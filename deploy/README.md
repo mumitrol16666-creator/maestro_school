@@ -23,13 +23,9 @@ Workflow: `.github/workflows/deploy.yml` — срабатывает при push 
 ssh -p 14579 root@178.105.59.89
 ```
 
-Скопируйте и выполните (или после первого push — скрипт уже в репо):
+`deploy.sh` **сам установит** Docker, Node.js 20 и PM2 при первом деплое (Ubuntu/Debian).
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/mumitrol16666-creator/maestro_school/main/deploy/setup-server.sh | bash
-```
-
-Или вручную: Docker, Node.js 20, PM2, порты `3000` и `4000` открыты в firewall.
+Опционально вручную: откройте порты `3000` и `4000` в firewall.
 
 ---
 

@@ -38,7 +38,7 @@ jobs:
           port: 14579
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          command_timeout: 25m
+          command_timeout: 40m
           script: |
             set -e
             export DEPLOY_HOST="178.105.59.89"

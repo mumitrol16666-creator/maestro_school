@@ -13,29 +13,65 @@ API_PUBLIC_URL="${API_PUBLIC_URL:-http://${DEPLOY_HOST}:4000/api/v1}"
 
 log() { echo "[deploy] $*"; }
 
-require_cmd() {
-  if ! command -v "$1" >/dev/null 2>&1; then
-    echo "Missing command: $1" >&2
-    exit 1
+docker_compose() {
+  if docker compose version >/dev/null 2>&1; then
+    docker compose "$@"
+  else
+    docker-compose "$@"
   fi
 }
 
-require_cmd node
-require_cmd npm
-require_cmd docker
+ensure_docker() {
+  if command -v docker >/dev/null 2>&1; then
+    return
+  fi
+  log "Installing Docker..."
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update -y
+  apt-get install -y curl ca-certificates
+  curl -fsSL https://get.docker.com | sh
+  systemctl enable docker
+  systemctl start docker
+}
+
+ensure_node() {
+  if command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then
+    log "Node.js $(node -v), npm $(npm -v)"
+    return
+  fi
+  log "Installing Node.js 20..."
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update -y
+  apt-get install -y curl ca-certificates
+  curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+  apt-get install -y nodejs
+  log "Node.js $(node -v), npm $(npm -v)"
+}
+
+ensure_pm2() {
+  if command -v pm2 >/dev/null 2>&1; then
+    return
+  fi
+  log "Installing PM2..."
+  npm install -g pm2
+}
 
 if [ -z "$JWT_SECRET" ] || [ "${#JWT_SECRET}" -lt 16 ]; then
   echo "JWT_SECRET must be set (min 16 chars). Add GitHub secret JWT_SECRET." >&2
   exit 1
 fi
 
+ensure_docker
+ensure_node
+ensure_pm2
+
 log "Starting PostgreSQL..."
 export POSTGRES_PASSWORD
-docker compose -f docker-compose.prod.yml up -d
+docker_compose -f docker-compose.prod.yml up -d
 
 log "Waiting for database..."
 for i in $(seq 1 30); do
-  if docker compose -f docker-compose.prod.yml exec -T postgres pg_isready -U maestro -d maestro >/dev/null 2>&1; then
+  if docker_compose -f docker-compose.prod.yml exec -T postgres pg_isready -U maestro -d maestro >/dev/null 2>&1; then
     break
   fi
   sleep 2
@@ -78,11 +114,6 @@ npm ci
 log "Building frontend..."
 npm run build
 cd "$APP_DIR"
-
-if ! command -v pm2 >/dev/null 2>&1; then
-  log "Installing PM2..."
-  npm install -g pm2
-fi
 
 log "Restarting PM2 apps..."
 pm2 startOrReload deploy/ecosystem.config.cjs --update-env
