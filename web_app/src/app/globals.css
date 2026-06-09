@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  color: #181816;
+  background: #f5f2eb;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+::selection {
+  background: #c59a45;
+  color: white;
+}
+
+.font-display {
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+.noise {
+  background-image: radial-gradient(rgba(24, 24, 22, 0.09) 0.55px, transparent 0.55px);
+  background-size: 5px 5px;
+}
+
+.card-hover {
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.card-hover:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 20px 55px rgba(37, 33, 25, 0.12);
+  border-color: rgba(197, 154, 69, 0.45);
+}

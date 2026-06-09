@@ -1,0 +1,56 @@
+import { apiRequest, apiRequestEnvelope } from "@/lib/api-client";
+import type { CmsCourse, CmsDirection, CmsHomework, CmsLesson, CmsMaterial, CmsMedia, CmsMeta, CmsModule, CmsNews } from "@/types/cms";
+
+const json = (method: string, body?: unknown): RequestInit => ({
+  method,
+  body: body === undefined ? undefined : JSON.stringify(body),
+});
+
+export const cmsApi = {
+  directions: (search = "", page = 1, limit = 20) => apiRequestEnvelope<CmsDirection[], CmsMeta>(`/admin/directions?search=${encodeURIComponent(search)}&page=${page}&limit=${limit}`),
+  createDirection: (body: unknown) => apiRequest<CmsDirection>("/admin/directions", json("POST", body)),
+  updateDirection: (id: string, body: unknown) => apiRequest<CmsDirection>(`/admin/directions/${id}`, json("PATCH", body)),
+  publishDirection: (id: string, isPublished: boolean) => apiRequest<CmsDirection>(`/admin/directions/${id}/publish`, json("POST", { isPublished })),
+  deleteDirection: (id: string) => apiRequest<CmsDirection>(`/admin/directions/${id}`, json("DELETE")),
+
+  courses: (directionId = "", search = "", page = 1, limit = 20) => {
+    const params = new URLSearchParams({ search, page: String(page), limit: String(limit) });
+    if (directionId) params.set("directionId", directionId);
+    return apiRequestEnvelope<CmsCourse[], CmsMeta>(`/admin/courses?${params}`);
+  },
+  course: (id: string) => apiRequest<CmsCourse>(`/admin/courses/${id}`),
+  createCourse: (body: unknown) => apiRequest<CmsCourse>("/admin/courses", json("POST", body)),
+  updateCourse: (id: string, body: unknown) => apiRequest<CmsCourse>(`/admin/courses/${id}`, json("PATCH", body)),
+  publishCourse: (id: string, isPublished: boolean) => apiRequest<CmsCourse>(`/admin/courses/${id}/publish`, json("POST", { isPublished })),
+  deleteCourse: (id: string) => apiRequest<CmsCourse>(`/admin/courses/${id}`, json("DELETE")),
+
+  modules: (courseId: string) => apiRequest<CmsModule[]>(`/admin/modules?courseId=${courseId}`),
+  createModule: (body: unknown) => apiRequest<CmsModule>("/admin/modules", json("POST", body)),
+  updateModule: (id: string, body: unknown) => apiRequest<CmsModule>(`/admin/modules/${id}`, json("PATCH", body)),
+  deleteModule: (id: string) => apiRequest<CmsModule>(`/admin/modules/${id}`, json("DELETE")),
+
+  lessons: (moduleId: string) => apiRequest<CmsLesson[]>(`/admin/lessons?moduleId=${moduleId}`),
+  createLesson: (body: unknown) => apiRequest<CmsLesson>("/admin/lessons", json("POST", body)),
+  updateLesson: (id: string, body: unknown) => apiRequest<CmsLesson>(`/admin/lessons/${id}`, json("PATCH", body)),
+  publishLesson: (id: string, isPublished: boolean) => apiRequest<CmsLesson>(`/admin/lessons/${id}/publish`, json("POST", { isPublished })),
+  deleteLesson: (id: string) => apiRequest<CmsLesson>(`/admin/lessons/${id}`, json("DELETE")),
+
+  materials: (lessonId: string) => apiRequest<CmsMaterial[]>(`/admin/materials?lessonId=${lessonId}`),
+  createMaterial: (body: unknown) => apiRequest<CmsMaterial>("/admin/materials", json("POST", body)),
+  updateMaterial: (id: string, body: unknown) => apiRequest<CmsMaterial>(`/admin/materials/${id}`, json("PATCH", body)),
+  deleteMaterial: (id: string) => apiRequest<CmsMaterial>(`/admin/materials/${id}`, json("DELETE")),
+  homeworks: (lessonId: string) => apiRequest<CmsHomework[]>(`/admin/homeworks?lessonId=${lessonId}`),
+  createHomework: (body: unknown) => apiRequest<CmsHomework>("/admin/homeworks", json("POST", body)),
+  updateHomework: (id: string, body: unknown) => apiRequest<CmsHomework>(`/admin/homeworks/${id}`, json("PATCH", body)),
+  deleteHomework: (id: string) => apiRequest<CmsHomework>(`/admin/homeworks/${id}`, json("DELETE")),
+
+  news: (search = "", page = 1) => apiRequestEnvelope<CmsNews[], CmsMeta>(`/admin/news?search=${encodeURIComponent(search)}&page=${page}`),
+  createNews: (body: unknown) => apiRequest<CmsNews>("/admin/news", json("POST", body)),
+  updateNews: (id: string, body: unknown) => apiRequest<CmsNews>(`/admin/news/${id}`, json("PATCH", body)),
+  publishNews: (id: string, isPublished: boolean) => apiRequest<CmsNews>(`/admin/news/${id}/publish`, json("POST", { isPublished })),
+  deleteNews: (id: string) => apiRequest<CmsNews>(`/admin/news/${id}`, json("DELETE")),
+
+  media: () => apiRequest<CmsMedia[]>("/admin/media"),
+  uploadMedia: (body: unknown) => apiRequest<CmsMedia>("/admin/media", json("POST", body)),
+  deleteMedia: (folder: string, filename: string) => apiRequest(`/admin/media/${folder}/${filename}`, json("DELETE")),
+};

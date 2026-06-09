@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+*.log
+.DS_Store
+uploads/images/*
+uploads/pdf/*
+uploads/files/*
+!uploads/images/.gitkeep
+!uploads/pdf/.gitkeep
+!uploads/files/.gitkeep
