@@ -20,14 +20,16 @@ export interface ListAdminSubmissionsInput {
 }
 
 function buildSearchWhere(search: string): Prisma.HomeworkSubmissionWhereInput {
+  const insensitive = { contains: search, mode: "insensitive" as const };
+
   return {
     OR: [
-      { student: { firstName: { contains: search, mode: "insensitive" } } },
-      { student: { lastName: { contains: search, mode: "insensitive" } } },
-      { student: { email: { contains: search, mode: "insensitive" } } },
-      { homework: { lesson: { title: { contains: search, mode: "insensitive" } } } },
-      { homework: { lesson: { module: { course: { title: { contains: search, mode: "insensitive" } } } } } } },
-      { homework: { lesson: { module: { title: { contains: search, mode: "insensitive" } } } } },
+      { student: { firstName: insensitive } },
+      { student: { lastName: insensitive } },
+      { student: { email: insensitive } },
+      { homework: { lesson: { title: insensitive } } },
+      { homework: { lesson: { module: { course: { title: insensitive } } } } },
+      { homework: { lesson: { module: { title: insensitive } } } },
     ],
   };
 }
