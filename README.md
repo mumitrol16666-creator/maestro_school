@@ -26,3 +26,12 @@ client, JWT-авторизация, typed responses и состояния заг
 
 Подключенные endpoint-ы и ограничения описаны в `web_app/INTEGRATION.md`.
 Документация CMS находится в `backend/docs/CMS.md`.
+
+## Деплой на VPS
+
+Автодеплой через GitHub Actions на `178.105.59.89:14579` (root):
+
+- workflow: `.github/workflows/deploy.yml`
+- инструкция: [deploy/README.md](./deploy/README.md)
+
+После деплоя: Web `http://178.105.59.89:3000`, API `http://178.105.59.89:4000/api/v1`.
