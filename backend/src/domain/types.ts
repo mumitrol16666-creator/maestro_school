@@ -8,7 +8,7 @@ export interface AuthUser {
 declare module "@fastify/jwt" {
   interface FastifyJWT {
     payload: { sub: string; role?: string };
-    user: AuthUser;
+    user: AuthUser | undefined;
   }
 }
 

@@ -40,7 +40,7 @@ export async function optionalAuthenticate(request: FastifyRequest): Promise<voi
   try {
     await authenticate(request);
   } catch {
-    request.user = undefined;
+    delete request.user;
   }
 }
 

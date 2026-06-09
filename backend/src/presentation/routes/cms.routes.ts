@@ -26,7 +26,7 @@ const newsGuards = () => [authenticate, requireContentAdmin, requirePermission("
 const meta = (page: number, limit: number, total: number) => ({ page, limit, total, pages: Math.ceil(total / limit) });
 
 async function audit(request: FastifyRequest, entityType: string, entityId: string, action: "create" | "update" | "delete" | "publish" | "unpublish") {
-  await writeAuditLog({ entityType, entityId, action, actorId: request.user.id });
+  await writeAuditLog({ entityType, entityId, action, actorId: request.user!.id });
 }
 
 function validateVideoUrl(value?: string | null) {
@@ -166,7 +166,7 @@ export async function cmsRoutes(app: FastifyInstance) {
   });
   app.post("/admin/news", { preHandler: newsGuards() }, async (request, reply) => {
     const body = z.object({ title: z.string().min(1).max(255), content: z.string().min(1), isPublished: z.boolean().optional() }).parse(request.body);
-    const item = await createNews({ ...body, authorId: request.user.id, publishedAt: body.isPublished ? new Date() : null });
+    const item = await createNews({ ...body, authorId: request.user!.id, publishedAt: body.isPublished ? new Date() : null });
     await audit(request, "news_post", item.id, "create"); return reply.status(201).send({ data: item });
   });
   app.patch("/admin/news/:id", { preHandler: newsGuards() }, async (request) => {
