@@ -14,8 +14,30 @@ ADMIN_EMAIL="${ADMIN_EMAIL:-}"
 ADMIN_PASSWORD="${ADMIN_PASSWORD:-}"
 ADMIN_FIRST_NAME="${ADMIN_FIRST_NAME:-}"
 ADMIN_LAST_NAME="${ADMIN_LAST_NAME:-}"
+DEPLOY_ENV_FILE="/var/lib/maestro/deploy.env"
 
 log() { echo "[deploy] $*"; }
+
+load_admin_env() {
+  if [ -f "$DEPLOY_ENV_FILE" ]; then
+    log "Loading admin env from ${DEPLOY_ENV_FILE}"
+    set -a
+    # shellcheck source=/dev/null
+    source "$DEPLOY_ENV_FILE"
+    set +a
+  fi
+}
+
+persist_admin_env() {
+  install -d -m 0700 /var/lib/maestro
+  cat > "$DEPLOY_ENV_FILE" <<EOF
+ADMIN_EMAIL="${ADMIN_EMAIL}"
+ADMIN_PASSWORD="${ADMIN_PASSWORD}"
+ADMIN_FIRST_NAME="${ADMIN_FIRST_NAME}"
+ADMIN_LAST_NAME="${ADMIN_LAST_NAME}"
+EOF
+  chmod 600 "$DEPLOY_ENV_FILE"
+}
 
 docker_compose() {
   if docker compose version >/dev/null 2>&1; then
@@ -70,10 +92,16 @@ if [ -z "$JWT_SECRET" ] || [ "${#JWT_SECRET}" -lt 16 ]; then
   exit 1
 fi
 
+load_admin_env
+
 if [ -z "$ADMIN_EMAIL" ] || [ -z "$ADMIN_PASSWORD" ] || [ -z "$ADMIN_FIRST_NAME" ] || [ -z "$ADMIN_LAST_NAME" ]; then
   echo "ADMIN_EMAIL, ADMIN_PASSWORD, ADMIN_FIRST_NAME and ADMIN_LAST_NAME must be set." >&2
+  echo "Add them as GitHub repository secrets, then re-run deploy." >&2
+  echo "They are stored on the server in ${DEPLOY_ENV_FILE} after the first successful deploy." >&2
   exit 1
 fi
+
+persist_admin_env
 
 ensure_docker
 ensure_node
