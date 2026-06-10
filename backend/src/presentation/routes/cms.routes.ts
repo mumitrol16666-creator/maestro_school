@@ -2,11 +2,12 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import {
   createCourse, createDirection, createHomework, createLesson, createMaterial, createModule, createNews,
-  deleteMaterial, getAdminCourse, listAdminCourses, listAdminDirections, listAdminNews, listHomeworks, listLessons,
-  listMaterials, listModules, updateCourse, updateDirection, updateHomework, updateLesson,
+  deleteMaterial, getAdminCourse, getAdminCourseTree, getAdminLesson, listAdminCourses, listAdminDirections, listAdminNews, listHomeworks, listLessons,
+  listMaterials, listMaterialUsages, listModules, updateCourse, updateDirection, updateHomework, updateLesson,
   updateMaterial, updateModule, updateNews,
 } from "../../application/repositories/cms.repository.js";
 import { writeAuditLog } from "../../application/services/audit.service.js";
+import { getMediaInfoFromUrl } from "../../application/services/media-storage.service.js";
 import { authenticate, requireContentAdmin, requirePermission } from "../guards/auth.guards.js";
 import { BadRequestError } from "../../domain/errors.js";
 
@@ -73,6 +74,9 @@ export async function cmsRoutes(app: FastifyInstance) {
   app.get("/admin/courses/:id", { preHandler: catalogGuards() }, async (request) => {
     const { id } = idParams.parse(request.params); return { data: await getAdminCourse(id) };
   });
+  app.get("/admin/courses/:id/tree", { preHandler: catalogGuards() }, async (request) => {
+    const { id } = idParams.parse(request.params); return { data: await getAdminCourseTree(id) };
+  });
   app.post("/admin/courses", { preHandler: catalogGuards() }, async (request, reply) => {
     const body = z.object({ directionId: z.string().uuid(), title: z.string().min(1).max(255), description: z.string().nullable().optional(), thumbnail: nullableUrl, difficultyLevel: difficulty.default("beginner"), isPublished: z.boolean().optional() }).parse(request.body);
     const item = await createCourse(body); await audit(request, "course", item.id, "create"); return reply.status(201).send({ data: item });
@@ -111,6 +115,9 @@ export async function cmsRoutes(app: FastifyInstance) {
   app.get("/admin/lessons", { preHandler: catalogGuards() }, async (request) => {
     const { moduleId } = z.object({ moduleId: z.string().uuid() }).parse(request.query); return { data: await listLessons(moduleId) };
   });
+  app.get("/admin/lessons/:id", { preHandler: catalogGuards() }, async (request) => {
+    const { id } = idParams.parse(request.params); return { data: await getAdminLesson(id) };
+  });
   app.post("/admin/lessons", { preHandler: catalogGuards() }, async (request, reply) => {
     const body = z.object({ moduleId: z.string().uuid(), title: z.string().min(1).max(255), description: z.string().nullable().optional(), videoUrl: nullableUrl, pointsReward: z.number().int().min(0).default(0), sortOrder: z.number().int().min(0).default(0), isPublished: z.boolean().optional() }).parse(request.body);
     validateVideoUrl(body.videoUrl); const item = await createLesson(body); await audit(request, "lesson", item.id, "create"); return reply.status(201).send({ data: item });
@@ -130,7 +137,12 @@ export async function cmsRoutes(app: FastifyInstance) {
   });
 
   app.get("/admin/materials", { preHandler: catalogGuards() }, async (request) => {
-    const { lessonId } = z.object({ lessonId: z.string().uuid() }).parse(request.query); return { data: await listMaterials(lessonId) };
+    const { lessonId } = z.object({ lessonId: z.string().uuid() }).parse(request.query);
+    const items = await listMaterials(lessonId);
+    return { data: await Promise.all(items.map(async (item) => ({ ...item, media: await getMediaInfoFromUrl(item.url, request) }))) };
+  });
+  app.get("/admin/materials/:id/usages", { preHandler: catalogGuards() }, async (request) => {
+    const { id } = idParams.parse(request.params); return { data: await listMaterialUsages(id) };
   });
   app.post("/admin/materials", { preHandler: catalogGuards() }, async (request, reply) => {
     const body = z.object({ lessonId: z.string().uuid(), type: materialType, title: z.string().min(1).max(255), url: z.string().url().max(1024), sortOrder: z.number().int().min(0).default(0) }).parse(request.body);

@@ -11,7 +11,38 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            web_app/package-lock.json
+      - name: Verify backend
+        working-directory: backend
+        run: |
+          npm ci
+          npm run lint
+          npm run typecheck
+          npm test
+          npm run build
+      - name: Verify frontend
+        working-directory: web_app
+        run: |
+          npm ci
+          npm run lint
+          npm run typecheck
+          npm run build
+
   deploy:
+    needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -46,7 +77,10 @@ jobs:
             export POSTGRES_PASSWORD="${{ secrets.POSTGRES_PASSWORD }}"
             export CORS_ORIGIN="${{ secrets.CORS_ORIGIN }}"
             export API_PUBLIC_URL="${{ secrets.API_PUBLIC_URL }}"
-            export RUN_SEED="${{ secrets.RUN_SEED }}"
+            export ADMIN_EMAIL="${{ secrets.ADMIN_EMAIL }}"
+            export ADMIN_PASSWORD="${{ secrets.ADMIN_PASSWORD }}"
+            export ADMIN_FIRST_NAME="${{ secrets.ADMIN_FIRST_NAME }}"
+            export ADMIN_LAST_NAME="${{ secrets.ADMIN_LAST_NAME }}"
             chmod +x /var/www/maestro_school/deploy/deploy.sh
             bash /var/www/maestro_school/deploy/deploy.sh
 

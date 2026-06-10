@@ -34,7 +34,7 @@ export function HomeworkAttemptTimeline({ attempts, currentSubmissionId }: Homew
                   {isCurrent ? " · текущая" : ""}
                 </span>
                 <span className={`rounded-full px-3 py-1 text-xs font-bold ${submissionStatusClass(attempt.status)}`}>
-                  {submissionStatusLabels[attempt.status] ?? attempt.status}
+                  {submissionStatusLabels[attempt.status] ?? "Неизвестный статус"}
                 </span>
                 {attempt.attachmentType && (
                   <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-bold text-stone-600">

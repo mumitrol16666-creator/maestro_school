@@ -52,7 +52,6 @@ export async function getCourseById(courseId: string) {
               description: true,
               sortOrder: true,
               pointsReward: true,
-              videoUrl: true,
             },
           },
         },

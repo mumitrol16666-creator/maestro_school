@@ -1,12 +1,14 @@
 "use client";
 
-import { ArrowRight, CalendarDays, CheckCircle2, Clock3, Flame, Play, Sparkles, Star } from "lucide-react";
+import { ArrowRight, CheckCircle2, Clock3, Flame, Play, Sparkles, Star } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/components/auth-provider";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
 import { ProgressBar } from "@/components/progress-bar";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { api } from "@/lib/api-client";
+import { lessonStatusLabels } from "@/lib/ui";
+import { difficultyLabel, normalizeLessonStatus } from "@/lib/adapters";
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -18,7 +20,7 @@ export default function DashboardPage() {
   if (resource.loading) return <LoadingState label="Собираем вашу главную страницу" />;
   if (resource.error) return <ErrorState message={resource.error} retry={resource.reload} />;
   if (!resource.data?.dashboard.currentCourse) {
-    return <EmptyState title="Курс пока не назначен" description="После зачисления на курс здесь появятся уроки, прогресс и баллы." />;
+    return <EmptyState title="Вы еще не начали обучение" description="Выберите опубликованный курс, чтобы открыть первый урок и отслеживать прогресс." action={<Link href="/courses" className="inline-flex items-center gap-2 rounded-full bg-ink px-5 py-3 text-sm font-bold text-white">Выбрать курс <ArrowRight size={16} /></Link>} />;
   }
 
   const { dashboard, news } = resource.data;
@@ -49,7 +51,7 @@ export default function DashboardPage() {
           <div className="absolute -bottom-36 -right-24 h-[380px] w-[380px] rounded-full border border-gold/25" />
           <div className="relative flex h-full flex-col">
             <div className="flex items-center justify-between">
-              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/60">{course.direction.title} · {course.difficultyLevel}</span>
+              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/60">{course.direction.title} · {difficultyLabel(course.difficultyLevel)}</span>
               <span className="font-display text-2xl text-gold">{dashboard.progressPercent}%</span>
             </div>
             <div className="my-auto max-w-xl py-10">
@@ -78,16 +80,11 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      <section className="mt-5 grid gap-5 lg:grid-cols-3">
-        <div className="card-hover rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft">
-          <div className="flex items-center justify-between"><p className="text-xs font-bold uppercase tracking-[0.16em] text-stone-400">Ближайшее занятие</p><CalendarDays size={18} className="text-gold" /></div>
-          <p className="font-display mt-8 text-3xl">Расписание появится позже</p>
-          <p className="mt-4 text-sm text-stone-500">Модуль расписания пока не подключен.</p>
-        </div>
+      <section className="mt-5 grid gap-5 lg:grid-cols-2">
         <div className="card-hover rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft">
           <div className="flex items-center justify-between"><p className="text-xs font-bold uppercase tracking-[0.16em] text-stone-400">Следующий урок</p><Clock3 size={18} className="text-gold" /></div>
           <p className="font-display mt-8 text-3xl">{nextLesson?.title ?? "Все доступные уроки пройдены"}</p>
-          <p className="mt-4 flex items-center gap-2 text-sm font-semibold text-amber-800"><Sparkles size={15} /> {nextLesson?.status ?? "Нет активного урока"}</p>
+          <p className="mt-4 flex items-center gap-2 text-sm font-semibold text-amber-800"><Sparkles size={15} /> {nextLesson ? lessonStatusLabels[normalizeLessonStatus(nextLesson.status)] : "Нет активного урока"}</p>
         </div>
         {latestPost ? (
           <Link href="/board" className="card-hover rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft">
@@ -104,7 +101,7 @@ export default function DashboardPage() {
           <Link href={`/lessons/${nextLesson.id}`} className="card-hover flex flex-col gap-5 rounded-[28px] border border-stone-200 bg-paper p-5 shadow-soft sm:flex-row sm:items-center">
             <span className="grid h-20 w-20 shrink-0 place-items-center rounded-2xl bg-[#715844] text-white"><Play fill="currentColor" /></span>
             <div className="flex-1"><p className="text-xs font-bold uppercase tracking-[0.16em] text-gold">Следующий доступный урок</p><h3 className="font-display mt-1 text-2xl">{nextLesson.title}</h3><p className="mt-2 text-sm text-stone-500">Откройте урок, чтобы продолжить обучение.</p></div>
-            <div className="flex items-center gap-2 text-sm font-bold text-emerald-700"><CheckCircle2 size={18} /> {nextLesson.status}</div>
+            <div className="flex items-center gap-2 text-sm font-bold text-emerald-700"><CheckCircle2 size={18} /> {lessonStatusLabels[normalizeLessonStatus(nextLesson.status)]}</div>
           </Link>
         </section>
       )}

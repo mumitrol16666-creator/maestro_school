@@ -142,7 +142,7 @@ Seed IDs: `prisma/seed-achievements.ts` → `SEED_IDS`.
 | `GET /api/v1/directions` | — | ✓ |
 | `GET /api/v1/courses` | — | ✓ |
 | `GET /api/v1/courses/:id` | — | ✓ |
-| `GET /api/v1/lessons/:id` | — | ✓ |
+| `GET /api/v1/lessons/:id` | enrolled student | ✓ |
 | `GET /api/v1/news` | — | ✓ |
 | `GET /api/v1/students/me/dashboard` | student | ✓ |
 | `GET /api/v1/students/me/progress` | student | ✓ |
@@ -150,9 +150,8 @@ Seed IDs: `prisma/seed-achievements.ts` → `SEED_IDS`.
 | `POST /api/v1/homeworks/:id/submissions` | student | ✓ |
 | `PATCH /api/v1/homeworks/submissions/:id/review` | admin | ✓ |
 
-Demo accounts:
-- `student@maestro.local` / `student123`
-- `admin@maestro.local` / `admin123`
+Production seed создает только администратора из `ADMIN_*`; ученик
+регистрируется через `POST /auth/register`.
 
 ---
 
@@ -164,7 +163,8 @@ Demo accounts:
 npm run e2e    # admin create → student learn → approve → points → unlock
 ```
 
-Добавлен `ensureStudentEnrolled()` — auto-enroll при первом доступе ученика к опубликованному курсу.
+Зачисление выполняется только через `POST /courses/:courseId/enroll`.
+Просмотр курса и прогресса не создает `StudentCourse`.
 
 ---
 

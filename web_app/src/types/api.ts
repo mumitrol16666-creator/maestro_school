@@ -25,6 +25,14 @@ export interface LoginResponse {
   user: ApiAuthUser;
 }
 
+export interface RegisterInput {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone?: string;
+  password: string;
+}
+
 export interface ApiCourseSummary {
   id: string;
   directionId: string;
@@ -37,6 +45,7 @@ export interface ApiCourseSummary {
   modulesCount: number;
   lessonsCount: number;
   progress: number;
+  enrollmentStatus: string | null;
 }
 
 export interface ApiCourseLesson {
@@ -45,7 +54,6 @@ export interface ApiCourseLesson {
   description: string | null;
   sortOrder: number;
   pointsReward: number;
-  videoUrl: string | null;
 }
 
 export interface ApiCourseModule {
@@ -119,6 +127,7 @@ export interface ApiEnrollment {
     title: string;
     directionId: string;
     difficultyLevel: string;
+    direction: Pick<ApiDirection, "id" | "title" | "slug">;
   };
 }
 

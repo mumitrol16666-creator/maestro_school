@@ -7,7 +7,7 @@ import {
 import { calculateStudentPoints, getStudentPointsHistory } from "../../application/services/points.service.js";
 import { calculateCourseProgressPercent } from "../../application/services/course-progress.service.js";
 import { syncLessonAvailability } from "../../application/services/lesson-unlock.service.js";
-import { ensureStudentEnrolled } from "../../application/services/enrollment.service.js";
+import { requireCourseEnrollment } from "../../application/services/enrollment.service.js";
 import { authenticate, requirePermission } from "../guards/auth.guards.js";
 
 export async function progressRoutes(app: FastifyInstance) {
@@ -19,7 +19,7 @@ export async function progressRoutes(app: FastifyInstance) {
       const studentId = request.user!.id;
 
       if (query.courseId) {
-        await ensureStudentEnrolled(studentId, query.courseId);
+        await requireCourseEnrollment(studentId, query.courseId);
       }
 
       const enrollments = await getStudentEnrollments(studentId);

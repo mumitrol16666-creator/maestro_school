@@ -25,3 +25,34 @@ export async function findUserWithRoleById(userId: string) {
     },
   });
 }
+
+export async function createStudentUser(params: {
+  email: string;
+  phone?: string;
+  passwordHash: string;
+  firstName: string;
+  lastName: string;
+}) {
+  const studentRole = await prisma.role.findUnique({ where: { slug: "student" } });
+  if (!studentRole) {
+    throw new Error("Student role is not configured. Run the production seed.");
+  }
+
+  return prisma.user.create({
+    data: {
+      email: params.email,
+      phone: params.phone,
+      passwordHash: params.passwordHash,
+      firstName: params.firstName,
+      lastName: params.lastName,
+      roleId: studentRole.id,
+    },
+    include: {
+      role: {
+        include: {
+          rolePermissions: { include: { permission: true } },
+        },
+      },
+    },
+  });
+}

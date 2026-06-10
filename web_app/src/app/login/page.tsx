@@ -1,6 +1,7 @@
 "use client";
 
-import { ArrowRight, Eye, LoaderCircle, Music2 } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, LoaderCircle, Music2 } from "lucide-react";
+import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Brand } from "@/components/brand";
@@ -10,8 +11,9 @@ import { ApiError } from "@/lib/api-client";
 export default function LoginPage() {
   const router = useRouter();
   const { login, user, loading: authLoading } = useAuth();
-  const [email, setEmail] = useState("student@maestro.local");
-  const [password, setPassword] = useState("student123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,26 +57,24 @@ export default function LoginPage() {
           <p className="mt-4 text-sm leading-6 text-stone-500">Войдите, чтобы продолжить обучение в Maestro.</p>
           <form onSubmit={handleSubmit} className="mt-10 space-y-5">
             <label className="block">
-              <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-stone-500">Email или телефон</span>
-              <input value={email} onChange={(event) => setEmail(event.target.value)} className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-4 text-sm outline-none transition focus:border-gold" />
+              <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-stone-500">Email</span>
+              <input type="email" required autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-4 text-sm outline-none transition focus:border-gold" />
             </label>
             <label className="block">
               <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-stone-500">Пароль</span>
               <span className="flex items-center rounded-2xl border border-stone-200 bg-white pr-4 focus-within:border-gold">
-                <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} className="min-w-0 flex-1 rounded-2xl px-4 py-4 text-sm outline-none" />
-                <Eye size={17} className="text-stone-400" />
+                <input type={showPassword ? "text" : "password"} required minLength={8} maxLength={72} autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} className="min-w-0 flex-1 rounded-2xl px-4 py-4 text-sm outline-none" />
+                <button type="button" onClick={() => setShowPassword((current) => !current)} aria-label={showPassword ? "Скрыть пароль" : "Показать пароль"} className="text-stone-400">
+                  {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+                </button>
               </span>
             </label>
-            <div className="flex items-center justify-between text-sm">
-              <label className="flex items-center gap-2 text-stone-500"><input type="checkbox" defaultChecked className="accent-ink" /> Запомнить меня</label>
-              <button type="button" className="font-semibold">Забыли пароль?</button>
-            </div>
             {error && <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</p>}
             <button disabled={submitting} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-ink px-5 py-4 text-sm font-bold text-white transition hover:bg-stone-800 disabled:opacity-60">
               {submitting ? <><LoaderCircle size={17} className="animate-spin" /> Входим...</> : <>Войти в кабинет <ArrowRight size={17} /></>}
             </button>
           </form>
-          <p className="mt-8 text-center text-xs leading-5 text-stone-400">Демо: student@maestro.local / student123</p>
+          <p className="mt-8 text-center text-sm text-stone-500">Еще нет аккаунта? <Link href="/register" className="font-bold text-ink">Зарегистрироваться</Link></p>
         </div>
       </section>
     </main>

@@ -1,5 +1,5 @@
 export type LessonStatus = "available" | "locked" | "in_progress" | "submitted" | "reviewed" | "completed";
-export type CourseAccess = "open" | "locked";
+export type CourseAccess = "enrolled" | "available";
 
 export interface Direction {
   id: string;
@@ -22,7 +22,6 @@ export interface Lesson {
   title: string;
   description: string;
   order: number;
-  duration: string;
   status: LessonStatus;
   pointsReward: number;
   materials: Material[];
@@ -55,10 +54,9 @@ export interface Student {
 
 export interface BoardPost {
   id: string;
-  category: "Новость" | "Объявление" | "Событие";
   title: string;
-  excerpt: string;
+  content: string;
   date: string;
+  author: string;
   accent: string;
-  featured?: boolean;
 }

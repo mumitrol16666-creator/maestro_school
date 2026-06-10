@@ -11,7 +11,7 @@ import {
   upsertLessonProgress,
 } from "../repositories/learning.repository.js";
 import { syncLessonAvailability } from "./lesson-unlock.service.js";
-import { ensureStudentEnrolled } from "./enrollment.service.js";
+import { requireCourseEnrollment } from "./enrollment.service.js";
 import { syncCourseCompletionStatus } from "./course-progress.service.js";
 import { evaluateAchievements } from "./achievement.service.js";
 
@@ -20,7 +20,7 @@ export async function startLesson(studentId: string, lessonId: string) {
   const lesson = await getLessonWithCourse(lessonId);
   const courseId = lesson.module.courseId;
 
-  await ensureStudentEnrolled(studentId, courseId);
+  await requireCourseEnrollment(studentId, courseId);
   await syncLessonAvailability(studentId, courseId);
 
   const progress = await getLessonProgressRecord(studentId, lessonId);

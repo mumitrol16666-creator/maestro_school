@@ -4,11 +4,13 @@ import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, clearSession, getAccessToken, getStoredUser, storeSession } from "@/lib/api-client";
 import type { ApiAuthUser } from "@/types/api";
+import type { RegisterInput } from "@/types/api";
 
 interface AuthContextValue {
   user: ApiAuthUser | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<ApiAuthUser>;
+  register: (input: RegisterInput) => Promise<ApiAuthUser>;
   logout: () => void;
 }
 
@@ -41,6 +43,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loading,
     login: async (email, password) => {
       const session = await api.login(email, password);
+      storeSession(session.token, session.user);
+      const fresh = await api.me();
+      const merged = { ...session.user, ...fresh };
+      storeSession(session.token, merged);
+      setUser(merged);
+      return merged;
+    },
+    register: async (input) => {
+      const session = await api.register(input);
       storeSession(session.token, session.user);
       const fresh = await api.me();
       const merged = { ...session.user, ...fresh };

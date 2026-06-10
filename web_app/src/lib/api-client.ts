@@ -10,6 +10,7 @@ import type {
   ApiProgress,
   HomeworkSubmissionResponse,
   LoginResponse,
+  RegisterInput,
   StartLessonResponse,
 } from "@/types/api";
 
@@ -108,11 +109,21 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ email, password }),
     }),
+  register: (body: RegisterInput) =>
+    apiRequest<LoginResponse>("/auth/register", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   me: () => apiRequest<ApiAuthUser>("/auth/me"),
   directions: () => apiRequest<ApiDirection[]>("/directions"),
   courses: (directionId?: string) =>
     apiRequest<ApiCourseSummary[]>(`/courses${directionId ? `?directionId=${encodeURIComponent(directionId)}` : ""}`),
   course: (courseId: string) => apiRequest<ApiCourseDetail>(`/courses/${courseId}`),
+  enroll: (courseId: string) =>
+    apiRequest<{ id: string; courseId: string; status: string; enrolledAt: string }>(
+      `/courses/${courseId}/enroll`,
+      { method: "POST" },
+    ),
   lesson: (lessonId: string) => apiRequest<ApiLessonDetail>(`/lessons/${lessonId}`),
   dashboard: () => apiRequest<ApiDashboard>("/students/me/dashboard"),
   progress: (courseId?: string) =>

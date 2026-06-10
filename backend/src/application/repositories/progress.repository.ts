@@ -26,7 +26,7 @@ export async function getStudentProgress(studentId: string, courseId?: string) {
 
 export async function getStudentEnrollments(studentId: string) {
   return prisma.studentCourse.findMany({
-    where: { studentId },
+    where: { studentId, status: { in: ["enrolled", "active", "completed"] } },
     include: {
       course: {
         select: {
@@ -34,8 +34,10 @@ export async function getStudentEnrollments(studentId: string) {
           title: true,
           directionId: true,
           difficultyLevel: true,
+          direction: { select: { id: true, title: true, slug: true } },
         },
       },
     },
+    orderBy: { updatedAt: "desc" },
   });
 }

@@ -39,7 +39,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       <header className="sticky top-0 z-30 flex h-20 items-center gap-4 border-b border-stone-200/80 bg-cream/90 px-5 backdrop-blur-xl sm:px-8">
         <button onClick={() => setOpen(true)} className="grid h-10 w-10 place-items-center rounded-full bg-white lg:hidden"><Menu size={20} /></button>
         <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">Maestro Admin</p><p className="text-sm font-semibold">{user?.email}</p></div>
-        <Link href="/dashboard" className="ml-auto rounded-full border border-stone-200 bg-white px-4 py-2 text-xs font-bold">Кабинет ученика</Link>
+        <button onClick={logout} className="ml-auto rounded-full border border-stone-200 bg-white px-4 py-2 text-xs font-bold">Выйти</button>
       </header>
       <main className="mx-auto max-w-[1500px] p-5 sm:p-8 lg:p-10">{children}</main>
     </div>

@@ -16,13 +16,13 @@ Base URL: `http://localhost:4000/api/v1`
 
 ### `POST /auth/login`
 
-Phase-1 вход для Admin и Student.
+Вход по email для зарегистрированного пользователя.
 
 **Body**
 ```json
 {
-  "email": "student@maestro.local",
-  "password": "student123"
+  "email": "student@example.com",
+  "password": "strong-password"
 }
 ```
 
@@ -33,20 +33,37 @@ Phase-1 вход для Admin и Student.
     "token": "eyJhbG...",
     "user": {
       "id": "uuid",
-      "email": "student@maestro.local",
-      "firstName": "Алексей",
-      "lastName": "Миронов",
+      "email": "student@example.com",
+      "firstName": "Анна",
+      "lastName": "Музыкант",
       "avatar": null,
+      "phone": null,
       "role": "student",
+      "permissions": ["courses.read", "lessons.read"],
       "points": 1240
     }
   }
 }
 ```
 
+### `POST /auth/register`
+
+Открытая регистрация ученика. Всегда создает роль `student`, нормализует email
+и возвращает JWT с полным профилем. Повторный email возвращает `409`.
+
+```json
+{
+  "firstName": "Анна",
+  "lastName": "Музыкант",
+  "email": "student@example.com",
+  "phone": "+7 700 000 00 00",
+  "password": "strong-password"
+}
+```
+
 ### `GET /auth/me`
 
-Требует JWT.
+Требует JWT. Возвращает имя, фамилию, телефон, email, роль, permissions и баллы.
 
 ---
 
@@ -98,6 +115,7 @@ Query params:
       "modulesCount": 1,
       "lessonsCount": 4,
       "progress": 68,
+      "enrollmentStatus": "active",
       "direction": { "id": "...", "title": "Гитара", "slug": "guitar" }
     }
   ]
@@ -108,13 +126,21 @@ Query params:
 
 ### `GET /courses/:courseId`
 
-Детали курса с модулями и уроками.
+Публичное описание опубликованного курса с модулями и названиями уроков.
+Не содержит `videoUrl`, материалы или домашнее задание и не создает зачисление.
+
+### `POST /courses/:courseId/enroll`
+
+🔒 JWT ученика. Явно и идемпотентно зачисляет в опубликованный курс,
+инициализирует прогресс и открывает первый урок.
 
 ---
 
 ## Lessons
 
 ### `GET /lessons/:lessonId`
+
+🔒 JWT ученика + зачисление + открытый статус урока. Закрытый урок возвращает `403`.
 
 **Response 200**
 ```json
@@ -174,6 +200,8 @@ Query params:
 🔒 JWT + permission `progress.read`
 
 Query: `courseId` (optional)
+
+Запрос с `courseId` требует существующего зачисления и не создает его.
 
 **Response 200**
 ```json
@@ -287,7 +315,7 @@ Query: `limit` (1–50, default 20)
 ### `GET /health`
 
 ```json
-{ "status": "ok", "service": "maestro-api" }
+{ "status": "ok", "service": "maestro-api", "database": "ok" }
 ```
 
 ---
@@ -299,4 +327,4 @@ Query: `limit` (1–50, default 20)
 - Расписание
 - Чаты
 - Push-уведомления
-- CRUD админки каталога (только read API + homework submit)
+- дополнительные бизнес-модули вне обучения и CMS

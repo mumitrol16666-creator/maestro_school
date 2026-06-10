@@ -1,5 +1,5 @@
 import { apiRequest, apiRequestEnvelope } from "@/lib/api-client";
-import type { CmsCourse, CmsDirection, CmsHomework, CmsLesson, CmsMaterial, CmsMedia, CmsMeta, CmsModule, CmsNews } from "@/types/cms";
+import type { CmsCourse, CmsCourseTree, CmsDirection, CmsHomework, CmsLesson, CmsMaterial, CmsMaterialUsage, CmsMedia, CmsMeta, CmsModule, CmsNews } from "@/types/cms";
 
 const json = (method: string, body?: unknown): RequestInit => ({
   method,
@@ -19,6 +19,7 @@ export const cmsApi = {
     return apiRequestEnvelope<CmsCourse[], CmsMeta>(`/admin/courses?${params}`);
   },
   course: (id: string) => apiRequest<CmsCourse>(`/admin/courses/${id}`),
+  courseTree: (id: string) => apiRequest<CmsCourseTree>(`/admin/courses/${id}/tree`),
   createCourse: (body: unknown) => apiRequest<CmsCourse>("/admin/courses", json("POST", body)),
   updateCourse: (id: string, body: unknown) => apiRequest<CmsCourse>(`/admin/courses/${id}`, json("PATCH", body)),
   publishCourse: (id: string, isPublished: boolean) => apiRequest<CmsCourse>(`/admin/courses/${id}/publish`, json("POST", { isPublished })),
@@ -30,6 +31,7 @@ export const cmsApi = {
   deleteModule: (id: string) => apiRequest<CmsModule>(`/admin/modules/${id}`, json("DELETE")),
 
   lessons: (moduleId: string) => apiRequest<CmsLesson[]>(`/admin/lessons?moduleId=${moduleId}`),
+  lesson: (id: string) => apiRequest<CmsLesson>(`/admin/lessons/${id}`),
   createLesson: (body: unknown) => apiRequest<CmsLesson>("/admin/lessons", json("POST", body)),
   updateLesson: (id: string, body: unknown) => apiRequest<CmsLesson>(`/admin/lessons/${id}`, json("PATCH", body)),
   publishLesson: (id: string, isPublished: boolean) => apiRequest<CmsLesson>(`/admin/lessons/${id}/publish`, json("POST", { isPublished })),
@@ -39,6 +41,7 @@ export const cmsApi = {
   createMaterial: (body: unknown) => apiRequest<CmsMaterial>("/admin/materials", json("POST", body)),
   updateMaterial: (id: string, body: unknown) => apiRequest<CmsMaterial>(`/admin/materials/${id}`, json("PATCH", body)),
   deleteMaterial: (id: string) => apiRequest<CmsMaterial>(`/admin/materials/${id}`, json("DELETE")),
+  materialUsages: (id: string) => apiRequest<CmsMaterialUsage[]>(`/admin/materials/${id}/usages`),
   homeworks: (lessonId: string) => apiRequest<CmsHomework[]>(`/admin/homeworks?lessonId=${lessonId}`),
   createHomework: (body: unknown) => apiRequest<CmsHomework>("/admin/homeworks", json("POST", body)),
   updateHomework: (id: string, body: unknown) => apiRequest<CmsHomework>(`/admin/homeworks/${id}`, json("PATCH", body)),
@@ -53,4 +56,5 @@ export const cmsApi = {
   media: () => apiRequest<CmsMedia[]>("/admin/media"),
   uploadMedia: (body: unknown) => apiRequest<CmsMedia>("/admin/media", json("POST", body)),
   deleteMedia: (folder: string, filename: string) => apiRequest(`/admin/media/${folder}/${filename}`, json("DELETE")),
+  mediaUsages: (folder: string, filename: string) => apiRequest<CmsMaterialUsage[]>(`/admin/media/${folder}/${filename}/usages`),
 };
