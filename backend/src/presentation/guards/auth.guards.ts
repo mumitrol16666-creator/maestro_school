@@ -50,3 +50,10 @@ export async function requireContentAdmin(request: FastifyRequest): Promise<void
     throw new ForbiddenError("Content CMS is available only to Admin and Owner");
   }
 }
+
+export async function requireStudent(request: FastifyRequest): Promise<void> {
+  if (!request.user) throw new UnauthorizedError();
+  if (request.user.roleSlug !== "student") {
+    throw new ForbiddenError("Student account required");
+  }
+}

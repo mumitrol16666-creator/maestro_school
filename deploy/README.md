@@ -55,7 +55,10 @@ chmod 600 ~/.ssh/authorized_keys
 | `POSTGRES_PASSWORD` | ✅ | надёжный пароль БД |
 | `CORS_ORIGIN` | опционально | `http://178.105.59.89:3000` |
 | `API_PUBLIC_URL` | опционально | `http://178.105.59.89:4000/api/v1` |
-| `RUN_SEED` | опционально | `true` — только при **первом** деплое (демо-данные) |
+| `ADMIN_EMAIL` | ✅ | email первого администратора |
+| `ADMIN_PASSWORD` | ✅ | пароль администратора, 8–72 символа |
+| `ADMIN_FIRST_NAME` | ✅ | имя администратора |
+| `ADMIN_LAST_NAME` | ✅ | фамилия администратора |
 
 ---
 
@@ -75,9 +78,10 @@ git push origin main
 
 1. Поднимает PostgreSQL (`docker-compose.prod.yml`)
 2. Пишет `backend/.env` и `web_app/.env.local`
-3. `npm ci` + Prisma migrate + build backend и frontend
-4. Перезапуск через PM2 (`maestro-api`, `maestro-web`)
-5. Health check: `/health` и порт `3000`
+3. `npm ci` + Prisma migrate + идемпотентный production seed
+4. Создает постоянное хранилище файлов `/var/lib/maestro/uploads`
+5. Собирает backend и frontend, затем перезапускает PM2
+6. Проверяет API, PostgreSQL и frontend
 
 ---
 
@@ -91,9 +95,8 @@ curl http://127.0.0.1:4000/health
 
 В браузере: http://178.105.59.89:3000/login
 
-Демо (если был `RUN_SEED=true`):
-- `admin@maestro.local` / `admin123`
-- `student@maestro.local` / `student123`
+Вход администратора выполняется с `ADMIN_EMAIL` и `ADMIN_PASSWORD`.
+Ученики самостоятельно регистрируются на странице `/register`.
 
 ---
 

@@ -28,6 +28,10 @@ export interface CmsCourse {
   _count: { modules: number };
 }
 
+export interface CmsCourseTree extends Omit<CmsCourse, "_count"> {
+  modules: Array<CmsModule & { lessons: CmsLessonSummary[] }>;
+}
+
 export interface CmsModule {
   id: string;
   courseId: string;
@@ -49,6 +53,16 @@ export interface CmsLesson {
   _count: { materials: number; homeworks: number };
 }
 
+export interface CmsLessonSummary {
+  id: string;
+  moduleId: string;
+  title: string;
+  sortOrder: number;
+  isPublished: boolean;
+  hasVideo: boolean;
+  _count: { materials: number; homeworks: number };
+}
+
 export interface CmsMaterial {
   id: string;
   lessonId: string;
@@ -56,6 +70,9 @@ export interface CmsMaterial {
   type: "pdf" | "image" | "file" | "link";
   url: string;
   sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+  media: CmsMedia | null;
 }
 
 export interface CmsHomework {
@@ -76,8 +93,24 @@ export interface CmsNews {
 
 export interface CmsMedia {
   filename: string;
+  originalFilename: string;
   folder: "images" | "pdf" | "files";
+  mimeType: string | null;
   size: number;
   createdAt: string;
   url: string;
+}
+
+export interface CmsMaterialUsage {
+  id: string;
+  title: string;
+  lesson: {
+    id: string;
+    title: string;
+    module: {
+      id: string;
+      title: string;
+      course: { id: string; title: string };
+    };
+  };
 }

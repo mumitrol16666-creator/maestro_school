@@ -57,6 +57,59 @@ export async function getAdminCourse(id: string) {
   }), "Course");
 }
 
+export async function getAdminCourseTree(id: string) {
+  const course = await requireRecord(prisma.course.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      directionId: true,
+      title: true,
+      description: true,
+      thumbnail: true,
+      difficultyLevel: true,
+      isPublished: true,
+      deletedAt: true,
+      direction: { select: { id: true, title: true } },
+      modules: {
+        where: { deletedAt: null },
+        orderBy: { sortOrder: "asc" },
+        select: {
+          id: true,
+          courseId: true,
+          title: true,
+          description: true,
+          sortOrder: true,
+          lessons: {
+            where: { deletedAt: null },
+            orderBy: { sortOrder: "asc" },
+            select: {
+              id: true,
+              moduleId: true,
+              title: true,
+              videoUrl: true,
+              sortOrder: true,
+              isPublished: true,
+              _count: { select: { materials: true, homeworks: { where: { deletedAt: null } } } },
+            },
+          },
+          _count: { select: { lessons: { where: { deletedAt: null } } } },
+        },
+      },
+    },
+  }), "Course");
+
+  return {
+    ...course,
+    modules: course.modules.map((module) => ({
+      ...module,
+      lessons: module.lessons.map(({ videoUrl, ...lesson }) => ({
+        ...lesson,
+        hasVideo: Boolean(videoUrl?.trim()),
+      })),
+    })),
+  };
+}
+
 export const createCourse = (data: { directionId: string; title: string; description?: string | null; thumbnail?: string | null; difficultyLevel: DifficultyLevel; isPublished?: boolean }) =>
   prisma.course.create({ data });
 
@@ -78,6 +131,13 @@ export async function updateModule(id: string, data: { courseId?: string; title?
 
 export const listLessons = (moduleId: string) =>
   prisma.lesson.findMany({ where: { moduleId, deletedAt: null }, include: { _count: { select: { materials: true, homeworks: true } } }, orderBy: { sortOrder: "asc" } });
+
+export async function getAdminLesson(id: string) {
+  return requireRecord(prisma.lesson.findFirst({
+    where: { id, deletedAt: null },
+    include: { _count: { select: { materials: true, homeworks: { where: { deletedAt: null } } } } },
+  }), "Lesson");
+}
 
 export const createLesson = (data: { moduleId: string; title: string; description?: string | null; videoUrl?: string | null; pointsReward: number; sortOrder: number; isPublished?: boolean }) =>
   prisma.lesson.create({ data });
@@ -102,6 +162,32 @@ export async function deleteMaterial(id: string) {
   await requireRecord(prisma.lessonMaterial.findUnique({ where: { id }, select: { id: true } }), "Material");
   return prisma.lessonMaterial.delete({ where: { id } });
 }
+
+const materialUsageSelect = {
+  id: true,
+  title: true,
+  lesson: {
+    select: {
+      id: true,
+      title: true,
+      module: {
+        select: {
+          id: true,
+          title: true,
+          course: { select: { id: true, title: true } },
+        },
+      },
+    },
+  },
+} as const;
+
+export async function listMaterialUsages(id: string) {
+  const material = await requireRecord(prisma.lessonMaterial.findUnique({ where: { id }, select: { url: true } }), "Material");
+  return prisma.lessonMaterial.findMany({ where: { url: material.url }, select: materialUsageSelect, orderBy: { createdAt: "asc" } });
+}
+
+export const listMaterialUsagesByUrlSuffix = (urlSuffix: string) =>
+  prisma.lessonMaterial.findMany({ where: { url: { endsWith: urlSuffix } }, select: materialUsageSelect, orderBy: { createdAt: "asc" } });
 
 export const listHomeworks = (lessonId: string) =>
   prisma.homework.findMany({ where: { lessonId, deletedAt: null }, orderBy: { createdAt: "asc" } });

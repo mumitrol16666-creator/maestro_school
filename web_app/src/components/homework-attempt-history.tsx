@@ -27,7 +27,7 @@ export function HomeworkAttemptHistory({ attempts, title = "История по�
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-sm font-bold text-ink">Попытка {attempt.attemptNumber}</span>
               <span className={`rounded-full px-3 py-1 text-xs font-bold ${submissionStatusClass(attempt.status)}`}>
-                {submissionStatusLabels[attempt.status] ?? attempt.status}
+                {submissionStatusLabels[attempt.status] ?? "Неизвестный статус"}
               </span>
               {attempt.attachmentType && (
                 <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-bold text-stone-600">

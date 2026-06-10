@@ -37,8 +37,6 @@ export function difficultyLabel(level: string) {
 export function toCourse(
   course: ApiCourseSummary,
   index: number,
-  enrolledCourseIds: Set<string>,
-  progressByCourse: Map<string, number>,
 ): Course {
   return {
     id: course.id,
@@ -46,8 +44,8 @@ export function toCourse(
     title: course.title,
     description: course.description ?? "",
     level: difficultyLabel(course.difficultyLevel),
-    access: enrolledCourseIds.has(course.id) ? "open" : "locked",
-    progress: progressByCourse.get(course.id) ?? course.progress ?? 0,
+    access: course.enrollmentStatus ? "enrolled" : "available",
+    progress: course.progress ?? 0,
     accent: courseAccents[index % courseAccents.length],
     modulesCount: course.modulesCount,
     lessonsCount: course.lessonsCount,
@@ -67,7 +65,6 @@ export function toCourseLesson(
     title: lesson.title,
     description: lesson.description ?? "",
     order: lesson.sortOrder,
-    duration: "Материал урока",
     status: normalizeLessonStatus(progress?.status),
     pointsReward: lesson.pointsReward,
     materials: [],
@@ -89,7 +86,6 @@ export function toLesson(detail: ApiLessonDetail, status?: string): Lesson {
     title: detail.title,
     description: detail.description ?? "",
     order: detail.sortOrder,
-    duration: "Видео урока",
     status: normalizeLessonStatus(status),
     pointsReward: detail.pointsReward,
     materials: detail.materials.map((material) => ({
@@ -107,11 +103,10 @@ export function toLesson(detail: ApiLessonDetail, status?: string): Lesson {
 export function toBoardPost(post: ApiNewsPost, index: number): BoardPost {
   return {
     id: post.id,
-    category: index === 0 ? "Событие" : "Новость",
     title: post.title,
-    excerpt: post.excerpt,
+    content: post.content,
     date: new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" }).format(new Date(post.publishedAt)),
+    author: post.author.name,
     accent: courseAccents[index % courseAccents.length],
-    featured: index === 0,
   };
 }

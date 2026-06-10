@@ -24,13 +24,15 @@ to `/login`.
 | Endpoint | Usage |
 | --- | --- |
 | `POST /auth/login` | Student and admin login |
+| `POST /auth/register` | Open student registration and automatic login |
 | `GET /auth/me` | Session validation and profile |
 | `GET /students/me/dashboard` | Student dashboard |
 | `GET /students/me/progress` | Course access, lesson statuses, progress, points history |
 | `GET /directions` | Direction labels |
 | `GET /courses` | Course catalog |
 | `GET /courses/:id` | Course modules and lessons |
-| `GET /lessons/:id` | Lesson, materials, homework |
+| `POST /courses/:id/enroll` | Explicit idempotent enrollment |
+| `GET /lessons/:id` | Protected lesson, materials, homework |
 | `POST /lessons/:lessonId/start` | Start available lesson |
 | `POST /homeworks/:homeworkId/submissions` | Submit comment and attachment URL |
 | `GET /news` | Maestro board |
@@ -46,9 +48,9 @@ Backend lesson statuses are normalized case-insensitively:
 - `REVIEWED` → `reviewed`
 - `COMPLETED` → `completed`
 
-Catalog endpoints do not currently include student-specific lesson statuses.
-The frontend merges course and lesson catalog data with
-`GET /students/me/progress` without changing backend behavior.
+Catalog course responses contain `enrollmentStatus`. Viewing a course never
+creates an enrollment. The frontend requests course progress only after the
+student presses “Начать обучение”.
 
 ## Role behavior
 
@@ -70,7 +72,8 @@ npm run build
 
 Backend typecheck/build and Learning Engine unit tests also pass. The live CMS
 scenario is available as `npm run cms:smoke`; it requires PostgreSQL, applied
-migrations, seed data, and the running backend.
+migrations, production seed, the running backend and `ADMIN_EMAIL` /
+`ADMIN_PASSWORD`.
 
 See `../backend/docs/CMS.md` for CMS endpoints, local media storage, RBAC, and
 the complete content-authoring scenario.

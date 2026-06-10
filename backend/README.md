@@ -16,6 +16,7 @@
 
 ```bash
 cp .env.example .env
+# заполните ADMIN_EMAIL, ADMIN_PASSWORD, ADMIN_FIRST_NAME, ADMIN_LAST_NAME
 docker compose up -d          # PostgreSQL (wait for healthy)
 npm install
 npm run db:generate
@@ -37,12 +38,11 @@ Health: `http://localhost:4000/health`
 npm test   # unit-тесты learning engine
 ```
 
-### Demo accounts (seed)
+### Production seed
 
-| Role | Email | Password |
-|------|-------|----------|
-| Admin | admin@maestro.local | admin123 |
-| Student | student@maestro.local | student123 |
+`npm run db:seed` идемпотентно синхронизирует роли, permissions, достижения и
+первого администратора из `ADMIN_*`. Ученики создаются только через
+`POST /auth/register`; учебный контент создается в CMS.
 
 ## Документация
 

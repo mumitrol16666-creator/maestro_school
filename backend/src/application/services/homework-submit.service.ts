@@ -4,7 +4,7 @@ import { getHomeworkById, createHomeworkSubmission } from "../repositories/homew
 import { getLessonProgressRecord, getLessonWithCourse } from "../repositories/learning.repository.js";
 import { startLesson, markLessonSubmitted } from "./lesson-progress.service.js";
 import { syncLessonAvailability } from "./lesson-unlock.service.js";
-import { ensureStudentEnrolled } from "./enrollment.service.js";
+import { requireCourseEnrollment } from "./enrollment.service.js";
 
 export async function submitHomework(params: {
   homeworkId: string;
@@ -18,7 +18,7 @@ export async function submitHomework(params: {
   const lesson = await getLessonWithCourse(lessonId);
   const courseId = lesson.module.courseId;
 
-  await ensureStudentEnrolled(params.studentId, courseId);
+  await requireCourseEnrollment(params.studentId, courseId);
   await syncLessonAvailability(params.studentId, courseId);
 
   const progress = await getLessonProgressRecord(params.studentId, lessonId);

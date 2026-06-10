@@ -52,6 +52,20 @@ news. Lesson materials and local media files are deleted directly.
 List endpoints for directions, courses, and news support `search`, `page`, and
 `limit`. Courses also support `directionId`.
 
+`GET /admin/courses/:id/tree` returns the complete ordered module and lesson
+tree used by the course editor. This avoids one request per module for large
+courses.
+
+## Course editor UX
+
+The course editor includes:
+
+- a collapsible course tree and lesson search;
+- separate selection and editing modes;
+- breadcrumb navigation;
+- unsaved-change protection and save status;
+- confirmation before destructive actions.
+
 ## Video
 
 The CMS stores only `videoUrl`. Supported providers:

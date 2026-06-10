@@ -21,6 +21,7 @@ import { HomeworkAttemptHistory } from "@/components/homework-attempt-history";
 import { HomeworkSubmissionForm } from "@/components/homework-submission-form";
 import { LessonVideoPlayer } from "@/components/lesson-video-player";
 import { StatusBadge } from "@/components/status-badge";
+import { MarkdownContent } from "@/components/markdown-content";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { flattenCourseLessons, normalizeLessonStatus, toLesson } from "@/lib/adapters";
 import { ApiError, api } from "@/lib/api-client";
@@ -149,7 +150,7 @@ export default function LessonPage() {
           {lesson.description && (
             <section className="mt-6">
               <h2 className="font-display text-2xl">Описание урока</h2>
-              <p className="mt-3 max-w-3xl text-sm leading-7 text-stone-500">{lesson.description}</p>
+              <MarkdownContent className="mt-3 max-w-3xl">{lesson.description}</MarkdownContent>
             </section>
           )}
 

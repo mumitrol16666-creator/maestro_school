@@ -1,5 +1,9 @@
+export {};
+
 const BASE_URL = process.env.SMOKE_BASE_URL ?? "http://localhost:4000";
 const API = `${BASE_URL}/api/v1`;
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 
 async function request<T>(method: string, path: string, token?: string, body?: unknown, expected = 200): Promise<T> {
   const response = await fetch(`${API}${path}`, {
@@ -21,12 +25,17 @@ async function login(email: string, password: string) {
 }
 
 async function main() {
+  if (!ADMIN_EMAIL || !ADMIN_PASSWORD) throw new Error("ADMIN_EMAIL and ADMIN_PASSWORD are required");
   const suffix = Date.now();
-  const admin = await login("admin@maestro.local", "admin123");
-  const student = await login("student@maestro.local", "student123");
+  const admin = await login(ADMIN_EMAIL, ADMIN_PASSWORD);
+  const student = await request<{ token: string }>("POST", "/auth/register", undefined, {
+    firstName: "CMS",
+    lastName: "Student",
+    email: `cms-${suffix}@maestro.test`,
+    password: `student-${suffix}`,
+  }, 201);
 
-  await request("GET", "/admin/directions", student, undefined, 403);
-  console.log("✓ Student receives 403");
+  await request("GET", "/admin/directions", student.token, undefined, 403);
 
   const direction = await request<{ id: string }>("POST", "/admin/directions", admin, {
     title: `Smoke Direction ${suffix}`, slug: `smoke-${suffix}`, description: "CMS smoke",
@@ -38,7 +47,7 @@ async function main() {
     courseId: course.id, title: "Module 1", sortOrder: 1,
   }, 201);
   const lesson = await request<{ id: string }>("POST", "/admin/lessons", admin, {
-    moduleId: module.id, title: "Lesson 1", description: "CMS smoke lesson", pointsReward: 10, sortOrder: 1, videoUrl: "https://youtu.be/example",
+    moduleId: module.id, title: "Lesson 1", description: "CMS smoke lesson", pointsReward: 10, sortOrder: 1, videoUrl: "https://youtu.be/dQw4w9WgXcQ",
   }, 201);
   await request("POST", "/admin/materials", admin, {
     lessonId: lesson.id, title: "PDF", type: "pdf", url: "https://example.com/material.pdf", sortOrder: 1,
@@ -49,9 +58,11 @@ async function main() {
   await request("POST", `/admin/courses/${course.id}/publish`, admin, { isPublished: true });
   await request("POST", "/admin/news", admin, { title: `Smoke News ${suffix}`, content: "**CMS** smoke", isPublished: true }, 201);
 
-  const publicCourse = await request<{ id: string }>("GET", `/courses/${course.id}`, student);
-  if (publicCourse.id !== course.id) throw new Error("Published course is not visible in student catalog");
-  console.log("✓ Full CMS content path and student visibility");
+  const publicCourse = await request<{ id: string; enrollmentStatus: string | null }>("GET", `/courses/${course.id}`, student.token);
+  if (publicCourse.id !== course.id || publicCourse.enrollmentStatus !== null) {
+    throw new Error("Published course preview is not visible or created an enrollment");
+  }
+  console.log("CMS smoke checks passed.");
 }
 
 main().catch((error) => {

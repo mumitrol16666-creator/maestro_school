@@ -24,6 +24,7 @@
   "dependencies": {
     "@fastify/cors": "^10.0.2",
     "@fastify/jwt": "^9.0.4",
+    "@fastify/rate-limit": "^10.3.0",
     "@prisma/client": "^6.3.1",
     "bcryptjs": "^2.4.3",
     "dotenv": "^16.4.7",

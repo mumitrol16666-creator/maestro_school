@@ -177,7 +177,7 @@ export async function getActiveEnrollment(studentId: string, courseId?: string) 
         },
       },
     },
-    orderBy: { enrolledAt: "desc" },
+    orderBy: { updatedAt: "desc" },
   });
 }
 

@@ -59,7 +59,7 @@ export async function homeworkRoutes(app: FastifyInstance) {
     {
       preHandler: [authenticate, requirePermission("homework.submit")],
     },
-    async (request) => {
+    async (request, reply) => {
       const { homeworkId } = z.object({ homeworkId: z.string().uuid() }).parse(request.params);
       const body = submitSchema.parse(request.body);
       const studentId = request.user!.id;
@@ -82,7 +82,7 @@ export async function homeworkRoutes(app: FastifyInstance) {
         payload: { homeworkId, lessonId, status: submission.status, lessonProgress: "submitted" },
       });
 
-      return {
+      return reply.status(201).send({
         data: {
           id: submission.id,
           homeworkId: submission.homeworkId,
@@ -91,7 +91,7 @@ export async function homeworkRoutes(app: FastifyInstance) {
           lessonProgress: "submitted",
           createdAt: submission.createdAt,
         },
-      };
+      });
     },
   );
 

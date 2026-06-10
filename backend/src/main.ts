@@ -1,7 +1,9 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import jwt from "@fastify/jwt";
+import rateLimit from "@fastify/rate-limit";
 import { env } from "./config/env.js";
+import { prisma } from "./infrastructure/database/prisma.js";
 import { errorHandler } from "./presentation/middleware/error-handler.js";
 import { authPlugin } from "./presentation/plugins/auth.plugin.js";
 import { registerRoutes } from "./presentation/routes/index.js";
@@ -22,9 +24,21 @@ async function bootstrap() {
     secret: env.JWT_SECRET,
   });
 
+  await app.register(rateLimit, { global: false });
   await app.register(authPlugin);
 
-  app.get("/health", async () => ({ status: "ok", service: "maestro-api" }));
+  app.get("/health", async (_request, reply) => {
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      return { status: "ok", service: "maestro-api", database: "ok" };
+    } catch {
+      return reply.status(503).send({
+        status: "error",
+        service: "maestro-api",
+        database: "unavailable",
+      });
+    }
+  });
 
   await registerRoutes(app);
 

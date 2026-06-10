@@ -4,6 +4,7 @@ import { LoaderCircle, Send } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { attachmentTypeLabels } from "@/lib/homework-ui";
 import type { HomeworkAttachmentType } from "@/types/homework";
+import { MarkdownContent } from "./markdown-content";
 
 const attachmentTypes: HomeworkAttachmentType[] = ["text", "video", "audio", "file"];
 
@@ -52,7 +53,7 @@ export function HomeworkSubmissionForm({
     <form onSubmit={handleSubmit} className="mt-9 rounded-[30px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
       <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">Домашнее задание</p>
       <h2 className="font-display mt-3 text-3xl">Задание к уроку</h2>
-      <p className="mt-4 text-sm leading-7 text-stone-500">{homeworkDescription}</p>
+      <MarkdownContent className="mt-4">{homeworkDescription}</MarkdownContent>
 
       {disabled && disabledReason && (
         <div className="mt-5 rounded-2xl border border-amber-100 bg-amber-50 p-4 text-sm font-bold text-amber-800">
