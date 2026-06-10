@@ -19,6 +19,7 @@ import { useParams } from "next/navigation";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
 import { HomeworkAttemptHistory } from "@/components/homework-attempt-history";
 import { HomeworkSubmissionForm } from "@/components/homework-submission-form";
+import { HomeworkTestForm } from "@/components/homework-test-form";
 import { LessonVideoPlayer } from "@/components/lesson-video-player";
 import { StatusBadge } from "@/components/status-badge";
 import { MarkdownContent } from "@/components/markdown-content";
@@ -37,7 +38,7 @@ function materialIcon(type: string) {
 }
 
 function canSubmitHomework(lesson: Lesson) {
-  return lesson.status === "available" || lesson.status === "in_progress";
+  return lesson.status === "in_progress";
 }
 
 function submitDisabledReason(lesson: Lesson) {
@@ -82,16 +83,15 @@ export default function LessonPage() {
 
   const { detail, lesson, attempts, nextLesson } = resource.data;
   const locked = lesson.status === "locked";
+  const lessonStarted = !locked && lesson.status !== "available";
   const latestReview = [...attempts].reverse().find((attempt) => attempt.reviewComment);
 
   async function handleStart() {
     setStarting(true);
     setActionError(null);
     try {
-      const result = await api.startLesson(lessonId);
-      resource.setData((current) =>
-        current ? { ...current, lesson: { ...current.lesson, status: normalizeLessonStatus(result.status) } } : current,
-      );
+      await api.startLesson(lessonId);
+      await resource.reload();
       setSuccess("Урок начат. Можно смотреть видео и готовить домашнее задание.");
     } catch (reason) {
       setActionError(reason instanceof ApiError ? reason.message : "Не удалось начать урок");
@@ -104,6 +104,7 @@ export default function LessonPage() {
     comment?: string;
     attachmentUrl?: string;
     attachmentType?: HomeworkAttachmentType;
+    testAnswers?: Record<string, string>;
   }) {
     if (!lesson.homeworkId) return;
     setSubmitting(true);
@@ -121,7 +122,9 @@ export default function LessonPage() {
             }
           : current,
       );
-      setSuccess("Работа отправлена на проверку.");
+      setSuccess(result.testResult
+        ? `Тест сдан: ${result.testResult.score}% (${result.testResult.correctAnswers} из ${result.testResult.totalQuestions} правильных ответов).`
+        : "Работа отправлена на проверку.");
     } catch (reason) {
       setActionError(reason instanceof ApiError ? reason.message : "Не удалось отправить домашнее задание");
     } finally {
@@ -155,12 +158,22 @@ export default function LessonPage() {
           )}
 
           <div className="mt-8">
-            <LessonVideoPlayer videoUrl={detail.videoUrl} title={lesson.title} locked={locked} />
+            <LessonVideoPlayer
+              videoUrl={detail.videoUrl}
+              title={lesson.title}
+              locked={!lessonStarted}
+              lockedLabel={lesson.status === "available" ? "Сначала начните урок" : undefined}
+              lockedDescription={lesson.status === "available" ? "После старта откроются видео, материалы и задание" : undefined}
+            />
           </div>
 
           <section className="mt-9">
             <h2 className="font-display text-3xl">Материалы урока</h2>
-            {lesson.materials.length ? (
+            {!lessonStarted ? (
+              <p className="mt-4 rounded-2xl border border-amber-100 bg-amber-50 p-4 text-sm font-bold text-amber-800">
+                Начните урок, чтобы открыть видео, материалы и задание.
+              </p>
+            ) : lesson.materials.length ? (
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 {lesson.materials.map((material) => (
                   <a
@@ -186,15 +199,33 @@ export default function LessonPage() {
             )}
           </section>
 
-          {lesson.homeworkId && lesson.homeworkDescription && (
+          {lessonStarted && lesson.homeworkId && lesson.homeworkDescription && (
             <>
-              <HomeworkSubmissionForm
-                homeworkDescription={lesson.homeworkDescription}
-                disabled={!canSubmitHomework(lesson)}
-                disabledReason={submitDisabledReason(lesson)}
-                submitting={submitting}
-                onSubmit={handleSubmit}
-              />
+              {detail.homework?.type === "test" ? (
+                canSubmitHomework(lesson) ? (
+                  <HomeworkTestForm
+                    description={lesson.homeworkDescription}
+                    questions={detail.homework.testQuestions ?? []}
+                    passingScore={detail.homework.passingScore}
+                    submitting={submitting}
+                    onSubmit={(testAnswers) => handleSubmit({ testAnswers })}
+                  />
+                ) : (
+                  <div className="mt-9 rounded-[30px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
+                    <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">Тест к уроку</p>
+                    <h2 className="font-display mt-3 text-3xl">Тест уже сдан</h2>
+                    <p className="mt-4 text-sm font-semibold text-stone-500">{submitDisabledReason(lesson)}</p>
+                  </div>
+                )
+              ) : (
+                <HomeworkSubmissionForm
+                  homeworkDescription={lesson.homeworkDescription}
+                  disabled={!canSubmitHomework(lesson)}
+                  disabledReason={submitDisabledReason(lesson)}
+                  submitting={submitting}
+                  onSubmit={handleSubmit}
+                />
+              )}
 
               {latestReview && (lesson.status === "available" || lesson.status === "in_progress") && (
                 <div className="mt-6 rounded-[24px] border border-amber-100 bg-amber-50 p-5">

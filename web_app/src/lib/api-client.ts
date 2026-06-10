@@ -138,6 +138,7 @@ export const api = {
       comment?: string;
       attachmentUrl?: string;
       attachmentType?: HomeworkAttachmentType;
+      testAnswers?: Record<string, string>;
     },
   ) =>
     apiRequest<HomeworkSubmissionResponse>(`/homeworks/${homeworkId}/submissions`, {

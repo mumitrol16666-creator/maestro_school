@@ -1,4 +1,4 @@
-import type { HomeworkAttachmentType } from "@prisma/client";
+import type { HomeworkAttachmentType, Prisma } from "@prisma/client";
 import { prisma, notDeleted } from "../../infrastructure/database/prisma.js";
 import { NotFoundError } from "../../domain/errors.js";
 
@@ -17,6 +17,9 @@ export async function createHomeworkSubmission(params: {
   comment?: string;
   attachmentUrl?: string;
   attachmentType?: HomeworkAttachmentType;
+  testAnswers?: Record<string, string>;
+  testScore?: number;
+  testPassed?: boolean;
 }) {
   return prisma.homeworkSubmission.create({
     data: {
@@ -25,6 +28,9 @@ export async function createHomeworkSubmission(params: {
       comment: params.comment,
       attachmentUrl: params.attachmentUrl,
       attachmentType: params.attachmentType,
+      testAnswers: params.testAnswers as Prisma.InputJsonValue | undefined,
+      testScore: params.testScore,
+      testPassed: params.testPassed,
       status: "submitted",
     },
   });
@@ -37,6 +43,8 @@ export interface HomeworkAttemptItem {
   comment: string | null;
   attachmentUrl: string | null;
   attachmentType: HomeworkAttachmentType | null;
+  testScore: number | null;
+  testPassed: boolean | null;
   status: string;
   reviewComment: string | null;
   reviewedAt: Date | null;
@@ -51,6 +59,8 @@ function mapAttempts(
     comment: string | null;
     attachmentUrl: string | null;
     attachmentType: HomeworkAttachmentType | null;
+    testScore: number | null;
+    testPassed: boolean | null;
     status: string;
     reviewComment: string | null;
     reviewedAt: Date | null;
@@ -65,6 +75,8 @@ function mapAttempts(
     comment: row.comment,
     attachmentUrl: row.attachmentUrl,
     attachmentType: row.attachmentType,
+    testScore: row.testScore,
+    testPassed: row.testPassed,
     status: row.status,
     reviewComment: row.reviewComment,
     reviewedAt: row.reviewedAt,

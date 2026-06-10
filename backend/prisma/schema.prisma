@@ -58,6 +58,11 @@ enum HomeworkAttachmentType {
   file
 }
 
+enum HomeworkType {
+  assignment
+  test
+}
+
 enum AuditAction {
   create
   update
@@ -357,12 +362,15 @@ model LessonProgress {
 // ─── Homework ────────────────────────────────────────────────────────────────
 
 model Homework {
-  id          String    @id @default(uuid()) @db.Uuid
-  lessonId    String    @map("lesson_id") @db.Uuid
-  description String    @db.Text
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz(6)
+  id            String       @id @default(uuid()) @db.Uuid
+  lessonId      String       @map("lesson_id") @db.Uuid
+  description   String       @db.Text
+  type          HomeworkType @default(assignment)
+  testQuestions Json?        @map("test_questions") @db.JsonB
+  passingScore  Int          @default(70) @map("passing_score")
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt     DateTime?    @map("deleted_at") @db.Timestamptz(6)
 
   lesson      Lesson               @relation(fields: [lessonId], references: [id], onDelete: Cascade)
   submissions HomeworkSubmission[]
@@ -380,6 +388,9 @@ model HomeworkSubmission {
   reviewComment  String?                   @map("review_comment") @db.Text
   attachmentUrl  String?                   @map("attachment_url") @db.VarChar(1024)
   attachmentType HomeworkAttachmentType?   @map("attachment_type")
+  testAnswers    Json?                     @map("test_answers") @db.JsonB
+  testScore      Int?                      @map("test_score")
+  testPassed     Boolean?                  @map("test_passed")
   status         HomeworkSubmissionStatus  @default(submitted)
   reviewedById  String?                  @map("reviewed_by") @db.Uuid
   reviewedAt    DateTime?                @map("reviewed_at") @db.Timestamptz(6)

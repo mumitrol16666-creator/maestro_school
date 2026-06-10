@@ -1,4 +1,5 @@
 import type { LessonStatus } from "@/types";
+import type { HomeworkTestQuestion, HomeworkType } from "@/types/homework";
 
 export interface ApiDirection {
   id: string;
@@ -80,6 +81,9 @@ export interface ApiMaterial {
 export interface ApiHomework {
   id: string;
   description: string;
+  type: HomeworkType;
+  passingScore: number;
+  testQuestions: HomeworkTestQuestion[] | null;
 }
 
 export interface ApiLessonDetail {
@@ -180,6 +184,9 @@ export interface HomeworkSubmissionResponse {
   homeworkId: string;
   status: string;
   attachmentType?: string | null;
+  testScore?: number | null;
+  testPassed?: boolean | null;
+  testResult?: { score: number; correctAnswers: number; totalQuestions: number } | null;
   lessonProgress: LessonStatus | string;
   createdAt: string;
 }

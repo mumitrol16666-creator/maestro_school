@@ -79,6 +79,9 @@ export interface CmsHomework {
   id: string;
   lessonId: string;
   description: string;
+  type: HomeworkType;
+  passingScore: number;
+  testQuestions: CmsHomeworkTestQuestion[] | null;
 }
 
 export interface CmsNews {
@@ -114,3 +117,4 @@ export interface CmsMaterialUsage {
     };
   };
 }
+import type { CmsHomeworkTestQuestion, HomeworkType } from "./homework";

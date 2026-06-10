@@ -21,6 +21,25 @@ const nullableUrl = z.string().url().max(1024).nullable().optional();
 const publishBody = z.object({ isPublished: z.boolean() });
 const difficulty = z.enum(["beginner", "intermediate", "advanced", "all_levels"]);
 const materialType = z.enum(["pdf", "image", "file", "link"]);
+const homeworkType = z.enum(["assignment", "test"]);
+const testOption = z.object({ id: z.string().min(1).max(100), text: z.string().trim().min(1).max(500) });
+const testQuestion = z.object({
+  id: z.string().min(1).max(100),
+  prompt: z.string().trim().min(1).max(1000),
+  options: z.array(testOption).min(2).max(10),
+  correctOptionId: z.string().min(1).max(100),
+}).superRefine((question, ctx) => {
+  if (!question.options.some((option) => option.id === question.correctOptionId)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Correct option must belong to question", path: ["correctOptionId"] });
+  }
+});
+const homeworkBody = z.object({
+  lessonId: z.string().uuid().optional(),
+  description: z.string().min(1).optional(),
+  type: homeworkType.optional(),
+  passingScore: z.number().int().min(0).max(100).optional(),
+  testQuestions: z.array(testQuestion).min(1).max(100).nullable().optional(),
+});
 
 const catalogGuards = () => [authenticate, requireContentAdmin, requirePermission("catalog.manage")];
 const newsGuards = () => [authenticate, requireContentAdmin, requirePermission("news.manage")];
@@ -160,11 +179,17 @@ export async function cmsRoutes(app: FastifyInstance) {
     const { lessonId } = z.object({ lessonId: z.string().uuid() }).parse(request.query); return { data: await listHomeworks(lessonId) };
   });
   app.post("/admin/homeworks", { preHandler: catalogGuards() }, async (request, reply) => {
-    const body = z.object({ lessonId: z.string().uuid(), description: z.string().min(1) }).parse(request.body);
+    const body = homeworkBody.extend({
+      lessonId: z.string().uuid(),
+      description: z.string().min(1),
+      type: homeworkType.default("assignment"),
+    }).parse(request.body);
+    if (body.type === "test" && !body.testQuestions?.length) throw new BadRequestError("Test homework must contain at least one question");
     const item = await createHomework(body); await audit(request, "homework", item.id, "create"); return reply.status(201).send({ data: item });
   });
   app.patch("/admin/homeworks/:id", { preHandler: catalogGuards() }, async (request) => {
-    const { id } = idParams.parse(request.params); const body = z.object({ lessonId: z.string().uuid().optional(), description: z.string().min(1).optional() }).parse(request.body);
+    const { id } = idParams.parse(request.params); const body = homeworkBody.parse(request.body);
+    if (body.type === "test" && !body.testQuestions?.length) throw new BadRequestError("Test homework must contain at least one question");
     const item = await updateHomework(id, body); await audit(request, "homework", id, "update"); return { data: item };
   });
   app.delete("/admin/homeworks/:id", { preHandler: catalogGuards() }, async (request) => {

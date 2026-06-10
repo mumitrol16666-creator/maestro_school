@@ -16,6 +16,7 @@ import {
 } from "../../application/services/enrollment.service.js";
 import { getLessonProgressRecord } from "../../application/repositories/learning.repository.js";
 import { syncLessonAvailability } from "../../application/services/lesson-unlock.service.js";
+import { publicHomeworkTestQuestions } from "../../domain/homework-test.js";
 import {
   authenticate,
   optionalAuthenticate,
@@ -121,6 +122,7 @@ export async function catalogRoutes(app: FastifyInstance) {
       if (!progress || progress.status === "locked") {
         throw new ForbiddenError("Урок пока закрыт");
       }
+      const contentOpen = progress.status !== "available";
 
       return {
         data: {
@@ -129,11 +131,21 @@ export async function catalogRoutes(app: FastifyInstance) {
           courseId: lesson.module.courseId,
           title: lesson.title,
           description: lesson.description,
-          videoUrl: lesson.videoUrl,
+          videoUrl: contentOpen ? lesson.videoUrl : null,
           sortOrder: lesson.sortOrder,
           pointsReward: lesson.pointsReward,
-          materials: lesson.materials,
-          homework: lesson.homeworks[0] ?? null,
+          materials: contentOpen ? lesson.materials : [],
+          homework: contentOpen && lesson.homeworks[0]
+            ? {
+                id: lesson.homeworks[0].id,
+                description: lesson.homeworks[0].description,
+                type: lesson.homeworks[0].type,
+                passingScore: lesson.homeworks[0].passingScore,
+                testQuestions: lesson.homeworks[0].type === "test"
+                  ? publicHomeworkTestQuestions(lesson.homeworks[0].testQuestions)
+                  : null,
+              }
+            : null,
           course: lesson.module.course,
         },
       };

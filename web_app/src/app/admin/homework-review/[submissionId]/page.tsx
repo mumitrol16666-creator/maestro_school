@@ -91,6 +91,16 @@ export default function HomeworkReviewDetailPage() {
             </p>
           </div>
 
+          {item.homeworkType === "test" && item.testScore != null && (
+            <div className={`mt-8 rounded-2xl border p-5 ${
+              item.testPassed ? "border-emerald-100 bg-emerald-50" : "border-red-100 bg-red-50"
+            }`}>
+              <p className="text-xs font-bold uppercase tracking-wider text-stone-500">Результат теста</p>
+              <p className="font-display mt-2 text-4xl">{item.testScore}%</p>
+              <p className="mt-1 text-sm font-bold">{item.testPassed ? "Проходной балл набран" : "Проходной балл не набран"}</p>
+            </div>
+          )}
+
           {item.attachmentUrl && (
             <div className="mt-8">
               <h2 className="font-display text-2xl">Материалы ученика</h2>

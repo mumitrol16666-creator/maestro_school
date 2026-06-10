@@ -34,6 +34,13 @@ export function HomeworkAttemptHistory({ attempts, title = "История по�
                   {attachmentTypeLabels[attempt.attachmentType]}
                 </span>
               )}
+              {attempt.testScore !== null && (
+                <span className={`rounded-full px-3 py-1 text-xs font-bold ${
+                  attempt.testPassed ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"
+                }`}>
+                  Тест: {attempt.testScore}%
+                </span>
+              )}
             </div>
 
             <p className="mt-3 text-xs text-stone-400">Отправлено {formatDate(attempt.createdAt)}</p>
