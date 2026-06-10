@@ -70,9 +70,20 @@ if [ -z "$JWT_SECRET" ] || [ "${#JWT_SECRET}" -lt 16 ]; then
   exit 1
 fi
 
-if [ -z "$ADMIN_EMAIL" ] || [ -z "$ADMIN_PASSWORD" ] || [ -z "$ADMIN_FIRST_NAME" ] || [ -z "$ADMIN_LAST_NAME" ]; then
-  echo "ADMIN_EMAIL, ADMIN_PASSWORD, ADMIN_FIRST_NAME and ADMIN_LAST_NAME must be set." >&2
+admin_values_set=0
+for value in "$ADMIN_EMAIL" "$ADMIN_PASSWORD" "$ADMIN_FIRST_NAME" "$ADMIN_LAST_NAME"; do
+  if [ -n "$value" ]; then
+    admin_values_set=$((admin_values_set + 1))
+  fi
+done
+
+if [ "$admin_values_set" -gt 0 ] && [ "$admin_values_set" -lt 4 ]; then
+  echo "Set all ADMIN_EMAIL, ADMIN_PASSWORD, ADMIN_FIRST_NAME and ADMIN_LAST_NAME values, or leave all of them empty." >&2
   exit 1
+fi
+
+if [ "$admin_values_set" -eq 0 ]; then
+  log "Admin secrets are not set; keeping existing administrators unchanged."
 fi
 
 ensure_docker
