@@ -49,12 +49,29 @@ const ROLE_PERMISSION_MAP: Record<string, string[]> = {
   ],
 };
 
-const adminEnv = z.object({
+const adminSchema = z.object({
   ADMIN_EMAIL: z.string().trim().email().transform((value) => value.toLowerCase()),
   ADMIN_PASSWORD: z.string().min(8).max(72),
   ADMIN_FIRST_NAME: z.string().trim().min(1).max(128),
   ADMIN_LAST_NAME: z.string().trim().min(1).max(128),
-}).parse(process.env);
+});
+
+const adminValues = [
+  process.env.ADMIN_EMAIL,
+  process.env.ADMIN_PASSWORD,
+  process.env.ADMIN_FIRST_NAME,
+  process.env.ADMIN_LAST_NAME,
+];
+const hasAnyAdminValue = adminValues.some(Boolean);
+const hasAllAdminValues = adminValues.every(Boolean);
+
+if (hasAnyAdminValue && !hasAllAdminValues) {
+  throw new Error(
+    "Set all ADMIN_EMAIL, ADMIN_PASSWORD, ADMIN_FIRST_NAME and ADMIN_LAST_NAME values, or leave all of them empty.",
+  );
+}
+
+const adminEnv = hasAllAdminValues ? adminSchema.parse(process.env) : null;
 
 async function main() {
   for (const permission of PERMISSIONS) {
@@ -109,26 +126,32 @@ async function main() {
     });
   }
 
-  await prisma.user.upsert({
-    where: { email: adminEnv.ADMIN_EMAIL },
-    update: {
-      firstName: adminEnv.ADMIN_FIRST_NAME,
-      lastName: adminEnv.ADMIN_LAST_NAME,
-      passwordHash: await bcrypt.hash(adminEnv.ADMIN_PASSWORD, 10),
-      roleId: roleRecords.admin,
-      isActive: true,
-      deletedAt: null,
-    },
-    create: {
-      email: adminEnv.ADMIN_EMAIL,
-      passwordHash: await bcrypt.hash(adminEnv.ADMIN_PASSWORD, 10),
-      firstName: adminEnv.ADMIN_FIRST_NAME,
-      lastName: adminEnv.ADMIN_LAST_NAME,
-      roleId: roleRecords.admin,
-    },
-  });
+  if (adminEnv) {
+    await prisma.user.upsert({
+      where: { email: adminEnv.ADMIN_EMAIL },
+      update: {
+        firstName: adminEnv.ADMIN_FIRST_NAME,
+        lastName: adminEnv.ADMIN_LAST_NAME,
+        passwordHash: await bcrypt.hash(adminEnv.ADMIN_PASSWORD, 10),
+        roleId: roleRecords.admin,
+        isActive: true,
+        deletedAt: null,
+      },
+      create: {
+        email: adminEnv.ADMIN_EMAIL,
+        passwordHash: await bcrypt.hash(adminEnv.ADMIN_PASSWORD, 10),
+        firstName: adminEnv.ADMIN_FIRST_NAME,
+        lastName: adminEnv.ADMIN_LAST_NAME,
+        roleId: roleRecords.admin,
+      },
+    });
+  }
 
-  console.log("Production seed complete: roles, permissions, achievements and first admin are ready.");
+  console.log(
+    adminEnv
+      ? "Production seed complete: roles, permissions, achievements and first admin are ready."
+      : "Production seed complete: roles, permissions and achievements are ready; existing administrators were unchanged.",
+  );
 }
 
 main()
