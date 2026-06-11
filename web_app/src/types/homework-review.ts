@@ -16,6 +16,9 @@ export interface HomeworkSubmissionItem {
   studentComment: string | null;
   attachmentUrl: string | null;
   attachmentType?: string | null;
+  homeworkType?: "assignment" | "test";
+  testScore?: number | null;
+  testPassed?: boolean | null;
   status: string;
   lessonProgressStatus: string | null;
   submittedAt: string;

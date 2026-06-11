@@ -4,6 +4,7 @@ import { ArrowDown, ArrowUp, Copy, ExternalLink, FilePlus, Pencil, Plus, Send, T
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { AdminVideoValidation } from "@/components/admin-video-validation";
+import { AdminTestBuilder } from "@/components/admin-test-builder";
 import { Breadcrumbs, ConfirmDialog, type ConfirmRequest, SaveStatus, type SaveState } from "@/components/admin-feedback";
 import { inputClass, primaryButton, PublishBadge, secondaryButton } from "@/components/admin-ui";
 import { CourseReadiness } from "@/components/course-readiness";
@@ -14,12 +15,18 @@ import { useApiResource } from "@/hooks/use-api-resource";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { cmsApi } from "@/lib/cms-api";
 import { uploadMediaFile } from "@/lib/file-upload";
-import type { CmsMaterial, CmsMaterialUsage } from "@/types/cms";
+import type { CmsHomework, CmsMaterial, CmsMaterialUsage } from "@/types/cms";
 
 type EditorMode = "none" | "new-module" | "edit-module" | "new-lesson" | "edit-lesson";
 const emptyModule = (courseId: string) => ({ title: "", description: "", sortOrder: 0, courseId });
 const emptyLesson = { title: "", description: "", videoUrl: "", pointsReward: 0, sortOrder: 0 };
 const emptyMaterial = { title: "", type: "pdf", url: "", sortOrder: 0 };
+const emptyHomework: Pick<CmsHomework, "description" | "type" | "passingScore" | "testQuestions"> = {
+  description: "",
+  type: "assignment",
+  passingScore: 70,
+  testQuestions: [],
+};
 const same = (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right);
 const formatSize = (bytes?: number) => bytes === undefined ? "Размер неизвестен" : bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${(bytes / 1024).toFixed(1)} KB`;
 const formatDate = (value?: string) => value ? new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(value)) : "Дата неизвестна";
@@ -43,8 +50,8 @@ export default function CourseBuilderPage() {
   const [materialForm, setMaterialForm] = useState(emptyMaterial);
   const [materialFile, setMaterialFile] = useState<globalThis.File | null>(null);
   const [replacingMaterialId, setReplacingMaterialId] = useState<string | null>(null);
-  const [homeworkText, setHomeworkText] = useState("");
-  const [homeworkBaseline, setHomeworkBaseline] = useState("");
+  const [homeworkForm, setHomeworkForm] = useState(emptyHomework);
+  const [homeworkBaseline, setHomeworkBaseline] = useState(emptyHomework);
   const [operation, setOperation] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [operationError, setOperationError] = useState<string | null>(null);
   const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null);
@@ -61,7 +68,7 @@ export default function CourseBuilderPage() {
   const moduleDirty = (editorMode === "new-module" || editorMode === "edit-module") && !same(moduleForm, moduleBaseline);
   const lessonDirty = (editorMode === "new-lesson" || editorMode === "edit-lesson") && !same(lessonForm, lessonBaseline);
   const materialDirty = !!selectedLesson && (!same(materialForm, emptyMaterial) || !!materialFile);
-  const homeworkDirty = !!selectedLesson && homeworkText !== homeworkBaseline;
+  const homeworkDirty = !!selectedLesson && !same(homeworkForm, homeworkBaseline);
   const isDirty = moduleDirty || lessonDirty || materialDirty || homeworkDirty;
   const saveState: SaveState = operation === "saving" ? "saving" : operation === "error" ? "error" : isDirty ? "dirty" : operation === "saved" ? "saved" : "idle";
 
@@ -75,8 +82,14 @@ export default function CourseBuilderPage() {
   }, [selectedModuleId, tree.data]);
 
   useEffect(() => {
-    const value = homeworks.data?.[0]?.description ?? "";
-    setHomeworkText(value);
+    const homework = homeworks.data?.[0];
+    const value = homework ? {
+      description: homework.description,
+      type: homework.type,
+      passingScore: homework.passingScore,
+      testQuestions: homework.testQuestions ?? [],
+    } : emptyHomework;
+    setHomeworkForm(value);
     setHomeworkBaseline(value);
   }, [homeworks.data, selectedLessonId]);
 
@@ -95,7 +108,7 @@ export default function CourseBuilderPage() {
     setModuleForm(emptyModule(courseId)); setModuleBaseline(emptyModule(courseId));
     setLessonForm(emptyLesson); setLessonBaseline(emptyLesson);
     setMaterialForm(emptyMaterial); setMaterialFile(null);
-    setHomeworkText(homeworkBaseline);
+    setHomeworkForm(homeworkBaseline);
     setOperation("idle"); setOperationError(null);
   }
 
@@ -189,9 +202,13 @@ export default function CourseBuilderPage() {
   async function saveHomework(event: FormEvent) {
     event.preventDefault(); if (!selectedLesson) return;
     await runOperation(async () => {
-      if (homeworks.data?.[0]) await cmsApi.updateHomework(homeworks.data[0].id, { description: homeworkText });
-      else await cmsApi.createHomework({ lessonId: selectedLesson.id, description: homeworkText });
-      setHomeworkBaseline(homeworkText); await Promise.all([homeworks.reload(), tree.reload()]);
+      const body = {
+        ...homeworkForm,
+        testQuestions: homeworkForm.type === "test" ? homeworkForm.testQuestions : null,
+      };
+      if (homeworks.data?.[0]) await cmsApi.updateHomework(homeworks.data[0].id, body);
+      else await cmsApi.createHomework({ lessonId: selectedLesson.id, ...body });
+      setHomeworkBaseline(homeworkForm); await Promise.all([homeworks.reload(), tree.reload()]);
     });
   }
 
@@ -306,7 +323,70 @@ export default function CourseBuilderPage() {
               <div className="mt-3 flex flex-wrap items-center gap-3"><label className={`${secondaryButton} cursor-pointer`}><Upload size={14} /> Выбрать файл<input type="file" accept="application/pdf,image/*" onChange={selectMaterialFile} className="hidden" /></label>{materialFile && <span className="max-w-sm truncate text-xs font-semibold text-stone-500">{materialFile.name} · {formatSize(materialFile.size)}</span>}<button className={primaryButton}><Plus size={14} /> Прикрепить материал</button></div>
             </form>
           </section>
-          <form onSubmit={saveHomework} className="mt-8 rounded-[24px] border border-stone-200 p-5"><div className="flex items-center justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-gold">Домашнее задание</p><p className="mt-1 text-xs text-stone-400">{homeworks.data?.[0] ? "Задание создано" : "Задание не создано"}</p></div>{homeworks.data?.[0] && <button type="button" onClick={() => requestDelete("Архивировать домашнее задание?", "Ученики больше не увидят это задание.", async () => { await cmsApi.deleteHomework(homeworks.data![0].id); setHomeworkText(""); setHomeworkBaseline(""); await Promise.all([homeworks.reload(), tree.reload()]); }, "Архивировать")} className={secondaryButton}><Trash2 size={14} /></button>}</div><div className="mt-4"><MarkdownEditor value={homeworkText} onChange={setHomeworkText} label="Описание задания" /></div><button className={`${primaryButton} mt-4`}>{homeworks.data?.[0] ? "Сохранить задание" : "Создать задание"}</button></form>
+          <form onSubmit={saveHomework} className="mt-8 rounded-[24px] border border-stone-200 p-5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-gold">Домашнее задание</p>
+                <p className="mt-1 text-xs text-stone-400">{homeworks.data?.[0] ? "Задание создано" : "Задание не создано"}</p>
+              </div>
+              {homeworks.data?.[0] && (
+                <button
+                  type="button"
+                  onClick={() => requestDelete("Архивировать домашнее задание?", "Ученики больше не увидят это задание.", async () => {
+                    await cmsApi.deleteHomework(homeworks.data![0].id);
+                    setHomeworkForm(emptyHomework);
+                    setHomeworkBaseline(emptyHomework);
+                    await Promise.all([homeworks.reload(), tree.reload()]);
+                  }, "Архивировать")}
+                  className={secondaryButton}
+                >
+                  <Trash2 size={14} />
+                </button>
+              )}
+            </div>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
+                Формат сдачи
+                <select
+                  value={homeworkForm.type}
+                  onChange={(event) => setHomeworkForm({
+                    ...homeworkForm,
+                    type: event.target.value as CmsHomework["type"],
+                    testQuestions: event.target.value === "test" ? homeworkForm.testQuestions : [],
+                  })}
+                  className={`${inputClass} mt-2`}
+                >
+                  <option value="assignment">Работа на проверку</option>
+                  <option value="test">Тест</option>
+                </select>
+              </label>
+              {homeworkForm.type === "test" && (
+                <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
+                  Проходной балл, %
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={homeworkForm.passingScore}
+                    onChange={(event) => setHomeworkForm({ ...homeworkForm, passingScore: Number(event.target.value) })}
+                    className={`${inputClass} mt-2`}
+                  />
+                </label>
+              )}
+            </div>
+            <div className="mt-4">
+              <MarkdownEditor value={homeworkForm.description} onChange={(description) => setHomeworkForm({ ...homeworkForm, description })} label="Описание задания" />
+            </div>
+            {homeworkForm.type === "test" && (
+              <AdminTestBuilder questions={homeworkForm.testQuestions ?? []} onChange={(testQuestions) => setHomeworkForm({ ...homeworkForm, testQuestions })} />
+            )}
+            <button
+              disabled={!homeworkForm.description.trim() || (homeworkForm.type === "test" && !homeworkForm.testQuestions?.length)}
+              className={`${primaryButton} mt-4 disabled:opacity-50`}
+            >
+              {homeworks.data?.[0] ? "Сохранить задание" : "Создать задание"}
+            </button>
+          </form>
         </> : selectedModule ? <div><div className="flex flex-col gap-4 border-b border-stone-100 pb-6 sm:flex-row sm:items-start sm:justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">Модуль</p><h2 className="font-display mt-2 text-4xl">{selectedModule.title}</h2><p className="mt-3 text-sm text-stone-500">{selectedModule.lessons.length} уроков · порядок {selectedModule.sortOrder}</p></div><div className="flex flex-wrap gap-2"><button onClick={startEditModule} className={primaryButton}><Pencil size={15} /> Редактировать</button><button onClick={() => startNewLesson(selectedModule.id)} className={secondaryButton}><Plus size={15} /> Урок</button><button onClick={() => requestDelete("Удалить модуль?", `Модуль «${selectedModule.title}» будет отправлен в архив вместе с его уроками.`, async () => { await cmsApi.deleteModule(selectedModule.id); setSelectedModuleId(null); await tree.reload(); })} className={secondaryButton}><Trash2 size={15} /></button></div></div><p className="mt-7 whitespace-pre-wrap text-sm leading-7 text-stone-600">{selectedModule.description || "Описание модуля пока не добавлено."}</p></div> : <EmptyState title="Выберите элемент курса" description="Откройте модуль или урок в дереве слева." />}
       </main>
     </div>

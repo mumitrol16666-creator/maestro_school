@@ -15,6 +15,7 @@ const submitSchema = z.object({
   comment: z.string().max(4000).optional(),
   attachmentUrl: z.string().url().max(1024).optional(),
   attachmentType: attachmentTypeSchema.optional(),
+  testAnswers: z.record(z.string().min(1), z.string().min(1)).optional(),
 });
 
 const reviewSchema = z
@@ -66,12 +67,13 @@ export async function homeworkRoutes(app: FastifyInstance) {
 
       await getHomeworkById(homeworkId);
 
-      const { submission, lessonId } = await submitHomework({
+      const { submission, lessonId, testResult } = await submitHomework({
         homeworkId,
         studentId,
         comment: body.comment,
         attachmentUrl: body.attachmentUrl,
         attachmentType: body.attachmentType,
+        testAnswers: body.testAnswers,
       });
 
       await writeAuditLog({
@@ -88,6 +90,9 @@ export async function homeworkRoutes(app: FastifyInstance) {
           homeworkId: submission.homeworkId,
           status: submission.status,
           attachmentType: submission.attachmentType,
+          testScore: submission.testScore,
+          testPassed: submission.testPassed,
+          testResult,
           lessonProgress: "submitted",
           createdAt: submission.createdAt,
         },

@@ -1,4 +1,4 @@
-import type { DifficultyLevel, MaterialType } from "@prisma/client";
+import { Prisma, type DifficultyLevel, type HomeworkType, type MaterialType } from "@prisma/client";
 import { prisma } from "../../infrastructure/database/prisma.js";
 import { NotFoundError } from "../../domain/errors.js";
 
@@ -192,12 +192,30 @@ export const listMaterialUsagesByUrlSuffix = (urlSuffix: string) =>
 export const listHomeworks = (lessonId: string) =>
   prisma.homework.findMany({ where: { lessonId, deletedAt: null }, orderBy: { createdAt: "asc" } });
 
-export const createHomework = (data: { lessonId: string; description: string }) =>
-  prisma.homework.create({ data });
+type HomeworkWrite = {
+  lessonId?: string;
+  description?: string;
+  type?: HomeworkType;
+  passingScore?: number;
+  testQuestions?: unknown[] | null;
+  deletedAt?: Date | null;
+};
 
-export async function updateHomework(id: string, data: { lessonId?: string; description?: string; deletedAt?: Date | null }) {
+function homeworkWriteData(data: HomeworkWrite): Prisma.HomeworkUncheckedUpdateInput {
+  return {
+    ...data,
+    testQuestions: data.testQuestions === null
+      ? Prisma.JsonNull
+      : data.testQuestions as Prisma.InputJsonValue | undefined,
+  };
+}
+
+export const createHomework = (data: HomeworkWrite & { lessonId: string; description: string }) =>
+  prisma.homework.create({ data: homeworkWriteData(data) as Prisma.HomeworkUncheckedCreateInput });
+
+export async function updateHomework(id: string, data: HomeworkWrite) {
   await requireRecord(prisma.homework.findUnique({ where: { id }, select: { id: true } }), "Homework");
-  return prisma.homework.update({ where: { id }, data });
+  return prisma.homework.update({ where: { id }, data: homeworkWriteData(data) });
 }
 
 export async function listAdminNews(input: PageInput) {

@@ -7,9 +7,17 @@ interface LessonVideoPlayerProps {
   videoUrl?: string | null;
   title: string;
   locked?: boolean;
+  lockedLabel?: string;
+  lockedDescription?: string;
 }
 
-export function LessonVideoPlayer({ videoUrl, title, locked = false }: LessonVideoPlayerProps) {
+export function LessonVideoPlayer({
+  videoUrl,
+  title,
+  locked = false,
+  lockedLabel = "Урок закрыт",
+  lockedDescription = "Сначала завершите предыдущий урок",
+}: LessonVideoPlayerProps) {
   const parsed = parseVideoUrl(videoUrl);
 
   if (locked) {
@@ -20,8 +28,8 @@ export function LessonVideoPlayer({ videoUrl, title, locked = false }: LessonVid
           <span className="grid h-20 w-20 place-items-center rounded-full border border-white/20 bg-white/10 opacity-40">
             <Play size={27} fill="currentColor" />
           </span>
-          <p className="mt-5 text-sm font-bold">Урок закрыт</p>
-          <p className="mt-1 text-xs text-white/45">Сначала завершите предыдущий урок</p>
+          <p className="mt-5 text-sm font-bold">{lockedLabel}</p>
+          <p className="mt-1 text-xs text-white/45">{lockedDescription}</p>
         </div>
       </div>
     );

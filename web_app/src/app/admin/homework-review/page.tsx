@@ -123,6 +123,11 @@ export default function HomeworkReviewPage() {
                 <p className="mt-2 line-clamp-2 text-sm text-stone-500">
                   {item.studentComment || item.homeworkDescription}
                 </p>
+                {item.homeworkType === "test" && item.testScore != null && (
+                  <p className={`mt-2 text-xs font-bold ${item.testPassed ? "text-emerald-700" : "text-red-700"}`}>
+                    Тест: {item.testScore}% · {item.testPassed ? "пройден" : "не пройден"}
+                  </p>
+                )}
                 <p className="mt-2 text-xs text-stone-400">
                   Отправлено {new Intl.DateTimeFormat("ru-RU", { dateStyle: "medium", timeStyle: "short" }).format(new Date(item.submittedAt))}
                 </p>

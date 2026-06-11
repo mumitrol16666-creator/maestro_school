@@ -1,8 +1,13 @@
 import type { HomeworkAttachmentType } from "@prisma/client";
 import { BadRequestError } from "../../domain/errors.js";
+import {
+  gradeHomeworkTest,
+  parseHomeworkTestQuestions,
+  type HomeworkTestAnswerMap,
+} from "../../domain/homework-test.js";
 import { getHomeworkById, createHomeworkSubmission } from "../repositories/homework.repository.js";
 import { getLessonProgressRecord, getLessonWithCourse } from "../repositories/learning.repository.js";
-import { startLesson, markLessonSubmitted } from "./lesson-progress.service.js";
+import { markLessonSubmitted } from "./lesson-progress.service.js";
 import { syncLessonAvailability } from "./lesson-unlock.service.js";
 import { requireCourseEnrollment } from "./enrollment.service.js";
 
@@ -12,6 +17,7 @@ export async function submitHomework(params: {
   comment?: string;
   attachmentUrl?: string;
   attachmentType?: HomeworkAttachmentType;
+  testAnswers?: HomeworkTestAnswerMap;
 }) {
   const homework = await getHomeworkById(params.homeworkId);
   const lessonId = homework.lesson.id;
@@ -36,7 +42,13 @@ export async function submitHomework(params: {
   }
 
   if (progress.status === "available") {
-    await startLesson(params.studentId, lessonId);
+    throw new BadRequestError("Сначала начните урок");
+  }
+
+  let testResult: { score: number; correctAnswers: number; totalQuestions: number } | null = null;
+  if (homework.type === "test") {
+    const questions = parseHomeworkTestQuestions(homework.testQuestions);
+    testResult = gradeHomeworkTest(questions, params.testAnswers ?? {});
   }
 
   const submission = await createHomeworkSubmission({
@@ -45,9 +57,12 @@ export async function submitHomework(params: {
     comment: params.comment,
     attachmentUrl: params.attachmentUrl,
     attachmentType: params.attachmentType,
+    testAnswers: homework.type === "test" ? params.testAnswers : undefined,
+    testScore: testResult?.score,
+    testPassed: testResult ? testResult.score >= homework.passingScore : undefined,
   });
 
   await markLessonSubmitted(params.studentId, lessonId);
 
-  return { submission, lessonId, courseId };
+  return { submission, lessonId, courseId, testResult };
 }
