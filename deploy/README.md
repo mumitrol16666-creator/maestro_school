@@ -61,6 +61,9 @@ chmod 600 ~/.ssh/authorized_keys
 | `ADMIN_PASSWORD` | ✅ (первый деплой) | пароль, 8–72 символа |
 | `ADMIN_FIRST_NAME` | ✅ (первый деплой) | имя, например `Анна` |
 | `ADMIN_LAST_NAME` | ✅ (первый деплой) | фамилия, например `Иванова` |
+| `VAPID_PUBLIC_KEY` | для push | `npx tsx backend/scripts/generate-vapid-keys.ts` |
+| `VAPID_PRIVATE_KEY` | для push | пара к `VAPID_PUBLIC_KEY` |
+| `VAPID_SUBJECT` | опционально | `mailto:admin@your-school.ru` |
 
 После первого успешного деплоя значения сохраняются на сервере в `/var/lib/maestro/deploy.env` и могут не передаваться повторно.
 

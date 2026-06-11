@@ -205,6 +205,7 @@ model User {
   achievements         StudentAchievement[]
   newsPosts            NewsPost[]
   auditLogs            AuditLog[]
+  pushSubscriptions    PushSubscription[]
 
   @@index([roleId])
   @@index([email])
@@ -489,6 +490,24 @@ model NewsPost {
   @@index([authorId])
   @@index([deletedAt])
   @@map("news_posts")
+}
+
+// ─── Push notifications ──────────────────────────────────────────────────────
+
+model PushSubscription {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  endpoint  String   @unique @db.VarChar(2048)
+  p256dh    String   @db.VarChar(255)
+  auth      String   @db.VarChar(255)
+  userAgent String?  @map("user_agent") @db.VarChar(512)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_subscriptions")
 }
 
 // ─── Audit ───────────────────────────────────────────────────────────────────

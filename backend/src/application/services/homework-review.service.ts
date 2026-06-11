@@ -6,6 +6,7 @@ import {
   markLessonReviewed,
   reopenLessonForRevision,
 } from "./lesson-progress.service.js";
+import { notifyHomeworkReviewed } from "./push-notification.service.js";
 
 export type HomeworkReviewAction = "approve" | "reject";
 
@@ -49,6 +50,13 @@ export async function reviewHomeworkSubmission(params: {
       lessonTitle: lesson.title,
     });
 
+    void notifyHomeworkReviewed({
+      studentId,
+      lessonId,
+      lessonTitle: lesson.title,
+      action: "approve",
+    }).catch(() => undefined);
+
     return {
       submission: updatedSubmission,
       lessonStatus: "completed" as const,
@@ -76,6 +84,13 @@ export async function reviewHomeworkSubmission(params: {
   });
 
   await reopenLessonForRevision(studentId, lessonId);
+
+  void notifyHomeworkReviewed({
+    studentId,
+    lessonId,
+    lessonTitle: lesson.title,
+    action: "reject",
+  }).catch(() => undefined);
 
   return {
     submission: updatedSubmission,

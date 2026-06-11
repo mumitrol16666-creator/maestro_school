@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useAuth } from "@/components/auth-provider";
 import { ErrorState, LoadingState } from "@/components/data-states";
 import { PageHeader } from "@/components/page-header";
+import { PwaInstallCard } from "@/components/pwa-install-card";
+import { PushNotificationsCard } from "@/components/push-notifications-card";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { api } from "@/lib/api-client";
 
@@ -54,6 +56,8 @@ export default function SettingsPage() {
           </button>
         </section>
         <section className="space-y-5">
+          <PwaInstallCard />
+          <PushNotificationsCard />
           <div className="rounded-[30px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8"><p className="text-xs font-bold uppercase tracking-[0.17em] text-gold">Обучение</p><div className="mt-6 grid gap-4 sm:grid-cols-2"><div className="rounded-2xl bg-stone-50 p-5"><GraduationCap size={18} className="text-gold" /><p className="mt-3 text-xs font-bold uppercase tracking-wider text-stone-400">Направления</p><p className="font-display mt-3 text-2xl">{directions.length || 0}</p></div><div className="rounded-2xl bg-stone-50 p-5"><Star size={18} className="text-gold" /><p className="mt-3 text-xs font-bold uppercase tracking-wider text-stone-400">Баллы</p><p className="font-display mt-3 text-2xl">{profile.points ?? 0}</p></div></div></div>
           <div className="rounded-[30px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
             <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold">Активные курсы</p>

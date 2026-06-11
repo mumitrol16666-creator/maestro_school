@@ -82,6 +82,9 @@ jobs:
             export ADMIN_PASSWORD="${{ secrets.ADMIN_PASSWORD }}"
             export ADMIN_FIRST_NAME="${{ secrets.ADMIN_FIRST_NAME }}"
             export ADMIN_LAST_NAME="${{ secrets.ADMIN_LAST_NAME }}"
+            export VAPID_PUBLIC_KEY="${{ secrets.VAPID_PUBLIC_KEY }}"
+            export VAPID_PRIVATE_KEY="${{ secrets.VAPID_PRIVATE_KEY }}"
+            export VAPID_SUBJECT="${{ secrets.VAPID_SUBJECT }}"
             chmod +x /var/www/maestro_school/deploy/deploy.sh
             bash /var/www/maestro_school/deploy/deploy.sh
 
