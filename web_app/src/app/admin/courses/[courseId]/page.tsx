@@ -1,16 +1,15 @@
 "use client";
 
-import { ArrowDown, ArrowUp, Copy, ExternalLink, FilePlus, FolderOpen, Pencil, Plus, Send, Trash2, Upload } from "lucide-react";
-import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { Pencil, Plus, Send, Trash2 } from "lucide-react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { AdminVideoValidation } from "@/components/admin-video-validation";
-import { AdminTestBuilder, isTestBuilderValid } from "@/components/admin-test-builder";
 import { Breadcrumbs, ConfirmDialog, type ConfirmRequest, SaveStatus, type SaveState } from "@/components/admin-feedback";
 import { inputClass, primaryButton, PublishBadge, secondaryButton } from "@/components/admin-ui";
+import { LessonEditorForm } from "@/components/lesson-editor-form";
+import { LessonWorkspace, type LessonWorkspaceTab } from "@/components/lesson-workspace";
 import { CourseReadiness } from "@/components/course-readiness";
 import { CourseStructureTree } from "@/components/course-structure-tree";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
-import { MarkdownEditor } from "@/components/markdown-editor";
 import { MediaPicker } from "@/components/media-picker";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
@@ -59,7 +58,7 @@ export default function CourseBuilderPage() {
   const [operationError, setOperationError] = useState<string | null>(null);
   const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
-  const videoInputRef = useRef<HTMLInputElement>(null);
+  const [lessonTab, setLessonTab] = useState<LessonWorkspaceTab>("content");
 
   const modules = tree.data?.modules ?? [];
   const selectedModule = modules.find((item) => item.id === selectedModuleId) ?? null;
@@ -83,6 +82,10 @@ export default function CourseBuilderPage() {
     setSelectedModuleId(first.id);
     setExpanded(new Set([first.id]));
   }, [selectedModuleId, tree.data]);
+
+  useEffect(() => {
+    setLessonTab("content");
+  }, [selectedLessonId]);
 
   useEffect(() => {
     const homework = homeworks.data?.[0];
@@ -305,18 +308,6 @@ export default function CourseBuilderPage() {
     </form>;
   }
 
-  function lessonEditor() {
-    return <form onSubmit={saveLesson} className="space-y-5">
-      <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">{editorMode === "new-lesson" ? "Новый урок" : "Настройки урока"}</p><h2 className="font-display mt-2 text-4xl">{editorMode === "new-lesson" ? "Добавить урок" : selectedLesson?.title}</h2></div>
-      <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">Название<input required value={lessonForm.title} onChange={(event) => setLessonForm({ ...lessonForm, title: event.target.value })} className={`${inputClass} mt-2`} /></label>
-      <MarkdownEditor label="Описание" value={lessonForm.description} onChange={(description) => setLessonForm({ ...lessonForm, description })} />
-      <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">Видео URL<input ref={videoInputRef} type="url" value={lessonForm.videoUrl} onChange={(event) => setLessonForm({ ...lessonForm, videoUrl: event.target.value })} className={`${inputClass} mt-2`} placeholder="YouTube / Vimeo / Cloudflare Stream" /></label>
-      <AdminVideoValidation videoUrl={lessonForm.videoUrl} title={lessonForm.title} onReplace={() => videoInputRef.current?.focus()} onDelete={() => setLessonForm({ ...lessonForm, videoUrl: "" })} />
-      <div className="grid gap-4 sm:grid-cols-2"><label className="block text-xs font-bold uppercase tracking-wider text-stone-500">Баллы<input type="number" min="0" value={lessonForm.pointsReward} onChange={(event) => setLessonForm({ ...lessonForm, pointsReward: Number(event.target.value) })} className={`${inputClass} mt-2`} /></label><label className="block text-xs font-bold uppercase tracking-wider text-stone-500">Порядок<input type="number" min="0" value={lessonForm.sortOrder} onChange={(event) => setLessonForm({ ...lessonForm, sortOrder: Number(event.target.value) })} className={`${inputClass} mt-2`} /></label></div>
-      <div className="flex flex-wrap gap-3"><button className={primaryButton}>{operation === "saving" ? "Сохраняем..." : "Сохранить урок"}</button><button type="button" onClick={() => { if (canDiscard()) discardDrafts(); }} className={secondaryButton}>Закрыть редактор</button></div>
-    </form>;
-  }
-
   return <>
     <Breadcrumbs items={breadcrumbs} />
     <header className="mb-7 flex flex-col gap-4 rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft sm:flex-row sm:items-center sm:justify-between">
@@ -328,117 +319,74 @@ export default function CourseBuilderPage() {
     <div className="grid items-start gap-6 xl:grid-cols-[390px_minmax(0,1fr)]">
       <CourseStructureTree modules={modules} query={query} expanded={expanded} selectedModuleId={selectedModuleId} selectedLessonId={selectedLessonId} onQueryChange={setQuery} onToggleModule={(id) => setExpanded((value) => { const next = new Set(value); if (next.has(id)) next.delete(id); else next.add(id); return next; })} onSelectModule={selectModule} onSelectLesson={selectLesson} onAddModule={startNewModule} onAddLesson={startNewLesson} />
       <main className="min-w-0 rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft lg:p-8">
-        {(editorMode === "new-module" || editorMode === "edit-module") ? moduleEditor() : (editorMode === "new-lesson" || editorMode === "edit-lesson") ? lessonEditor() : selectedLessonId && lesson.loading && !selectedLesson ? <LoadingState label="Загружаем урок" /> : selectedLessonId && lesson.error ? <ErrorState message={lesson.error} retry={lesson.reload} /> : selectedLesson ? <>
-          <div className="flex flex-col gap-4 border-b border-stone-100 pb-6 sm:flex-row sm:items-start sm:justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">Урок · {selectedModule?.title}</p><div className="mt-2 flex flex-wrap items-center gap-3"><h2 className="font-display text-4xl">{selectedLesson.title}</h2><PublishBadge published={selectedLesson.isPublished} /></div><p className="mt-3 text-sm text-stone-500">{selectedLesson.pointsReward} баллов · порядок {selectedLesson.sortOrder}</p></div><div className="flex flex-wrap gap-2"><button onClick={startEditLesson} className={primaryButton}><Pencil size={15} /> Редактировать</button><button onClick={() => void runOperation(async () => { await cmsApi.publishLesson(selectedLesson.id, !selectedLesson.isPublished); await Promise.all([tree.reload(), lesson.reload()]); })} className={secondaryButton}><Send size={15} />{selectedLesson.isPublished ? "Снять" : "Опубликовать"}</button><button onClick={() => { if (canDiscard()) requestDelete("Удалить урок?", `Урок «${selectedLesson.title}» будет отправлен в архив.`, async () => { await cmsApi.deleteLesson(selectedLesson.id); setSelectedLessonId(null); await tree.reload(); }); }} className={secondaryButton}><Trash2 size={15} /></button></div></div>
-          {selectedLesson.videoUrl && <section className="mt-7"><AdminVideoValidation videoUrl={selectedLesson.videoUrl} title={selectedLesson.title} onReplace={startEditLesson} onDelete={() => requestDelete("Удалить видео из урока?", "Ссылка на видео будет удалена из урока. Само видео у провайдера останется без изменений.", async () => { await cmsApi.updateLesson(selectedLesson.id, { videoUrl: null }); await Promise.all([lesson.reload(), tree.reload()]); })} /></section>}
-          <section className="mt-7"><h3 className="font-display text-3xl">Описание</h3><p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-stone-600">{selectedLesson.description || "Описание пока не добавлено."}</p></section>
-          <section className="mt-8 rounded-[24px] border border-stone-200 bg-stone-50 p-5">
-            <div className="flex items-center justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-gold">Материалы</p><p className="mt-1 text-xs text-stone-400">{materials.data?.length ?? 0} прикреплено</p></div><FilePlus size={18} className="text-gold" /></div>
-            <div className="mt-4 space-y-3">{materials.data?.map((item, index) => <article key={item.id} className="rounded-2xl border border-stone-100 bg-white p-4">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-800">{item.type}</span><h4 className="truncate text-sm font-bold">{item.title}</h4></div>
-                  <p className="mt-2 truncate text-sm text-stone-600">{item.media?.originalFilename ?? item.url.split("/").pop()}</p>
-                  <p className="mt-1 text-xs text-stone-400">{formatSize(item.media?.size)} · загружен {formatDate(item.media?.createdAt ?? item.createdAt)}</p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <a href={item.url} target="_blank" rel="noreferrer" className={secondaryButton}><ExternalLink size={14} /> Открыть</a>
-                  <label className={`${secondaryButton} cursor-pointer ${replacingMaterialId === item.id ? "opacity-50" : ""}`}><Upload size={14} />{replacingMaterialId === item.id ? "Замена..." : "Заменить"}<input disabled={replacingMaterialId === item.id} type="file" accept={item.type === "pdf" ? "application/pdf,.pdf" : item.type === "image" ? "image/*" : undefined} onChange={(event) => void replaceMaterial(item, event)} className="hidden" /></label>
-                  <button type="button" onClick={() => void navigator.clipboard.writeText(item.url)} className={secondaryButton}><Copy size={14} /> Ссылка</button>
-                  <button type="button" disabled={index === 0} onClick={() => void moveMaterial(index, -1)} className={secondaryButton} aria-label="Поднять материал"><ArrowUp size={14} /></button>
-                  <button type="button" disabled={index === (materials.data?.length ?? 0) - 1} onClick={() => void moveMaterial(index, 1)} className={secondaryButton} aria-label="Опустить материал"><ArrowDown size={14} /></button>
-                  <button type="button" onClick={() => void prepareMaterialDelete(item)} className={secondaryButton}><Trash2 size={14} /></button>
-                </div>
-              </div>
-            </article>)}</div>
-            <form onSubmit={saveMaterial} className="mt-5 rounded-2xl border border-dashed border-stone-300 bg-white p-4">
-              <div className="grid gap-3 lg:grid-cols-[1fr_130px_1.5fr_100px]"><input required value={materialForm.title} onChange={(event) => setMaterialForm({ ...materialForm, title: event.target.value })} className={inputClass} placeholder="Название материала" /><select value={materialForm.type} onChange={(event) => setMaterialForm({ ...materialForm, type: event.target.value })} className={inputClass}><option value="pdf">PDF</option><option value="image">Изображение</option><option value="link">Ссылка</option><option value="file">Файл</option></select><input required={!materialFile} type="url" value={materialForm.url} onChange={(event) => setMaterialForm({ ...materialForm, url: event.target.value })} className={inputClass} placeholder={materialFile ? materialFile.name : "URL или загрузите файл ниже"} /><input type="number" min="0" value={materialForm.sortOrder} onChange={(event) => setMaterialForm({ ...materialForm, sortOrder: Number(event.target.value) })} className={inputClass} aria-label="Порядок материала" /></div>
-              <div className="mt-3 flex flex-wrap items-center gap-3">
-                <button type="button" onClick={() => setMediaPickerOpen(true)} className={secondaryButton}><FolderOpen size={14} /> Из медиатеки</button>
-                <label className={`${secondaryButton} cursor-pointer`}><Upload size={14} /> Выбрать файл<input type="file" accept="application/pdf,image/*" onChange={selectMaterialFile} className="hidden" /></label>
-                {materialFile && <span className="max-w-sm truncate text-xs font-semibold text-stone-500">{materialFile.name} · {formatSize(materialFile.size)}</span>}
-                <button className={primaryButton}><Plus size={14} /> Прикрепить материал</button>
-              </div>
-            </form>
-          </section>
-          <form onSubmit={saveHomework} className="mt-8 rounded-[24px] border border-stone-200 p-5">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.16em] text-gold">Домашнее задание</p>
-                <p className="mt-1 text-xs text-stone-400">{homeworks.data?.[0] ? "Задание создано" : "Задание не создано"}</p>
-              </div>
-              {homeworks.data?.[0] && (
-                <button
-                  type="button"
-                  onClick={() => requestDelete("Архивировать домашнее задание?", "Ученики больше не увидят это задание.", async () => {
-                    await cmsApi.deleteHomework(homeworks.data![0].id);
-                    setHomeworkForm(emptyHomework);
-                    setHomeworkBaseline(emptyHomework);
-                    await Promise.all([homeworks.reload(), tree.reload()]);
-                  }, "Архивировать")}
-                  className={secondaryButton}
-                >
-                  <Trash2 size={14} />
-                </button>
-              )}
-            </div>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
-                Формат сдачи
-                <select
-                  value={homeworkForm.type}
-                  onChange={(event) => {
-                    const type = event.target.value as CmsHomework["type"];
-                    setHomeworkForm({
-                      ...homeworkForm,
-                      type,
-                      testQuestions: type === "test"
-                        ? (homeworkForm.testQuestions?.length ? homeworkForm.testQuestions : [])
-                        : [],
-                    });
-                  }}
-                  className={`${inputClass} mt-2`}
-                >
-                  <option value="assignment">Работа на проверку</option>
-                  <option value="test">Тест</option>
-                </select>
-              </label>
-              {homeworkForm.type === "test" && (
-                <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
-                  Проходной балл, %
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={homeworkForm.passingScore}
-                    onChange={(event) => setHomeworkForm({ ...homeworkForm, passingScore: Number(event.target.value) })}
-                    className={`${inputClass} mt-2`}
-                  />
-                </label>
-              )}
-            </div>
-            <div className="mt-4">
-              <MarkdownEditor value={homeworkForm.description} onChange={(description) => setHomeworkForm({ ...homeworkForm, description })} label="Описание задания" />
-            </div>
-            {homeworkForm.type === "test" && (
-              <>
-                <p className="mt-4 text-sm text-stone-500">
-                  Тест проверяется автоматически. Ученик сразу узнает результат и может пересдать, если не набрал проходной балл.
-                </p>
-                <AdminTestBuilder
-                  questions={homeworkForm.testQuestions ?? []}
-                  onChange={(testQuestions) => setHomeworkForm({ ...homeworkForm, testQuestions })}
-                />
-              </>
+        {(editorMode === "new-module" || editorMode === "edit-module") ? moduleEditor() : (editorMode === "new-lesson" || editorMode === "edit-lesson") ? (
+          <LessonEditorForm
+            mode={editorMode}
+            lessonTitle={selectedLesson?.title}
+            values={lessonForm}
+            saving={operation === "saving"}
+            onChange={setLessonForm}
+            onSubmit={saveLesson}
+            onClose={() => { if (canDiscard()) discardDrafts(); }}
+          />
+        ) : selectedLessonId && lesson.loading && !selectedLesson ? <LoadingState label="Загружаем урок" /> : selectedLessonId && lesson.error ? <ErrorState message={lesson.error} retry={lesson.reload} /> : selectedLesson ? (
+          <LessonWorkspace
+            lesson={selectedLesson}
+            module={selectedModule}
+            activeTab={lessonTab}
+            materials={materials.data ?? []}
+            homeworkForm={homeworkForm}
+            hasHomework={!!homeworks.data?.[0]}
+            materialForm={materialForm}
+            materialFile={materialFile}
+            replacingMaterialId={replacingMaterialId}
+            saving={operation === "saving"}
+            formatSize={formatSize}
+            formatDate={formatDate}
+            onTabChange={setLessonTab}
+            onEditLesson={startEditLesson}
+            onTogglePublish={() => void runOperation(async () => {
+              await cmsApi.publishLesson(selectedLesson.id, !selectedLesson.isPublished);
+              await Promise.all([tree.reload(), lesson.reload()]);
+            })}
+            onDeleteLesson={() => {
+              if (!canDiscard()) return;
+              requestDelete("Удалить урок?", `Урок «${selectedLesson.title}» будет отправлен в архив.`, async () => {
+                await cmsApi.deleteLesson(selectedLesson.id);
+                setSelectedLessonId(null);
+                await tree.reload();
+              });
+            }}
+            onDeleteVideo={() => requestDelete(
+              "Удалить видео из урока?",
+              "Ссылка на видео будет удалена из урока. Само видео у провайдера останется без изменений.",
+              async () => {
+                await cmsApi.updateLesson(selectedLesson.id, { videoUrl: null });
+                await Promise.all([lesson.reload(), tree.reload()]);
+              },
             )}
-            <button
-              disabled={!homeworkForm.description.trim() || (homeworkForm.type === "test" && !isTestBuilderValid(homeworkForm.testQuestions ?? []))}
-              className={`${primaryButton} mt-4 disabled:opacity-50`}
-            >
-              {homeworks.data?.[0] ? "Сохранить задание" : "Создать задание"}
-            </button>
-          </form>
-        </> : selectedModule ? <div><div className="flex flex-col gap-4 border-b border-stone-100 pb-6 sm:flex-row sm:items-start sm:justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">Модуль</p><h2 className="font-display mt-2 text-4xl">{selectedModule.title}</h2><p className="mt-3 text-sm text-stone-500">{selectedModule.lessons.length} уроков · порядок {selectedModule.sortOrder}</p></div><div className="flex flex-wrap gap-2"><button onClick={startEditModule} className={primaryButton}><Pencil size={15} /> Редактировать</button><button onClick={() => startNewLesson(selectedModule.id)} className={secondaryButton}><Plus size={15} /> Урок</button><button onClick={() => requestDelete("Удалить модуль?", `Модуль «${selectedModule.title}» будет отправлен в архив вместе с его уроками.`, async () => { await cmsApi.deleteModule(selectedModule.id); setSelectedModuleId(null); await tree.reload(); })} className={secondaryButton}><Trash2 size={15} /></button></div></div><p className="mt-7 whitespace-pre-wrap text-sm leading-7 text-stone-600">{selectedModule.description || "Описание модуля пока не добавлено."}</p></div> : <EmptyState title="Выберите элемент курса" description="Откройте модуль или урок в дереве слева." />}
+            onMaterialFormChange={setMaterialForm}
+            onSelectMaterialFile={selectMaterialFile}
+            onOpenMediaPicker={() => setMediaPickerOpen(true)}
+            onSaveMaterial={saveMaterial}
+            onReplaceMaterial={(item, event) => void replaceMaterial(item, event)}
+            onMoveMaterial={(index, direction) => void moveMaterial(index, direction)}
+            onDeleteMaterial={(item) => void prepareMaterialDelete(item)}
+            onHomeworkChange={setHomeworkForm}
+            onSaveHomework={saveHomework}
+            onArchiveHomework={() => requestDelete(
+              "Архивировать домашнее задание?",
+              "Ученики больше не увидят это задание.",
+              async () => {
+                await cmsApi.deleteHomework(homeworks.data![0].id);
+                setHomeworkForm(emptyHomework);
+                setHomeworkBaseline(emptyHomework);
+                await Promise.all([homeworks.reload(), tree.reload()]);
+              },
+              "Архивировать",
+            )}
+          />
+        ) : selectedModule ? <div><div className="flex flex-col gap-4 border-b border-stone-100 pb-6 sm:flex-row sm:items-start sm:justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">Модуль</p><h2 className="font-display mt-2 text-4xl">{selectedModule.title}</h2><p className="mt-3 text-sm text-stone-500">{selectedModule.lessons.length} уроков · порядок {selectedModule.sortOrder}</p></div><div className="flex flex-wrap gap-2"><button onClick={startEditModule} className={primaryButton}><Pencil size={15} /> Редактировать</button><button onClick={() => startNewLesson(selectedModule.id)} className={secondaryButton}><Plus size={15} /> Урок</button><button onClick={() => requestDelete("Удалить модуль?", `Модуль «${selectedModule.title}» будет отправлен в архив вместе с его уроками.`, async () => { await cmsApi.deleteModule(selectedModule.id); setSelectedModuleId(null); await tree.reload(); })} className={secondaryButton}><Trash2 size={15} /></button></div></div><p className="mt-7 whitespace-pre-wrap text-sm leading-7 text-stone-600">{selectedModule.description || "Описание модуля пока не добавлено."}</p></div> : <EmptyState title="Выберите элемент курса" description="Откройте модуль или урок в дереве слева." />}
       </main>
     </div>
     <MediaPicker
