@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDown, ArrowUp, Copy, ExternalLink, FilePlus, Pencil, Plus, Send, Trash2, Upload } from "lucide-react";
+import { ArrowDown, ArrowUp, Copy, ExternalLink, FilePlus, FolderOpen, Pencil, Plus, Send, Trash2, Upload } from "lucide-react";
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { AdminVideoValidation } from "@/components/admin-video-validation";
@@ -11,11 +11,13 @@ import { CourseReadiness } from "@/components/course-readiness";
 import { CourseStructureTree } from "@/components/course-structure-tree";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
 import { MarkdownEditor } from "@/components/markdown-editor";
+import { MediaPicker } from "@/components/media-picker";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { cmsApi } from "@/lib/cms-api";
 import { uploadMediaFile } from "@/lib/file-upload";
-import type { CmsHomework, CmsMaterial, CmsMaterialUsage } from "@/types/cms";
+import { materialTypeFromFile, materialTypeFromMedia, titleFromFilename } from "@/lib/media-utils";
+import type { CmsHomework, CmsMaterial, CmsMaterialUsage, CmsMedia } from "@/types/cms";
 
 type EditorMode = "none" | "new-module" | "edit-module" | "new-lesson" | "edit-lesson";
 const emptyModule = (courseId: string) => ({ title: "", description: "", sortOrder: 0, courseId });
@@ -50,6 +52,7 @@ export default function CourseBuilderPage() {
   const [materialForm, setMaterialForm] = useState(emptyMaterial);
   const [materialFile, setMaterialFile] = useState<globalThis.File | null>(null);
   const [replacingMaterialId, setReplacingMaterialId] = useState<string | null>(null);
+  const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
   const [homeworkForm, setHomeworkForm] = useState(emptyHomework);
   const [homeworkBaseline, setHomeworkBaseline] = useState(emptyHomework);
   const [operation, setOperation] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -194,8 +197,28 @@ export default function CourseBuilderPage() {
     event.preventDefault(); if (!selectedLesson) return;
     await runOperation(async () => {
       const uploaded = materialFile ? await uploadMediaFile(materialFile) : null;
-      await cmsApi.createMaterial({ ...materialForm, url: uploaded?.url ?? materialForm.url, lessonId: selectedLesson.id });
+      const type = uploaded ? materialTypeFromMedia(uploaded) : materialForm.type;
+      await cmsApi.createMaterial({
+        ...materialForm,
+        type,
+        url: uploaded?.url ?? materialForm.url,
+        lessonId: selectedLesson.id,
+      });
       setMaterialForm(emptyMaterial); setMaterialFile(null); await Promise.all([materials.reload(), tree.reload()]);
+    });
+  }
+
+  async function quickAttachMedia(media: CmsMedia) {
+    if (!selectedLesson) return;
+    await runOperation(async () => {
+      await cmsApi.createMaterial({
+        title: titleFromFilename(media.originalFilename),
+        type: materialTypeFromMedia(media),
+        url: media.url,
+        sortOrder: materials.data?.length ?? 0,
+        lessonId: selectedLesson.id,
+      });
+      await Promise.all([materials.reload(), tree.reload()]);
     });
   }
 
@@ -224,7 +247,14 @@ export default function CourseBuilderPage() {
   function selectMaterialFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0] ?? null;
     setMaterialFile(file);
-    if (file) setMaterialForm((value) => ({ ...value, title: value.title || file.name, type: file.type === "application/pdf" ? "pdf" : value.type }));
+    if (file) {
+      setMaterialForm((value) => ({
+        ...value,
+        title: value.title || titleFromFilename(file.name),
+        type: materialTypeFromFile(file),
+        sortOrder: value.sortOrder || (materials.data?.length ?? 0),
+      }));
+    }
     event.target.value = "";
   }
 
@@ -234,7 +264,10 @@ export default function CourseBuilderPage() {
     setReplacingMaterialId(item.id);
     await runOperation(async () => {
       const uploaded = await uploadMediaFile(file);
-      await cmsApi.updateMaterial(item.id, { url: uploaded.url });
+      await cmsApi.updateMaterial(item.id, {
+        url: uploaded.url,
+        type: materialTypeFromMedia(uploaded),
+      });
       await materials.reload();
     });
     setReplacingMaterialId(null);
@@ -310,7 +343,7 @@ export default function CourseBuilderPage() {
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <a href={item.url} target="_blank" rel="noreferrer" className={secondaryButton}><ExternalLink size={14} /> Открыть</a>
-                  <label className={`${secondaryButton} cursor-pointer ${replacingMaterialId === item.id ? "opacity-50" : ""}`}><Upload size={14} />{replacingMaterialId === item.id ? "Замена..." : "Заменить"}<input disabled={replacingMaterialId === item.id} type="file" accept={item.type === "pdf" ? "application/pdf,.pdf" : undefined} onChange={(event) => void replaceMaterial(item, event)} className="hidden" /></label>
+                  <label className={`${secondaryButton} cursor-pointer ${replacingMaterialId === item.id ? "opacity-50" : ""}`}><Upload size={14} />{replacingMaterialId === item.id ? "Замена..." : "Заменить"}<input disabled={replacingMaterialId === item.id} type="file" accept={item.type === "pdf" ? "application/pdf,.pdf" : item.type === "image" ? "image/*" : undefined} onChange={(event) => void replaceMaterial(item, event)} className="hidden" /></label>
                   <button type="button" onClick={() => void navigator.clipboard.writeText(item.url)} className={secondaryButton}><Copy size={14} /> Ссылка</button>
                   <button type="button" disabled={index === 0} onClick={() => void moveMaterial(index, -1)} className={secondaryButton} aria-label="Поднять материал"><ArrowUp size={14} /></button>
                   <button type="button" disabled={index === (materials.data?.length ?? 0) - 1} onClick={() => void moveMaterial(index, 1)} className={secondaryButton} aria-label="Опустить материал"><ArrowDown size={14} /></button>
@@ -320,7 +353,12 @@ export default function CourseBuilderPage() {
             </article>)}</div>
             <form onSubmit={saveMaterial} className="mt-5 rounded-2xl border border-dashed border-stone-300 bg-white p-4">
               <div className="grid gap-3 lg:grid-cols-[1fr_130px_1.5fr_100px]"><input required value={materialForm.title} onChange={(event) => setMaterialForm({ ...materialForm, title: event.target.value })} className={inputClass} placeholder="Название материала" /><select value={materialForm.type} onChange={(event) => setMaterialForm({ ...materialForm, type: event.target.value })} className={inputClass}><option value="pdf">PDF</option><option value="image">Изображение</option><option value="link">Ссылка</option><option value="file">Файл</option></select><input required={!materialFile} type="url" value={materialForm.url} onChange={(event) => setMaterialForm({ ...materialForm, url: event.target.value })} className={inputClass} placeholder={materialFile ? materialFile.name : "URL или загрузите файл ниже"} /><input type="number" min="0" value={materialForm.sortOrder} onChange={(event) => setMaterialForm({ ...materialForm, sortOrder: Number(event.target.value) })} className={inputClass} aria-label="Порядок материала" /></div>
-              <div className="mt-3 flex flex-wrap items-center gap-3"><label className={`${secondaryButton} cursor-pointer`}><Upload size={14} /> Выбрать файл<input type="file" accept="application/pdf,image/*" onChange={selectMaterialFile} className="hidden" /></label>{materialFile && <span className="max-w-sm truncate text-xs font-semibold text-stone-500">{materialFile.name} · {formatSize(materialFile.size)}</span>}<button className={primaryButton}><Plus size={14} /> Прикрепить материал</button></div>
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <button type="button" onClick={() => setMediaPickerOpen(true)} className={secondaryButton}><FolderOpen size={14} /> Из медиатеки</button>
+                <label className={`${secondaryButton} cursor-pointer`}><Upload size={14} /> Выбрать файл<input type="file" accept="application/pdf,image/*" onChange={selectMaterialFile} className="hidden" /></label>
+                {materialFile && <span className="max-w-sm truncate text-xs font-semibold text-stone-500">{materialFile.name} · {formatSize(materialFile.size)}</span>}
+                <button className={primaryButton}><Plus size={14} /> Прикрепить материал</button>
+              </div>
             </form>
           </section>
           <form onSubmit={saveHomework} className="mt-8 rounded-[24px] border border-stone-200 p-5">
@@ -390,6 +428,12 @@ export default function CourseBuilderPage() {
         </> : selectedModule ? <div><div className="flex flex-col gap-4 border-b border-stone-100 pb-6 sm:flex-row sm:items-start sm:justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">Модуль</p><h2 className="font-display mt-2 text-4xl">{selectedModule.title}</h2><p className="mt-3 text-sm text-stone-500">{selectedModule.lessons.length} уроков · порядок {selectedModule.sortOrder}</p></div><div className="flex flex-wrap gap-2"><button onClick={startEditModule} className={primaryButton}><Pencil size={15} /> Редактировать</button><button onClick={() => startNewLesson(selectedModule.id)} className={secondaryButton}><Plus size={15} /> Урок</button><button onClick={() => requestDelete("Удалить модуль?", `Модуль «${selectedModule.title}» будет отправлен в архив вместе с его уроками.`, async () => { await cmsApi.deleteModule(selectedModule.id); setSelectedModuleId(null); await tree.reload(); })} className={secondaryButton}><Trash2 size={15} /></button></div></div><p className="mt-7 whitespace-pre-wrap text-sm leading-7 text-stone-600">{selectedModule.description || "Описание модуля пока не добавлено."}</p></div> : <EmptyState title="Выберите элемент курса" description="Откройте модуль или урок в дереве слева." />}
       </main>
     </div>
+    <MediaPicker
+      open={mediaPickerOpen}
+      onClose={() => setMediaPickerOpen(false)}
+      onSelect={(media) => void quickAttachMedia(media)}
+      title="Прикрепить из медиатеки"
+    />
     <ConfirmDialog request={confirmRequest} busy={confirmBusy} onClose={() => { if (!confirmBusy) setConfirmRequest(null); }} />
   </>;
 }

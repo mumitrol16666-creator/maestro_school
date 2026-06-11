@@ -8,10 +8,12 @@ import { listMaterialUsagesByUrlSuffix } from "../../application/repositories/cm
 import {
   deleteMediaFile,
   getMediaInfo,
+  inferMimeType,
   mediaDirectory,
   mediaFilePath,
   mediaFolderFor,
   mediaFolders,
+  type MediaFolder,
   writeMediaFile,
 } from "../../application/services/media-storage.service.js";
 import { authenticate, requireContentAdmin, requirePermission } from "../guards/auth.guards.js";
@@ -20,14 +22,23 @@ const mediaGuards = () => [authenticate, requireContentAdmin, requirePermission(
 
 export async function mediaRoutes(app: FastifyInstance) {
   app.get("/admin/media", { preHandler: mediaGuards() }, async (request) => {
-    const items = (await Promise.all(mediaFolders.map(async (folder) => {
+    const query = z.object({
+      search: z.string().optional(),
+      folder: z.enum(mediaFolders).optional(),
+    }).parse(request.query);
+    const folders = query.folder ? [query.folder] as MediaFolder[] : mediaFolders;
+    const search = query.search?.trim().toLowerCase() ?? "";
+    const items = (await Promise.all(folders.map(async (folder) => {
       const directory = mediaDirectory(folder);
       await mkdir(directory, { recursive: true });
       const filenames = (await readdir(directory)).filter((filename) => !filename.endsWith(".meta.json"));
       return Promise.all(filenames.map((filename) => getMediaInfo(folder, filename, request)));
     }))).flat().filter((item) => item !== null);
-    items.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-    return { data: items };
+    const filtered = search
+      ? items.filter((item) => item.originalFilename.toLowerCase().includes(search) || item.filename.toLowerCase().includes(search))
+      : items;
+    filtered.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    return { data: filtered };
   });
 
   app.post("/admin/media", { preHandler: mediaGuards() }, async (request, reply) => {
@@ -38,17 +49,18 @@ export async function mediaRoutes(app: FastifyInstance) {
     }).parse(request.body);
     const bytes = Buffer.from(body.base64, "base64");
     if (bytes.length > 20 * 1024 * 1024) throw new BadRequestError("File is larger than 20 MB");
-    const folder = mediaFolderFor(body.mimeType);
+    const mimeType = inferMimeType(body.filename, body.mimeType);
+    const folder = mediaFolderFor(mimeType);
     const extension = path.extname(body.filename).toLowerCase().replace(/[^a-z0-9.]/g, "");
     const filename = `${randomUUID()}${extension}`;
-    await writeMediaFile(folder, filename, bytes, { originalFilename: body.filename, mimeType: body.mimeType });
+    await writeMediaFile(folder, filename, bytes, { originalFilename: body.filename, mimeType });
 
     return reply.status(201).send({
       data: {
         filename,
         originalFilename: body.filename,
         folder,
-        mimeType: body.mimeType,
+        mimeType,
         size: bytes.length,
         createdAt: new Date(),
         url: `${request.protocol}://${request.host}/api/v1/media/${folder}/${filename}`,

@@ -12,10 +12,27 @@ interface MediaMetadata {
 
 const uploadRoot = path.resolve(env.UPLOAD_DIR);
 
+export function inferMimeType(filename: string, mimeType: string): string {
+  if (mimeType && mimeType !== "application/octet-stream") return mimeType;
+  const extension = path.extname(filename).toLowerCase();
+  if (extension === ".pdf") return "application/pdf";
+  if (extension === ".png") return "image/png";
+  if (extension === ".jpg" || extension === ".jpeg") return "image/jpeg";
+  if (extension === ".webp") return "image/webp";
+  if (extension === ".gif") return "image/gif";
+  return mimeType || "application/octet-stream";
+}
+
 export function mediaFolderFor(mime: string): MediaFolder {
   if (mime.startsWith("image/")) return "images";
   if (mime === "application/pdf") return "pdf";
   return "files";
+}
+
+export function materialTypeForFolder(folder: MediaFolder): "pdf" | "image" | "file" {
+  if (folder === "pdf") return "pdf";
+  if (folder === "images") return "image";
+  return "file";
 }
 
 export function mediaPublicUrl(request: { protocol: string; host: string }, folder: string, filename: string) {

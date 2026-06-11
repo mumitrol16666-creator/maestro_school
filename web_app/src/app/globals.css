@@ -32,11 +32,26 @@ body {
 }
 
 .card-hover {
-  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+  transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
 }
 
 .card-hover:hover {
   transform: translateY(-3px);
-  box-shadow: 0 20px 55px rgba(37, 33, 25, 0.12);
-  border-color: rgba(197, 154, 69, 0.45);
+  box-shadow: 0 22px 60px rgba(37, 33, 25, 0.11);
+  border-color: rgba(197, 154, 69, 0.4);
+}
+
+a.card-hover:focus-visible,
+button.card-hover:focus-visible {
+  outline: 2px solid rgba(197, 154, 69, 0.55);
+  outline-offset: 3px;
+}
+
+.premium-surface {
+  border: 1px solid rgba(231, 229, 224, 0.9);
+  background: linear-gradient(180deg, #fcfcfa 0%, #f8f6f1 100%);
+}
+
+.section-eyebrow {
+  letter-spacing: 0.2em;
 }

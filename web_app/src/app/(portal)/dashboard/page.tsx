@@ -39,20 +39,23 @@ export default function DashboardPage() {
           <p className="mt-3 text-sm text-stone-500">Продолжим с того места, где остановились?</p>
         </div>
         {nextLesson && (
-          <Link href={`/lessons/${nextLesson.id}`} className="inline-flex items-center justify-center gap-2 rounded-full bg-ink px-5 py-3 text-sm font-bold text-white">
+          <Link href={`/lessons/${nextLesson.id}`} className="inline-flex items-center justify-center gap-2 rounded-full bg-ink px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-stone-800 hover:shadow-soft">
             Продолжить урок <ArrowRight size={16} />
           </Link>
         )}
       </div>
 
       <section className="grid gap-5 xl:grid-cols-[1.55fr_0.85fr]">
-        <div className="relative min-h-[350px] overflow-hidden rounded-[32px] bg-ink p-7 text-white shadow-soft sm:p-9">
+        <Link href={`/courses/${course.id}`} className="card-hover group relative block min-h-[350px] overflow-hidden rounded-[32px] bg-ink p-7 text-white shadow-soft sm:p-9">
           <div className="noise absolute inset-0 opacity-20" />
           <div className="absolute -bottom-36 -right-24 h-[380px] w-[380px] rounded-full border border-gold/25" />
           <div className="relative flex h-full flex-col">
             <div className="flex items-center justify-between">
               <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/60">{course.direction.title} · {difficultyLabel(course.difficultyLevel)}</span>
-              <span className="font-display text-2xl text-gold">{dashboard.progressPercent}%</span>
+              <span className="flex items-center gap-2 font-display text-2xl text-gold">
+                {dashboard.progressPercent}%
+                <ArrowRight size={18} className="opacity-0 transition group-hover:opacity-100" />
+              </span>
             </div>
             <div className="my-auto max-w-xl py-10">
               <p className="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-gold">Текущий курс</p>
@@ -64,28 +67,36 @@ export default function DashboardPage() {
               <ProgressBar value={dashboard.progressPercent} dark />
             </div>
           </div>
-        </div>
+        </Link>
 
         <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-1">
-          <div className="rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft">
-            <div className="flex items-start justify-between"><span className="grid h-11 w-11 place-items-center rounded-2xl bg-amber-50 text-gold"><Star size={20} fill="currentColor" /></span><span className="text-xs font-bold text-emerald-700">Реальный баланс</span></div>
+          <div className="premium-surface rounded-[28px] p-6 shadow-soft">
+            <div className="flex items-start justify-between"><span className="grid h-11 w-11 place-items-center rounded-2xl bg-amber-50 text-gold ring-1 ring-gold/10"><Star size={20} fill="currentColor" /></span><span className="text-xs font-bold text-emerald-700">Баланс</span></div>
             <p className="font-display mt-8 text-4xl">{dashboard.points.toLocaleString("ru-RU")}</p>
             <p className="mt-1 text-sm text-stone-500">баллов Maestro</p>
           </div>
-          <div className="rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft">
-            <div className="flex items-start justify-between"><span className="grid h-11 w-11 place-items-center rounded-2xl bg-orange-50 text-orange-500"><Flame size={20} /></span><span className="text-xs font-bold text-stone-400">Пройдено</span></div>
+          <div className="premium-surface rounded-[28px] p-6 shadow-soft">
+            <div className="flex items-start justify-between"><span className="grid h-11 w-11 place-items-center rounded-2xl bg-orange-50 text-orange-500 ring-1 ring-orange-200/60"><Flame size={20} /></span><span className="text-xs font-bold text-stone-400">Пройдено</span></div>
             <p className="font-display mt-8 text-4xl">{dashboard.completedLessonsCount}</p>
-            <p className="mt-1 text-sm text-stone-500">завершенных уроков</p>
+            <p className="mt-1 text-sm text-stone-500">завершённых уроков</p>
           </div>
         </div>
       </section>
 
       <section className="mt-5 grid gap-5 lg:grid-cols-2">
-        <div className="card-hover rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft">
-          <div className="flex items-center justify-between"><p className="text-xs font-bold uppercase tracking-[0.16em] text-stone-400">Следующий урок</p><Clock3 size={18} className="text-gold" /></div>
-          <p className="font-display mt-8 text-3xl">{nextLesson?.title ?? "Все доступные уроки пройдены"}</p>
-          <p className="mt-4 flex items-center gap-2 text-sm font-semibold text-amber-800"><Sparkles size={15} /> {nextLesson ? lessonStatusLabels[normalizeLessonStatus(nextLesson.status)] : "Нет активного урока"}</p>
-        </div>
+        {nextLesson ? (
+          <Link href={`/lessons/${nextLesson.id}`} className="card-hover rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft">
+            <div className="flex items-center justify-between"><p className="text-xs font-bold uppercase tracking-[0.16em] text-stone-400">Следующий урок</p><ArrowRight size={18} className="text-gold" /></div>
+            <p className="font-display mt-8 text-3xl">{nextLesson.title}</p>
+            <p className="mt-4 flex items-center gap-2 text-sm font-semibold text-amber-800"><Sparkles size={15} /> {lessonStatusLabels[normalizeLessonStatus(nextLesson.status)]}</p>
+          </Link>
+        ) : (
+          <div className="rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft">
+            <div className="flex items-center justify-between"><p className="text-xs font-bold uppercase tracking-[0.16em] text-stone-400">Следующий урок</p><Clock3 size={18} className="text-stone-300" /></div>
+            <p className="font-display mt-8 text-3xl">Все доступные уроки пройдены</p>
+            <p className="mt-4 text-sm text-stone-500">Нет активного урока</p>
+          </div>
+        )}
         {latestPost ? (
           <Link href="/board" className="card-hover rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft">
             <div className="flex items-center justify-between"><p className="text-xs font-bold uppercase tracking-[0.16em] text-stone-400">Последнее на доске</p><ArrowRight size={18} className="text-gold" /></div>

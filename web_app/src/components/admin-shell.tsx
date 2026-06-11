@@ -28,7 +28,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         const active = href === "/admin" ? pathname === href : pathname.startsWith(href);
         return <Link key={href} href={href} onClick={() => setOpen(false)} className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold ${active ? "bg-white text-ink" : "text-white/55 hover:bg-white/5 hover:text-white"}`}><Icon size={18} />{label}</Link>;
       })}</nav>
-      <button onClick={logout} className="mt-auto flex items-center gap-3 rounded-2xl border border-white/10 px-4 py-3 text-sm font-semibold text-white/60 hover:text-white"><LogOut size={17} /> Выйти</button>
+      <button onClick={logout} className="mt-auto flex items-center gap-3 rounded-2xl border border-white/10 px-4 py-3 text-sm font-semibold text-white/50 transition hover:border-red-400/25 hover:bg-red-500/10 hover:text-red-100"><LogOut size={17} /> Выйти из админки</button>
     </aside>
   );
   return <div className="min-h-screen bg-cream">
@@ -39,7 +39,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       <header className="sticky top-0 z-30 flex h-20 items-center gap-4 border-b border-stone-200/80 bg-cream/90 px-5 backdrop-blur-xl sm:px-8">
         <button onClick={() => setOpen(true)} className="grid h-10 w-10 place-items-center rounded-full bg-white lg:hidden"><Menu size={20} /></button>
         <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">Maestro Admin</p><p className="text-sm font-semibold">{user?.email}</p></div>
-        <button onClick={logout} className="ml-auto rounded-full border border-stone-200 bg-white px-4 py-2 text-xs font-bold">Выйти</button>
+        <button onClick={logout} className="ml-auto inline-flex items-center gap-2 rounded-full border border-stone-200 bg-white px-4 py-2 text-xs font-bold text-stone-600 transition hover:border-red-200 hover:bg-red-50 hover:text-red-700"><LogOut size={14} /> Выйти</button>
       </header>
       <main className="mx-auto max-w-[1500px] p-5 sm:p-8 lg:p-10">{children}</main>
     </div>

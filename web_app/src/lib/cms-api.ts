@@ -53,7 +53,13 @@ export const cmsApi = {
   publishNews: (id: string, isPublished: boolean) => apiRequest<CmsNews>(`/admin/news/${id}/publish`, json("POST", { isPublished })),
   deleteNews: (id: string) => apiRequest<CmsNews>(`/admin/news/${id}`, json("DELETE")),
 
-  media: () => apiRequest<CmsMedia[]>("/admin/media"),
+  media: (search = "", folder = "") => {
+    const params = new URLSearchParams();
+    if (search) params.set("search", search);
+    if (folder) params.set("folder", folder);
+    const query = params.toString();
+    return apiRequest<CmsMedia[]>(`/admin/media${query ? `?${query}` : ""}`);
+  },
   uploadMedia: (body: unknown) => apiRequest<CmsMedia>("/admin/media", json("POST", body)),
   deleteMedia: (folder: string, filename: string) => apiRequest(`/admin/media/${folder}/${filename}`, json("DELETE")),
   mediaUsages: (folder: string, filename: string) => apiRequest<CmsMaterialUsage[]>(`/admin/media/${folder}/${filename}/usages`),

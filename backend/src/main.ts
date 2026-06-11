@@ -11,6 +11,8 @@ import { registerRoutes } from "./presentation/routes/index.js";
 async function bootstrap() {
   const app = Fastify({
     logger: true,
+    // Base64 JSON uploads: allow ~20 MB files (+ overhead)
+    bodyLimit: 28 * 1024 * 1024,
   });
 
   app.setErrorHandler(errorHandler);

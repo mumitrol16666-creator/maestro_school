@@ -15,8 +15,8 @@ export function CourseCard({ course }: { course: Course }) {
         <div className="relative flex h-full flex-col justify-between">
           <div className="flex items-center justify-between text-xs font-bold uppercase tracking-widest text-white/70">
             <span>{course.level}</span>
-            <span className="grid h-9 w-9 place-items-center rounded-full bg-white/10">
-              <ArrowUpRight size={16} />
+            <span className="grid h-9 w-9 place-items-center rounded-full bg-white/10 transition group-hover:bg-white/20 group-hover:scale-105">
+              <ArrowUpRight size={16} className="transition group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
             </span>
           </div>
           <span className="font-display max-w-[250px] text-3xl leading-none">{course.title}</span>
