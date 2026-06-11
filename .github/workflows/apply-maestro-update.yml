@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - '.github/maestro-product.patch.gz.part-*'
+      - '.github/maestro-product.patch.b64.part-*'
       - '.github/workflows/apply-maestro-update.yml'
 
 permissions:
@@ -19,10 +19,9 @@ jobs:
           fetch-depth: 0
       - name: Apply prepared product update
         run: |
-          cat .github/maestro-product.patch.gz.part-aa .github/maestro-product.patch.gz.part-ab .github/maestro-product.patch.gz.part-ac > /tmp/maestro-product.patch.gz
-          gunzip -c /tmp/maestro-product.patch.gz > /tmp/maestro-product.patch
+          cat .github/maestro-product.patch.b64.part-aa .github/maestro-product.patch.b64.part-ab .github/maestro-product.patch.b64.part-ac | base64 --decode | gunzip > /tmp/maestro-product.patch
           git apply --index /tmp/maestro-product.patch
-          git rm .github/maestro-product.patch.gz .github/maestro-product.patch.gz.part-aa .github/maestro-product.patch.gz.part-ab .github/maestro-product.patch.gz.part-ac .github/workflows/apply-maestro-update.yml
+          git rm .github/maestro-product.patch.gz .github/maestro-product.patch.gz.part-aa .github/maestro-product.patch.gz.part-ab .github/maestro-product.patch.gz.part-ac .github/maestro-product.patch.b64.part-aa .github/maestro-product.patch.b64.part-ab .github/maestro-product.patch.b64.part-ac .github/workflows/apply-maestro-update.yml
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git commit -m "Add lesson tests and deploy all current changes"
