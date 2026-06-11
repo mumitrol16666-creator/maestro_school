@@ -36,7 +36,10 @@ export function HomeworkTestForm({
       <h2 className="font-display mt-3 text-3xl">Проверьте знания</h2>
       <MarkdownContent className="mt-4">{description}</MarkdownContent>
       <p className="mt-4 text-sm font-semibold text-stone-500">
-        Для прохождения нужно набрать не менее {passingScore}%. Ответы дойдут до преподавателя вместе с результатом.
+        Для прохождения нужно набрать не менее {passingScore}%. Результат проверяется сразу после сдачи.
+      </p>
+      <p className="mt-2 text-xs text-stone-400">
+        Отвечено: {answeredCount} из {questions.length}
       </p>
 
       <div className="mt-7 space-y-5">

@@ -4,7 +4,7 @@ import { ArrowDown, ArrowUp, Copy, ExternalLink, FilePlus, FolderOpen, Pencil, P
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { AdminVideoValidation } from "@/components/admin-video-validation";
-import { AdminTestBuilder } from "@/components/admin-test-builder";
+import { AdminTestBuilder, isTestBuilderValid } from "@/components/admin-test-builder";
 import { Breadcrumbs, ConfirmDialog, type ConfirmRequest, SaveStatus, type SaveState } from "@/components/admin-feedback";
 import { inputClass, primaryButton, PublishBadge, secondaryButton } from "@/components/admin-ui";
 import { CourseReadiness } from "@/components/course-readiness";
@@ -387,11 +387,16 @@ export default function CourseBuilderPage() {
                 Формат сдачи
                 <select
                   value={homeworkForm.type}
-                  onChange={(event) => setHomeworkForm({
-                    ...homeworkForm,
-                    type: event.target.value as CmsHomework["type"],
-                    testQuestions: event.target.value === "test" ? homeworkForm.testQuestions : [],
-                  })}
+                  onChange={(event) => {
+                    const type = event.target.value as CmsHomework["type"];
+                    setHomeworkForm({
+                      ...homeworkForm,
+                      type,
+                      testQuestions: type === "test"
+                        ? (homeworkForm.testQuestions?.length ? homeworkForm.testQuestions : [])
+                        : [],
+                    });
+                  }}
                   className={`${inputClass} mt-2`}
                 >
                   <option value="assignment">Работа на проверку</option>
@@ -416,10 +421,18 @@ export default function CourseBuilderPage() {
               <MarkdownEditor value={homeworkForm.description} onChange={(description) => setHomeworkForm({ ...homeworkForm, description })} label="Описание задания" />
             </div>
             {homeworkForm.type === "test" && (
-              <AdminTestBuilder questions={homeworkForm.testQuestions ?? []} onChange={(testQuestions) => setHomeworkForm({ ...homeworkForm, testQuestions })} />
+              <>
+                <p className="mt-4 text-sm text-stone-500">
+                  Тест проверяется автоматически. Ученик сразу узнает результат и может пересдать, если не набрал проходной балл.
+                </p>
+                <AdminTestBuilder
+                  questions={homeworkForm.testQuestions ?? []}
+                  onChange={(testQuestions) => setHomeworkForm({ ...homeworkForm, testQuestions })}
+                />
+              </>
             )}
             <button
-              disabled={!homeworkForm.description.trim() || (homeworkForm.type === "test" && !homeworkForm.testQuestions?.length)}
+              disabled={!homeworkForm.description.trim() || (homeworkForm.type === "test" && !isTestBuilderValid(homeworkForm.testQuestions ?? []))}
               className={`${primaryButton} mt-4 disabled:opacity-50`}
             >
               {homeworks.data?.[0] ? "Сохранить задание" : "Создать задание"}

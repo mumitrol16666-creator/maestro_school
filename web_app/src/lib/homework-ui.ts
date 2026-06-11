@@ -30,3 +30,16 @@ export const lessonStatusHints: Record<string, string> = {
   reviewed: "Преподаватель проверяет вашу работу.",
   completed: "Урок завершён. Баллы начислены, следующий урок открыт.",
 };
+
+export const testLessonStatusHints: Record<string, string> = {
+  ...lessonStatusHints,
+  in_progress: "Посмотрите урок и пройдите тест.",
+  submitted: "Тест отправлен. Ожидайте результат.",
+  completed: "Тест пройден. Урок завершён, следующий урок открыт.",
+};
+
+export function attemptStatusLabel(status: string, isTest: boolean) {
+  if (isTest && status === "rejected") return "Не пройден";
+  if (isTest && status === "approved") return "Пройден";
+  return submissionStatusLabels[status] ?? "Неизвестный статус";
+}

@@ -20,13 +20,14 @@ import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
 import { HomeworkAttemptHistory } from "@/components/homework-attempt-history";
 import { HomeworkSubmissionForm } from "@/components/homework-submission-form";
 import { HomeworkTestForm } from "@/components/homework-test-form";
+import { HomeworkTestResult } from "@/components/homework-test-result";
 import { LessonVideoPlayer } from "@/components/lesson-video-player";
 import { StatusBadge } from "@/components/status-badge";
 import { MarkdownContent } from "@/components/markdown-content";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { flattenCourseLessons, normalizeLessonStatus, toLesson } from "@/lib/adapters";
 import { ApiError, api } from "@/lib/api-client";
-import { lessonStatusHints } from "@/lib/homework-ui";
+import { lessonStatusHints, testLessonStatusHints } from "@/lib/homework-ui";
 import { lessonStatusLabels } from "@/lib/ui";
 import type { HomeworkAttachmentType } from "@/types/homework";
 import type { Lesson } from "@/types";
@@ -41,12 +42,13 @@ function canSubmitHomework(lesson: Lesson) {
   return lesson.status === "in_progress";
 }
 
-function submitDisabledReason(lesson: Lesson) {
+function submitDisabledReason(lesson: Lesson, isTest: boolean) {
   if (lesson.status === "locked") return "Урок закрыт. Сначала завершите предыдущий урок.";
-  if (lesson.status === "submitted" || lesson.status === "reviewed") {
+  if (isTest && lesson.status === "completed") return "Тест пройден. Урок завершён.";
+  if (!isTest && (lesson.status === "submitted" || lesson.status === "reviewed")) {
     return "Работа отправлена на проверку. Дождитесь ответа преподавателя.";
   }
-  if (lesson.status === "completed") return "Урок завершён. Повторная отправка недоступна.";
+  if (!isTest && lesson.status === "completed") return "Урок завершён. Повторная отправка недоступна.";
   return undefined;
 }
 
@@ -82,9 +84,14 @@ export default function LessonPage() {
   if (!resource.data) return <EmptyState title="Урок не найден" description="Возможно, урок больше недоступен." />;
 
   const { detail, lesson, attempts, nextLesson } = resource.data;
+  const isTestHomework = detail.homework?.type === "test";
+  const testQuestions = detail.homework?.testQuestions ?? [];
+  const passingScore = detail.homework?.passingScore ?? 70;
   const locked = lesson.status === "locked";
   const lessonStarted = !locked && lesson.status !== "available";
-  const latestReview = [...attempts].reverse().find((attempt) => attempt.reviewComment);
+  const latestAttempt = attempts.length ? attempts[attempts.length - 1] : null;
+  const latestReview = [...attempts].reverse().find((attempt) => attempt.reviewComment && (!isTestHomework || attempt.status !== "rejected"));
+  const statusHints = isTestHomework ? testLessonStatusHints : lessonStatusHints;
 
   async function handleStart() {
     setStarting(true);
@@ -122,9 +129,15 @@ export default function LessonPage() {
             }
           : current,
       );
-      setSuccess(result.testResult
-        ? `Тест сдан: ${result.testResult.score}% (${result.testResult.correctAnswers} из ${result.testResult.totalQuestions} правильных ответов).`
-        : "Работа отправлена на проверку.");
+      if (result.testResult) {
+        setSuccess(
+          result.testPassed
+            ? `Тест пройден: ${result.testResult.score}% (${result.testResult.correctAnswers} из ${result.testResult.totalQuestions} правильных). Урок завершён.`
+            : `Набрано ${result.testResult.score}% (${result.testResult.correctAnswers} из ${result.testResult.totalQuestions} правильных). Нужно не менее ${passingScore}%. Попробуйте ещё раз.`,
+        );
+      } else {
+        setSuccess("Работа отправлена на проверку.");
+      }
     } catch (reason) {
       setActionError(reason instanceof ApiError ? reason.message : "Не удалось отправить домашнее задание");
     } finally {
@@ -201,27 +214,43 @@ export default function LessonPage() {
 
           {lessonStarted && lesson.homeworkId && lesson.homeworkDescription && (
             <>
-              {detail.homework?.type === "test" ? (
-                canSubmitHomework(lesson) ? (
-                  <HomeworkTestForm
-                    description={lesson.homeworkDescription}
-                    questions={detail.homework.testQuestions ?? []}
-                    passingScore={detail.homework.passingScore}
-                    submitting={submitting}
-                    onSubmit={(testAnswers) => handleSubmit({ testAnswers })}
-                  />
+              {isTestHomework ? (
+                testQuestions.length ? (
+                  <>
+                    {canSubmitHomework(lesson) ? (
+                      <>
+                        <HomeworkTestResult
+                          passingScore={passingScore}
+                          latestAttempt={latestAttempt}
+                          lessonCompleted={false}
+                        />
+                        <HomeworkTestForm
+                          key={attempts.length}
+                          description={lesson.homeworkDescription}
+                          questions={testQuestions}
+                          passingScore={passingScore}
+                          submitting={submitting}
+                          onSubmit={(testAnswers) => handleSubmit({ testAnswers })}
+                        />
+                      </>
+                    ) : (
+                      <HomeworkTestResult
+                        passingScore={passingScore}
+                        latestAttempt={latestAttempt}
+                        lessonCompleted={lesson.status === "completed"}
+                      />
+                    )}
+                  </>
                 ) : (
-                  <div className="mt-9 rounded-[30px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
-                    <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">Тест к уроку</p>
-                    <h2 className="font-display mt-3 text-3xl">Тест уже сдан</h2>
-                    <p className="mt-4 text-sm font-semibold text-stone-500">{submitDisabledReason(lesson)}</p>
+                  <div className="mt-9 rounded-[30px] border border-amber-100 bg-amber-50 p-6 text-sm font-bold text-amber-800">
+                    Тест для этого урока ещё не настроен. Обратитесь к преподавателю.
                   </div>
                 )
               ) : (
                 <HomeworkSubmissionForm
                   homeworkDescription={lesson.homeworkDescription}
                   disabled={!canSubmitHomework(lesson)}
-                  disabledReason={submitDisabledReason(lesson)}
+                  disabledReason={submitDisabledReason(lesson, false)}
                   submitting={submitting}
                   onSubmit={handleSubmit}
                 />
@@ -235,7 +264,7 @@ export default function LessonPage() {
                 </div>
               )}
 
-              <HomeworkAttemptHistory attempts={attempts} />
+              <HomeworkAttemptHistory attempts={attempts} isTest={isTestHomework} />
             </>
           )}
         </div>
@@ -247,7 +276,7 @@ export default function LessonPage() {
               <Sparkles size={21} />
             </span>
             <h3 className="font-display mt-5 text-2xl">{lessonStatusLabels[lesson.status]}</h3>
-            <p className="mt-3 text-sm leading-6 text-stone-500">{lessonStatusHints[lesson.status]}</p>
+            <p className="mt-3 text-sm leading-6 text-stone-500">{statusHints[lesson.status]}</p>
 
             {lesson.status === "available" && (
               <button
@@ -279,7 +308,11 @@ export default function LessonPage() {
             <p className="mt-1 text-sm text-white/50">баллов за урок</p>
             <div className="mt-6 flex items-center gap-2 text-xs text-white/50">
               <CheckCircle2 size={15} />
-              {lesson.status === "completed" ? "Баллы начислены" : "Начислятся после проверки"}
+              {lesson.status === "completed"
+                ? "Баллы начислены"
+                : isTestHomework
+                  ? "Начислятся после прохождения теста"
+                  : "Начислятся после проверки"}
             </div>
           </div>
 

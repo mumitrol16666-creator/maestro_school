@@ -1,4 +1,4 @@
-import type { HomeworkAttachmentType, Prisma } from "@prisma/client";
+import type { HomeworkAttachmentType, HomeworkSubmissionStatus, Prisma } from "@prisma/client";
 import { prisma, notDeleted } from "../../infrastructure/database/prisma.js";
 import { NotFoundError } from "../../domain/errors.js";
 
@@ -20,6 +20,9 @@ export async function createHomeworkSubmission(params: {
   testAnswers?: Record<string, string>;
   testScore?: number;
   testPassed?: boolean;
+  status?: HomeworkSubmissionStatus;
+  reviewComment?: string;
+  reviewedAt?: Date;
 }) {
   return prisma.homeworkSubmission.create({
     data: {
@@ -31,7 +34,9 @@ export async function createHomeworkSubmission(params: {
       testAnswers: params.testAnswers as Prisma.InputJsonValue | undefined,
       testScore: params.testScore,
       testPassed: params.testPassed,
-      status: "submitted",
+      status: params.status ?? "submitted",
+      reviewComment: params.reviewComment,
+      reviewedAt: params.reviewedAt,
     },
   });
 }

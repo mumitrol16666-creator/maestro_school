@@ -1,15 +1,16 @@
 "use client";
 
 import { ExternalLink } from "lucide-react";
-import { attachmentTypeLabels, submissionStatusClass, submissionStatusLabels } from "@/lib/homework-ui";
+import { attachmentTypeLabels, attemptStatusLabel, submissionStatusClass } from "@/lib/homework-ui";
 import type { HomeworkAttempt } from "@/types/homework";
 
 interface HomeworkAttemptHistoryProps {
   attempts: HomeworkAttempt[];
   title?: string;
+  isTest?: boolean;
 }
 
-export function HomeworkAttemptHistory({ attempts, title = "История попыток" }: HomeworkAttemptHistoryProps) {
+export function HomeworkAttemptHistory({ attempts, title = "История попыток", isTest = false }: HomeworkAttemptHistoryProps) {
   if (!attempts.length) return null;
 
   const formatDate = (value: string) =>
@@ -27,7 +28,7 @@ export function HomeworkAttemptHistory({ attempts, title = "История по�
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-sm font-bold text-ink">Попытка {attempt.attemptNumber}</span>
               <span className={`rounded-full px-3 py-1 text-xs font-bold ${submissionStatusClass(attempt.status)}`}>
-                {submissionStatusLabels[attempt.status] ?? "Неизвестный статус"}
+                {attemptStatusLabel(attempt.status, isTest)}
               </span>
               {attempt.attachmentType && (
                 <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-bold text-stone-600">
@@ -62,7 +63,9 @@ export function HomeworkAttemptHistory({ attempts, title = "История по�
 
             {attempt.reviewComment && (
               <div className="mt-4 rounded-xl border border-stone-200 bg-stone-50 p-4">
-                <p className="text-xs font-bold uppercase tracking-wider text-stone-400">Комментарий преподавателя</p>
+                <p className="text-xs font-bold uppercase tracking-wider text-stone-400">
+                  {isTest && attempt.status === "rejected" ? "Результат" : "Комментарий преподавателя"}
+                </p>
                 <p className="mt-2 text-sm leading-7 text-stone-600">{attempt.reviewComment}</p>
                 {attempt.reviewedAt && (
                   <p className="mt-2 text-xs text-stone-400">

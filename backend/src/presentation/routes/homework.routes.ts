@@ -67,7 +67,7 @@ export async function homeworkRoutes(app: FastifyInstance) {
 
       await getHomeworkById(homeworkId);
 
-      const { submission, lessonId, testResult } = await submitHomework({
+      const { submission, lessonId, testResult, lessonProgress } = await submitHomework({
         homeworkId,
         studentId,
         comment: body.comment,
@@ -81,7 +81,7 @@ export async function homeworkRoutes(app: FastifyInstance) {
         entityId: submission.id,
         action: "create",
         actorId: studentId,
-        payload: { homeworkId, lessonId, status: submission.status, lessonProgress: "submitted" },
+        payload: { homeworkId, lessonId, status: submission.status, lessonProgress },
       });
 
       return reply.status(201).send({
@@ -93,7 +93,7 @@ export async function homeworkRoutes(app: FastifyInstance) {
           testScore: submission.testScore,
           testPassed: submission.testPassed,
           testResult,
-          lessonProgress: "submitted",
+          lessonProgress,
           createdAt: submission.createdAt,
         },
       });

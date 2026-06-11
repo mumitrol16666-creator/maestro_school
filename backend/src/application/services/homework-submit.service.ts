@@ -1,4 +1,5 @@
-import type { HomeworkAttachmentType } from "@prisma/client";
+import type { HomeworkAttachmentType, LessonProgressStatus } from "@prisma/client";
+import { prisma } from "../../infrastructure/database/prisma.js";
 import { BadRequestError } from "../../domain/errors.js";
 import {
   gradeHomeworkTest,
@@ -7,7 +8,7 @@ import {
 } from "../../domain/homework-test.js";
 import { getHomeworkById, createHomeworkSubmission } from "../repositories/homework.repository.js";
 import { getLessonProgressRecord, getLessonWithCourse } from "../repositories/learning.repository.js";
-import { markLessonSubmitted } from "./lesson-progress.service.js";
+import { completeLesson, markLessonSubmitted } from "./lesson-progress.service.js";
 import { syncLessonAvailability } from "./lesson-unlock.service.js";
 import { requireCourseEnrollment } from "./enrollment.service.js";
 
@@ -45,10 +46,16 @@ export async function submitHomework(params: {
     throw new BadRequestError("Сначала начните урок");
   }
 
-  let testResult: { score: number; correctAnswers: number; totalQuestions: number } | null = null;
   if (homework.type === "test") {
-    const questions = parseHomeworkTestQuestions(homework.testQuestions);
-    testResult = gradeHomeworkTest(questions, params.testAnswers ?? {});
+    return submitHomeworkTest({
+      homework,
+      lesson,
+      lessonId,
+      courseId,
+      studentId: params.studentId,
+      testAnswers: params.testAnswers,
+      hasAssignmentPayload: Boolean(params.comment || params.attachmentUrl),
+    });
   }
 
   const submission = await createHomeworkSubmission({
@@ -57,12 +64,91 @@ export async function submitHomework(params: {
     comment: params.comment,
     attachmentUrl: params.attachmentUrl,
     attachmentType: params.attachmentType,
-    testAnswers: homework.type === "test" ? params.testAnswers : undefined,
-    testScore: testResult?.score,
-    testPassed: testResult ? testResult.score >= homework.passingScore : undefined,
   });
 
   await markLessonSubmitted(params.studentId, lessonId);
 
-  return { submission, lessonId, courseId, testResult };
+  return {
+    submission,
+    lessonId,
+    courseId,
+    testResult: null,
+    lessonProgress: "submitted" as LessonProgressStatus,
+  };
+}
+
+async function submitHomeworkTest(params: {
+  homework: Awaited<ReturnType<typeof getHomeworkById>>;
+  lesson: Awaited<ReturnType<typeof getLessonWithCourse>>;
+  lessonId: string;
+  courseId: string;
+  studentId: string;
+  testAnswers?: HomeworkTestAnswerMap;
+  hasAssignmentPayload: boolean;
+}) {
+  if (params.hasAssignmentPayload) {
+    throw new BadRequestError("Для теста нужны только ответы на вопросы");
+  }
+
+  const questions = parseHomeworkTestQuestions(params.homework.testQuestions);
+  const testResult = gradeHomeworkTest(questions, params.testAnswers ?? {});
+  const testPassed = testResult.score >= params.homework.passingScore;
+
+  if (testPassed) {
+    const submission = await createHomeworkSubmission({
+      homeworkId: params.homework.id,
+      studentId: params.studentId,
+      testAnswers: params.testAnswers,
+      testScore: testResult.score,
+      testPassed: true,
+      status: "submitted",
+    });
+
+    await markLessonSubmitted(params.studentId, params.lessonId);
+
+    const approved = await prisma.homeworkSubmission.update({
+      where: { id: submission.id },
+      data: {
+        status: "approved",
+        reviewedAt: new Date(),
+      },
+    });
+
+    await completeLesson({
+      studentId: params.studentId,
+      lessonId: params.lessonId,
+      courseId: params.courseId,
+      reviewerId: params.studentId,
+      pointsReward: params.lesson.pointsReward,
+      lessonTitle: params.lesson.title,
+    });
+
+    return {
+      submission: approved,
+      lessonId: params.lessonId,
+      courseId: params.courseId,
+      testResult,
+      lessonProgress: "completed" as LessonProgressStatus,
+    };
+  }
+
+  const reviewComment = `Набрано ${testResult.score}%. Для прохождения нужно не менее ${params.homework.passingScore}%.`;
+  const submission = await createHomeworkSubmission({
+    homeworkId: params.homework.id,
+    studentId: params.studentId,
+    testAnswers: params.testAnswers,
+    testScore: testResult.score,
+    testPassed: false,
+    status: "rejected",
+    reviewComment,
+    reviewedAt: new Date(),
+  });
+
+  return {
+    submission,
+    lessonId: params.lessonId,
+    courseId: params.courseId,
+    testResult,
+    lessonProgress: "in_progress" as LessonProgressStatus,
+  };
 }
