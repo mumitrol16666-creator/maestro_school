@@ -36,4 +36,8 @@ client, JWT-авторизация, typed responses и состояния заг
 - workflow: `.github/workflows/deploy.yml`
 - инструкция: [deploy/README.md](./deploy/README.md)
 
-После деплоя: Web `http://178.105.59.89:3000`, API `http://178.105.59.89:4000/api/v1`.
+Продакшен: **https://maestro-school.duckdns.org** (nginx + certbot на сервере).
+
+- Логин: https://maestro-school.duckdns.org/login
+- Админка: https://maestro-school.duckdns.org/admin
+- Nginx config: [deploy/nginx-maestro-school.conf](./deploy/nginx-maestro-school.conf)

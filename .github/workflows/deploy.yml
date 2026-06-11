@@ -73,6 +73,7 @@ jobs:
           script: |
             set -e
             export DEPLOY_HOST="178.105.59.89"
+            export PUBLIC_DOMAIN="maestro-school.duckdns.org"
             export JWT_SECRET="${{ secrets.JWT_SECRET }}"
             export POSTGRES_PASSWORD="${{ secrets.POSTGRES_PASSWORD }}"
             export CORS_ORIGIN="${{ secrets.CORS_ORIGIN }}"
@@ -95,3 +96,4 @@ jobs:
             sleep 5
             curl -fsS http://127.0.0.1:4000/health
             curl -fsS -o /dev/null http://127.0.0.1:3000/
+            curl -fsS -o /dev/null https://maestro-school.duckdns.org/ || echo "Public HTTPS not ready yet (nginx/certbot pending)"
