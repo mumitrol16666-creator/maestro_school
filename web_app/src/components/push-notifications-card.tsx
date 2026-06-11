@@ -146,6 +146,10 @@ export function PushNotificationsCard() {
           <p className="mt-3 text-sm leading-6 text-stone-500">
             Сообщим, когда преподаватель принял домашнее задание или попросил доработать.
           </p>
+          <ul className="mt-4 space-y-2 text-sm leading-6 text-stone-500">
+            <li>✓ Домашнее задание принято</li>
+            <li>✓ Нужна доработка задания</li>
+          </ul>
 
           {enabled ? (
             <div className="mt-4 flex items-center gap-2 text-sm font-semibold text-emerald-700">
