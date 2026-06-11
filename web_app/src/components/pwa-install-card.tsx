@@ -24,10 +24,10 @@ export function PwaInstallCard() {
           <Smartphone size={20} />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold">Мобильное приложение</p>
-          <h3 className="font-display mt-2 text-3xl">Установить на Android</h3>
+          <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold">Приложение на телефоне</p>
+          <h3 className="font-display mt-2 text-3xl">Добавить на главный экран</h3>
           <p className="mt-3 text-sm leading-6 text-stone-500">
-            Maestro можно добавить на главный экран — будет открываться как приложение, без адресной строки браузера.
+            Иконка Maestro на экране телефона — открывается сразу, как обычное приложение.
           </p>
           {canInstall ? (
             <button
@@ -40,9 +40,9 @@ export function PwaInstallCard() {
             </button>
           ) : (
             <ol className="mt-5 list-decimal space-y-2 pl-5 text-sm leading-6 text-stone-600">
-              <li>Откройте сайт в <strong>Chrome</strong> на Android</li>
-              <li>Меню ⋮ → <strong>«Установить приложение»</strong> или <strong>«Добавить на главный экран»</strong></li>
-              <li>Подтвердите установку — иконка Maestro появится на экране</li>
+              <li>Откройте сайт в браузере <strong>Chrome</strong> на телефоне</li>
+              <li>Нажмите меню ⋮ вверху справа</li>
+              <li>Выберите <strong>«Установить приложение»</strong> или <strong>«Добавить на главный экран»</strong></li>
             </ol>
           )}
         </div>

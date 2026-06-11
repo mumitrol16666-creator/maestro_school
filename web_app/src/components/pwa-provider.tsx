@@ -70,9 +70,9 @@ export function PwaProvider() {
           <Smartphone size={18} />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-bold">Установить Maestro на телефон</p>
+          <p className="text-sm font-bold">Добавить Maestro на главный экран</p>
           <p className="mt-1 text-xs leading-5 text-stone-500">
-            Добавьте приложение на главный экран — будет открываться как обычное, без адресной строки.
+            Быстрый доступ с телефона — как обычное приложение.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <button

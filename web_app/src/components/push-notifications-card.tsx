@@ -4,7 +4,8 @@ import { Bell, BellOff, CheckCircle2, LoaderCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
   getNotificationPermission,
-  isPushAvailable,
+  getPushServerStatus,
+  isPushSupportedOnDevice,
   sendTestPushNotification,
   subscribeToPushNotifications,
   unsubscribeFromPushNotifications,
@@ -13,7 +14,8 @@ import {
 export function PushNotificationsCard() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [available, setAvailable] = useState(false);
+  const [serverReady, setServerReady] = useState(false);
+  const [deviceReady, setDeviceReady] = useState(false);
   const [permission, setPermission] = useState<NotificationPermission | "unsupported">("default");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -23,7 +25,9 @@ export function PushNotificationsCard() {
       setLoading(true);
       try {
         setPermission(getNotificationPermission());
-        setAvailable(await isPushAvailable());
+        setDeviceReady(isPushSupportedOnDevice());
+        const status = await getPushServerStatus();
+        setServerReady(status.ready);
       } finally {
         setLoading(false);
       }
@@ -37,7 +41,7 @@ export function PushNotificationsCard() {
     try {
       await subscribeToPushNotifications();
       setPermission(getNotificationPermission());
-      setMessage("Уведомления включены");
+      setMessage("Готово — будем сообщать, когда задание проверят.");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Не удалось включить уведомления");
     } finally {
@@ -66,14 +70,14 @@ export function PushNotificationsCard() {
     try {
       const result = await sendTestPushNotification();
       if (result.skipped) {
-        setError("Сервер ещё не настроил push-уведомления");
+        setError("Сейчас уведомления недоступны. Попробуйте позже.");
       } else if (result.sent === 0) {
-        setError("Подписка не найдена — сначала включите уведомления");
+        setError("Сначала нажмите «Включить уведомления».");
       } else {
-        setMessage("Тестовое уведомление отправлено");
+        setMessage("Отправили пробное сообщение — проверьте экран телефона.");
       }
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Не удалось отправить тест");
+      setError(reason instanceof Error ? reason.message : "Не удалось отправить пробное сообщение");
     } finally {
       setBusy(false);
     }
@@ -84,19 +88,46 @@ export function PushNotificationsCard() {
       <div className="rounded-[30px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
         <div className="flex items-center gap-3 text-sm text-stone-500">
           <LoaderCircle size={16} className="animate-spin" />
-          Проверяем поддержку уведомлений...
+          Загружаем настройки...
         </div>
       </div>
     );
   }
 
-  if (!available) {
+  if (!deviceReady) {
     return (
       <div className="rounded-[30px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
-        <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold">Уведомления</p>
-        <p className="mt-3 text-sm leading-6 text-stone-500">
-          Push пока недоступны: нужен HTTPS, установленное PWA-приложение или Chrome на Android, и настройка VAPID-ключей на сервере.
-        </p>
+        <div className="flex items-start gap-4">
+          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-ink text-gold">
+            <Bell size={20} />
+          </span>
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold">Уведомления</p>
+            <h3 className="font-display mt-2 text-3xl">На этом устройстве</h3>
+            <p className="mt-3 text-sm leading-6 text-stone-500">
+              Чтобы получать сообщения о проверке домашних заданий, откройте Maestro в браузере <strong>Chrome на телефоне Android</strong>.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!serverReady) {
+    return (
+      <div className="rounded-[30px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
+        <div className="flex items-start gap-4">
+          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-ink text-gold">
+            <BellOff size={20} />
+          </span>
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold">Уведомления</p>
+            <h3 className="font-display mt-2 text-3xl">Скоро будут доступны</h3>
+            <p className="mt-3 text-sm leading-6 text-stone-500">
+              Мы подключаем уведомления на сервере. Зайдите в профиль чуть позже и включите их здесь.
+            </p>
+          </div>
+        </div>
       </div>
     );
   }
@@ -110,10 +141,10 @@ export function PushNotificationsCard() {
           {enabled ? <Bell size={20} /> : <BellOff size={20} />}
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold">Push-уведомления</p>
-          <h3 className="font-display mt-2 text-3xl">Оставаться в курсе</h3>
+          <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold">Уведомления</p>
+          <h3 className="font-display mt-2 text-3xl">О проверке заданий</h3>
           <p className="mt-3 text-sm leading-6 text-stone-500">
-            Получайте сообщения, когда преподаватель проверил домашнее задание — принято или нужна доработка.
+            Сообщим, когда преподаватель принял домашнее задание или попросил доработать.
           </p>
 
           {enabled ? (
@@ -123,7 +154,7 @@ export function PushNotificationsCard() {
             </div>
           ) : permission === "denied" ? (
             <p className="mt-4 text-sm leading-6 text-amber-800">
-              Уведомления заблокированы в браузере. Откройте настройки сайта в Chrome → Разрешения → Уведомления → Разрешить.
+              Уведомления запрещены в настройках браузера. Разрешите их для сайта Maestro — обычно это в меню ⋮ → «Настройки сайта» → «Уведомления».
             </p>
           ) : null}
 

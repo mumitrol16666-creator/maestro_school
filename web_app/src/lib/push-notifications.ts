@@ -21,26 +21,40 @@ export function getNotificationPermission(): NotificationPermission | "unsupport
   return Notification.permission;
 }
 
-export async function isPushAvailable() {
+export function isPushSupportedOnDevice() {
   if (typeof window === "undefined") return false;
-  if (!("serviceWorker" in navigator) || !("PushManager" in window)) return false;
-  const config = await apiRequest<{ enabled: boolean; publicKey: string | null }>("/push/vapid-public-key");
-  return config.enabled && Boolean(config.publicKey);
+  return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+}
+
+export async function getPushServerStatus() {
+  try {
+    const config = await apiRequest<{ enabled: boolean; publicKey: string | null }>("/push/vapid-public-key");
+    return { ready: Boolean(config.enabled && config.publicKey) };
+  } catch {
+    return { ready: false };
+  }
 }
 
 export async function subscribeToPushNotifications() {
+  const { ready } = await getPushServerStatus();
+  if (!ready) {
+    throw new Error("Сейчас не удалось подключить уведомления. Попробуйте чуть позже.");
+  }
+
   const config = await apiRequest<{ enabled: boolean; publicKey: string | null }>("/push/vapid-public-key");
-  if (!config.enabled || !config.publicKey) {
-    throw new Error("Push-уведомления пока не настроены на сервере");
+  if (!config.publicKey) {
+    throw new Error("Сейчас не удалось подключить уведомления. Попробуйте чуть позже.");
   }
 
   const permission = await Notification.requestPermission();
   if (permission !== "granted") {
-    throw new Error("Разрешите уведомления в настройках браузера");
+    throw new Error("Нужно разрешить уведомления — иначе мы не сможем сообщать о проверке заданий.");
   }
 
   const registration = await getServiceWorkerRegistration();
-  if (!registration) throw new Error("Service Worker недоступен");
+  if (!registration) {
+    throw new Error("Откройте Maestro в браузере Chrome на телефоне и попробуйте снова.");
+  }
 
   await navigator.serviceWorker.ready;
 
@@ -54,7 +68,7 @@ export async function subscribeToPushNotifications() {
 
   const json = subscription.toJSON();
   if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) {
-    throw new Error("Не удалось оформить подписку на уведомления");
+    throw new Error("Не удалось подключить уведомления. Попробуйте ещё раз.");
   }
 
   await apiRequest("/push/subscribe", {
