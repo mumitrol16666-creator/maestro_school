@@ -2,6 +2,7 @@
 
 import { ArrowRight, CheckCircle2, Clock3, Coins, Flame, Play, Sparkles, Star, Trophy } from "lucide-react";
 import { AchievementsWall } from "@/components/achievements-wall";
+import { DashboardWelcome } from "@/components/dashboard-welcome";
 import { FounderMessage } from "@/components/founder-message";
 import Link from "next/link";
 import { useAuth } from "@/components/auth-provider";
@@ -10,39 +11,44 @@ import { ProgressBar } from "@/components/progress-bar";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { api } from "@/lib/api-client";
 import { lessonStatusLabels } from "@/lib/ui";
-import { difficultyLabel, normalizeLessonStatus } from "@/lib/adapters";
+import { difficultyLabel, normalizeLessonStatus, toCourse } from "@/lib/adapters";
 
 export default function DashboardPage() {
   const { user } = useAuth();
   const resource = useApiResource(async () => {
-    const [dashboard, news, achievements] = await Promise.all([
+    const [dashboard, news, achievements, courses] = await Promise.all([
       api.dashboard(),
       api.news(),
       api.achievements(),
+      api.courses(),
     ]);
-    return { dashboard, news, achievements };
+    return {
+      dashboard,
+      news,
+      achievements,
+      courses: courses.map((course, index) => toCourse(course, index)),
+    };
   }, []);
 
   if (resource.loading) return <LoadingState label="Собираем вашу главную страницу" />;
   if (resource.error) return <ErrorState message={resource.error} retry={resource.reload} />;
-  if (!resource.data?.dashboard.currentCourse) {
+  const data = resource.data;
+  if (!data) return <ErrorState message="Не удалось загрузить данные" retry={resource.reload} />;
+  if (!data.dashboard.currentCourse) {
+    const { dashboard, news, achievements, courses } = data;
     return (
-      <>
-        <EmptyState
-          title="Вы еще не начали обучение"
-          description="Выберите опубликованный курс, чтобы открыть первый урок и отслеживать прогресс."
-          action={
-            <Link href="/courses" className="inline-flex items-center gap-2 rounded-full bg-ink px-5 py-3 text-sm font-bold text-white">
-              Выбрать курс <ArrowRight size={16} />
-            </Link>
-          }
-        />
-        <FounderMessage className="mt-10" />
-      </>
+      <DashboardWelcome
+        points={dashboard.points}
+        courses={courses}
+        news={news}
+        achievements={achievements.data}
+        earnedCount={achievements.meta?.earnedCount ?? 0}
+        totalAchievements={achievements.meta?.totalCount ?? achievements.data.length}
+      />
     );
   }
 
-  const { dashboard, news, achievements } = resource.data;
+  const { dashboard, news, achievements } = data;
   const course = dashboard.currentCourse;
   if (!course) return <EmptyState title="Курс пока не назначен" description="После зачисления на курс здесь появятся уроки, прогресс и баллы." />;
   const nextLesson = dashboard.nextAvailableLesson;
