@@ -26,9 +26,34 @@ export function DashboardWelcome({
   const { user } = useAuth();
   const firstName = user?.firstName || "ученик";
   const available = courses.filter((course) => course.access === "available");
-  const enrolled = courses.filter((course) => course.access === "enrolled");
-  const preview = available.length ? available : courses;
+  const inProgress = courses.filter((course) => course.access === "enrolled" && course.progress < 100);
+  const completed = courses.filter((course) => course.access === "enrolled" && course.progress >= 100);
   const latestPost = news[0];
+
+  const section =
+    inProgress.length > 0
+      ? {
+          title: "Продолжите обучение",
+          description: "Откройте курс и продолжайте с того урока, на котором остановились.",
+          items: inProgress,
+        }
+      : available.length > 0
+        ? {
+            title: "С чего начать",
+            description: "Выберите опубликованный курс — первый урок откроется сразу после зачисления.",
+            items: available,
+          }
+        : completed.length > 0
+          ? {
+              title: "Пройденные курсы",
+              description: "Все ваши курсы завершены. Можно открыть курс повторно или дождаться новых программ.",
+              items: completed,
+            }
+          : {
+              title: "С чего начать",
+              description: "Выберите опубликованный курс — первый урок откроется сразу после зачисления.",
+              items: [],
+            };
 
   return (
     <>
@@ -50,23 +75,17 @@ export function DashboardWelcome({
       <section className="mt-8 rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h2 className="font-display text-3xl">
-              {enrolled.length ? "Продолжите обучение" : "С чего начать"}
-            </h2>
-            <p className="mt-2 text-sm text-stone-500">
-              {enrolled.length
-                ? "У вас есть зачисления — откройте курс и продолжайте уроки."
-                : "Выберите опубликованный курс — первый урок откроется сразу после зачисления."}
-            </p>
+            <h2 className="font-display text-3xl">{section.title}</h2>
+            <p className="mt-2 text-sm text-stone-500">{section.description}</p>
           </div>
           <Link href="/courses" className="inline-flex items-center gap-2 text-sm font-bold text-gold hover:underline">
             Все курсы <ArrowRight size={15} />
           </Link>
         </div>
 
-        {preview.length ? (
+        {section.items.length ? (
           <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-            {preview.slice(0, 3).map((course) => (
+            {section.items.slice(0, 3).map((course) => (
               <CourseCard key={course.id} course={course} />
             ))}
           </div>
