@@ -1,9 +1,10 @@
 "use client";
 
-import { ArrowRight, Eye, EyeOff, LoaderCircle, Music2 } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, LoaderCircle } from "lucide-react";
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { AuthHeroPanel } from "@/components/auth-hero-panel";
 import { Brand } from "@/components/brand";
 import { useAuth } from "@/components/auth-provider";
 import { ApiError } from "@/lib/api-client";
@@ -46,17 +47,7 @@ export default function RegisterPage() {
 
   return (
     <main className="grid min-h-screen bg-paper lg:grid-cols-[1.05fr_0.95fr]">
-      <section className="relative hidden overflow-hidden bg-ink p-12 text-white lg:flex lg:flex-col">
-        <div className="noise absolute inset-0 opacity-20" />
-        <div className="absolute -bottom-40 -right-32 h-[520px] w-[520px] rounded-full border border-gold/20" />
-        <div className="relative"><Brand /></div>
-        <div className="relative my-auto max-w-xl">
-          <span className="mb-8 grid h-14 w-14 place-items-center rounded-full border border-white/10 bg-white/5 text-gold"><Music2 /></span>
-          <h1 className="font-display text-6xl leading-[1.08]">Начните свой путь в Maestro.</h1>
-          <p className="mt-7 max-w-md text-base leading-7 text-white/55">Создайте аккаунт, выберите опубликованный курс и сразу приступайте к занятиям.</p>
-        </div>
-        <p className="relative text-xs uppercase tracking-[0.2em] text-white/30">Maestro education platform</p>
-      </section>
+      <AuthHeroPanel />
       <section className="flex items-center justify-center p-6 sm:p-12">
         <div className="w-full max-w-md">
           <div className="mb-10 lg:hidden"><Brand /></div>
