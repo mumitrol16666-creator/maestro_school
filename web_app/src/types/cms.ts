@@ -82,6 +82,7 @@ export interface CmsHomework {
   type: HomeworkType;
   passingScore: number;
   testQuestions: CmsHomeworkTestQuestion[] | null;
+  updatedAt?: string;
 }
 
 export interface CmsNews {

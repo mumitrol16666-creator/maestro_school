@@ -1,7 +1,7 @@
 "use client";
 
 import { ClipboardList, Trash2 } from "lucide-react";
-import { AdminTestBuilder, isTestBuilderValid } from "@/components/admin-test-builder";
+import { AdminTestBuilder, createEmptyTestQuestion, isTestBuilderValid } from "@/components/admin-test-builder";
 import { MarkdownEditor } from "@/components/markdown-editor";
 import { inputClass, primaryButton, secondaryButton } from "@/components/admin-ui";
 import type { CmsHomework } from "@/types/cms";
@@ -12,7 +12,7 @@ interface LessonHomeworkPanelProps {
   homeworkForm: HomeworkFormValues;
   hasHomework: boolean;
   saving: boolean;
-  onChange: (value: HomeworkFormValues) => void;
+  onChange: (value: HomeworkFormValues | ((current: HomeworkFormValues) => HomeworkFormValues)) => void;
   onSubmit: (event: React.FormEvent) => void;
   onArchive: () => void;
 }
@@ -28,6 +28,14 @@ export function LessonHomeworkPanel({
   const isTest = homeworkForm.type === "test";
   const canSave = homeworkForm.description.trim() && (!isTest || isTestBuilderValid(homeworkForm.testQuestions ?? []));
 
+  function patchHomework(patch: Partial<HomeworkFormValues> | ((current: HomeworkFormValues) => HomeworkFormValues)) {
+    if (typeof patch === "function") {
+      onChange(patch);
+      return;
+    }
+    onChange((current) => ({ ...current, ...patch }));
+  }
+
   return (
     <form onSubmit={onSubmit} className="space-y-5">
       <div className="rounded-[24px] border border-stone-200 bg-white p-5">
@@ -35,9 +43,9 @@ export function LessonHomeworkPanel({
           <div className="flex items-start gap-3">
             <ClipboardList size={20} className="mt-1 text-gold" />
             <div>
-              <h3 className="font-display text-3xl">Задание к уроку</h3>
+              <h3 className="font-display text-3xl">Задание и тест</h3>
               <p className="mt-1 text-sm text-stone-500">
-                Ученик сдаёт работу или проходит тест после просмотра урока.
+                Здесь прикрепляется сдача урока: работа на проверку или автоматический тест.
               </p>
               <p className="mt-3 text-xs font-bold uppercase tracking-wider text-stone-400">
                 {hasHomework ? "Задание создано" : "Задание ещё не создано"}
@@ -68,7 +76,7 @@ export function LessonHomeworkPanel({
               name="homework-type"
               className="sr-only"
               checked={homeworkForm.type === "assignment"}
-              onChange={() => onChange({ ...homeworkForm, type: "assignment", testQuestions: [] })}
+              onChange={() => patchHomework({ type: "assignment", testQuestions: [] })}
             />
             <p className="text-sm font-bold">Работа на проверку</p>
             <p className="mt-1 text-xs leading-5 text-stone-500">
@@ -85,11 +93,11 @@ export function LessonHomeworkPanel({
               name="homework-type"
               className="sr-only"
               checked={homeworkForm.type === "test"}
-              onChange={() => onChange({
-                ...homeworkForm,
+              onChange={() => patchHomework((current) => ({
+                ...current,
                 type: "test",
-                testQuestions: homeworkForm.testQuestions?.length ? homeworkForm.testQuestions : [],
-              })}
+                testQuestions: current.testQuestions?.length ? current.testQuestions : [createEmptyTestQuestion()],
+              }))}
             />
             <p className="text-sm font-bold">Тест</p>
             <p className="mt-1 text-xs leading-5 text-stone-500">
@@ -106,7 +114,7 @@ export function LessonHomeworkPanel({
               min="0"
               max="100"
               value={homeworkForm.passingScore}
-              onChange={(event) => onChange({ ...homeworkForm, passingScore: Number(event.target.value) })}
+              onChange={(event) => patchHomework({ passingScore: Number(event.target.value) })}
               className={`${inputClass} mt-2`}
             />
           </label>
@@ -122,7 +130,7 @@ export function LessonHomeworkPanel({
         <div className="mt-4">
           <MarkdownEditor
             value={homeworkForm.description}
-            onChange={(description) => onChange({ ...homeworkForm, description })}
+            onChange={(description) => patchHomework({ description })}
             label="Текст задания"
           />
         </div>
@@ -137,7 +145,7 @@ export function LessonHomeworkPanel({
           </p>
           <AdminTestBuilder
             questions={homeworkForm.testQuestions ?? []}
-            onChange={(testQuestions) => onChange({ ...homeworkForm, testQuestions })}
+            onChange={(testQuestions) => patchHomework({ testQuestions })}
           />
         </section>
       )}

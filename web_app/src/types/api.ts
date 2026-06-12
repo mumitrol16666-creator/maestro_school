@@ -100,6 +100,21 @@ export interface ApiLessonDetail {
   course: { id: string; directionId: string; title: string };
 }
 
+export interface StudentAchievementItem {
+  code: string;
+  title: string;
+  description: string | null;
+  earned: boolean;
+  earnedAt: string | null;
+  progressPercent: number;
+  progressLabel: string;
+}
+
+export interface StudentAchievementsMeta {
+  earnedCount: number;
+  totalCount: number;
+}
+
 export interface ApiDashboard {
   currentCourse: {
     id: string;

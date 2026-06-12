@@ -2,7 +2,9 @@
 
 import { ArrowRight, ClipboardCheck, Search } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { AdminPendingHomeworkBadge } from "@/components/admin-pending-homework-badge";
+import { usePendingHomeworkCount } from "@/hooks/use-pending-homework-count";
 import { PageControls, secondaryButton } from "@/components/admin-ui";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
 import { PageHeader } from "@/components/page-header";
@@ -41,6 +43,15 @@ export default function HomeworkReviewPage() {
   const [status, setStatus] = useState<HomeworkReviewFilterStatus | "">("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const { count: pendingCount, reload: reloadPendingCount } = usePendingHomeworkCount();
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const initial = params.get("status");
+    if (initial === "submitted" || initial === "reviewed" || initial === "completed" || initial === "rejected") {
+      setStatus(initial);
+    }
+  }, []);
 
   const resource = useApiResource(
     () =>
@@ -51,6 +62,12 @@ export default function HomeworkReviewPage() {
       }),
     [status, search, page],
   );
+
+  useEffect(() => {
+    if (!resource.loading) {
+      void reloadPendingCount();
+    }
+  }, [resource.loading, resource.data, reloadPendingCount]);
 
   return (
     <>
@@ -68,11 +85,14 @@ export default function HomeworkReviewPage() {
               setStatus(item.value);
               setPage(1);
             }}
-            className={`rounded-full px-4 py-2 text-xs font-bold ${
+            className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold ${
               status === item.value ? "bg-ink text-white" : "border border-stone-200 bg-white text-stone-600"
             }`}
           >
             {item.label}
+            {item.value === "submitted" && pendingCount != null && pendingCount > 0 && (
+              <AdminPendingHomeworkBadge count={pendingCount} />
+            )}
           </button>
         ))}
       </div>

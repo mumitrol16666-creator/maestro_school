@@ -184,12 +184,17 @@ export async function cmsRoutes(app: FastifyInstance) {
       description: z.string().min(1),
       type: homeworkType.default("assignment"),
     }).parse(request.body);
-    if (body.type === "test" && !body.testQuestions?.length) throw new BadRequestError("Test homework must contain at least one question");
+    if (body.type === "test" && !body.testQuestions?.length) {
+      throw new BadRequestError("В тесте должен быть хотя бы один вопрос с вариантами ответа");
+    }
     const item = await createHomework(body); await audit(request, "homework", item.id, "create"); return reply.status(201).send({ data: item });
   });
   app.patch("/admin/homeworks/:id", { preHandler: catalogGuards() }, async (request) => {
-    const { id } = idParams.parse(request.params); const body = homeworkBody.parse(request.body);
-    if (body.type === "test" && !body.testQuestions?.length) throw new BadRequestError("Test homework must contain at least one question");
+    const { id } = idParams.parse(request.params);
+    const body = homeworkBody.parse(request.body);
+    if (body.type === "test" && !body.testQuestions?.length) {
+      throw new BadRequestError("В тесте должен быть хотя бы один вопрос с вариантами ответа");
+    }
     const item = await updateHomework(id, body); await audit(request, "homework", id, "update"); return { data: item };
   });
   app.delete("/admin/homeworks/:id", { preHandler: catalogGuards() }, async (request) => {

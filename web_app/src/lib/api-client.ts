@@ -12,6 +12,8 @@ import type {
   LoginResponse,
   RegisterInput,
   StartLessonResponse,
+  StudentAchievementItem,
+  StudentAchievementsMeta,
 } from "@/types/api";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1";
@@ -126,6 +128,8 @@ export const api = {
     ),
   lesson: (lessonId: string) => apiRequest<ApiLessonDetail>(`/lessons/${lessonId}`),
   dashboard: () => apiRequest<ApiDashboard>("/students/me/dashboard"),
+  achievements: () =>
+    apiRequestEnvelope<StudentAchievementItem[], StudentAchievementsMeta>("/students/me/achievements"),
   progress: (courseId?: string) =>
     apiRequest<ApiProgress>(`/students/me/progress${courseId ? `?courseId=${encodeURIComponent(courseId)}` : ""}`),
   startLesson: (lessonId: string) =>

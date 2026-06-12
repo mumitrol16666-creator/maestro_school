@@ -53,7 +53,7 @@ export function LessonMaterialsPanel({
           <div>
             <h3 className="font-display text-3xl">Материалы урока</h3>
             <p className="mt-1 text-sm text-stone-500">
-              PDF, изображения и ссылки, которые ученик скачает вместе с уроком.
+              Здесь прикрепляются PDF, изображения и ссылки — ученик скачает их на странице урока.
             </p>
           </div>
         </div>

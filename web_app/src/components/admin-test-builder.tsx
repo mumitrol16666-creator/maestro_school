@@ -13,7 +13,7 @@ function id() {
   return crypto.randomUUID();
 }
 
-function newQuestion(): CmsHomeworkTestQuestion {
+export function createEmptyTestQuestion(): CmsHomeworkTestQuestion {
   const first = id();
   return {
     id: id(),
@@ -21,6 +21,27 @@ function newQuestion(): CmsHomeworkTestQuestion {
     correctOptionId: first,
     options: [{ id: first, text: "" }, { id: id(), text: "" }],
   };
+}
+
+function newQuestion() {
+  return createEmptyTestQuestion();
+}
+
+export function normalizeTestQuestions(value: unknown): CmsHomeworkTestQuestion[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item) => item && typeof item === "object" && "id" in item) as CmsHomeworkTestQuestion[];
+}
+
+export function serializeTestQuestions(questions: CmsHomeworkTestQuestion[]) {
+  return questions.map((question) => ({
+    id: question.id,
+    prompt: question.prompt.trim(),
+    correctOptionId: question.correctOptionId,
+    options: question.options.map((option) => ({
+      id: option.id,
+      text: option.text.trim(),
+    })),
+  }));
 }
 
 export function isTestBuilderValid(questions: CmsHomeworkTestQuestion[]) {
@@ -123,9 +144,13 @@ export function AdminTestBuilder({ questions, onChange }: AdminTestBuilderProps)
       </div>
 
       {!questions.length && (
-        <p className="mt-4 rounded-xl border border-dashed border-stone-200 bg-stone-50 p-4 text-sm text-stone-500">
-          Добавьте хотя бы один вопрос с двумя вариантами ответа.
-        </p>
+        <div className="mt-4 rounded-xl border border-dashed border-amber-200 bg-amber-50 p-5 text-center">
+          <p className="text-sm font-bold text-amber-900">В тесте пока нет вопросов</p>
+          <p className="mt-2 text-sm text-amber-800">Нажмите кнопку ниже, чтобы создать первый вопрос с вариантами ответа.</p>
+          <button type="button" onClick={() => onChange([createEmptyTestQuestion()])} className={`${secondaryButton} mt-4`}>
+            <Plus size={14} /> Создать первый вопрос
+          </button>
+        </div>
       )}
     </div>
   );

@@ -73,3 +73,93 @@ export async function getStudentAchievements(studentId: string) {
     orderBy: { earnedAt: "desc" },
   });
 }
+
+export interface StudentAchievementOverviewItem {
+  code: string;
+  title: string;
+  description: string | null;
+  earned: boolean;
+  earnedAt: string | null;
+  progressPercent: number;
+  progressLabel: string;
+}
+
+export async function getStudentAchievementsOverview(
+  studentId: string,
+): Promise<StudentAchievementOverviewItem[]> {
+  const [achievements, earnedRows, points, completedLessons] = await Promise.all([
+    prisma.achievement.findMany({
+      where: { isActive: true },
+      orderBy: { threshold: "asc" },
+    }),
+    prisma.studentAchievement.findMany({
+      where: { studentId },
+      select: { achievementId: true, earnedAt: true },
+    }),
+    calculateStudentPoints(studentId),
+    countCompletedLessons(studentId),
+  ]);
+
+  const earnedMap = new Map(
+    earnedRows.map((row) => [row.achievementId, row.earnedAt]),
+  );
+
+  return achievements.map((achievement) => {
+    const earnedAt = earnedMap.get(achievement.id) ?? null;
+    const earned = earnedAt != null;
+    const { progressPercent, progressLabel } = buildAchievementProgress({
+      criteriaType: achievement.criteriaType,
+      threshold: achievement.threshold,
+      points,
+      completedLessons,
+      earned,
+    });
+
+    return {
+      code: achievement.code,
+      title: achievement.title,
+      description: achievement.description,
+      earned,
+      earnedAt: earnedAt?.toISOString() ?? null,
+      progressPercent,
+      progressLabel,
+    };
+  });
+}
+
+function buildAchievementProgress(params: {
+  criteriaType: string;
+  threshold: number;
+  points: number;
+  completedLessons: number;
+  earned: boolean;
+}) {
+  if (params.earned) {
+    return { progressPercent: 100, progressLabel: "Получено" };
+  }
+
+  switch (params.criteriaType) {
+    case "points_threshold": {
+      const current = Math.min(params.points, params.threshold);
+      return {
+        progressPercent: Math.round((current / params.threshold) * 100),
+        progressLabel: `${params.points} из ${params.threshold} баллов`,
+      };
+    }
+    case "lessons_completed_count":
+    case "first_lesson_completed": {
+      const current = Math.min(params.completedLessons, params.threshold);
+      return {
+        progressPercent: Math.round((current / params.threshold) * 100),
+        progressLabel: `${params.completedLessons} из ${params.threshold} уроков`,
+      };
+    }
+    case "first_module_completed":
+      return {
+        progressPercent: 0,
+        progressLabel: "Завершите все уроки первого модуля",
+      };
+    default:
+      return { progressPercent: 0, progressLabel: "В процессе" };
+  }
+}

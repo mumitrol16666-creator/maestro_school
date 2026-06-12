@@ -1,6 +1,7 @@
 "use client";
 
-import { ArrowRight, CheckCircle2, Clock3, Flame, Play, Sparkles, Star } from "lucide-react";
+import { ArrowRight, CheckCircle2, Clock3, Flame, Play, Sparkles, Star, Trophy } from "lucide-react";
+import { AchievementsWall } from "@/components/achievements-wall";
 import Link from "next/link";
 import { useAuth } from "@/components/auth-provider";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
@@ -13,8 +14,12 @@ import { difficultyLabel, normalizeLessonStatus } from "@/lib/adapters";
 export default function DashboardPage() {
   const { user } = useAuth();
   const resource = useApiResource(async () => {
-    const [dashboard, news] = await Promise.all([api.dashboard(), api.news()]);
-    return { dashboard, news };
+    const [dashboard, news, achievements] = await Promise.all([
+      api.dashboard(),
+      api.news(),
+      api.achievements(),
+    ]);
+    return { dashboard, news, achievements };
   }, []);
 
   if (resource.loading) return <LoadingState label="Собираем вашу главную страницу" />;
@@ -23,7 +28,7 @@ export default function DashboardPage() {
     return <EmptyState title="Вы еще не начали обучение" description="Выберите опубликованный курс, чтобы открыть первый урок и отслеживать прогресс." action={<Link href="/courses" className="inline-flex items-center gap-2 rounded-full bg-ink px-5 py-3 text-sm font-bold text-white">Выбрать курс <ArrowRight size={16} /></Link>} />;
   }
 
-  const { dashboard, news } = resource.data;
+  const { dashboard, news, achievements } = resource.data;
   const course = dashboard.currentCourse;
   if (!course) return <EmptyState title="Курс пока не назначен" description="После зачисления на курс здесь появятся уроки, прогресс и баллы." />;
   const nextLesson = dashboard.nextAvailableLesson;
@@ -104,6 +109,26 @@ export default function DashboardPage() {
             <p className="mt-4 line-clamp-2 text-sm leading-6 text-stone-500">{latestPost.excerpt}</p>
           </Link>
         ) : <div className="rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft"><p className="font-display text-3xl">Новостей пока нет</p></div>}
+      </section>
+
+      <section className="mt-10 rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <span className="grid h-11 w-11 place-items-center rounded-2xl bg-amber-50 text-gold">
+              <Trophy size={20} />
+            </span>
+            <div>
+              <h2 className="font-display text-3xl">Достижения</h2>
+              <p className="mt-1 text-sm text-stone-500">
+                {achievements.meta?.earnedCount ?? 0} из {achievements.meta?.totalCount ?? achievements.data.length} получено
+              </p>
+            </div>
+          </div>
+          <Link href="/progress" className="text-sm font-bold text-gold hover:underline">
+            Все достижения
+          </Link>
+        </div>
+        <AchievementsWall achievements={achievements.data} compact />
       </section>
 
       {nextLesson && (

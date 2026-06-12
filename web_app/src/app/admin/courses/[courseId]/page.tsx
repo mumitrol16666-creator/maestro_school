@@ -10,6 +10,7 @@ import { LessonWorkspace, type LessonWorkspaceTab } from "@/components/lesson-wo
 import { CourseReadiness } from "@/components/course-readiness";
 import { CourseStructureTree } from "@/components/course-structure-tree";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
+import { normalizeTestQuestions, serializeTestQuestions } from "@/components/admin-test-builder";
 import { MediaPicker } from "@/components/media-picker";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
@@ -18,7 +19,7 @@ import { uploadMediaFile } from "@/lib/file-upload";
 import { materialTypeFromFile, materialTypeFromMedia, titleFromFilename } from "@/lib/media-utils";
 import type { CmsHomework, CmsMaterial, CmsMaterialUsage, CmsMedia } from "@/types/cms";
 
-type EditorMode = "none" | "new-module" | "edit-module" | "new-lesson" | "edit-lesson";
+type EditorMode = "none" | "new-module" | "edit-module" | "new-lesson";
 const emptyModule = (courseId: string) => ({ title: "", description: "", sortOrder: 0, courseId });
 const emptyLesson = { title: "", description: "", videoUrl: "", pointsReward: 0, sortOrder: 0 };
 const emptyMaterial = { title: "", type: "pdf", url: "", sortOrder: 0 };
@@ -68,7 +69,7 @@ export default function CourseBuilderPage() {
   const materials = useApiResource(() => selectedLessonId ? cmsApi.materials(selectedLessonId) : Promise.resolve([]), [selectedLessonId]);
   const homeworks = useApiResource(() => selectedLessonId ? cmsApi.homeworks(selectedLessonId) : Promise.resolve([]), [selectedLessonId]);
   const moduleDirty = (editorMode === "new-module" || editorMode === "edit-module") && !same(moduleForm, moduleBaseline);
-  const lessonDirty = (editorMode === "new-lesson" || editorMode === "edit-lesson") && !same(lessonForm, lessonBaseline);
+  const lessonDirty = (editorMode === "new-lesson" || !!selectedLessonId) && !same(lessonForm, lessonBaseline);
   const materialDirty = !!selectedLesson && (!same(materialForm, emptyMaterial) || !!materialFile);
   const homeworkDirty = !!selectedLesson && !same(homeworkForm, homeworkBaseline);
   const isDirty = moduleDirty || lessonDirty || materialDirty || homeworkDirty;
@@ -88,16 +89,29 @@ export default function CourseBuilderPage() {
   }, [selectedLessonId]);
 
   useEffect(() => {
+    if (!selectedLesson) return;
+    const value = {
+      title: selectedLesson.title,
+      description: selectedLesson.description ?? "",
+      videoUrl: selectedLesson.videoUrl ?? "",
+      pointsReward: selectedLesson.pointsReward,
+      sortOrder: selectedLesson.sortOrder,
+    };
+    setLessonForm(value);
+    setLessonBaseline(value);
+  }, [selectedLesson]);
+
+  useEffect(() => {
     const homework = homeworks.data?.[0];
     const value = homework ? {
       description: homework.description,
       type: homework.type,
       passingScore: homework.passingScore,
-      testQuestions: homework.testQuestions ?? [],
+      testQuestions: normalizeTestQuestions(homework.testQuestions),
     } : emptyHomework;
     setHomeworkForm(value);
     setHomeworkBaseline(value);
-  }, [homeworks.data, selectedLessonId]);
+  }, [selectedLessonId, homeworks.data?.[0]?.id, homeworks.data?.[0]?.updatedAt]);
 
   const breadcrumbs = useMemo(() => [
     { label: "Курсы", href: "/admin/courses" },
@@ -155,13 +169,6 @@ export default function CourseBuilderPage() {
     setLessonForm(value); setLessonBaseline(emptyLesson); setEditorMode("new-lesson");
   }
 
-  function startEditLesson() {
-    if (!selectedLesson || !canDiscard()) return;
-    discardDrafts();
-    const value = { title: selectedLesson.title, description: selectedLesson.description ?? "", videoUrl: selectedLesson.videoUrl ?? "", pointsReward: selectedLesson.pointsReward, sortOrder: selectedLesson.sortOrder };
-    setLessonForm(value); setLessonBaseline(value); setEditorMode("edit-lesson");
-  }
-
   async function runOperation(action: () => Promise<void>) {
     setOperation("saving"); setOperationError(null);
     try {
@@ -187,10 +194,15 @@ export default function CourseBuilderPage() {
     event.preventDefault(); if (!selectedModuleId) return;
     await runOperation(async () => {
       const body = { ...lessonForm, moduleId: selectedModuleId, videoUrl: lessonForm.videoUrl || null, description: lessonForm.description || null };
-      if (editorMode === "edit-lesson" && selectedLesson) {
-        await cmsApi.updateLesson(selectedLesson.id, body); setLessonBaseline(lessonForm);
+      if (selectedLesson && editorMode !== "new-lesson") {
+        await cmsApi.updateLesson(selectedLesson.id, body);
+        setLessonBaseline(lessonForm);
+        setLessonTab("content");
       } else {
-        const created = await cmsApi.createLesson(body); setSelectedLessonId(created.id); setEditorMode("none");
+        const created = await cmsApi.createLesson(body);
+        setSelectedLessonId(created.id);
+        setEditorMode("none");
+        setLessonTab("homework");
       }
       await Promise.all([tree.reload(), selectedLessonId ? lesson.reload() : Promise.resolve()]);
     });
@@ -228,13 +240,27 @@ export default function CourseBuilderPage() {
   async function saveHomework(event: FormEvent) {
     event.preventDefault(); if (!selectedLesson) return;
     await runOperation(async () => {
+      const testQuestions = homeworkForm.type === "test"
+        ? serializeTestQuestions(homeworkForm.testQuestions ?? [])
+        : null;
       const body = {
-        ...homeworkForm,
-        testQuestions: homeworkForm.type === "test" ? homeworkForm.testQuestions : null,
+        description: homeworkForm.description.trim(),
+        type: homeworkForm.type,
+        passingScore: homeworkForm.passingScore,
+        testQuestions,
       };
-      if (homeworks.data?.[0]) await cmsApi.updateHomework(homeworks.data[0].id, body);
-      else await cmsApi.createHomework({ lessonId: selectedLesson.id, ...body });
-      setHomeworkBaseline(homeworkForm); await Promise.all([homeworks.reload(), tree.reload()]);
+      const saved = homeworks.data?.[0]
+        ? await cmsApi.updateHomework(homeworks.data[0].id, body)
+        : await cmsApi.createHomework({ lessonId: selectedLesson.id, ...body });
+      const nextForm = {
+        description: saved.description,
+        type: saved.type,
+        passingScore: saved.passingScore,
+        testQuestions: normalizeTestQuestions(saved.testQuestions),
+      };
+      setHomeworkForm(nextForm);
+      setHomeworkBaseline(nextForm);
+      await Promise.all([homeworks.reload(), tree.reload()]);
     });
   }
 
@@ -319,10 +345,9 @@ export default function CourseBuilderPage() {
     <div className="grid items-start gap-6 xl:grid-cols-[390px_minmax(0,1fr)]">
       <CourseStructureTree modules={modules} query={query} expanded={expanded} selectedModuleId={selectedModuleId} selectedLessonId={selectedLessonId} onQueryChange={setQuery} onToggleModule={(id) => setExpanded((value) => { const next = new Set(value); if (next.has(id)) next.delete(id); else next.add(id); return next; })} onSelectModule={selectModule} onSelectLesson={selectLesson} onAddModule={startNewModule} onAddLesson={startNewLesson} />
       <main className="min-w-0 rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft lg:p-8">
-        {(editorMode === "new-module" || editorMode === "edit-module") ? moduleEditor() : (editorMode === "new-lesson" || editorMode === "edit-lesson") ? (
+        {(editorMode === "new-module" || editorMode === "edit-module") ? moduleEditor() : editorMode === "new-lesson" ? (
           <LessonEditorForm
-            mode={editorMode}
-            lessonTitle={selectedLesson?.title}
+            mode="new-lesson"
             values={lessonForm}
             saving={operation === "saving"}
             onChange={setLessonForm}
@@ -334,6 +359,7 @@ export default function CourseBuilderPage() {
             lesson={selectedLesson}
             module={selectedModule}
             activeTab={lessonTab}
+            lessonForm={lessonForm}
             materials={materials.data ?? []}
             homeworkForm={homeworkForm}
             hasHomework={!!homeworks.data?.[0]}
@@ -344,7 +370,8 @@ export default function CourseBuilderPage() {
             formatSize={formatSize}
             formatDate={formatDate}
             onTabChange={setLessonTab}
-            onEditLesson={startEditLesson}
+            onLessonFormChange={setLessonForm}
+            onSaveLesson={saveLesson}
             onTogglePublish={() => void runOperation(async () => {
               await cmsApi.publishLesson(selectedLesson.id, !selectedLesson.isPublished);
               await Promise.all([tree.reload(), lesson.reload()]);

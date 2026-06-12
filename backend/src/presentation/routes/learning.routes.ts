@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { getStudentAchievementsOverview } from "../../application/services/achievement.service.js";
 import { startLesson } from "../../application/services/lesson-progress.service.js";
 import { getStudentDashboard } from "../../application/services/student-dashboard.service.js";
 import { writeAuditLog } from "../../application/services/audit.service.js";
@@ -34,6 +35,20 @@ export async function learningRoutes(app: FastifyInstance) {
       const studentId = request.user!.id;
       const dashboard = await getStudentDashboard(studentId);
       return { data: dashboard };
+    },
+  );
+
+  app.get(
+    "/students/me/achievements",
+    { preHandler: [authenticate, requirePermission("progress.read")] },
+    async (request) => {
+      const studentId = request.user!.id;
+      const achievements = await getStudentAchievementsOverview(studentId);
+      const earnedCount = achievements.filter((item) => item.earned).length;
+      return {
+        data: achievements,
+        meta: { earnedCount, totalCount: achievements.length },
+      };
     },
   );
 }

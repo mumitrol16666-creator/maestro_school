@@ -70,9 +70,13 @@ export function LessonEditorForm({
         <h2 className="font-display mt-2 text-4xl">
           {mode === "new-lesson" ? "Добавить урок" : lessonTitle}
         </h2>
-        {mode === "new-lesson" && (
+        {mode === "new-lesson" ? (
           <p className="mt-3 max-w-2xl text-sm leading-6 text-stone-500">
-            Заполните три блока ниже и сохраните урок. Материалы и задание можно добавить после создания — они откроются отдельными вкладками.
+            Сначала создайте урок. После сохранения откроются вкладки «Материалы» и «Задание и тест» — туда прикрепляются файлы и настраивается сдача.
+          </p>
+        ) : (
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-stone-500">
+            Здесь меняются название, описание, видео и баллы. Материалы и задание настраиваются в своих вкладках выше.
           </p>
         )}
       </div>
@@ -144,9 +148,11 @@ export function LessonEditorForm({
         <button className={primaryButton} disabled={saving}>
           {saving ? "Сохраняем..." : mode === "new-lesson" ? "Создать урок" : "Сохранить изменения"}
         </button>
-        <button type="button" onClick={onClose} className={secondaryButton}>
-          Закрыть редактор
-        </button>
+        {mode === "new-lesson" && (
+          <button type="button" onClick={onClose} className={secondaryButton}>
+            Отмена
+          </button>
+        )}
       </div>
     </form>
   );
