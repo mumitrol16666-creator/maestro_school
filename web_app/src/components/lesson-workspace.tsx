@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, ClipboardList, FileStack, Send, Settings2, Trash2 } from "lucide-react";
+import { BookOpen, CheckCircle2, ClipboardList, FileStack, Send, Settings2, Trash2 } from "lucide-react";
 import { AdminVideoValidation } from "@/components/admin-video-validation";
 import { LessonEditorForm, type LessonFormValues } from "@/components/lesson-editor-form";
 import { LessonHomeworkPanel } from "@/components/lesson-homework-panel";
@@ -117,8 +117,6 @@ export function LessonWorkspace({
         hasDescription={!!lesson.description?.trim()}
         materialsCount={materials.length}
         hasHomework={hasHomework}
-        homeworkType={hasHomework ? homeworkForm.type : null}
-        activeTab={activeTab}
         onGoTo={onTabChange}
       />
 
@@ -126,11 +124,21 @@ export function LessonWorkspace({
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const active = activeTab === tab.id;
-          const needsAttention = tab.id === "materials"
-            ? materials.length === 0
-            : tab.id === "homework"
-              ? !hasHomework
-              : false;
+          const contentReady = !!lesson.videoUrl && !!lesson.description?.trim();
+          const isDone = tab.id === "content"
+            ? contentReady
+            : tab.id === "materials"
+              ? materials.length > 0
+              : tab.id === "homework"
+                ? hasHomework
+                : contentReady;
+          const needsAttention = tab.id === "content"
+            ? !contentReady
+            : tab.id === "materials"
+              ? materials.length === 0
+              : tab.id === "homework"
+                ? !hasHomework
+                : false;
           const badge = tab.id === "materials"
             ? (materials.length || null)
             : tab.id === "homework"
@@ -152,7 +160,9 @@ export function LessonWorkspace({
             >
               <div className="flex items-center justify-between gap-2">
                 <Icon size={16} className={active ? "text-gold" : needsAttention ? "text-amber-600" : "text-stone-400"} />
-                {badge != null && (
+                {isDone && !needsAttention ? (
+                  <CheckCircle2 size={16} className={active ? "text-gold" : "text-emerald-600"} />
+                ) : badge != null ? (
                   <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
                     active
                       ? "bg-white/15 text-white"
@@ -162,7 +172,7 @@ export function LessonWorkspace({
                   }`}>
                     {badge}
                   </span>
-                )}
+                ) : null}
               </div>
               <p className={`mt-3 text-sm font-bold ${active ? "text-white" : "text-ink"}`}>{tab.label}</p>
               <p className={`mt-1 text-xs ${active ? "text-white/70" : "text-stone-500"}`}>{tab.hint}</p>
