@@ -2,6 +2,7 @@
 
 import { ArrowRight, CheckCircle2, Clock3, Coins, Flame, Play, Sparkles, Star, Trophy } from "lucide-react";
 import { AchievementsWall } from "@/components/achievements-wall";
+import { FounderMessage } from "@/components/founder-message";
 import Link from "next/link";
 import { useAuth } from "@/components/auth-provider";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
@@ -25,7 +26,20 @@ export default function DashboardPage() {
   if (resource.loading) return <LoadingState label="Собираем вашу главную страницу" />;
   if (resource.error) return <ErrorState message={resource.error} retry={resource.reload} />;
   if (!resource.data?.dashboard.currentCourse) {
-    return <EmptyState title="Вы еще не начали обучение" description="Выберите опубликованный курс, чтобы открыть первый урок и отслеживать прогресс." action={<Link href="/courses" className="inline-flex items-center gap-2 rounded-full bg-ink px-5 py-3 text-sm font-bold text-white">Выбрать курс <ArrowRight size={16} /></Link>} />;
+    return (
+      <>
+        <EmptyState
+          title="Вы еще не начали обучение"
+          description="Выберите опубликованный курс, чтобы открыть первый урок и отслеживать прогресс."
+          action={
+            <Link href="/courses" className="inline-flex items-center gap-2 rounded-full bg-ink px-5 py-3 text-sm font-bold text-white">
+              Выбрать курс <ArrowRight size={16} />
+            </Link>
+          }
+        />
+        <FounderMessage className="mt-10" />
+      </>
+    );
   }
 
   const { dashboard, news, achievements } = resource.data;
@@ -145,6 +159,8 @@ export default function DashboardPage() {
           </Link>
         </section>
       )}
+
+      <FounderMessage className="mt-10" />
     </>
   );
 }
