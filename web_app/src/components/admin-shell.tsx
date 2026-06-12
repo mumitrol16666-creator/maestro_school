@@ -1,9 +1,10 @@
 "use client";
 
-import { BookOpen, ClipboardCheck, FolderOpen, LayoutDashboard, Library, LogOut, Menu, MessageCircleQuestion, Newspaper, Users, Video, X } from "lucide-react";
+import { BookOpen, ClipboardCheck, FolderOpen, LayoutDashboard, Library, LogOut, Menu, MessageCircleQuestion, Newspaper, Settings, UserCog, Users, Video, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { roleLabel } from "@/lib/role-labels";
 import { usePendingHomeworkCount } from "@/hooks/use-pending-homework-count";
 import { usePendingLessonQuestionsCount } from "@/hooks/use-pending-lesson-questions-count";
 import { usePendingOnlineLessonsCount } from "@/hooks/use-pending-online-lessons-count";
@@ -17,6 +18,10 @@ const cmsNavigation = [
   { href: "/admin/courses", label: "Курсы", icon: BookOpen },
   { href: "/admin/news", label: "Доска Maestro", icon: Newspaper },
   { href: "/admin/media", label: "Медиатека", icon: Library },
+];
+
+const accessNavigation = [
+  { href: "/admin/users", label: "Пользователи", icon: UserCog },
 ];
 
 const teachingNavigation = [
@@ -36,6 +41,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const isContentAdmin = user?.role === "admin" || user?.role === "owner";
   const navigation = [
     ...(isContentAdmin ? cmsNavigation : [{ href: "/admin/online-lessons", label: "Онлайн-уроки", icon: Video }]),
+    ...(isContentAdmin ? accessNavigation : []),
     ...teachingNavigation.filter((item) => isContentAdmin || item.href === "/admin/online-lessons"),
   ];
 
@@ -79,7 +85,15 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           </Link>
         );
       })}</nav>
-      <button onClick={logout} className="mt-auto flex items-center gap-3 rounded-2xl border border-white/10 px-4 py-3 text-sm font-semibold text-white/50 transition hover:border-red-400/25 hover:bg-red-500/10 hover:text-red-100"><LogOut size={17} /> Выйти из админки</button>
+      <Link
+        href="/admin/settings"
+        onClick={() => setOpen(false)}
+        className="mt-auto rounded-3xl border border-white/10 bg-white/5 p-4 transition hover:border-gold/25 hover:bg-white/10"
+      >
+        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gold">{roleLabel(user?.role)}</p>
+        <p className="mt-2 truncate text-sm font-semibold">{user?.email}</p>
+        <p className="mt-2 text-xs text-white/40">Настройки аккаунта →</p>
+      </Link>
     </aside>
   );
   return <div className="min-h-screen bg-cream">
@@ -98,7 +112,23 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             </Link>
           )}
         </div>
-        <button onClick={logout} className="ml-auto inline-flex items-center gap-2 rounded-full border border-stone-200 bg-white px-4 py-2 text-xs font-bold text-stone-600 transition hover:border-red-200 hover:bg-red-50 hover:text-red-700"><LogOut size={14} /> Выйти</button>
+        <div className="ml-auto flex items-center gap-2">
+          <Link
+            href="/admin/settings"
+            className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-bold transition ${
+              pathname.startsWith("/admin/settings")
+                ? "border-gold/30 bg-amber-50 text-amber-900"
+                : "border-stone-200 bg-white text-stone-600 hover:border-gold/30"
+            }`}
+          >
+            <Settings size={14} />
+            Настройки
+          </Link>
+          <button onClick={logout} className="inline-flex items-center gap-2 rounded-full border border-stone-200 bg-white px-4 py-2 text-xs font-bold text-stone-600 transition hover:border-red-200 hover:bg-red-50 hover:text-red-700">
+            <LogOut size={14} />
+            Выйти
+          </button>
+        </div>
       </header>
       <main className="mx-auto max-w-[1500px] p-5 sm:p-8 lg:p-10">{children}</main>
     </div>

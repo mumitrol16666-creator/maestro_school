@@ -2,6 +2,8 @@
 
 import { BookOpen, Coins, GraduationCap, LogOut, Mail, Phone, Star, UserRound } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { ErrorState, LoadingState } from "@/components/data-states";
 import { PageHeader } from "@/components/page-header";
@@ -9,8 +11,10 @@ import { PwaInstallCard } from "@/components/pwa-install-card";
 import { PushNotificationsCard } from "@/components/push-notifications-card";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { api } from "@/lib/api-client";
+import { isStudentRole, roleLabel, settingsPathForRole } from "@/lib/role-labels";
 
 export default function SettingsPage() {
+  const router = useRouter();
   const { user, logout } = useAuth();
   const resource = useApiResource(async () => {
     const [profile, directions, progress] = await Promise.all([api.me(), api.directions(), api.progress()]);
@@ -22,13 +26,23 @@ export default function SettingsPage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!user) return;
+    if (!isStudentRole(user.role)) {
+      router.replace(settingsPathForRole(user.role));
+    }
+  }, [router, user]);
+
+  if (!user || !isStudentRole(user.role)) {
+    return <LoadingState label="Открываем профиль" />;
+  }
+
   if (resource.loading) return <LoadingState label="Загружаем профиль" />;
   if (resource.error) return <ErrorState message={resource.error} retry={resource.reload} />;
 
   const profile = { ...user, ...resource.data?.profile };
   const fullName = [profile.firstName, profile.lastName].filter(Boolean).join(" ") || profile.email || "Пользователь Maestro";
   const initials = profile.firstName && profile.lastName ? `${profile.firstName[0]}${profile.lastName[0]}` : fullName.slice(0, 2).toUpperCase();
-  const roleLabel = profile.role === "student" ? "Ученик" : profile.role === "admin" ? "Администратор" : profile.role;
   const directions = resource.data?.directions ?? [];
   const courses = resource.data?.courses ?? [];
 
@@ -39,12 +53,12 @@ export default function SettingsPage() {
         <section className="rounded-[30px] bg-ink p-7 text-white shadow-soft">
           <div className="grid h-20 w-20 place-items-center rounded-full border border-white/10 bg-white/10 font-display text-2xl text-gold">{initials}</div>
           <h2 className="font-display mt-7 text-4xl">{fullName}</h2>
-          <p className="mt-2 text-sm text-white/45">{roleLabel} Maestro</p>
+          <p className="mt-2 text-sm text-white/45">{roleLabel(profile.role)} Maestro</p>
           <div className="mt-8 space-y-3 border-t border-white/10 pt-6 text-sm">
             <div className="flex items-center gap-3 text-white/60"><GraduationCap size={16} className="text-gold" /> {directions.length ? directions.map((item) => item.title).join(", ") : "Направления пока не выбраны"}</div>
-            <div className="flex items-center gap-3 text-white/60"><UserRound size={16} className="text-gold" /> Роль: {roleLabel}</div>
+            <div className="flex items-center gap-3 text-white/60"><UserRound size={16} className="text-gold" /> Роль: {roleLabel(profile.role)}</div>
             <div className="flex items-center gap-3 text-white/60"><Mail size={16} className="text-gold" /> {profile.email}</div>
-            <div className="flex items-center gap-3 text-white/60"><Phone size={16} className="text-gold" /> {profile.phone ?? "Телефон не указан"}</div>
+            <div className="flex items-center gap-3 text-white/60"><Phone size={16} className="text-gold" /> {profile.phone && profile.phone !== "00000000000" ? profile.phone : "Телефон не указан"}</div>
           </div>
           <button
             type="button"
@@ -81,7 +95,19 @@ export default function SettingsPage() {
           </div>
           <div className="rounded-[30px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
             <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold">Активные курсы</p>
-            <div className="mt-5 space-y-3">{courses.length ? courses.map((course) => <Link key={course.id} href={`/courses/${course.id}`} className="card-hover flex items-center gap-4 rounded-2xl border border-transparent bg-stone-50 p-4"><span className="grid h-10 w-10 place-items-center rounded-xl bg-white text-gold ring-1 ring-gold/10"><BookOpen size={17} /></span><div><p className="font-bold">{course.title}</p><p className="mt-1 text-xs text-stone-400">{course.direction.title}</p></div></Link>) : <p className="text-sm text-stone-500">Вы еще не начали ни одного курса.</p>}</div>
+            <div className="mt-5 space-y-3">
+              {courses.length ? courses.map((course) => (
+                <Link key={course.id} href={`/courses/${course.id}`} className="card-hover flex items-center gap-4 rounded-2xl border border-transparent bg-stone-50 p-4">
+                  <span className="grid h-10 w-10 place-items-center rounded-xl bg-white text-gold ring-1 ring-gold/10"><BookOpen size={17} /></span>
+                  <div>
+                    <p className="font-bold">{course.title}</p>
+                    <p className="mt-1 text-xs text-stone-400">{course.direction.title}</p>
+                  </div>
+                </Link>
+              )) : (
+                <p className="text-sm text-stone-500">Вы еще не начали ни одного курса.</p>
+              )}
+            </div>
           </div>
         </section>
       </div>

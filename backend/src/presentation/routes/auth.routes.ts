@@ -8,6 +8,8 @@ import {
   findUserWithRoleById,
   findUserWithRoleByLogin,
   findUserWithRoleByLoginOrEmail,
+  updateUserPassword,
+  updateUserProfile,
 } from "../../application/repositories/auth.repository.js";
 import { BadRequestError, ConflictError, UnauthorizedError } from "../../domain/errors.js";
 import { isValidLogin, normalizeLogin } from "../../lib/login.js";
@@ -28,6 +30,17 @@ const registerSchema = z.object({
   email: z.string().trim().email().transform((value) => value.toLowerCase()),
   phone: z.string().trim().min(10).max(32),
   password: z.string().min(8).max(72),
+});
+
+const profileUpdateSchema = z.object({
+  firstName: z.string().trim().min(1).max(128).optional(),
+  lastName: z.string().trim().min(1).max(128).optional(),
+  phone: z.string().trim().min(10).max(32).optional(),
+});
+
+const passwordChangeSchema = z.object({
+  currentPassword: z.string().min(8).max(72),
+  newPassword: z.string().min(8).max(72),
 });
 
 function profile(
@@ -137,6 +150,47 @@ export async function authRoutes(app: FastifyInstance) {
 
     return {
       data: profile(user, stats),
+    };
+  });
+
+  app.patch("/auth/me", { preHandler: [authenticate] }, async (request) => {
+    const authUser = request.user!;
+    const body = profileUpdateSchema.parse(request.body);
+    if (!body.firstName && !body.lastName && !body.phone) {
+      throw new BadRequestError("Укажите хотя бы одно поле для обновления");
+    }
+    if (body.phone && !isValidPhone(body.phone)) {
+      throw new BadRequestError("Укажите корректный номер телефона");
+    }
+
+    const user = await updateUserProfile(authUser.id, {
+      ...(body.firstName ? { firstName: body.firstName } : {}),
+      ...(body.lastName ? { lastName: body.lastName } : {}),
+      ...(body.phone ? { phone: normalizePhoneDigits(body.phone) } : {}),
+    });
+    const stats = await studentStats(authUser.id, authUser.roleSlug);
+
+    return {
+      data: profile(user, stats),
+    };
+  });
+
+  app.patch("/auth/me/password", { preHandler: [authenticate] }, async (request) => {
+    const authUser = request.user!;
+    const body = passwordChangeSchema.parse(request.body);
+    if (body.currentPassword === body.newPassword) {
+      throw new BadRequestError("Новый пароль должен отличаться от текущего");
+    }
+
+    const user = await findUserWithRoleById(authUser.id);
+    if (!user || !(await bcrypt.compare(body.currentPassword, user.passwordHash))) {
+      throw new UnauthorizedError("Текущий пароль указан неверно");
+    }
+
+    await updateUserPassword(authUser.id, await bcrypt.hash(body.newPassword, 10));
+
+    return {
+      data: { ok: true },
     };
   });
 }

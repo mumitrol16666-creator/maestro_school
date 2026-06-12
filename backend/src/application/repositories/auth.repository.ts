@@ -37,6 +37,24 @@ export async function findUserWithRoleById(userId: string) {
   });
 }
 
+export async function updateUserPassword(userId: string, passwordHash: string) {
+  return prisma.user.update({
+    where: { id: userId },
+    data: { passwordHash },
+  });
+}
+
+export async function updateUserProfile(
+  userId: string,
+  params: { firstName?: string; lastName?: string; phone?: string },
+) {
+  return prisma.user.update({
+    where: { id: userId },
+    data: params,
+    include: userWithRoleInclude,
+  });
+}
+
 export async function createStudentUser(params: {
   login: string;
   email: string;

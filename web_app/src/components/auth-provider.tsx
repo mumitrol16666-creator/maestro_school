@@ -11,6 +11,7 @@ interface AuthContextValue {
   loading: boolean;
   login: (login: string, password: string) => Promise<ApiAuthUser>;
   register: (input: RegisterInput) => Promise<ApiAuthUser>;
+  refreshUser: () => Promise<ApiAuthUser | null>;
   logout: () => void;
 }
 
@@ -56,6 +57,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const fresh = await api.me();
       const merged = { ...session.user, ...fresh };
       storeSession(session.token, merged);
+      setUser(merged);
+      return merged;
+    },
+    refreshUser: async () => {
+      const token = getAccessToken();
+      if (!token) {
+        setUser(null);
+        return null;
+      }
+      const fresh = await api.me();
+      const cached = getStoredUser();
+      const merged = { ...cached, ...fresh };
+      storeSession(token, merged);
       setUser(merged);
       return merged;
     },

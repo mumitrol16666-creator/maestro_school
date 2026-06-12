@@ -117,6 +117,16 @@ export const api = {
       body: JSON.stringify(body),
     }),
   me: () => apiRequest<ApiAuthUser>("/auth/me"),
+  updateProfile: (body: { firstName?: string; lastName?: string; phone?: string }) =>
+    apiRequest<ApiAuthUser>("/auth/me", {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    apiRequest<{ ok: boolean }>("/auth/me/password", {
+      method: "PATCH",
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
   directions: () => apiRequest<ApiDirection[]>("/directions"),
   courses: (directionId?: string) =>
     apiRequest<ApiCourseSummary[]>(`/courses${directionId ? `?directionId=${encodeURIComponent(directionId)}` : ""}`),

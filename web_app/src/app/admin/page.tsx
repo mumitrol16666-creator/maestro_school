@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, ClipboardCheck, FolderOpen, Library, Newspaper, Users, Video } from "lucide-react";
+import { BookOpen, ClipboardCheck, FolderOpen, Library, Newspaper, UserCog, Users, Video } from "lucide-react";
 import Link from "next/link";
 import { AdminPendingHomeworkBadge } from "@/components/admin-pending-homework-badge";
 import { AdminPendingHomeworkBanner } from "@/components/admin-pending-homework-banner";
@@ -12,6 +12,7 @@ const sections = [
   { href: "/admin/directions", title: "Направления", text: "Создание и публикация направлений школы", icon: FolderOpen },
   { href: "/admin/courses", title: "Курсы и уроки", text: "Модули, уроки, материалы и домашние задания", icon: BookOpen },
   { href: "/admin/students", title: "Ученики", text: "Баллы, уроки, достижения и контакты учеников", icon: Users },
+  { href: "/admin/users", title: "Пользователи и роли", text: "Назначение ролей: преподаватель, администратор, ученик", icon: UserCog },
   { href: "/admin/online-lessons", title: "Онлайн-уроки", text: "Заявки на живые уроки в Zoom", icon: Video, showOnlinePending: true },
   { href: "/admin/homework-review", title: "Проверка ДЗ", text: "Очередь работ учеников на проверку", icon: ClipboardCheck, showPending: true },
   { href: "/admin/news", title: "Доска Maestro", text: "Новости, объявления и мероприятия", icon: Newspaper },

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
+import { isStudentRole, roleLabel, settingsPathForRole } from "@/lib/role-labels";
 import { useAuth } from "./auth-provider";
 import { AdminPendingHomeworkBadge } from "./admin-pending-homework-badge";
 import { Brand } from "./brand";
@@ -22,7 +23,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const { user } = useAuth();
-  const roleLabel = user?.role === "student" ? "Ученик" : user?.role === "admin" ? "Администратор" : user?.role ?? "";
+  const student = isStudentRole(user?.role);
   const points = user?.points ?? 0;
   const coins = user?.coins ?? 0;
   const { count: unreadNotifications } = useUnreadNotifications();
@@ -55,14 +56,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         })}
       </nav>
       <Link
-        href="/settings"
+        href={settingsPathForRole(user?.role)}
         onClick={() => setOpen(false)}
         className="mt-auto rounded-3xl border border-white/10 bg-white/5 p-4 transition hover:border-gold/25 hover:bg-white/10"
       >
-        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gold">{roleLabel}</p>
-        <p className="mt-2 text-sm font-semibold">
-          {points.toLocaleString("ru-RU")} баллов · {coins.toLocaleString("ru-RU")} Coins
-        </p>
+        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gold">{roleLabel(user?.role)}</p>
+        {student ? (
+          <p className="mt-2 text-sm font-semibold">
+            {points.toLocaleString("ru-RU")} баллов · {coins.toLocaleString("ru-RU")} Coins
+          </p>
+        ) : (
+          <p className="mt-2 text-sm font-semibold">{user?.email}</p>
+        )}
         <p className="mt-2 text-xs text-white/40">Открыть профиль →</p>
       </Link>
     </aside>

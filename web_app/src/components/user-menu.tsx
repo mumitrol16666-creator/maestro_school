@@ -3,6 +3,7 @@
 import { ChevronDown, Coins, LogOut, Settings, Star } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { isStudentRole, roleLabel, settingsPathForRole } from "@/lib/role-labels";
 import { useAuth } from "./auth-provider";
 
 export function UserMenu() {
@@ -14,7 +15,8 @@ export function UserMenu() {
   const initials = user?.firstName && user?.lastName
     ? `${user.firstName[0]}${user.lastName[0]}`
     : fullName.slice(0, 2).toUpperCase();
-  const roleLabel = user?.role === "student" ? "Ученик" : user?.role === "admin" ? "Администратор" : user?.role ?? "";
+  const student = isStudentRole(user?.role);
+  const settingsHref = settingsPathForRole(user?.role);
 
   useEffect(() => {
     if (!open) return;
@@ -46,7 +48,7 @@ export function UserMenu() {
         </span>
         <span className="hidden text-left sm:block">
           <span className="block text-sm font-bold leading-tight">{fullName}</span>
-          <span className="block text-[11px] text-stone-400">{roleLabel}</span>
+          <span className="block text-[11px] text-stone-400">{roleLabel(user?.role)}</span>
         </span>
         <ChevronDown size={14} className={`hidden text-stone-400 transition sm:block ${open ? "rotate-180" : ""}`} />
       </button>
@@ -62,24 +64,26 @@ export function UserMenu() {
           </div>
           <div className="space-y-1 p-2">
             <Link
-              href="/settings"
+              href={settingsHref}
               role="menuitem"
               onClick={() => setOpen(false)}
               className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-stone-700 transition hover:bg-stone-100"
             >
               <Settings size={16} className="text-gold" />
-              Профиль и настройки
+              {student ? "Профиль и настройки" : "Настройки аккаунта"}
             </Link>
-            <div className="mx-1 space-y-1">
-              <div className="flex items-center gap-2 rounded-xl bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
-                <Star size={14} className="text-gold" fill="currentColor" />
-                {(user?.points ?? 0).toLocaleString("ru-RU")} баллов Maestro
+            {student ? (
+              <div className="mx-1 space-y-1">
+                <div className="flex items-center gap-2 rounded-xl bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
+                  <Star size={14} className="text-gold" fill="currentColor" />
+                  {(user?.points ?? 0).toLocaleString("ru-RU")} баллов Maestro
+                </div>
+                <div className="flex items-center gap-2 rounded-xl bg-stone-100 px-3 py-2 text-xs font-semibold text-stone-700">
+                  <Coins size={14} className="text-gold" />
+                  {(user?.coins ?? 0).toLocaleString("ru-RU")} Maestro Coins
+                </div>
               </div>
-              <div className="flex items-center gap-2 rounded-xl bg-stone-100 px-3 py-2 text-xs font-semibold text-stone-700">
-                <Coins size={14} className="text-gold" />
-                {(user?.coins ?? 0).toLocaleString("ru-RU")} Maestro Coins
-              </div>
-            </div>
+            ) : null}
           </div>
           <div className="border-t border-stone-100 p-2">
             <button
