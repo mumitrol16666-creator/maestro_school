@@ -19,6 +19,7 @@
     "test": "tsx --test src/**/*.test.ts",
     "smoke": "tsx scripts/smoke.ts",
     "e2e": "tsx scripts/e2e-flow.ts",
+    "e2e:online-lessons": "tsx scripts/online-lessons-e2e.ts",
     "cms:smoke": "tsx scripts/cms-smoke.ts"
   },
   "dependencies": {
