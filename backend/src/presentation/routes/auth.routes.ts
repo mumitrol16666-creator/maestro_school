@@ -8,6 +8,7 @@ import {
   findUserWithRoleById,
 } from "../../application/repositories/auth.repository.js";
 import { ConflictError, UnauthorizedError } from "../../domain/errors.js";
+import { getStudentCoins } from "../../application/services/coins.service.js";
 import { getStudentPointsBalance } from "../../application/services/points.service.js";
 import { authenticate } from "../guards/auth.guards.js";
 
@@ -24,7 +25,10 @@ const registerSchema = z.object({
   password: z.string().min(8).max(72),
 });
 
-function profile(user: Awaited<ReturnType<typeof findUserWithRoleByEmail>>, points?: number) {
+function profile(
+  user: Awaited<ReturnType<typeof findUserWithRoleByEmail>>,
+  stats?: { points?: number; coins?: number },
+) {
   if (!user) throw new UnauthorizedError();
   return {
     id: user.id,
@@ -35,8 +39,18 @@ function profile(user: Awaited<ReturnType<typeof findUserWithRoleByEmail>>, poin
     phone: user.phone,
     role: user.role.slug,
     permissions: user.role.rolePermissions.map((item) => item.permission.code),
-    points,
+    points: stats?.points,
+    coins: stats?.coins,
   };
+}
+
+async function studentStats(userId: string, roleSlug: string) {
+  if (roleSlug !== "student") return { points: 0, coins: 0 };
+  const [points, coins] = await Promise.all([
+    getStudentPointsBalance(userId),
+    getStudentCoins(userId),
+  ]);
+  return { points, coins };
 }
 
 export async function authRoutes(app: FastifyInstance) {
@@ -48,14 +62,12 @@ export async function authRoutes(app: FastifyInstance) {
     }
 
     const token = await reply.jwtSign({ sub: user.id, role: user.role.slug });
-    const points = user.role.slug === "student"
-      ? await getStudentPointsBalance(user.id)
-      : 0;
+    const stats = await studentStats(user.id, user.role.slug);
 
     return {
       data: {
         token,
-        user: profile(user, points),
+        user: profile(user, stats),
       },
     };
   });
@@ -87,7 +99,7 @@ export async function authRoutes(app: FastifyInstance) {
     return reply.status(201).send({
       data: {
         token,
-        user: profile(user, 0),
+        user: profile(user, { points: 0, coins: 0 }),
       },
     });
   });
@@ -96,12 +108,10 @@ export async function authRoutes(app: FastifyInstance) {
     const authUser = request.user!;
     const user = await findUserWithRoleById(authUser.id);
     if (!user) throw new UnauthorizedError();
-    const points = authUser.roleSlug === "student"
-      ? await getStudentPointsBalance(authUser.id)
-      : 0;
+    const stats = await studentStats(authUser.id, authUser.roleSlug);
 
     return {
-      data: profile(user, points),
+      data: profile(user, stats),
     };
   });
 }

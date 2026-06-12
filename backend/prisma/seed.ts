@@ -28,6 +28,11 @@ const PERMISSIONS = [
   { code: "users.manage", description: "Manage users and roles" },
   { code: "news.manage", description: "Publish news posts" },
   { code: "homework.review", description: "Review homework submissions" },
+  { code: "online_lessons.read", description: "View online lessons" },
+  { code: "online_lessons.request", description: "Request online lessons" },
+  { code: "online_lessons.manage", description: "Manage online lesson requests" },
+  { code: "coins.read", description: "View Maestro Coins balance" },
+  { code: "coins.award", description: "Award Maestro Coins manually" },
 ] as const;
 
 const ROLE_PERMISSION_MAP: Record<string, string[]> = {
@@ -35,17 +40,29 @@ const ROLE_PERMISSION_MAP: Record<string, string[]> = {
   admin: [
     "directions.read", "courses.read", "lessons.read", "progress.read",
     "catalog.manage", "users.manage", "news.manage", "homework.review", "news.read",
+    "online_lessons.read", "online_lessons.manage", "coins.read", "coins.award",
   ],
   owner: [
     "directions.read", "courses.read", "lessons.read", "catalog.manage",
     "users.manage", "news.manage", "homework.review", "news.read",
+    "online_lessons.read", "online_lessons.manage", "coins.read", "coins.award",
   ],
-  branch_manager: ["directions.read", "courses.read", "lessons.read", "users.manage", "homework.review"],
-  teacher: ["directions.read", "courses.read", "lessons.read", "homework.review", "progress.read"],
-  curator: ["directions.read", "courses.read", "lessons.read", "progress.read", "homework.review"],
+  branch_manager: [
+    "directions.read", "courses.read", "lessons.read", "users.manage", "homework.review",
+    "online_lessons.read", "online_lessons.manage", "coins.read", "coins.award",
+  ],
+  teacher: [
+    "directions.read", "courses.read", "lessons.read", "homework.review", "progress.read",
+    "online_lessons.read", "online_lessons.manage", "coins.read", "coins.award",
+  ],
+  curator: [
+    "directions.read", "courses.read", "lessons.read", "progress.read", "homework.review",
+    "online_lessons.read", "online_lessons.manage", "coins.read", "coins.award",
+  ],
   student: [
     "directions.read", "courses.read", "lessons.read", "progress.read",
     "progress.write", "homework.submit", "news.read", "points.read",
+    "online_lessons.read", "online_lessons.request", "coins.read",
   ],
 };
 

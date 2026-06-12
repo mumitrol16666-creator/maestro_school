@@ -19,6 +19,7 @@ export interface ApiAuthUser {
   role: string;
   permissions?: string[];
   points?: number;
+  coins?: number;
 }
 
 export interface LoginResponse {

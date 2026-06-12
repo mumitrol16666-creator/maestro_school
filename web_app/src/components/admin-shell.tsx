@@ -1,23 +1,28 @@
 "use client";
 
-import { BookOpen, ClipboardCheck, FolderOpen, LayoutDashboard, Library, LogOut, Menu, MessageCircleQuestion, Newspaper, X } from "lucide-react";
+import { BookOpen, ClipboardCheck, FolderOpen, LayoutDashboard, Library, LogOut, Menu, MessageCircleQuestion, Newspaper, Video, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { usePendingHomeworkCount } from "@/hooks/use-pending-homework-count";
 import { usePendingLessonQuestionsCount } from "@/hooks/use-pending-lesson-questions-count";
+import { usePendingOnlineLessonsCount } from "@/hooks/use-pending-online-lessons-count";
 import { AdminPendingHomeworkBadge } from "./admin-pending-homework-badge";
 import { useAuth } from "./auth-provider";
 import { Brand } from "./brand";
 
-const navigation = [
+const cmsNavigation = [
   { href: "/admin", label: "Обзор", icon: LayoutDashboard },
   { href: "/admin/directions", label: "Направления", icon: FolderOpen },
   { href: "/admin/courses", label: "Курсы", icon: BookOpen },
-  { href: "/admin/homework-review", label: "Проверка ДЗ", icon: ClipboardCheck },
-  { href: "/admin/lesson-questions", label: "Вопросы", icon: MessageCircleQuestion },
   { href: "/admin/news", label: "Доска Maestro", icon: Newspaper },
   { href: "/admin/media", label: "Медиатека", icon: Library },
+];
+
+const teachingNavigation = [
+  { href: "/admin/online-lessons", label: "Онлайн-уроки", icon: Video },
+  { href: "/admin/homework-review", label: "Проверка ДЗ", icon: ClipboardCheck },
+  { href: "/admin/lesson-questions", label: "Вопросы", icon: MessageCircleQuestion },
 ];
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
@@ -26,6 +31,12 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const { count: pendingHomeworkCount, reload: reloadPendingHomeworkCount } = usePendingHomeworkCount();
   const { count: pendingQuestionsCount, reload: reloadPendingQuestionsCount } = usePendingLessonQuestionsCount();
+  const { count: pendingOnlineLessonsCount, reload: reloadPendingOnlineLessonsCount } = usePendingOnlineLessonsCount();
+  const isContentAdmin = user?.role === "admin" || user?.role === "owner";
+  const navigation = [
+    ...(isContentAdmin ? cmsNavigation : [{ href: "/admin/online-lessons", label: "Онлайн-уроки", icon: Video }]),
+    ...teachingNavigation.filter((item) => isContentAdmin || item.href === "/admin/online-lessons"),
+  ];
 
   useEffect(() => {
     if (pathname.startsWith("/admin/homework-review")) {
@@ -34,7 +45,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     if (pathname.startsWith("/admin/lesson-questions")) {
       void reloadPendingQuestionsCount();
     }
-  }, [pathname, reloadPendingHomeworkCount, reloadPendingQuestionsCount]);
+    if (pathname.startsWith("/admin/online-lessons")) {
+      void reloadPendingOnlineLessonsCount();
+    }
+  }, [pathname, reloadPendingHomeworkCount, reloadPendingQuestionsCount, reloadPendingOnlineLessonsCount]);
 
   const sidebar = (
     <aside className="flex h-full flex-col bg-ink px-5 py-6 text-white">
@@ -46,7 +60,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           ? pendingHomeworkCount
           : href === "/admin/lesson-questions"
             ? pendingQuestionsCount
-            : null;
+            : href === "/admin/online-lessons"
+              ? pendingOnlineLessonsCount
+              : null;
         return (
           <Link
             key={href}

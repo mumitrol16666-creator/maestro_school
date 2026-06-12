@@ -10,6 +10,7 @@ import { cmsRoutes } from "./cms.routes.js";
 import { mediaRoutes } from "./media.routes.js";
 import { pushRoutes } from "./push.routes.js";
 import { lessonQuestionsRoutes } from "./lesson-questions.routes.js";
+import { onlineLessonsRoutes } from "./online-lessons.routes.js";
 
 export async function registerRoutes(app: FastifyInstance) {
   await app.register(async (api) => {
@@ -24,5 +25,6 @@ export async function registerRoutes(app: FastifyInstance) {
     await api.register(mediaRoutes);
     await api.register(pushRoutes);
     await api.register(lessonQuestionsRoutes);
+    await api.register(onlineLessonsRoutes);
   }, { prefix: "/api/v1" });
 }

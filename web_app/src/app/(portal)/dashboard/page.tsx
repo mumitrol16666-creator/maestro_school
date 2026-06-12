@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, CheckCircle2, Clock3, Flame, Play, Sparkles, Star, Trophy } from "lucide-react";
+import { ArrowRight, CheckCircle2, Clock3, Coins, Flame, Play, Sparkles, Star, Trophy } from "lucide-react";
 import { AchievementsWall } from "@/components/achievements-wall";
 import Link from "next/link";
 import { useAuth } from "@/components/auth-provider";
@@ -79,6 +79,10 @@ export default function DashboardPage() {
             <div className="flex items-start justify-between"><span className="grid h-11 w-11 place-items-center rounded-2xl bg-amber-50 text-gold ring-1 ring-gold/10"><Star size={20} fill="currentColor" /></span><span className="text-xs font-bold text-emerald-700">Баланс</span></div>
             <p className="font-display mt-8 text-4xl">{dashboard.points.toLocaleString("ru-RU")}</p>
             <p className="mt-1 text-sm text-stone-500">баллов Maestro</p>
+            <p className="mt-4 inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-900">
+              <Coins size={14} />
+              {(user?.coins ?? 0).toLocaleString("ru-RU")} Maestro Coins
+            </p>
           </div>
           <div className="premium-surface rounded-[28px] p-6 shadow-soft">
             <div className="flex items-start justify-between"><span className="grid h-11 w-11 place-items-center rounded-2xl bg-orange-50 text-orange-500 ring-1 ring-orange-200/60"><Flame size={20} /></span><span className="text-xs font-bold text-stone-400">Пройдено</span></div>

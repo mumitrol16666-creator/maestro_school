@@ -81,6 +81,46 @@ export async function awardLessonPoints(params: {
   return { awarded: true, transactionId: tx.id };
 }
 
+export async function awardManualPoints(params: {
+  studentId: string;
+  amount: number;
+  reason: string;
+  awardedBy: string;
+  idempotencyKey?: string;
+}): Promise<{ awarded: boolean; transactionId?: string }> {
+  if (params.amount <= 0) {
+    return { awarded: false };
+  }
+
+  const reason = params.idempotencyKey
+    ? `[${params.idempotencyKey}] ${params.reason}`
+    : params.reason;
+
+  if (params.idempotencyKey) {
+    const existing = await prisma.pointsTransaction.findFirst({
+      where: {
+        studentId: params.studentId,
+        reason: { startsWith: `[${params.idempotencyKey}]` },
+      },
+    });
+    if (existing) {
+      return { awarded: false, transactionId: existing.id };
+    }
+  }
+
+  const tx = await prisma.pointsTransaction.create({
+    data: {
+      studentId: params.studentId,
+      lessonId: null,
+      amount: params.amount,
+      reason,
+      awardedBy: params.awardedBy,
+    },
+  });
+
+  return { awarded: true, transactionId: tx.id };
+}
+
 export async function assertLessonPointsNotAwarded(
   studentId: string,
   lessonId: string,

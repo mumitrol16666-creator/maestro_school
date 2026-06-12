@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, GraduationCap, LogOut, Mail, Phone, Star, UserRound } from "lucide-react";
+import { BookOpen, Coins, GraduationCap, LogOut, Mail, Phone, Star, UserRound } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/components/auth-provider";
 import { ErrorState, LoadingState } from "@/components/data-states";
@@ -58,7 +58,27 @@ export default function SettingsPage() {
         <section className="space-y-5">
           <PwaInstallCard />
           <PushNotificationsCard />
-          <div className="rounded-[30px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8"><p className="text-xs font-bold uppercase tracking-[0.17em] text-gold">Обучение</p><div className="mt-6 grid gap-4 sm:grid-cols-2"><div className="rounded-2xl bg-stone-50 p-5"><GraduationCap size={18} className="text-gold" /><p className="mt-3 text-xs font-bold uppercase tracking-wider text-stone-400">Направления</p><p className="font-display mt-3 text-2xl">{directions.length || 0}</p></div><div className="rounded-2xl bg-stone-50 p-5"><Star size={18} className="text-gold" /><p className="mt-3 text-xs font-bold uppercase tracking-wider text-stone-400">Баллы</p><p className="font-display mt-3 text-2xl">{profile.points ?? 0}</p></div></div></div>
+          <div className="rounded-[30px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
+            <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold">Обучение</p>
+            <div className="mt-6 grid gap-4 sm:grid-cols-3">
+              <div className="rounded-2xl bg-stone-50 p-5">
+                <GraduationCap size={18} className="text-gold" />
+                <p className="mt-3 text-xs font-bold uppercase tracking-wider text-stone-400">Направления</p>
+                <p className="font-display mt-3 text-2xl">{directions.length || 0}</p>
+              </div>
+              <div className="rounded-2xl bg-stone-50 p-5">
+                <Star size={18} className="text-gold" />
+                <p className="mt-3 text-xs font-bold uppercase tracking-wider text-stone-400">Баллы</p>
+                <p className="font-display mt-3 text-2xl">{(profile.points ?? 0).toLocaleString("ru-RU")}</p>
+              </div>
+              <div className="rounded-2xl bg-amber-50 p-5">
+                <Coins size={18} className="text-gold" />
+                <p className="mt-3 text-xs font-bold uppercase tracking-wider text-amber-700">Maestro Coins</p>
+                <p className="font-display mt-3 text-2xl text-amber-950">{(profile.coins ?? 0).toLocaleString("ru-RU")}</p>
+                <p className="mt-2 text-xs leading-5 text-amber-800">Награда от преподавателя после онлайн-уроков и ДЗ</p>
+              </div>
+            </div>
+          </div>
           <div className="rounded-[30px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
             <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold">Активные курсы</p>
             <div className="mt-5 space-y-3">{courses.length ? courses.map((course) => <Link key={course.id} href={`/courses/${course.id}`} className="card-hover flex items-center gap-4 rounded-2xl border border-transparent bg-stone-50 p-4"><span className="grid h-10 w-10 place-items-center rounded-xl bg-white text-gold ring-1 ring-gold/10"><BookOpen size={17} /></span><div><p className="font-bold">{course.title}</p><p className="mt-1 text-xs text-stone-400">{course.direction.title}</p></div></Link>) : <p className="text-sm text-stone-500">Вы еще не начали ни одного курса.</p>}</div>

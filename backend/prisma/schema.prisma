@@ -68,6 +68,43 @@ enum HomeworkType {
   test
 }
 
+enum OnlineLessonRequestStatus {
+  new
+  assigned
+  scheduled
+  completed
+  cancelled
+  no_show
+}
+
+enum OnlineLessonMaterialType {
+  youtube
+  link
+  text
+  pdf
+  image
+  file
+}
+
+enum OnlineLessonAssignmentSubmissionStatus {
+  submitted
+  approved
+  approved_with_remarks
+  returned
+}
+
+enum MaestroCoinTransactionType {
+  earn
+  adjustment
+  correction
+}
+
+enum MaestroCoinSourceType {
+  online_lesson
+  assignment
+  manual
+}
+
 enum AuditAction {
   create
   update
@@ -212,6 +249,14 @@ model User {
   auditLogs            AuditLog[]
   pushSubscriptions    PushSubscription[]
   lessonQuestions      LessonQuestion[]
+  onlineLessonRequestsAsStudent OnlineLessonRequest[] @relation("OnlineLessonStudent")
+  onlineLessonRequestsAsTeacher OnlineLessonRequest[] @relation("OnlineLessonTeacher")
+  onlineLessonRequestsCompleted OnlineLessonRequest[] @relation("OnlineLessonCompleter")
+  onlineLessonAssignmentSubmissions OnlineLessonAssignmentSubmission[] @relation("OnlineAssignmentStudent")
+  onlineLessonAssignmentReviews OnlineLessonAssignmentSubmission[] @relation("OnlineAssignmentReviewer")
+  coinBalance              StudentCoinBalance?
+  maestroCoinTransactions  MaestroCoinTransaction[] @relation("CoinStudent")
+  maestroCoinsAwarded      MaestroCoinTransaction[] @relation("CoinAwarder")
 
   @@index([roleId])
   @@index([email])
@@ -235,7 +280,8 @@ model Direction {
   deletedAt   DateTime? @map("deleted_at") @db.Timestamptz(6)
 
   school  School?  @relation(fields: [schoolId], references: [id], onDelete: SetNull)
-  courses Course[]
+  courses              Course[]
+  onlineLessonRequests OnlineLessonRequest[]
 
   @@index([slug])
   @@index([isPublished])
@@ -522,6 +568,139 @@ model NewsPost {
   @@index([authorId])
   @@index([deletedAt])
   @@map("news_posts")
+}
+
+// ─── Online lessons (Zoom, separate from course lessons) ─────────────────────
+
+model OnlineLessonRequest {
+  id              String                    @id @default(uuid()) @db.Uuid
+  studentId       String                    @map("student_id") @db.Uuid
+  directionId     String?                   @map("direction_id") @db.Uuid
+  directionTitle  String                    @map("direction_title") @db.VarChar(255)
+  level           String                    @db.VarChar(128)
+  preferredTime   String                    @map("preferred_time") @db.VarChar(512)
+  comment         String?                   @db.Text
+  status          OnlineLessonRequestStatus @default(new)
+  teacherId       String?                   @map("teacher_id") @db.Uuid
+  scheduledAt     DateTime?                 @map("scheduled_at") @db.Timestamptz(6)
+  zoomUrl         String?                   @map("zoom_url") @db.VarChar(1024)
+  coveredTopics   String?                   @map("covered_topics") @db.Text
+  whatWorked      String?                   @map("what_worked") @db.Text
+  whatToImprove   String?                   @map("what_to_improve") @db.Text
+  completionComment String?                 @map("completion_comment") @db.Text
+  lessonPoints    Int                       @default(0) @map("lesson_points")
+  lessonCoins     Int                       @default(0) @map("lesson_coins")
+  lessonCoinsReason String?                 @map("lesson_coins_reason") @db.VarChar(512)
+  completedAt     DateTime?                 @map("completed_at") @db.Timestamptz(6)
+  completedById   String?                   @map("completed_by") @db.Uuid
+  createdAt       DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  student     User       @relation("OnlineLessonStudent", fields: [studentId], references: [id], onDelete: Cascade)
+  teacher     User?      @relation("OnlineLessonTeacher", fields: [teacherId], references: [id], onDelete: SetNull)
+  completedBy User?      @relation("OnlineLessonCompleter", fields: [completedById], references: [id], onDelete: SetNull)
+  direction   Direction? @relation(fields: [directionId], references: [id], onDelete: SetNull)
+  assignment  OnlineLessonAssignment?
+
+  @@index([studentId, status, createdAt])
+  @@index([teacherId, status])
+  @@index([status, createdAt])
+  @@map("online_lesson_requests")
+}
+
+model OnlineLessonAssignment {
+  id               String                 @id @default(uuid()) @db.Uuid
+  requestId        String                 @unique @map("request_id") @db.Uuid
+  title            String                 @db.VarChar(255)
+  description      String                 @db.Text
+  dueAt            DateTime?              @map("due_at") @db.Timestamptz(6)
+  submissionFormat HomeworkAttachmentType @map("submission_format")
+  pointsReward     Int                    @default(0) @map("points_reward")
+  createdAt        DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  request     OnlineLessonRequest              @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  materials   OnlineLessonAssignmentMaterial[]
+  submissions OnlineLessonAssignmentSubmission[]
+
+  @@map("online_lesson_assignments")
+}
+
+model OnlineLessonAssignmentMaterial {
+  id           String                   @id @default(uuid()) @db.Uuid
+  assignmentId String                   @map("assignment_id") @db.Uuid
+  type         OnlineLessonMaterialType
+  title        String                   @db.VarChar(255)
+  url          String?                  @db.VarChar(1024)
+  content      String?                  @db.Text
+  sortOrder    Int                      @default(0) @map("sort_order")
+  createdAt    DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  assignment OnlineLessonAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+
+  @@index([assignmentId, sortOrder])
+  @@map("online_lesson_assignment_materials")
+}
+
+model OnlineLessonAssignmentSubmission {
+  id               String                               @id @default(uuid()) @db.Uuid
+  assignmentId     String                               @map("assignment_id") @db.Uuid
+  studentId        String                               @map("student_id") @db.Uuid
+  comment          String?                              @db.Text
+  attachmentUrl    String?                              @map("attachment_url") @db.VarChar(1024)
+  attachmentType   HomeworkAttachmentType?            @map("attachment_type")
+  status           OnlineLessonAssignmentSubmissionStatus @default(submitted)
+  reviewComment    String?                              @map("review_comment") @db.Text
+  reviewPoints     Int?                                 @map("review_points")
+  reviewCoins      Int                                  @default(0) @map("review_coins")
+  reviewCoinsReason String?                             @map("review_coins_reason") @db.VarChar(512)
+  reviewedById     String?                              @map("reviewed_by") @db.Uuid
+  reviewedAt       DateTime?                            @map("reviewed_at") @db.Timestamptz(6)
+  createdAt        DateTime                             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime                             @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  assignment OnlineLessonAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  student    User                   @relation("OnlineAssignmentStudent", fields: [studentId], references: [id], onDelete: Cascade)
+  reviewedBy User?                  @relation("OnlineAssignmentReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([assignmentId, studentId, createdAt])
+  @@index([studentId, status])
+  @@map("online_lesson_assignment_submissions")
+}
+
+// ─── Maestro Coins (manual awards only — no shop yet) ────────────────────────
+
+model StudentCoinBalance {
+  id        String   @id @default(uuid()) @db.Uuid
+  studentId String   @unique @map("student_id") @db.Uuid
+  balance   Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  student User @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@map("student_coin_balances")
+}
+
+model MaestroCoinTransaction {
+  id              String                   @id @default(uuid()) @db.Uuid
+  studentId       String                   @map("student_id") @db.Uuid
+  amount          Int
+  transactionType MaestroCoinTransactionType @map("transaction_type")
+  reason          String                   @db.VarChar(512)
+  sourceType      MaestroCoinSourceType    @map("source_type")
+  sourceId        String?                  @map("source_id") @db.Uuid
+  createdById     String                   @map("created_by") @db.Uuid
+  balanceBefore   Int                      @map("balance_before")
+  balanceAfter    Int                      @map("balance_after")
+  createdAt       DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  student   User @relation("CoinStudent", fields: [studentId], references: [id], onDelete: Cascade)
+  createdBy User @relation("CoinAwarder", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([studentId, createdAt])
+  @@index([sourceType, sourceId])
+  @@map("maestro_coin_transactions")
 }
 
 // ─── Push notifications ──────────────────────────────────────────────────────

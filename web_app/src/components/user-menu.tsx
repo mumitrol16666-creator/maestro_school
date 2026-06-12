@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, LogOut, Settings, Star } from "lucide-react";
+import { ChevronDown, Coins, LogOut, Settings, Star } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "./auth-provider";
@@ -70,9 +70,15 @@ export function UserMenu() {
               <Settings size={16} className="text-gold" />
               Профиль и настройки
             </Link>
-            <div className="mx-1 flex items-center gap-2 rounded-xl bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
-              <Star size={14} className="text-gold" fill="currentColor" />
-              {(user?.points ?? 0).toLocaleString("ru-RU")} баллов Maestro
+            <div className="mx-1 space-y-1">
+              <div className="flex items-center gap-2 rounded-xl bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
+                <Star size={14} className="text-gold" fill="currentColor" />
+                {(user?.points ?? 0).toLocaleString("ru-RU")} баллов Maestro
+              </div>
+              <div className="flex items-center gap-2 rounded-xl bg-stone-100 px-3 py-2 text-xs font-semibold text-stone-700">
+                <Coins size={14} className="text-gold" />
+                {(user?.coins ?? 0).toLocaleString("ru-RU")} Maestro Coins
+              </div>
             </div>
           </div>
           <div className="border-t border-stone-100 p-2">

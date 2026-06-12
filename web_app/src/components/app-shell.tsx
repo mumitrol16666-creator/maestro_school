@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, Home, Menu, Newspaper, UserRound, X } from "lucide-react";
+import { BookOpen, Home, Menu, Newspaper, UserRound, Video, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
@@ -11,6 +11,7 @@ import { UserMenu } from "./user-menu";
 const navigation = [
   { href: "/dashboard", label: "Главная", icon: Home },
   { href: "/courses", label: "Курсы", icon: BookOpen },
+  { href: "/online-lessons", label: "Онлайн-уроки", icon: Video },
   { href: "/board", label: "Доска Maestro", icon: Newspaper },
   { href: "/settings", label: "Профиль", icon: UserRound },
 ];
@@ -21,6 +22,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const roleLabel = user?.role === "student" ? "Ученик" : user?.role === "admin" ? "Администратор" : user?.role ?? "";
   const points = user?.points ?? 0;
+  const coins = user?.coins ?? 0;
 
   const sidebar = (
     <aside className="flex h-full flex-col bg-ink px-5 py-6 text-white">
@@ -52,7 +54,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         className="mt-auto rounded-3xl border border-white/10 bg-white/5 p-4 transition hover:border-gold/25 hover:bg-white/10"
       >
         <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gold">{roleLabel}</p>
-        <p className="mt-2 text-sm font-semibold">{points.toLocaleString("ru-RU")} баллов Maestro</p>
+        <p className="mt-2 text-sm font-semibold">
+          {points.toLocaleString("ru-RU")} баллов · {coins.toLocaleString("ru-RU")} Coins
+        </p>
         <p className="mt-2 text-xs text-white/40">Открыть профиль →</p>
       </Link>
     </aside>
