@@ -4,7 +4,9 @@ import { BookOpen, Home, Menu, Newspaper, UserRound, Video, X } from "lucide-rea
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
 import { useAuth } from "./auth-provider";
+import { AdminPendingHomeworkBadge } from "./admin-pending-homework-badge";
 import { Brand } from "./brand";
 import { UserMenu } from "./user-menu";
 
@@ -23,6 +25,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const roleLabel = user?.role === "student" ? "Ученик" : user?.role === "admin" ? "Администратор" : user?.role ?? "";
   const points = user?.points ?? 0;
   const coins = user?.coins ?? 0;
+  const { count: unreadNotifications } = useUnreadNotifications();
 
   const sidebar = (
     <aside className="flex h-full flex-col bg-ink px-5 py-6 text-white">
@@ -43,7 +46,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               }`}
             >
               <Icon size={18} className={active ? "text-gold" : undefined} />
-              {label}
+              <span className="flex-1">{label}</span>
+              {href === "/online-lessons" && unreadNotifications != null && unreadNotifications > 0 ? (
+                <AdminPendingHomeworkBadge count={unreadNotifications} />
+              ) : null}
             </Link>
           );
         })}

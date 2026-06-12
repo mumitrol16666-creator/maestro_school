@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, ClipboardCheck, FolderOpen, LayoutDashboard, Library, LogOut, Menu, MessageCircleQuestion, Newspaper, Video, X } from "lucide-react";
+import { BookOpen, ClipboardCheck, FolderOpen, LayoutDashboard, Library, LogOut, Menu, MessageCircleQuestion, Newspaper, Users, Video, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -20,6 +20,7 @@ const cmsNavigation = [
 ];
 
 const teachingNavigation = [
+  { href: "/admin/students", label: "Ученики", icon: Users },
   { href: "/admin/online-lessons", label: "Онлайн-уроки", icon: Video },
   { href: "/admin/homework-review", label: "Проверка ДЗ", icon: ClipboardCheck },
   { href: "/admin/lesson-questions", label: "Вопросы", icon: MessageCircleQuestion },

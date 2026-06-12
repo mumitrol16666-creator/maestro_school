@@ -62,6 +62,25 @@ export async function sendPushToUser(userId: string, payload: PushPayload) {
   return { sent, failed, skipped: false };
 }
 
+export async function notifyOnlineLessonScheduled(params: {
+  studentId: string;
+  requestId: string;
+  directionTitle: string;
+  scheduledAt: Date;
+}) {
+  const when = new Intl.DateTimeFormat("ru-RU", {
+    dateStyle: "long",
+    timeStyle: "short",
+  }).format(params.scheduledAt);
+
+  return sendPushToUser(params.studentId, {
+    title: "Онлайн-урок назначен",
+    body: `${params.directionTitle} — ${when}`,
+    url: `/online-lessons/${params.requestId}`,
+    tag: `online-lesson-${params.requestId}`,
+  });
+}
+
 export async function notifyHomeworkReviewed(params: {
   studentId: string;
   lessonId: string;

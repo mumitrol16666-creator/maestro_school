@@ -32,10 +32,11 @@ export const onlineLessonsApi = {
     }),
   myCoins: () => apiRequest<{ balance: number }>("/students/me/coins"),
 
-  adminList: (params: { status?: string; search?: string; page?: number; limit?: number }) => {
+  adminList: (params: { status?: string; search?: string; mine?: boolean; page?: number; limit?: number }) => {
     const query = new URLSearchParams();
     if (params.status) query.set("status", params.status);
     if (params.search) query.set("search", params.search);
+    if (params.mine) query.set("mine", "true");
     query.set("page", String(params.page ?? 1));
     query.set("limit", String(params.limit ?? 20));
     return apiRequestEnvelope<OnlineLessonRequest[], OnlineLessonsMeta>(
@@ -44,7 +45,9 @@ export const onlineLessonsApi = {
   },
   adminGet: (id: string) => apiRequest<OnlineLessonRequest>(`/admin/online-lesson-requests/${id}`),
   pendingCount: () =>
-    apiRequest<{ requests: number; submissions: number }>("/admin/online-lesson-requests/pending-count"),
+    apiRequest<{ newRequests: number; myInWork: number; submissions: number }>(
+      "/admin/online-lesson-requests/pending-count",
+    ),
   assign: (id: string) =>
     apiRequest<OnlineLessonRequest>(`/admin/online-lesson-requests/${id}/assign`, { method: "PATCH" }),
   schedule: (id: string, body: { scheduledAt: string; zoomUrl: string }) =>

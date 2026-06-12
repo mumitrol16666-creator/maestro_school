@@ -6,7 +6,9 @@ import type {
 import { prisma } from "../../infrastructure/database/prisma.js";
 import { BadRequestError, NotFoundError } from "../../domain/errors.js";
 import { addMaestroCoins } from "./coins.service.js";
+import { createUserNotification } from "./notification.service.js";
 import { awardManualPoints } from "./points.service.js";
+import { sendPushToUser } from "./push-notification.service.js";
 
 const requestSelect = {
   id: true,
@@ -32,7 +34,7 @@ const requestSelect = {
   createdAt: true,
   updatedAt: true,
   student: {
-    select: { id: true, firstName: true, lastName: true, email: true },
+    select: { id: true, firstName: true, lastName: true, email: true, phone: true, login: true },
   },
   teacher: {
     select: { id: true, firstName: true, lastName: true, email: true },
@@ -127,9 +129,12 @@ export async function listAdminOnlineLessonRequests(input: {
   search?: string;
   page: number;
   limit: number;
+  teacherId?: string;
+  mine?: boolean;
 }) {
   const where = {
     ...(input.status ? { status: input.status } : {}),
+    ...(input.mine && input.teacherId ? { teacherId: input.teacherId } : {}),
     ...(input.search
       ? {
           OR: [
@@ -167,10 +172,18 @@ export async function getAdminOnlineLessonRequest(requestId: string) {
   return item;
 }
 
-export async function countPendingOnlineLessonRequests() {
-  return prisma.onlineLessonRequest.count({
-    where: { status: { in: ["new", "assigned"] } },
-  });
+export async function countPendingOnlineLessonRequests(teacherId?: string) {
+  const [newRequests, myInWork, submissions] = await Promise.all([
+    prisma.onlineLessonRequest.count({ where: { status: "new" } }),
+    teacherId
+      ? prisma.onlineLessonRequest.count({
+          where: { teacherId, status: { in: ["assigned", "scheduled"] } },
+        })
+      : prisma.onlineLessonRequest.count({ where: { status: "assigned" } }),
+    countPendingOnlineAssignmentSubmissions(),
+  ]);
+
+  return { newRequests, myInWork, submissions };
 }
 
 async function requireManageableRequest(requestId: string) {
@@ -205,7 +218,7 @@ export async function scheduleOnlineLessonRequest(requestId: string, params: {
   const zoomUrl = params.zoomUrl.trim();
   if (!zoomUrl) throw new BadRequestError("Добавьте Zoom-ссылку");
 
-  return prisma.onlineLessonRequest.update({
+  const updated = await prisma.onlineLessonRequest.update({
     where: { id: requestId },
     data: {
       scheduledAt: params.scheduledAt,
@@ -215,6 +228,28 @@ export async function scheduleOnlineLessonRequest(requestId: string, params: {
     },
     select: requestSelect,
   });
+
+  const when = new Intl.DateTimeFormat("ru-RU", {
+    dateStyle: "long",
+    timeStyle: "short",
+  }).format(params.scheduledAt);
+
+  await createUserNotification({
+    userId: item.studentId,
+    type: "online_lesson_scheduled",
+    title: "Онлайн-урок назначен",
+    body: `${item.directionTitle}: ${when}. Ссылка на Zoom уже в личном кабинете.`,
+    url: `/online-lessons/${requestId}`,
+  });
+
+  await sendPushToUser(item.studentId, {
+    title: "Онлайн-урок назначен",
+    body: `${item.directionTitle} — ${when}`,
+    url: `/online-lessons/${requestId}`,
+    tag: `online-lesson-${requestId}`,
+  });
+
+  return updated;
 }
 
 export async function cancelOnlineLessonRequest(requestId: string) {

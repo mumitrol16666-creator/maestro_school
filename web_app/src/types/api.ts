@@ -11,6 +11,7 @@ export interface ApiDirection {
 
 export interface ApiAuthUser {
   id: string;
+  login?: string;
   email: string;
   firstName?: string;
   lastName?: string;
@@ -30,8 +31,9 @@ export interface LoginResponse {
 export interface RegisterInput {
   firstName: string;
   lastName: string;
+  login: string;
   email: string;
-  phone?: string;
+  phone: string;
   password: string;
 }
 

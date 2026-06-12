@@ -9,7 +9,7 @@ import type { RegisterInput } from "@/types/api";
 interface AuthContextValue {
   user: ApiAuthUser | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<ApiAuthUser>;
+  login: (login: string, password: string) => Promise<ApiAuthUser>;
   register: (input: RegisterInput) => Promise<ApiAuthUser>;
   logout: () => void;
 }
@@ -41,8 +41,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<AuthContextValue>(() => ({
     user,
     loading,
-    login: async (email, password) => {
-      const session = await api.login(email, password);
+    login: async (login, password) => {
+      const session = await api.login(login, password);
       storeSession(session.token, session.user);
       const fresh = await api.me();
       const merged = { ...session.user, ...fresh };

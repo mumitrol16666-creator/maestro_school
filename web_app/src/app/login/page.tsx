@@ -12,7 +12,7 @@ import { ApiError } from "@/lib/api-client";
 export default function LoginPage() {
   const router = useRouter();
   const { login, user, loading: authLoading } = useAuth();
-  const [email, setEmail] = useState("");
+  const [loginValue, setLoginValue] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -27,7 +27,7 @@ export default function LoginPage() {
     setSubmitting(true);
     setError(null);
     try {
-      const loggedInUser = await login(email, password);
+      const loggedInUser = await login(loginValue, password);
       router.replace(["admin", "owner"].includes(loggedInUser.role) ? "/admin" : "/dashboard");
     } catch (reason) {
       setError(reason instanceof ApiError ? reason.message : "Не удалось войти в кабинет");
@@ -57,13 +57,14 @@ export default function LoginPage() {
 
           <form onSubmit={handleSubmit} className="mt-10 space-y-5">
             <label className="block">
-              <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-stone-500">Email</span>
+              <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-stone-500">Логин</span>
               <input
-                type="email"
+                type="text"
                 required
-                autoComplete="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
+                autoComplete="username"
+                value={loginValue}
+                onChange={(event) => setLoginValue(event.target.value)}
+                placeholder="ivan_guitar"
                 className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-4 text-sm outline-none transition focus:border-gold"
               />
             </label>

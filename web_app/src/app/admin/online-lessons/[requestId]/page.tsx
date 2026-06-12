@@ -9,6 +9,7 @@ import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { ApiError } from "@/lib/api-client";
 import { onlineLessonStatusClasses, onlineLessonStatusLabels } from "@/lib/online-lessons-ui";
+import { StudentPhoneLine, WhatsAppLink } from "@/components/whatsapp-link";
 import { onlineLessonsApi } from "@/lib/online-lessons-api";
 
 export default function AdminOnlineLessonDetailPage() {
@@ -72,7 +73,16 @@ export default function AdminOnlineLessonDetailPage() {
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">Заявка на онлайн-урок</p>
             <h1 className="font-display mt-2 text-4xl">{item.student.firstName} {item.student.lastName}</h1>
-            <p className="mt-1 text-sm text-stone-500">{item.student.email}</p>
+            <div className="mt-3">
+              <StudentPhoneLine
+                phone={item.student.phone}
+                login={item.student.login}
+                email={item.student.email}
+              />
+            </div>
+            <div className="mt-4">
+              <WhatsAppLink phone={item.student.phone} label="Написать в WhatsApp" />
+            </div>
           </div>
           <span className={`rounded-full px-4 py-2 text-xs font-bold ${onlineLessonStatusClasses[item.status]}`}>
             {onlineLessonStatusLabels[item.status]}
@@ -94,7 +104,7 @@ export default function AdminOnlineLessonDetailPage() {
           {item.status === "new" && (
             <button disabled={acting} onClick={() => void runAction(async () => {
               await onlineLessonsApi.assign(requestId);
-              setMessage("Заявка взята в работу.");
+              setMessage("Заявка взята в работу и перемещена в «Уроки в работе».");
             })} className={primaryButton}>Взять заявку</button>
           )}
           {(item.status === "new" || item.status === "assigned") && (

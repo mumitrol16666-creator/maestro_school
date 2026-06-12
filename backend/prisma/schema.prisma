@@ -221,10 +221,15 @@ model Teacher {
 
 // ─── Users ───────────────────────────────────────────────────────────────────
 
+enum UserNotificationType {
+  online_lesson_scheduled
+}
+
 model User {
   id           String    @id @default(uuid()) @db.Uuid
+  login        String    @unique @db.VarChar(64)
   email        String    @unique @db.VarChar(255)
-  phone        String?   @db.VarChar(32)
+  phone        String    @db.VarChar(32)
   passwordHash String    @map("password_hash") @db.VarChar(255)
   firstName    String    @map("first_name") @db.VarChar(128)
   lastName     String    @map("last_name") @db.VarChar(128)
@@ -257,9 +262,11 @@ model User {
   coinBalance              StudentCoinBalance?
   maestroCoinTransactions  MaestroCoinTransaction[] @relation("CoinStudent")
   maestroCoinsAwarded      MaestroCoinTransaction[] @relation("CoinAwarder")
+  notifications            UserNotification[]
 
   @@index([roleId])
   @@index([email])
+  @@index([login])
   @@index([isActive])
   @@index([deletedAt])
   @@map("users")
@@ -701,6 +708,25 @@ model MaestroCoinTransaction {
   @@index([studentId, createdAt])
   @@index([sourceType, sourceId])
   @@map("maestro_coin_transactions")
+}
+
+// ─── In-app notifications ────────────────────────────────────────────────────
+
+model UserNotification {
+  id        String               @id @default(uuid()) @db.Uuid
+  userId    String               @map("user_id") @db.Uuid
+  type      UserNotificationType
+  title     String               @db.VarChar(255)
+  body      String               @db.Text
+  url       String?              @db.VarChar(512)
+  readAt    DateTime?            @map("read_at") @db.Timestamptz(6)
+  createdAt DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
+  @@map("user_notifications")
 }
 
 // ─── Push notifications ──────────────────────────────────────────────────────

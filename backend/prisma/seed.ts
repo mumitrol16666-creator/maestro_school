@@ -144,9 +144,16 @@ async function main() {
   }
 
   if (adminEnv) {
+    const adminLogin = adminEnv.ADMIN_EMAIL.split("@")[0]
+      .toLowerCase()
+      .replace(/[^a-z0-9_]/g, "_")
+      .slice(0, 32) || "admin";
+
     await prisma.user.upsert({
       where: { email: adminEnv.ADMIN_EMAIL },
       update: {
+        login: adminLogin,
+        phone: "00000000000",
         firstName: adminEnv.ADMIN_FIRST_NAME,
         lastName: adminEnv.ADMIN_LAST_NAME,
         passwordHash: await bcrypt.hash(adminEnv.ADMIN_PASSWORD, 10),
@@ -155,7 +162,9 @@ async function main() {
         deletedAt: null,
       },
       create: {
+        login: adminLogin,
         email: adminEnv.ADMIN_EMAIL,
+        phone: "00000000000",
         passwordHash: await bcrypt.hash(adminEnv.ADMIN_PASSWORD, 10),
         firstName: adminEnv.ADMIN_FIRST_NAME,
         lastName: adminEnv.ADMIN_LAST_NAME,

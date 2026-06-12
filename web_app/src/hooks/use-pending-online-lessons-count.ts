@@ -4,14 +4,14 @@ import { useCallback, useEffect, useState } from "react";
 import { onlineLessonsApi } from "@/lib/online-lessons-api";
 
 export function usePendingOnlineLessonsCount(pollMs = 60_000) {
-  const [count, setCount] = useState<number | null>(null);
+  const [counts, setCounts] = useState<{ newRequests: number; myInWork: number; submissions: number } | null>(null);
 
   const reload = useCallback(async () => {
     try {
       const result = await onlineLessonsApi.pendingCount();
-      setCount(result.requests + result.submissions);
+      setCounts(result);
     } catch {
-      setCount(null);
+      setCounts(null);
     }
   }, []);
 
@@ -21,5 +21,9 @@ export function usePendingOnlineLessonsCount(pollMs = 60_000) {
     return () => window.clearInterval(timer);
   }, [pollMs, reload]);
 
-  return { count, reload };
+  const count = counts
+    ? counts.newRequests + counts.myInWork + counts.submissions
+    : null;
+
+  return { count, counts, reload };
 }

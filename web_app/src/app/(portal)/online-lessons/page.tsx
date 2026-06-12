@@ -4,11 +4,13 @@ import { CalendarClock, LoaderCircle, Send, Video } from "lucide-react";
 import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
+import { SuccessModal } from "@/components/success-modal";
 import { PageHeader } from "@/components/page-header";
 import { useAuth } from "@/components/auth-provider";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { ApiError, api } from "@/lib/api-client";
 import { levelOptions, onlineLessonStatusClasses, onlineLessonStatusLabels } from "@/lib/online-lessons-ui";
+import { formatPhoneDisplay } from "@/lib/phone";
 import { onlineLessonsApi } from "@/lib/online-lessons-api";
 
 export default function OnlineLessonsPage() {
@@ -22,14 +24,14 @@ export default function OnlineLessonsPage() {
   const [preferredTime, setPreferredTime] = useState("");
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [success, setSuccess] = useState<string | null>(null);
+  const [showSuccess, setShowSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setSubmitting(true);
     setError(null);
-    setSuccess(null);
+    setShowSuccess(false);
     try {
       const title = directionId
         ? directions.data?.find((item) => item.id === directionId)?.title ?? directionTitle
@@ -41,7 +43,7 @@ export default function OnlineLessonsPage() {
         preferredTime,
         comment: comment.trim() || undefined,
       });
-      setSuccess("Заявка отправлена. Преподаватель свяжется с вами и назначит урок в Zoom.");
+      setShowSuccess(true);
       setPreferredTime("");
       setComment("");
       await requests.reload();
@@ -80,8 +82,12 @@ export default function OnlineLessonsPage() {
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">Заявка</p>
           <h2 className="font-display mt-3 text-3xl">Записаться на онлайн-урок</h2>
 
-          {success && <p className="mt-4 rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800">{success}</p>}
           {error && <p className="mt-4 rounded-2xl border border-red-100 bg-red-50 p-4 text-sm font-semibold text-red-700">{error}</p>}
+          {user?.phone ? (
+            <p className="mt-4 rounded-2xl bg-stone-50 p-4 text-sm text-stone-600">
+              Для связи используем WhatsApp: <span className="font-bold text-ink">{formatPhoneDisplay(user.phone)}</span>
+            </p>
+          ) : null}
 
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">
             <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
@@ -190,6 +196,13 @@ export default function OnlineLessonsPage() {
           </div>
         </section>
       </div>
+
+      <SuccessModal
+        open={showSuccess}
+        title="Вы записаны на онлайн-урок"
+        description="Заявка принята. Скоро с вами свяжутся в WhatsApp для согласования времени и деталей занятия."
+        onClose={() => setShowSuccess(false)}
+      />
     </>
   );
 }

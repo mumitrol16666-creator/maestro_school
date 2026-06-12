@@ -106,10 +106,10 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
 }
 
 export const api = {
-  login: (email: string, password: string) =>
+  login: (login: string, password: string) =>
     apiRequest<LoginResponse>("/auth/login", {
       method: "POST",
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ login, password }),
     }),
   register: (body: RegisterInput) =>
     apiRequest<LoginResponse>("/auth/register", {

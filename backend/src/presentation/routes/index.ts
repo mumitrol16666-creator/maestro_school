@@ -11,6 +11,8 @@ import { mediaRoutes } from "./media.routes.js";
 import { pushRoutes } from "./push.routes.js";
 import { lessonQuestionsRoutes } from "./lesson-questions.routes.js";
 import { onlineLessonsRoutes } from "./online-lessons.routes.js";
+import { notificationsRoutes } from "./notifications.routes.js";
+import { studentsAdminRoutes } from "./students-admin.routes.js";
 
 export async function registerRoutes(app: FastifyInstance) {
   await app.register(async (api) => {
@@ -26,5 +28,7 @@ export async function registerRoutes(app: FastifyInstance) {
     await api.register(pushRoutes);
     await api.register(lessonQuestionsRoutes);
     await api.register(onlineLessonsRoutes);
+    await api.register(notificationsRoutes);
+    await api.register(studentsAdminRoutes);
   }, { prefix: "/api/v1" });
 }

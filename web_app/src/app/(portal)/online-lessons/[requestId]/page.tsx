@@ -2,13 +2,14 @@
 
 import { ArrowLeft, ExternalLink, LoaderCircle, Send } from "lucide-react";
 import Link from "next/link";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { ApiError } from "@/lib/api-client";
 import { attachmentTypeLabels } from "@/lib/homework-ui";
 import { onlineLessonStatusClasses, onlineLessonStatusLabels } from "@/lib/online-lessons-ui";
+import { notificationsApi } from "@/lib/notifications-api";
 import { onlineLessonsApi } from "@/lib/online-lessons-api";
 import type { HomeworkAttachmentType } from "@/types/homework";
 
@@ -20,6 +21,10 @@ export default function OnlineLessonDetailPage() {
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void notificationsApi.markAllRead().catch(() => undefined);
+  }, [requestId]);
 
   if (resource.loading) return <LoadingState label="Открываем заявку" />;
   if (resource.error) return <ErrorState message={resource.error} retry={resource.reload} />;

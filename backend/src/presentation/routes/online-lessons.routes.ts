@@ -126,11 +126,23 @@ export async function onlineLessonsRoutes(app: FastifyInstance) {
       const query = z.object({
         status: z.enum(["new", "assigned", "scheduled", "completed", "cancelled", "no_show"]).optional(),
         search: z.string().trim().optional(),
+        mine: z.coerce.boolean().optional(),
         page: z.coerce.number().int().min(1).default(1),
         limit: z.coerce.number().int().min(1).max(50).default(20),
       }).parse(request.query);
 
-      const result = await listAdminOnlineLessonRequests(query);
+      const authUser = request.user!;
+      const teacherScopedStatuses = new Set<typeof query.status>(["assigned", "scheduled"]);
+      const autoMine = authUser.roleSlug === "teacher"
+        && query.status
+        && teacherScopedStatuses.has(query.status);
+      const mine = query.mine ?? autoMine;
+
+      const result = await listAdminOnlineLessonRequests({
+        ...query,
+        mine,
+        teacherId: mine ? authUser.id : undefined,
+      });
       return {
         data: result.items,
         meta: {
@@ -146,11 +158,8 @@ export async function onlineLessonsRoutes(app: FastifyInstance) {
   app.get(
     "/admin/online-lesson-requests/pending-count",
     { preHandler: manageGuards() },
-    async () => ({
-      data: {
-        requests: await countPendingOnlineLessonRequests(),
-        submissions: await countPendingOnlineAssignmentSubmissions(),
-      },
+    async (request) => ({
+      data: await countPendingOnlineLessonRequests(request.user!.id),
     }),
   );
 

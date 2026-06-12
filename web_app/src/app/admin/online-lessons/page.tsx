@@ -10,12 +10,13 @@ import { PageHeader } from "@/components/page-header";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { usePendingOnlineLessonsCount } from "@/hooks/use-pending-online-lessons-count";
 import { onlineLessonStatusClasses, onlineLessonStatusLabels } from "@/lib/online-lessons-ui";
+import { formatPhoneDisplay } from "@/lib/phone";
 import { onlineLessonsApi } from "@/lib/online-lessons-api";
 
 const filters = [
   { value: "", label: "Все" },
   { value: "new", label: "Новые" },
-  { value: "assigned", label: "В работе" },
+  { value: "assigned", label: "Уроки в работе" },
   { value: "scheduled", label: "Назначены" },
   { value: "completed", label: "Завершены" },
 ] as const;
@@ -24,7 +25,7 @@ export default function AdminOnlineLessonsPage() {
   const [status, setStatus] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const { count: pendingCount } = usePendingOnlineLessonsCount();
+  const { counts } = usePendingOnlineLessonsCount();
 
   const resource = useApiResource(
     () => onlineLessonsApi.adminList({ status: status || undefined, search: search || undefined, page, limit: 20 }),
@@ -49,8 +50,11 @@ export default function AdminOnlineLessonsPage() {
             }`}
           >
             {item.label}
-            {item.value === "new" && pendingCount != null && pendingCount > 0 && (
-              <AdminPendingHomeworkBadge count={pendingCount} />
+            {item.value === "new" && counts && counts.newRequests > 0 && (
+              <AdminPendingHomeworkBadge count={counts.newRequests} />
+            )}
+            {item.value === "assigned" && counts && counts.myInWork > 0 && (
+              <AdminPendingHomeworkBadge count={counts.myInWork} />
             )}
           </button>
         ))}
@@ -91,7 +95,8 @@ export default function AdminOnlineLessonsPage() {
                 </span>
               </div>
               <p className="mt-1 text-xs font-bold text-gold">{item.directionTitle} · {item.level}</p>
-              <p className="mt-2 text-sm text-stone-500">{item.preferredTime}</p>
+              <p className="mt-2 text-sm font-semibold text-ink">{formatPhoneDisplay(item.student.phone)}</p>
+              <p className="mt-1 text-sm text-stone-500">{item.preferredTime}</p>
             </div>
             <ArrowRight size={18} className="text-gold" />
           </Link>

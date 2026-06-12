@@ -1,34 +1,46 @@
 import { prisma, notDeleted } from "../../infrastructure/database/prisma.js";
 
+const userWithRoleInclude = {
+  role: {
+    include: {
+      rolePermissions: { include: { permission: true } },
+    },
+  },
+} as const;
+
 export async function findUserWithRoleByEmail(email: string) {
   return prisma.user.findFirst({
     where: { email, ...notDeleted, isActive: true },
-    include: {
-      role: {
-        include: {
-          rolePermissions: { include: { permission: true } },
-        },
-      },
-    },
+    include: userWithRoleInclude,
   });
+}
+
+export async function findUserWithRoleByLogin(login: string) {
+  return prisma.user.findFirst({
+    where: { login, ...notDeleted, isActive: true },
+    include: userWithRoleInclude,
+  });
+}
+
+export async function findUserWithRoleByLoginOrEmail(identifier: string) {
+  const value = identifier.trim().toLowerCase();
+  if (value.includes("@")) {
+    return findUserWithRoleByEmail(value);
+  }
+  return findUserWithRoleByLogin(value);
 }
 
 export async function findUserWithRoleById(userId: string) {
   return prisma.user.findFirst({
     where: { id: userId, ...notDeleted, isActive: true },
-    include: {
-      role: {
-        include: {
-          rolePermissions: { include: { permission: true } },
-        },
-      },
-    },
+    include: userWithRoleInclude,
   });
 }
 
 export async function createStudentUser(params: {
+  login: string;
   email: string;
-  phone?: string;
+  phone: string;
   passwordHash: string;
   firstName: string;
   lastName: string;
@@ -40,6 +52,7 @@ export async function createStudentUser(params: {
 
   return prisma.user.create({
     data: {
+      login: params.login,
       email: params.email,
       phone: params.phone,
       passwordHash: params.passwordHash,
@@ -47,12 +60,6 @@ export async function createStudentUser(params: {
       lastName: params.lastName,
       roleId: studentRole.id,
     },
-    include: {
-      role: {
-        include: {
-          rolePermissions: { include: { permission: true } },
-        },
-      },
-    },
+    include: userWithRoleInclude,
   });
 }

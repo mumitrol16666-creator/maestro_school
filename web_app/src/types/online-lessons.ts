@@ -17,6 +17,8 @@ export interface OnlineLessonUserSummary {
   firstName: string;
   lastName: string;
   email: string;
+  phone: string;
+  login: string;
 }
 
 export interface OnlineLessonAssignmentMaterial {
