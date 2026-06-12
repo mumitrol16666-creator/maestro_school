@@ -17,6 +17,7 @@ import {
 import { getLessonProgressRecord } from "../../application/repositories/learning.repository.js";
 import { syncLessonAvailability } from "../../application/services/lesson-unlock.service.js";
 import { publicHomeworkTestQuestions } from "../../domain/homework-test.js";
+import { buildLessonEndActions } from "../../application/services/lesson-signup.service.js";
 import {
   authenticate,
   optionalAuthenticate,
@@ -123,6 +124,11 @@ export async function catalogRoutes(app: FastifyInstance) {
         throw new ForbiddenError("Урок пока закрыт");
       }
       const contentOpen = progress.status !== "available";
+      const signupCourseIds = lesson.signupCourseId ? [lesson.signupCourseId] : [];
+      const enrollmentMap = await getStudentEnrollmentMap(studentId, signupCourseIds);
+      const endActions = contentOpen
+        ? buildLessonEndActions(lesson, new Set(enrollmentMap.keys()))
+        : { askTeacher: null, signup: null, hasActions: false };
 
       return {
         data: {
@@ -146,6 +152,7 @@ export async function catalogRoutes(app: FastifyInstance) {
                   : null,
               }
             : null,
+          endActions,
           course: lesson.module.course,
         },
       };

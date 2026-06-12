@@ -5,18 +5,27 @@ import { AdminVideoValidation } from "@/components/admin-video-validation";
 import { MarkdownEditor } from "@/components/markdown-editor";
 import { inputClass, primaryButton, secondaryButton } from "@/components/admin-ui";
 
+export type LessonSignupMode = "course" | "external";
+
 export interface LessonFormValues {
   title: string;
   description: string;
   videoUrl: string;
   pointsReward: number;
   sortOrder: number;
+  enableAskTeacher: boolean;
+  enableLessonSignup: boolean;
+  signupMode: LessonSignupMode;
+  signupCourseId: string;
+  signupExternalUrl: string;
+  signupLabel: string;
 }
 
 interface LessonEditorFormProps {
   mode: "new-lesson" | "edit-lesson";
   lessonTitle?: string;
   values: LessonFormValues;
+  courseOptions: Array<{ id: string; title: string }>;
   saving: boolean;
   onChange: (values: LessonFormValues) => void;
   onSubmit: (event: React.FormEvent) => void;
@@ -54,6 +63,7 @@ export function LessonEditorForm({
   mode,
   lessonTitle,
   values,
+  courseOptions,
   saving,
   onChange,
   onSubmit,
@@ -142,6 +152,109 @@ export function LessonEditorForm({
             />
           </label>
         </div>
+      </Section>
+
+      <Section
+        step={4}
+        title="Действия после урока"
+        description="Два режима для ученика: задать вопрос преподавателю и записаться на следующий этап обучения."
+      >
+        <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-stone-200 bg-white p-4">
+          <input
+            type="checkbox"
+            checked={values.enableAskTeacher}
+            onChange={(event) => onChange({ ...values, enableAskTeacher: event.target.checked })}
+            className="mt-1"
+          />
+          <span>
+            <span className="block text-sm font-bold">Вопрос преподавателю</span>
+            <span className="mt-1 block text-xs leading-5 text-stone-500">
+              Ученик сможет отправить вопрос по уроку прямо на странице урока.
+            </span>
+          </span>
+        </label>
+
+        <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-stone-200 bg-white p-4">
+          <input
+            type="checkbox"
+            checked={values.enableLessonSignup}
+            onChange={(event) => onChange({ ...values, enableLessonSignup: event.target.checked })}
+            className="mt-1"
+          />
+          <span>
+            <span className="block text-sm font-bold">Запись на урок / курс</span>
+            <span className="mt-1 block text-xs leading-5 text-stone-500">
+              Кнопка в конце урока: автозапись на другой курс или переход по внешней ссылке.
+            </span>
+          </span>
+        </label>
+
+        {values.enableLessonSignup && (
+          <div className="space-y-4 rounded-2xl border border-amber-100 bg-amber-50 p-4">
+            <p className="text-xs font-bold uppercase tracking-wider text-amber-800">Как работает запись</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className={`cursor-pointer rounded-xl border p-3 ${values.signupMode === "course" ? "border-ink bg-white" : "border-stone-200 bg-white/70"}`}>
+                <input
+                  type="radio"
+                  name="signup-mode"
+                  className="sr-only"
+                  checked={values.signupMode === "course"}
+                  onChange={() => onChange({ ...values, signupMode: "course", signupExternalUrl: "" })}
+                />
+                <p className="text-sm font-bold">Автозапись на курс</p>
+                <p className="mt-1 text-xs text-stone-500">Ученик сразу записывается в выбранный курс школы.</p>
+              </label>
+              <label className={`cursor-pointer rounded-xl border p-3 ${values.signupMode === "external" ? "border-ink bg-white" : "border-stone-200 bg-white/70"}`}>
+                <input
+                  type="radio"
+                  name="signup-mode"
+                  className="sr-only"
+                  checked={values.signupMode === "external"}
+                  onChange={() => onChange({ ...values, signupMode: "external", signupCourseId: "" })}
+                />
+                <p className="text-sm font-bold">Внешняя ссылка</p>
+                <p className="mt-1 text-xs text-stone-500">Calendly, Google Forms или страница записи.</p>
+              </label>
+            </div>
+
+            <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
+              Текст кнопки
+              <input
+                value={values.signupLabel}
+                onChange={(event) => onChange({ ...values, signupLabel: event.target.value })}
+                className={`${inputClass} mt-2`}
+                placeholder="Записаться на урок"
+              />
+            </label>
+
+            {values.signupMode === "course" ? (
+              <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
+                Курс для записи
+                <select
+                  value={values.signupCourseId}
+                  onChange={(event) => onChange({ ...values, signupCourseId: event.target.value })}
+                  className={`${inputClass} mt-2`}
+                >
+                  <option value="">Выберите курс</option>
+                  {courseOptions.map((course) => (
+                    <option key={course.id} value={course.id}>{course.title}</option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
+                Ссылка для записи
+                <input
+                  type="url"
+                  value={values.signupExternalUrl}
+                  onChange={(event) => onChange({ ...values, signupExternalUrl: event.target.value })}
+                  className={`${inputClass} mt-2`}
+                  placeholder="https://..."
+                />
+              </label>
+            )}
+          </div>
+        )}
       </Section>
 
       <div className="flex flex-wrap gap-3 rounded-[24px] border border-stone-200 bg-white p-5">

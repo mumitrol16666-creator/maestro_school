@@ -16,6 +16,7 @@ interface LessonWorkspaceProps {
   module: Pick<CmsModule, "title"> | null;
   activeTab: LessonWorkspaceTab;
   lessonForm: LessonFormValues;
+  courseOptions: Array<{ id: string; title: string }>;
   materials: CmsMaterial[];
   homeworkForm: Pick<CmsHomework, "description" | "type" | "passingScore" | "testQuestions">;
   hasHomework: boolean;
@@ -58,6 +59,7 @@ export function LessonWorkspace({
   module,
   activeTab,
   lessonForm,
+  courseOptions,
   materials,
   homeworkForm,
   hasHomework,
@@ -247,6 +249,7 @@ export function LessonWorkspace({
           mode="edit-lesson"
           lessonTitle={lesson.title}
           values={lessonForm}
+          courseOptions={courseOptions}
           saving={saving}
           onChange={onLessonFormChange}
           onSubmit={onSaveLesson}

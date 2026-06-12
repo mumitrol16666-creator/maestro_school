@@ -50,6 +50,11 @@ export interface CmsLesson {
   pointsReward: number;
   sortOrder: number;
   isPublished: boolean;
+  enableAskTeacher: boolean;
+  enableLessonSignup: boolean;
+  signupCourseId: string | null;
+  signupExternalUrl: string | null;
+  signupLabel: string | null;
   _count: { materials: number; homeworks: number };
 }
 

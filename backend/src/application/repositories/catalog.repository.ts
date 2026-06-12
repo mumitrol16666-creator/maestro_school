@@ -66,6 +66,7 @@ export async function getLessonById(lessonId: string) {
     include: {
       materials: { orderBy: { sortOrder: "asc" } },
       homeworks: { where: notDeleted, take: 1 },
+      signupCourse: { select: { id: true, title: true } },
       module: {
         select: {
           id: true,

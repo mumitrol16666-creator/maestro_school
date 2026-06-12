@@ -33,6 +33,27 @@ const testQuestion = z.object({
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Correct option must belong to question", path: ["correctOptionId"] });
   }
 });
+const lessonEndActionsBody = z.object({
+  enableAskTeacher: z.boolean().optional(),
+  enableLessonSignup: z.boolean().optional(),
+  signupCourseId: z.string().uuid().nullable().optional(),
+  signupExternalUrl: z.string().url().max(1024).nullable().optional(),
+  signupLabel: z.string().trim().min(1).max(255).nullable().optional(),
+});
+
+function validateLessonEndActions(body: z.infer<typeof lessonEndActionsBody>) {
+  if (body.enableLessonSignup) {
+    const hasCourse = Boolean(body.signupCourseId);
+    const hasUrl = Boolean(body.signupExternalUrl);
+    if (!hasCourse && !hasUrl) {
+      throw new BadRequestError("Для записи на урок выберите курс или укажите внешнюю ссылку");
+    }
+    if (hasCourse && hasUrl) {
+      throw new BadRequestError("Укажите либо курс для автозаписи, либо внешнюю ссылку");
+    }
+  }
+}
+
 const homeworkBody = z.object({
   lessonId: z.string().uuid().optional(),
   description: z.string().min(1).optional(),
@@ -138,12 +159,36 @@ export async function cmsRoutes(app: FastifyInstance) {
     const { id } = idParams.parse(request.params); return { data: await getAdminLesson(id) };
   });
   app.post("/admin/lessons", { preHandler: catalogGuards() }, async (request, reply) => {
-    const body = z.object({ moduleId: z.string().uuid(), title: z.string().min(1).max(255), description: z.string().nullable().optional(), videoUrl: nullableUrl, pointsReward: z.number().int().min(0).default(0), sortOrder: z.number().int().min(0).default(0), isPublished: z.boolean().optional() }).parse(request.body);
-    validateVideoUrl(body.videoUrl); const item = await createLesson(body); await audit(request, "lesson", item.id, "create"); return reply.status(201).send({ data: item });
+    const body = z.object({
+      moduleId: z.string().uuid(),
+      title: z.string().min(1).max(255),
+      description: z.string().nullable().optional(),
+      videoUrl: nullableUrl,
+      pointsReward: z.number().int().min(0).default(0),
+      sortOrder: z.number().int().min(0).default(0),
+      isPublished: z.boolean().optional(),
+    }).merge(lessonEndActionsBody).parse(request.body);
+    validateVideoUrl(body.videoUrl);
+    validateLessonEndActions(body);
+    const item = await createLesson(body);
+    await audit(request, "lesson", item.id, "create");
+    return reply.status(201).send({ data: item });
   });
   app.patch("/admin/lessons/:id", { preHandler: catalogGuards() }, async (request) => {
-    const { id } = idParams.parse(request.params); const body = z.object({ moduleId: z.string().uuid().optional(), title: z.string().min(1).max(255).optional(), description: z.string().nullable().optional(), videoUrl: nullableUrl, pointsReward: z.number().int().min(0).optional(), sortOrder: z.number().int().min(0).optional() }).parse(request.body);
-    validateVideoUrl(body.videoUrl); const item = await updateLesson(id, body); await audit(request, "lesson", id, "update"); return { data: item };
+    const { id } = idParams.parse(request.params);
+    const body = z.object({
+      moduleId: z.string().uuid().optional(),
+      title: z.string().min(1).max(255).optional(),
+      description: z.string().nullable().optional(),
+      videoUrl: nullableUrl,
+      pointsReward: z.number().int().min(0).optional(),
+      sortOrder: z.number().int().min(0).optional(),
+    }).merge(lessonEndActionsBody).parse(request.body);
+    validateVideoUrl(body.videoUrl);
+    validateLessonEndActions(body);
+    const item = await updateLesson(id, body);
+    await audit(request, "lesson", id, "update");
+    return { data: item };
   });
   app.post("/admin/lessons/:id/publish", { preHandler: catalogGuards() }, async (request) => {
     const { id } = idParams.parse(request.params); const body = publishBody.parse(request.body);

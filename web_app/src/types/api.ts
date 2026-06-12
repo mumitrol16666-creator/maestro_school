@@ -86,6 +86,20 @@ export interface ApiHomework {
   testQuestions: HomeworkTestQuestion[] | null;
 }
 
+export interface ApiLessonEndActions {
+  askTeacher: { enabled: true } | null;
+  signup: {
+    enabled: true;
+    label: string;
+    mode: "course" | "external";
+    courseId?: string;
+    courseTitle?: string;
+    alreadyEnrolled?: boolean;
+    externalUrl?: string;
+  } | null;
+  hasActions: boolean;
+}
+
 export interface ApiLessonDetail {
   id: string;
   moduleId: string;
@@ -97,6 +111,7 @@ export interface ApiLessonDetail {
   pointsReward: number;
   materials: ApiMaterial[];
   homework: ApiHomework | null;
+  endActions: ApiLessonEndActions;
   course: { id: string; directionId: string; title: string };
 }
 

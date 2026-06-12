@@ -139,10 +139,26 @@ export async function getAdminLesson(id: string) {
   }), "Lesson");
 }
 
-export const createLesson = (data: { moduleId: string; title: string; description?: string | null; videoUrl?: string | null; pointsReward: number; sortOrder: number; isPublished?: boolean }) =>
+type LessonWrite = {
+  moduleId?: string;
+  title?: string;
+  description?: string | null;
+  videoUrl?: string | null;
+  pointsReward?: number;
+  sortOrder?: number;
+  isPublished?: boolean;
+  enableAskTeacher?: boolean;
+  enableLessonSignup?: boolean;
+  signupCourseId?: string | null;
+  signupExternalUrl?: string | null;
+  signupLabel?: string | null;
+  deletedAt?: Date | null;
+};
+
+export const createLesson = (data: LessonWrite & { moduleId: string; title: string; pointsReward: number; sortOrder: number }) =>
   prisma.lesson.create({ data });
 
-export async function updateLesson(id: string, data: { moduleId?: string; title?: string; description?: string | null; videoUrl?: string | null; pointsReward?: number; sortOrder?: number; isPublished?: boolean; deletedAt?: Date | null }) {
+export async function updateLesson(id: string, data: LessonWrite) {
   await requireRecord(prisma.lesson.findUnique({ where: { id }, select: { id: true } }), "Lesson");
   return prisma.lesson.update({ where: { id }, data });
 }

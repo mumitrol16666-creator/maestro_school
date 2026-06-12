@@ -43,6 +43,11 @@ enum LessonProgressStatus {
   completed
 }
 
+enum LessonQuestionStatus {
+  pending
+  answered
+}
+
 enum HomeworkSubmissionStatus {
   pending
   submitted
@@ -206,6 +211,7 @@ model User {
   newsPosts            NewsPost[]
   auditLogs            AuditLog[]
   pushSubscriptions    PushSubscription[]
+  lessonQuestions      LessonQuestion[]
 
   @@index([roleId])
   @@index([email])
@@ -255,6 +261,7 @@ model Course {
   branch         Branch?         @relation(fields: [branchId], references: [id], onDelete: SetNull)
   modules        CourseModule[]
   studentCourses StudentCourse[]
+  signupLessons  Lesson[] @relation("LessonSignupCourse")
 
   @@index([directionId])
   @@index([branchId])
@@ -290,20 +297,45 @@ model Lesson {
   sortOrder    Int       @default(0) @map("sort_order")
   pointsReward Int       @default(0) @map("points_reward")
   isPublished  Boolean   @default(false) @map("is_published")
+  enableAskTeacher   Boolean @default(false) @map("enable_ask_teacher")
+  enableLessonSignup Boolean @default(false) @map("enable_lesson_signup")
+  signupCourseId     String? @map("signup_course_id") @db.Uuid
+  signupExternalUrl  String? @map("signup_external_url") @db.VarChar(1024)
+  signupLabel        String? @map("signup_label") @db.VarChar(255)
   createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt    DateTime? @map("deleted_at") @db.Timestamptz(6)
 
   module          CourseModule     @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  signupCourse    Course?          @relation("LessonSignupCourse", fields: [signupCourseId], references: [id], onDelete: SetNull)
   materials       LessonMaterial[]
   homeworks       Homework[]
   lessonProgress      LessonProgress[]
   pointsTransactions PointsTransaction[]
+  questions       LessonQuestion[]
 
   @@index([moduleId, sortOrder])
   @@index([isPublished])
   @@index([deletedAt])
+  @@index([signupCourseId])
   @@map("lessons")
+}
+
+model LessonQuestion {
+  id        String               @id @default(uuid()) @db.Uuid
+  lessonId  String               @map("lesson_id") @db.Uuid
+  studentId String               @map("student_id") @db.Uuid
+  message   String               @db.Text
+  status    LessonQuestionStatus @default(pending)
+  createdAt DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  lesson  Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  student User   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([lessonId, status, createdAt])
+  @@index([studentId])
+  @@map("lesson_questions")
 }
 
 model LessonMaterial {

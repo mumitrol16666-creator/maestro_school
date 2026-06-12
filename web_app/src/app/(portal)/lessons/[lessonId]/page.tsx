@@ -21,6 +21,7 @@ import { HomeworkAttemptHistory } from "@/components/homework-attempt-history";
 import { HomeworkSubmissionForm } from "@/components/homework-submission-form";
 import { HomeworkTestForm } from "@/components/homework-test-form";
 import { HomeworkTestResult } from "@/components/homework-test-result";
+import { LessonEndActions } from "@/components/lesson-end-actions";
 import { LessonVideoPlayer } from "@/components/lesson-video-player";
 import { StatusBadge } from "@/components/status-badge";
 import { MarkdownContent } from "@/components/markdown-content";
@@ -266,6 +267,22 @@ export default function LessonPage() {
 
               <HomeworkAttemptHistory attempts={attempts} isTest={isTestHomework} />
             </>
+          )}
+
+          {lessonStarted && detail.endActions?.hasActions && (
+            <LessonEndActions
+              lessonId={lesson.id}
+              lessonTitle={lesson.title}
+              endActions={detail.endActions}
+              onSignupComplete={(message) => {
+                setActionError(null);
+                setSuccess(message);
+              }}
+              onError={(message) => {
+                setSuccess(null);
+                setActionError(message);
+              }}
+            />
           )}
         </div>
 

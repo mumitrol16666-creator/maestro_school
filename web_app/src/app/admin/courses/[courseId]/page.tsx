@@ -11,6 +11,7 @@ import { CourseReadiness } from "@/components/course-readiness";
 import { CourseStructureTree } from "@/components/course-structure-tree";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
 import { normalizeTestQuestions, serializeTestQuestions } from "@/components/admin-test-builder";
+import { emptyLessonForm, lessonFormFromCms, serializeLessonForm } from "@/lib/lesson-form";
 import { MediaPicker } from "@/components/media-picker";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
@@ -21,7 +22,7 @@ import type { CmsHomework, CmsMaterial, CmsMaterialUsage, CmsMedia } from "@/typ
 
 type EditorMode = "none" | "new-module" | "edit-module" | "new-lesson";
 const emptyModule = (courseId: string) => ({ title: "", description: "", sortOrder: 0, courseId });
-const emptyLesson = { title: "", description: "", videoUrl: "", pointsReward: 0, sortOrder: 0 };
+const emptyLesson = emptyLessonForm;
 const emptyMaterial = { title: "", type: "pdf", url: "", sortOrder: 0 };
 const emptyHomework: Pick<CmsHomework, "description" | "type" | "passingScore" | "testQuestions"> = {
   description: "",
@@ -90,13 +91,7 @@ export default function CourseBuilderPage() {
 
   useEffect(() => {
     if (!selectedLesson) return;
-    const value = {
-      title: selectedLesson.title,
-      description: selectedLesson.description ?? "",
-      videoUrl: selectedLesson.videoUrl ?? "",
-      pointsReward: selectedLesson.pointsReward,
-      sortOrder: selectedLesson.sortOrder,
-    };
+    const value = lessonFormFromCms(selectedLesson);
     setLessonForm(value);
     setLessonBaseline(value);
   }, [selectedLesson]);
@@ -193,7 +188,7 @@ export default function CourseBuilderPage() {
   async function saveLesson(event: FormEvent) {
     event.preventDefault(); if (!selectedModuleId) return;
     await runOperation(async () => {
-      const body = { ...lessonForm, moduleId: selectedModuleId, videoUrl: lessonForm.videoUrl || null, description: lessonForm.description || null };
+      const body = serializeLessonForm(lessonForm, selectedModuleId);
       if (selectedLesson && editorMode !== "new-lesson") {
         await cmsApi.updateLesson(selectedLesson.id, body);
         setLessonBaseline(lessonForm);
@@ -345,10 +340,11 @@ export default function CourseBuilderPage() {
     <div className="grid items-start gap-6 xl:grid-cols-[390px_minmax(0,1fr)]">
       <CourseStructureTree modules={modules} query={query} expanded={expanded} selectedModuleId={selectedModuleId} selectedLessonId={selectedLessonId} onQueryChange={setQuery} onToggleModule={(id) => setExpanded((value) => { const next = new Set(value); if (next.has(id)) next.delete(id); else next.add(id); return next; })} onSelectModule={selectModule} onSelectLesson={selectLesson} onAddModule={startNewModule} onAddLesson={startNewLesson} />
       <main className="min-w-0 rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft lg:p-8">
-        {(editorMode === "new-module" || editorMode === "edit-module") ? moduleEditor() : editorMode === "new-lesson" ? (
+        {(editorMode === "new-module" || editorMode === "edit-module") ? moduleEditor(        ) : editorMode === "new-lesson" ? (
           <LessonEditorForm
             mode="new-lesson"
             values={lessonForm}
+            courseOptions={allCourses.data?.map((item) => ({ id: item.id, title: item.title })) ?? []}
             saving={operation === "saving"}
             onChange={setLessonForm}
             onSubmit={saveLesson}
@@ -360,6 +356,7 @@ export default function CourseBuilderPage() {
             module={selectedModule}
             activeTab={lessonTab}
             lessonForm={lessonForm}
+            courseOptions={allCourses.data?.map((item) => ({ id: item.id, title: item.title })) ?? []}
             materials={materials.data ?? []}
             homeworkForm={homeworkForm}
             hasHomework={!!homeworks.data?.[0]}

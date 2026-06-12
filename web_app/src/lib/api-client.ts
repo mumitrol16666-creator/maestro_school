@@ -127,6 +127,20 @@ export const api = {
       { method: "POST" },
     ),
   lesson: (lessonId: string) => apiRequest<ApiLessonDetail>(`/lessons/${lessonId}`),
+  askLessonQuestion: (lessonId: string, message: string) =>
+    apiRequest<{ id: string; lessonId: string; message: string; status: string; createdAt: string }>(
+      `/lessons/${lessonId}/questions`,
+      { method: "POST", body: JSON.stringify({ message }) },
+    ),
+  signupFromLesson: (lessonId: string) =>
+    apiRequest<{
+      mode: "course" | "external";
+      alreadyEnrolled?: boolean;
+      courseId?: string;
+      courseTitle?: string;
+      url?: string;
+      label?: string;
+    }>(`/lessons/${lessonId}/signup`, { method: "POST" }),
   dashboard: () => apiRequest<ApiDashboard>("/students/me/dashboard"),
   achievements: () =>
     apiRequestEnvelope<StudentAchievementItem[], StudentAchievementsMeta>("/students/me/achievements"),
