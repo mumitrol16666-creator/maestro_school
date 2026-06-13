@@ -30,6 +30,23 @@ async function crmGet<T>(path: string): Promise<T> {
   return body.data;
 }
 
+async function crmPost<T>(path: string, payload: Record<string, unknown>): Promise<T> {
+  const response = await fetch(`${crmBaseUrl()}${path}`, {
+    method: "POST",
+    headers: {
+      ...integrationHeaders(),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const body = (await response.json()) as CrmResponse<T>;
+  if (!response.ok || !body.success || !body.data) {
+    throw new Error(body.error || `CRM request failed (${response.status})`);
+  }
+  return body.data;
+}
+
 export async function fetchTeacherOfflineClasses(
   crmTeacherId: string,
   params?: { from?: string; to?: string },
@@ -64,5 +81,48 @@ export async function fetchStudentFreezeStatus(crmStudentId: string, date?: stri
   const qs = date ? `?date=${encodeURIComponent(date)}` : "";
   return crmGet<Record<string, unknown>>(
     `/api/integration/v1/students/${encodeURIComponent(crmStudentId)}/freeze-status${qs}`,
+  );
+}
+
+export type TeacherSubmitPayload = {
+  crmTeacherId: string;
+  topic?: string;
+  homeworkDraft?: string;
+  materials?: Array<{ type?: string; url?: string; title?: string }>;
+  teacherOutcomeHint?: "held" | "not_held" | "no_submission";
+  comment?: string;
+};
+
+export async function postTeacherStart(crmClassId: string, crmTeacherId: string) {
+  return crmPost<Record<string, unknown>>(
+    `/api/integration/v1/classes/${encodeURIComponent(crmClassId)}/teacher-start`,
+    { crmTeacherId },
+  );
+}
+
+export async function postTeacherFinish(
+  crmClassId: string,
+  payload: { crmTeacherId: string; comment?: string },
+) {
+  return crmPost<Record<string, unknown>>(
+    `/api/integration/v1/classes/${encodeURIComponent(crmClassId)}/teacher-finish`,
+    payload,
+  );
+}
+
+export async function postTeacherSubmit(crmClassId: string, payload: TeacherSubmitPayload) {
+  return crmPost<Record<string, unknown>>(
+    `/api/integration/v1/classes/${encodeURIComponent(crmClassId)}/teacher-submit`,
+    payload,
+  );
+}
+
+export async function postTeacherMarkNotHeld(
+  crmClassId: string,
+  payload: { crmTeacherId: string; comment?: string },
+) {
+  return crmPost<Record<string, unknown>>(
+    `/api/integration/v1/classes/${encodeURIComponent(crmClassId)}/teacher-mark-not-held`,
+    payload,
   );
 }
