@@ -1,13 +1,22 @@
-name: Deploy to VPS
+name: Deploy Learning Platform
 
 on:
   push:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      target:
+        description: Что деплоить (скрипт на VPS в maestro_crm)
+        required: true
+        default: learning-platform
+        type: choice
+        options:
+          - learning-platform
+          - all
 
 concurrency:
-  group: deploy-maestro-production
+  group: deploy-maestro-ecosystem
   cancel-in-progress: false
 
 jobs:
@@ -15,10 +24,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
@@ -44,49 +51,41 @@ jobs:
   deploy:
     needs: verify
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Check SSH secret
+        run: |
+          if [ -z "${{ secrets.SSH_PRIVATE_KEY }}" ]; then
+            echo "::error::Добавьте GitHub Secret SSH_PRIVATE_KEY."
+            exit 1
+          fi
 
-      - name: Copy project to server
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: 178.105.59.89
-          port: 14579
-          username: root
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "."
-          target: /var/www/maestro_school
-          overwrite: true
-          rm: true
+      - name: Resolve deploy target
+        id: target
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "value=${{ github.event.inputs.target }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=learning-platform" >> "$GITHUB_OUTPUT"
+          fi
 
-      - name: Deploy on server
+      - name: Deploy via unified VPS script
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: 178.105.59.89
           port: 14579
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          command_timeout: 40m
+          command_timeout: 45m
+          script_stop: true
           script: |
-            set -e
-            export DEPLOY_HOST="178.105.59.89"
-            export PUBLIC_DOMAIN="maestro-school.duckdns.org"
-            export JWT_SECRET="${{ secrets.JWT_SECRET }}"
-            export POSTGRES_PASSWORD="${{ secrets.POSTGRES_PASSWORD }}"
-            export CORS_ORIGIN="${{ secrets.CORS_ORIGIN }}"
-            export API_PUBLIC_URL="${{ secrets.API_PUBLIC_URL }}"
-            export ADMIN_EMAIL="${{ secrets.ADMIN_EMAIL }}"
-            export ADMIN_PASSWORD="${{ secrets.ADMIN_PASSWORD }}"
-            export ADMIN_FIRST_NAME="${{ secrets.ADMIN_FIRST_NAME }}"
-            export ADMIN_LAST_NAME="${{ secrets.ADMIN_LAST_NAME }}"
-            export VAPID_PUBLIC_KEY="${{ secrets.VAPID_PUBLIC_KEY }}"
-            export VAPID_PRIVATE_KEY="${{ secrets.VAPID_PRIVATE_KEY }}"
-            export VAPID_SUBJECT="${{ secrets.VAPID_SUBJECT }}"
-            chmod +x /var/www/maestro_school/deploy/deploy.sh
-            bash /var/www/maestro_school/deploy/deploy.sh
+            set -euo pipefail
+            cd /var/www/maestro_crm
+            git fetch origin main
+            git reset --hard origin/main
+            chmod +x deploy/deploy-maestro-all.sh
+            bash deploy/deploy-maestro-all.sh "${{ steps.target.outputs.value }}"
 
       - name: Health check
         uses: appleboy/ssh-action@v1.2.0
@@ -96,7 +95,5 @@ jobs:
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            sleep 5
             curl -fsS http://127.0.0.1:4000/health
-            curl -fsS -o /dev/null http://127.0.0.1:3000/
-            curl -fsS -o /dev/null https://maestro-school.duckdns.org/ || echo "Public HTTPS not ready yet (nginx/certbot pending)"
+            curl -fsS -o /dev/null https://maestro-school.duckdns.org/
