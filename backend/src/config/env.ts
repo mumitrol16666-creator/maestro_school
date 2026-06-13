@@ -11,6 +11,8 @@ const envSchema = z.object({
   VAPID_PUBLIC_KEY: z.string().optional(),
   VAPID_PRIVATE_KEY: z.string().optional(),
   VAPID_SUBJECT: z.string().default("mailto:admin@maestro.local"),
+  INTEGRATION_SERVICE_SECRET: z.string().min(16).optional(),
+  INTEGRATION_SSO_SECRET: z.string().min(16).optional(),
 });
 
 export const env = envSchema.parse(process.env);

@@ -236,6 +236,14 @@ model User {
   avatar       String?   @db.VarChar(512)
   roleId       String    @map("role_id") @db.Uuid
   isActive     Boolean   @default(true) @map("is_active")
+
+  // Integration: CRM user link
+  crmStudentId         String?   @unique @map("crm_student_id") @db.VarChar(64)
+  crmTeacherId         String?   @unique @map("crm_teacher_id") @db.VarChar(64)
+  phoneNormalized      String?   @map("phone_normalized") @db.VarChar(32)
+  externalLinkStatus   String?   @map("external_link_status") @db.VarChar(32)
+  linkedAt             DateTime? @map("linked_at") @db.Timestamptz(6)
+
   createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt    DateTime? @map("deleted_at") @db.Timestamptz(6)
@@ -269,6 +277,9 @@ model User {
   @@index([login])
   @@index([isActive])
   @@index([deletedAt])
+  @@index([phoneNormalized])
+  @@index([crmStudentId])
+  @@index([crmTeacherId])
   @@map("users")
 }
 
