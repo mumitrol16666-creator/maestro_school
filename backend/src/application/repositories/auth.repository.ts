@@ -62,22 +62,32 @@ export async function createStudentUser(params: {
   passwordHash: string;
   firstName: string;
   lastName: string;
+  crmStudentId?: string;
 }) {
   const studentRole = await prisma.role.findUnique({ where: { slug: "student" } });
   if (!studentRole) {
     throw new Error("Student role is not configured. Run the production seed.");
   }
 
+  const digits = params.phone.replace(/\D/g, "");
+
   return prisma.user.create({
     data: {
       login: params.login,
       email: params.email,
       phone: params.phone,
-      phoneNormalized: params.phone,
+      phoneNormalized: digits,
       passwordHash: params.passwordHash,
       firstName: params.firstName,
       lastName: params.lastName,
       roleId: studentRole.id,
+      ...(params.crmStudentId
+        ? {
+            crmStudentId: params.crmStudentId,
+            externalLinkStatus: "linked",
+            linkedAt: new Date(),
+          }
+        : {}),
     },
     include: userWithRoleInclude,
   });
