@@ -1,11 +1,11 @@
 "use client";
 
-import { BookOpen, Home, Menu, Newspaper, UserRound, Video, X } from "lucide-react";
+import { BookOpen, GraduationCap, Home, Menu, Newspaper, UserRound, Video, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
-import { isStudentRole, roleLabel, settingsPathForRole } from "@/lib/role-labels";
+import { isStaffRole, isStudentRole, roleLabel, settingsPathForRole } from "@/lib/role-labels";
 import { useAuth } from "./auth-provider";
 import { AdminPendingHomeworkBadge } from "./admin-pending-homework-badge";
 import { Brand } from "./brand";
@@ -14,6 +14,7 @@ import { UserMenu } from "./user-menu";
 const navigation = [
   { href: "/dashboard", label: "Главная", icon: Home },
   { href: "/courses", label: "Курсы", icon: BookOpen },
+  { href: "/school-lessons", label: "Уроки в школе", icon: GraduationCap, studentOnly: true },
   { href: "/online-lessons", label: "Онлайн-уроки", icon: Video },
   { href: "/board", label: "Доска Maestro", icon: Newspaper },
   { href: "/settings", label: "Профиль", icon: UserRound },
@@ -24,6 +25,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const { user } = useAuth();
   const student = isStudentRole(user?.role);
+  const staff = isStaffRole(user?.role);
   const points = user?.points ?? 0;
   const coins = user?.coins ?? 0;
   const { count: unreadNotifications } = useUnreadNotifications();
@@ -35,7 +37,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <button className="lg:hidden" onClick={() => setOpen(false)} aria-label="Закрыть меню"><X /></button>
       </div>
       <nav className="mt-12 space-y-1.5">
-        {navigation.map(({ href, label, icon: Icon }) => {
+        {navigation.filter((item) => !item.studentOnly || (!staff && student)).map(({ href, label, icon: Icon }) => {
           const active = pathname.startsWith(href);
           return (
             <Link

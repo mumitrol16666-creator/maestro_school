@@ -15,6 +15,7 @@ import type {
   StudentAchievementItem,
   StudentAchievementsMeta,
 } from "@/types/api";
+import type { StudentOfflineSummary } from "@/types/school-offline";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1";
 const TOKEN_KEY = "maestro_access_token";
@@ -174,4 +175,5 @@ export const api = {
       body: JSON.stringify(body),
     }),
   news: () => apiRequest<ApiNewsPost[]>("/news"),
+  studentOfflineSummary: () => apiRequest<StudentOfflineSummary>("/students/me/offline-summary"),
 };

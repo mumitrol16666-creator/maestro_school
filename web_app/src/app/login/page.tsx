@@ -8,6 +8,14 @@ import { AuthHeroPanel } from "@/components/auth-hero-panel";
 import { Brand } from "@/components/brand";
 import { useAuth } from "@/components/auth-provider";
 import { ApiError } from "@/lib/api-client";
+import { isStaffRole } from "@/lib/role-labels";
+
+function homePathForRole(role?: string | null) {
+  if (!role || role === "student") return "/dashboard";
+  if (role === "admin" || role === "owner") return "/admin";
+  if (isStaffRole(role)) return "/admin/offline-lessons";
+  return "/dashboard";
+}
 
 export default function LoginPage() {
   const router = useRouter();
@@ -19,7 +27,7 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!authLoading && user) router.replace(["admin", "owner"].includes(user.role) ? "/admin" : "/dashboard");
+    if (!authLoading && user) router.replace(homePathForRole(user.role));
   }, [authLoading, router, user]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -28,7 +36,7 @@ export default function LoginPage() {
     setError(null);
     try {
       const loggedInUser = await login(loginValue, password);
-      router.replace(["admin", "owner"].includes(loggedInUser.role) ? "/admin" : "/dashboard");
+      router.replace(homePathForRole(loggedInUser.role));
     } catch (reason) {
       setError(reason instanceof ApiError ? reason.message : "Не удалось войти в кабинет");
     } finally {

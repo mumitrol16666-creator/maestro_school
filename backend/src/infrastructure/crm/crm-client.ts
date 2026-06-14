@@ -127,6 +127,16 @@ export async function postTeacherMarkNotHeld(
   );
 }
 
+export async function postTeacherAttendance(
+  crmClassId: string,
+  payload: { crmTeacherId: string; studentId: string; attended: boolean },
+) {
+  return crmPost<Record<string, unknown>>(
+    `/api/integration/v1/classes/${encodeURIComponent(crmClassId)}/teacher-attendance`,
+    payload,
+  );
+}
+
 export async function syncStudentFromApp(payload: {
   appUserId: string;
   phone: string;

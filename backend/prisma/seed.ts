@@ -33,6 +33,8 @@ const PERMISSIONS = [
   { code: "online_lessons.manage", description: "Manage online lesson requests" },
   { code: "coins.read", description: "View Maestro Coins balance" },
   { code: "coins.award", description: "Award Maestro Coins manually" },
+  { code: "offline_school.read", description: "View offline school lessons from CRM" },
+  { code: "offline_school.write", description: "Manage offline school lessons via CRM proxy" },
 ] as const;
 
 const ROLE_PERMISSION_MAP: Record<string, string[]> = {
@@ -41,23 +43,28 @@ const ROLE_PERMISSION_MAP: Record<string, string[]> = {
     "directions.read", "courses.read", "lessons.read", "progress.read",
     "catalog.manage", "users.manage", "news.manage", "homework.review", "news.read",
     "online_lessons.read", "online_lessons.manage", "coins.read", "coins.award",
+    "offline_school.read", "offline_school.write",
   ],
   owner: [
     "directions.read", "courses.read", "lessons.read", "catalog.manage",
     "users.manage", "news.manage", "homework.review", "news.read",
     "online_lessons.read", "online_lessons.manage", "coins.read", "coins.award",
+    "offline_school.read", "offline_school.write",
   ],
   branch_manager: [
     "directions.read", "courses.read", "lessons.read", "users.manage", "homework.review",
     "online_lessons.read", "online_lessons.manage", "coins.read", "coins.award",
+    "offline_school.read", "offline_school.write",
   ],
   teacher: [
     "directions.read", "courses.read", "lessons.read", "homework.review", "progress.read",
     "online_lessons.read", "online_lessons.manage", "coins.read", "coins.award",
+    "offline_school.read", "offline_school.write",
   ],
   curator: [
     "directions.read", "courses.read", "lessons.read", "progress.read", "homework.review",
     "online_lessons.read", "online_lessons.manage", "coins.read", "coins.award",
+    "offline_school.read", "offline_school.write",
   ],
   student: [
     "directions.read", "courses.read", "lessons.read", "progress.read",

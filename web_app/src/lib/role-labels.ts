@@ -26,6 +26,8 @@ const PERMISSION_LABELS: Record<string, string> = {
   "online_lessons.manage": "Управление онлайн-уроками",
   "coins.read": "Просмотр Maestro Coins",
   "coins.award": "Начисление Maestro Coins",
+  "offline_school.read": "Офлайн-уроки (просмотр)",
+  "offline_school.write": "Офлайн-уроки (действия)",
 };
 
 export const ASSIGNABLE_ROLES = [

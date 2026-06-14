@@ -7,14 +7,17 @@ export function useApiResource<T>(loader: () => Promise<T>, dependencies: unknow
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setErrorCode(null);
     try {
       setData(await loader());
     } catch (reason) {
       setError(reason instanceof ApiError ? reason.message : "Не удалось загрузить данные");
+      setErrorCode(reason instanceof ApiError ? reason.code : null);
     } finally {
       setLoading(false);
     }
@@ -25,5 +28,5 @@ export function useApiResource<T>(loader: () => Promise<T>, dependencies: unknow
     void reload();
   }, [reload]);
 
-  return { data, loading, error, reload, setData };
+  return { data, loading, error, errorCode, reload, setData };
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, ClipboardCheck, FolderOpen, LayoutDashboard, Library, LogOut, Menu, MessageCircleQuestion, Newspaper, Settings, UserCog, Users, Video, X } from "lucide-react";
+import { BookOpen, ClipboardCheck, FolderOpen, GraduationCap, LayoutDashboard, Library, LogOut, Menu, MessageCircleQuestion, Newspaper, Settings, UserCog, Users, Video, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -26,6 +26,7 @@ const accessNavigation = [
 
 const teachingNavigation = [
   { href: "/admin/students", label: "Ученики", icon: Users },
+  { href: "/admin/offline-lessons", label: "Офлайн-уроки", icon: GraduationCap },
   { href: "/admin/online-lessons", label: "Онлайн-уроки", icon: Video },
   { href: "/admin/homework-review", label: "Проверка ДЗ", icon: ClipboardCheck },
   { href: "/admin/lesson-questions", label: "Вопросы", icon: MessageCircleQuestion },
@@ -40,9 +41,14 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const { count: pendingOnlineLessonsCount, reload: reloadPendingOnlineLessonsCount } = usePendingOnlineLessonsCount();
   const isContentAdmin = user?.role === "admin" || user?.role === "owner";
   const navigation = [
-    ...(isContentAdmin ? cmsNavigation : [{ href: "/admin/online-lessons", label: "Онлайн-уроки", icon: Video }]),
+    ...(isContentAdmin ? cmsNavigation : [
+      { href: "/admin/offline-lessons", label: "Офлайн-уроки", icon: GraduationCap },
+      { href: "/admin/online-lessons", label: "Онлайн-уроки", icon: Video },
+    ]),
     ...(isContentAdmin ? accessNavigation : []),
-    ...teachingNavigation.filter((item) => isContentAdmin || item.href === "/admin/online-lessons"),
+    ...teachingNavigation.filter((item) =>
+      isContentAdmin || ["/admin/online-lessons", "/admin/offline-lessons"].includes(item.href),
+    ),
   ];
 
   useEffect(() => {
