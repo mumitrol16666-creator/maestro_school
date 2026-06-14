@@ -1,10 +1,10 @@
 import type { FastifyInstance } from "fastify";
-import jwt from "jsonwebtoken";
 import { z } from "zod";
 import { applyUserLink, getUserLinkStatus } from "../../application/repositories/user-link.repository.js";
 import { findUserWithRoleById } from "../../application/repositories/auth.repository.js";
-import { BadRequestError, ConflictError, UnauthorizedError } from "../../domain/errors.js";
+import { BadRequestError, ConflictError } from "../../domain/errors.js";
 import { requireIntegrationAuth } from "../guards/integration.guards.js";
+import { exchangeSsoBridgeToken } from "../../application/services/sso-bridge.service.js";
 
 const linkSchema = z.object({
   phone: z.string().optional(),
@@ -62,33 +62,7 @@ export async function integrationRoutes(app: FastifyInstance) {
 
   app.post("/auth/sso-exchange", async (request, reply) => {
     const { token } = ssoExchangeSchema.parse(request.body);
-    const secret = process.env.INTEGRATION_SSO_SECRET || process.env.JWT_SECRET;
-    if (!secret) {
-      throw new BadRequestError("SSO secret is not configured");
-    }
-
-    let payload: {
-      purpose?: string;
-      crmStudentId?: string;
-      appUserId?: string;
-      role?: string;
-    };
-
-    try {
-      payload = jwt.verify(token, secret) as typeof payload;
-    } catch {
-      throw new UnauthorizedError("Invalid or expired SSO token");
-    }
-
-    if (payload.purpose !== "sso-bridge" || !payload.appUserId) {
-      throw new UnauthorizedError("Invalid SSO token payload");
-    }
-
-    const user = await findUserWithRoleById(payload.appUserId);
-    if (!user) {
-      throw new UnauthorizedError("Linked App user not found");
-    }
-
+    const { user, crmStudentId } = await exchangeSsoBridgeToken(token);
     const sessionToken = await reply.jwtSign({ sub: user.id, role: user.role.slug });
 
     return {
@@ -96,7 +70,7 @@ export async function integrationRoutes(app: FastifyInstance) {
       data: {
         token: sessionToken,
         user: integrationProfile(user),
-        crmStudentId: payload.crmStudentId,
+        crmStudentId,
       },
     };
   });

@@ -2,7 +2,7 @@
 
 import { ArrowRight, Eye, EyeOff, LoaderCircle } from "lucide-react";
 import Link from "next/link";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AuthHeroPanel } from "@/components/auth-hero-panel";
 import { Brand } from "@/components/brand";
@@ -17,18 +17,60 @@ function homePathForRole(role?: string | null) {
   return "/dashboard";
 }
 
+function safeNextPath(next: string | null, role?: string | null) {
+  if (!next || !next.startsWith("/") || next.startsWith("//")) {
+    return homePathForRole(role);
+  }
+  return next;
+}
+
 export default function LoginPage() {
   const router = useRouter();
-  const { login, user, loading: authLoading } = useAuth();
+  const { login, loginWithSso, user, loading: authLoading } = useAuth();
   const [loginValue, setLoginValue] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [ssoPending, setSsoPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const ssoStartedRef = useRef(false);
 
   useEffect(() => {
     if (!authLoading && user) router.replace(homePathForRole(user.role));
   }, [authLoading, router, user]);
+
+  useEffect(() => {
+    if (authLoading || user || ssoStartedRef.current || typeof window === "undefined") return;
+
+    const params = new URLSearchParams(window.location.search);
+    const ssoToken = params.get("ssoToken");
+    if (!ssoToken) return;
+
+    ssoStartedRef.current = true;
+    let cancelled = false;
+
+    async function completeSso() {
+      setSsoPending(true);
+      setError(null);
+      try {
+        const loggedInUser = await loginWithSso(ssoToken!);
+        if (cancelled) return;
+        const target = safeNextPath(params.get("next"), loggedInUser.role);
+        router.replace(target);
+      } catch (reason) {
+        if (!cancelled) {
+          setError(reason instanceof ApiError ? reason.message : "Не удалось войти по ссылке из CRM");
+        }
+      } finally {
+        if (!cancelled) setSsoPending(false);
+      }
+    }
+
+    void completeSso();
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, loginWithSso, router, user]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -43,6 +85,8 @@ export default function LoginPage() {
       setSubmitting(false);
     }
   }
+
+  const busy = submitting || ssoPending;
 
   return (
     <main className="grid min-h-screen bg-paper lg:grid-cols-[1.05fr_0.95fr]">
@@ -60,7 +104,9 @@ export default function LoginPage() {
           <p className="text-xs font-bold uppercase tracking-[0.22em] text-gold">Личный кабинет</p>
           <h2 className="font-display mt-3 text-5xl">Вход в личный кабинет</h2>
           <p className="mt-4 text-sm leading-6 text-stone-500">
-            Продолжайте обучение, смотрите задания, материалы и прогресс.
+            {ssoPending
+              ? "Входим в кабинет по ссылке из CRM..."
+              : "Продолжайте обучение, смотрите задания, материалы и прогресс."}
           </p>
 
           <form onSubmit={handleSubmit} className="mt-10 space-y-5">
@@ -101,10 +147,10 @@ export default function LoginPage() {
             </label>
             {error && <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</p>}
             <button
-              disabled={submitting}
+              disabled={busy}
               className="flex w-full items-center justify-center gap-2 rounded-2xl bg-ink px-5 py-4 text-sm font-bold text-white transition hover:bg-stone-800 disabled:opacity-60"
             >
-              {submitting ? (
+              {busy ? (
                 <>
                   <LoaderCircle size={17} className="animate-spin" /> Входим...
                 </>

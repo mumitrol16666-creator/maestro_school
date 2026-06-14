@@ -10,6 +10,7 @@ interface AuthContextValue {
   user: ApiAuthUser | null;
   loading: boolean;
   login: (login: string, password: string) => Promise<ApiAuthUser>;
+  loginWithSso: (ssoToken: string) => Promise<ApiAuthUser>;
   register: (input: RegisterInput) => Promise<ApiAuthUser>;
   refreshUser: () => Promise<ApiAuthUser | null>;
   logout: () => void;
@@ -44,6 +45,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loading,
     login: async (login, password) => {
       const session = await api.login(login, password);
+      storeSession(session.token, session.user);
+      const fresh = await api.me();
+      const merged = { ...session.user, ...fresh };
+      storeSession(session.token, merged);
+      setUser(merged);
+      return merged;
+    },
+    loginWithSso: async (ssoToken) => {
+      const session = await api.ssoExchange(ssoToken);
       storeSession(session.token, session.user);
       const fresh = await api.me();
       const merged = { ...session.user, ...fresh };

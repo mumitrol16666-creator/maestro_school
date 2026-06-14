@@ -18,6 +18,14 @@ import { getStudentCoins } from "../../application/services/coins.service.js";
 import { getStudentPointsBalance } from "../../application/services/points.service.js";
 import { authenticate } from "../guards/auth.guards.js";
 import { syncNewStudentToCrm } from "../../application/services/crm-sync.service.js";
+import {
+  buildAuthUserProfile,
+  exchangeSsoBridgeToken,
+} from "../../application/services/sso-bridge.service.js";
+
+const ssoExchangeSchema = z.object({
+  token: z.string().min(10),
+});
 
 const loginSchema = z.object({
   login: z.string().trim().min(1).max(255),
@@ -74,6 +82,19 @@ async function studentStats(userId: string, roleSlug: string) {
 }
 
 export async function authRoutes(app: FastifyInstance) {
+  app.post("/auth/sso-exchange", { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } }, async (request, reply) => {
+    const { token } = ssoExchangeSchema.parse(request.body);
+    const { user, stats } = await exchangeSsoBridgeToken(token);
+    const sessionToken = await reply.jwtSign({ sub: user.id, role: user.role.slug });
+
+    return {
+      data: {
+        token: sessionToken,
+        user: buildAuthUserProfile(user, stats),
+      },
+    };
+  });
+
   app.post("/auth/login", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (request, reply) => {
     const body = loginSchema.parse(request.body);
     const user = await findUserWithRoleByLoginOrEmail(body.login);

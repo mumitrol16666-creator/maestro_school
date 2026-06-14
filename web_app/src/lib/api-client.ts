@@ -112,6 +112,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ login, password }),
     }),
+  ssoExchange: (token: string) =>
+    apiRequest<LoginResponse>("/auth/sso-exchange", {
+      method: "POST",
+      body: JSON.stringify({ token }),
+    }),
   register: (body: RegisterInput) =>
     apiRequest<LoginResponse>("/auth/register", {
       method: "POST",
