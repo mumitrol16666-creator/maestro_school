@@ -16,6 +16,32 @@ export interface AdminUserSummary {
 export interface AdminUserDetail extends AdminUserSummary {
   roleDescription: string | null;
   permissions: string[];
+  crmStudentId?: string | null;
+  crmTeacherId?: string | null;
+  externalLinkStatus?: string | null;
+  linkedAt?: string | null;
+}
+
+export interface CrmLinkStatus {
+  appUserId: string;
+  role: string;
+  crmStudentId: string | null;
+  crmTeacherId: string | null;
+  externalLinkStatus: string | null;
+  linkedAt: string | null;
+  local: Record<string, unknown>;
+  crmLookup: CrmLookupResult | null;
+  crmLinkStatus: Record<string, unknown> | null;
+}
+
+export interface CrmLookupResult {
+  found: boolean;
+  crmUserId?: string;
+  role?: string;
+  name?: string;
+  phone?: string;
+  appUserId?: string | null;
+  externalLinkStatus?: string | null;
 }
 
 export interface AssignableRole {
@@ -42,4 +68,18 @@ export const usersApi = {
       method: "PATCH",
       body: JSON.stringify({ role }),
     }),
+  crmLink: (id: string) => apiRequest<CrmLinkStatus>(`/admin/users/${id}/crm-link`),
+  linkToCrm: (id: string, crmUserId?: string) =>
+    apiRequest<{
+      status: string;
+      crmStudentId: string | null;
+      crmTeacherId: string | null;
+      externalLinkStatus: string | null;
+      linkedAt: string | null;
+    }>(`/admin/users/${id}/crm-link`, {
+      method: "POST",
+      body: JSON.stringify(crmUserId ? { crmUserId } : {}),
+    }),
+  crmLookup: (phone: string) =>
+    apiRequest<CrmLookupResult>(`/admin/crm-lookup?phone=${encodeURIComponent(phone)}`),
 };

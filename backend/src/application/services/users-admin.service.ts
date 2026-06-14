@@ -96,6 +96,10 @@ export async function getAdminUser(userId: string) {
       phone: true,
       isActive: true,
       createdAt: true,
+      crmStudentId: true,
+      crmTeacherId: true,
+      externalLinkStatus: true,
+      linkedAt: true,
       role: {
         select: {
           slug: true,
@@ -123,6 +127,10 @@ export async function getAdminUser(userId: string) {
     roleName: user.role.name,
     roleDescription: user.role.description,
     permissions: user.role.rolePermissions.map((item) => item.permission.code),
+    crmStudentId: user.crmStudentId,
+    crmTeacherId: user.crmTeacherId,
+    externalLinkStatus: user.externalLinkStatus,
+    linkedAt: user.linkedAt?.toISOString() ?? null,
   };
 }
 

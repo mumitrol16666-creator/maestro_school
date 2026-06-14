@@ -151,3 +151,44 @@ export async function syncStudentFromApp(payload: {
     created: boolean;
   }>("/api/integration/v1/users/sync-from-app", payload);
 }
+
+export async function postCrmUserLink(payload: {
+  phone: string;
+  phoneNormalized?: string;
+  crmStudentId?: string;
+  appUserId: string;
+  initiatedBy?: string;
+}) {
+  return crmPost<{
+    status: string;
+    crmStudentId: string;
+    appUserId: string;
+    crm?: Record<string, unknown>;
+    app?: Record<string, unknown>;
+  }>("/api/integration/v1/users/link", {
+    ...payload,
+    initiatedBy: payload.initiatedBy ?? "learning-platform",
+  });
+}
+
+export async function fetchCrmProfileByPhone(phone: string) {
+  const digits = phone.replace(/\D/g, "");
+  return crmGet<{
+    found: boolean;
+    phoneNormalized?: string;
+    crmUserId?: string;
+    role?: string;
+    name?: string;
+    phone?: string;
+    appUserId?: string | null;
+    externalLinkStatus?: string | null;
+    linkedAt?: string | null;
+  }>(`/api/integration/v1/users/crm-lookup/${encodeURIComponent(digits || phone)}`);
+}
+
+export async function fetchCrmLinkStatusByPhone(phone: string) {
+  const digits = phone.replace(/\D/g, "");
+  return crmGet<Record<string, unknown>>(
+    `/api/integration/v1/users/link-status/${encodeURIComponent(digits || phone)}`,
+  );
+}

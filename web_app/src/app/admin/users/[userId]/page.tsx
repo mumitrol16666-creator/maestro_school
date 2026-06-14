@@ -12,6 +12,7 @@ import { useApiResource } from "@/hooks/use-api-resource";
 import { isContentAdminRole, permissionLabel, roleLabel } from "@/lib/role-labels";
 import { formatPhoneDisplay } from "@/lib/phone";
 import { usersApi } from "@/lib/users-api";
+import { CrmLinkPanel } from "@/components/crm-link-panel";
 
 export default function AdminUserDetailPage() {
   const params = useParams<{ userId: string }>();
@@ -63,7 +64,8 @@ export default function AdminUserDetailPage() {
       </Link>
 
       <div className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
-        <section className="rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
+        <div className="space-y-6">
+          <section className="rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="font-display text-4xl">{user.firstName} {user.lastName}</h1>
             <RoleBadge role={user.role} />
@@ -79,7 +81,17 @@ export default function AdminUserDetailPage() {
               Открыть карточку ученика →
             </Link>
           ) : null}
-        </section>
+          </section>
+
+          {(user.role === "student" || user.role === "teacher") ? (
+            <CrmLinkPanel
+              userId={userId}
+              phone={user.phone}
+              role={user.role}
+              onLinked={resource.reload}
+            />
+          ) : null}
+        </div>
 
         <section className="rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
           <div className="flex items-center gap-3">

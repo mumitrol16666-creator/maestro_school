@@ -6,6 +6,11 @@ import {
   listAssignableRoles,
   updateAdminUserRole,
 } from "../../application/services/users-admin.service.js";
+import {
+  getAdminUserCrmLink,
+  linkAdminUserToCrm,
+  lookupCrmByPhone,
+} from "../../application/services/user-link-admin.service.js";
 import { authenticate, requirePermission } from "../guards/auth.guards.js";
 
 export async function usersAdminRoutes(app: FastifyInstance) {
@@ -55,5 +60,23 @@ export async function usersAdminRoutes(app: FastifyInstance) {
         roleSlug: body.role,
       }),
     };
+  });
+
+  app.get("/admin/users/:id/crm-link", { preHandler: guards }, async (request) => {
+    const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+    return { data: await getAdminUserCrmLink(id) };
+  });
+
+  app.post("/admin/users/:id/crm-link", { preHandler: guards }, async (request) => {
+    const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+    const body = z.object({
+      crmUserId: z.string().min(1).optional(),
+    }).parse(request.body ?? {});
+    return { data: await linkAdminUserToCrm(id, body.crmUserId) };
+  });
+
+  app.get("/admin/crm-lookup", { preHandler: guards }, async (request) => {
+    const query = z.object({ phone: z.string().min(5) }).parse(request.query);
+    return { data: await lookupCrmByPhone(query.phone) };
   });
 }
