@@ -5,6 +5,7 @@ import { findUserWithRoleById } from "../../application/repositories/auth.reposi
 import { BadRequestError, ConflictError } from "../../domain/errors.js";
 import { requireIntegrationAuth } from "../guards/integration.guards.js";
 import { exchangeSsoBridgeToken } from "../../application/services/sso-bridge.service.js";
+import { provisionTeacherFromCrm } from "../../application/services/teacher-provision.service.js";
 
 const linkSchema = z.object({
   phone: z.string().optional(),
@@ -18,6 +19,16 @@ const linkSchema = z.object({
 
 const ssoExchangeSchema = z.object({
   token: z.string().min(10),
+});
+
+const provisionTeacherSchema = z.object({
+  crmTeacherId: z.string().min(1).max(64),
+  phone: z.string().min(10).max(32),
+  firstName: z.string().trim().min(1).max(128),
+  lastName: z.string().trim().min(1).max(128),
+  email: z.string().trim().email().optional().nullable(),
+  password: z.string().min(8).max(72).optional().nullable(),
+  bio: z.string().max(5000).optional().nullable(),
 });
 
 function integrationProfile(
@@ -58,6 +69,12 @@ export async function integrationRoutes(app: FastifyInstance) {
     const { phone } = request.params as { phone: string };
     const result = await getUserLinkStatus(phone);
     return { success: true, data: result.data };
+  });
+
+  app.post("/users/provision-teacher", async (request, reply) => {
+    const body = provisionTeacherSchema.parse(request.body);
+    const result = await provisionTeacherFromCrm(body);
+    return reply.status(result.created ? 201 : 200).send({ success: true, data: result });
   });
 
   app.post("/auth/sso-exchange", async (request, reply) => {

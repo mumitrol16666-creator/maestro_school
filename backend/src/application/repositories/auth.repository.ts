@@ -82,3 +82,49 @@ export async function createStudentUser(params: {
     include: userWithRoleInclude,
   });
 }
+
+export async function createTeacherUser(params: {
+  login: string;
+  email: string;
+  phone: string;
+  passwordHash: string;
+  firstName: string;
+  lastName: string;
+  crmTeacherId: string;
+  bio?: string | null;
+}) {
+  const teacherRole = await prisma.role.findUnique({ where: { slug: "teacher" } });
+  if (!teacherRole) {
+    throw new Error("Teacher role is not configured. Run the production seed.");
+  }
+
+  const digits = params.phone.replace(/\D/g, "");
+
+  return prisma.$transaction(async (tx) => {
+    const user = await tx.user.create({
+      data: {
+        login: params.login,
+        email: params.email,
+        phone: params.phone,
+        phoneNormalized: digits,
+        passwordHash: params.passwordHash,
+        firstName: params.firstName,
+        lastName: params.lastName,
+        roleId: teacherRole.id,
+        crmTeacherId: params.crmTeacherId,
+        externalLinkStatus: "linked",
+        linkedAt: new Date(),
+      },
+      include: userWithRoleInclude,
+    });
+
+    await tx.teacher.create({
+      data: {
+        userId: user.id,
+        bio: params.bio ?? null,
+      },
+    });
+
+    return user;
+  });
+}
