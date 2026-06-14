@@ -124,6 +124,22 @@ export async function applyUserLink(params: {
   };
 }
 
+export async function linkUserToCrm(
+  userId: string,
+  crmStudentId: string,
+  phoneNormalized: string,
+) {
+  return prisma.user.update({
+    where: { id: userId },
+    data: {
+      crmStudentId,
+      phoneNormalized,
+      externalLinkStatus: "linked",
+      linkedAt: new Date(),
+    },
+  });
+}
+
 export async function getUserLinkStatus(phoneNormalized: string) {
   const digits = normalizePhoneDigits(phoneNormalized);
   const user = await findUserByPhoneNormalized(digits);

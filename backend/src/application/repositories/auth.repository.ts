@@ -73,6 +73,7 @@ export async function createStudentUser(params: {
       login: params.login,
       email: params.email,
       phone: params.phone,
+      phoneNormalized: params.phone,
       passwordHash: params.passwordHash,
       firstName: params.firstName,
       lastName: params.lastName,

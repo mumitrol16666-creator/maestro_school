@@ -17,6 +17,7 @@ import { isValidPhone, normalizePhoneDigits } from "../../lib/phone.js";
 import { getStudentCoins } from "../../application/services/coins.service.js";
 import { getStudentPointsBalance } from "../../application/services/points.service.js";
 import { authenticate } from "../guards/auth.guards.js";
+import { syncNewStudentToCrm } from "../../application/services/crm-sync.service.js";
 
 const loginSchema = z.object({
   login: z.string().trim().min(1).max(255),
@@ -133,6 +134,14 @@ export async function authRoutes(app: FastifyInstance) {
       throw error;
     }
     const token = await reply.jwtSign({ sub: user.id, role: user.role.slug });
+
+    await syncNewStudentToCrm({
+      appUserId: user.id,
+      phone: user.phone,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+    });
 
     return reply.status(201).send({
       data: {

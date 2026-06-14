@@ -126,3 +126,18 @@ export async function postTeacherMarkNotHeld(
     payload,
   );
 }
+
+export async function syncStudentFromApp(payload: {
+  appUserId: string;
+  phone: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+}) {
+  return crmPost<{
+    status: string;
+    crmStudentId: string;
+    appUserId: string;
+    created: boolean;
+  }>("/api/integration/v1/users/sync-from-app", payload);
+}
