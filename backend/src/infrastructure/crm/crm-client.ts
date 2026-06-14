@@ -156,12 +156,15 @@ export async function postCrmUserLink(payload: {
   phone: string;
   phoneNormalized?: string;
   crmStudentId?: string;
+  crmTeacherId?: string;
+  crmRole?: string;
   appUserId: string;
   initiatedBy?: string;
 }) {
   return crmPost<{
     status: string;
-    crmStudentId: string;
+    crmStudentId?: string;
+    crmTeacherId?: string;
     appUserId: string;
     crm?: Record<string, unknown>;
     app?: Record<string, unknown>;

@@ -2,7 +2,7 @@
 
 import { ArrowRight, Search, UserCog } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { PageControls } from "@/components/admin-ui";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
 import { PageHeader } from "@/components/page-header";
@@ -16,6 +16,11 @@ export default function AdminUsersPage() {
   const [search, setSearch] = useState("");
   const [role, setRole] = useState("");
   const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    const initialRole = new URLSearchParams(window.location.search).get("role");
+    if (initialRole) setRole(initialRole);
+  }, []);
 
   const resource = useApiResource(
     () => usersApi.list({ search: search || undefined, role: role || undefined, page, limit: 20 }),

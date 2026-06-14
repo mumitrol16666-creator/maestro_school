@@ -71,6 +71,15 @@ export function CrmLinkPanel({
   }
 
   async function linkAccount() {
+    if (role === "teacher" && lookup?.role === "student") {
+      setError("В CRM по этому телефону найден ученик, а не преподаватель. Проверьте телефон или карточку в CRM.");
+      return;
+    }
+    if (role === "student" && lookup?.role === "teacher") {
+      setError("В CRM по этому телефону найден преподаватель, а не ученик. Проверьте телефон или карточку в CRM.");
+      return;
+    }
+
     setLinking(true);
     setError(null);
     setMessage(null);

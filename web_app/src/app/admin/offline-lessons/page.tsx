@@ -4,7 +4,9 @@ import { ArrowRight, CalendarDays, GraduationCap } from "lucide-react";
 import Link from "next/link";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
 import { PageHeader } from "@/components/page-header";
+import { useAuth } from "@/components/auth-provider";
 import { useApiResource } from "@/hooks/use-api-resource";
+import { isContentAdminRole } from "@/lib/role-labels";
 import { teacherOfflineApi } from "@/lib/teacher-offline-api";
 
 const statusLabels: Record<string, string> = {
@@ -33,11 +35,14 @@ function formatLessonDate(dateStr: string) {
 }
 
 export default function AdminOfflineLessonsPage() {
+  const { user } = useAuth();
   const resource = useApiResource(() => teacherOfflineApi.agenda(), []);
 
   if (resource.loading) return <LoadingState label="Загружаем расписание школы" />;
 
   if (resource.errorCode === "CRM_NOT_LINKED") {
+    const isAdmin = isContentAdminRole(user?.role);
+
     return (
       <>
         <PageHeader
@@ -47,7 +52,21 @@ export default function AdminOfflineLessonsPage() {
         />
         <EmptyState
           title="CRM-профиль не подключён"
-          description="Аккаунт преподавателя не связан с CRM. Попросите администратора привязать crmTeacherId к вашему пользователю."
+          description={
+            isAdmin
+              ? "Этот раздел показывает расписание конкретного преподавателя из CRM. Аккаунт администратора CMS (admin@…) не привязан к карточке преподавателя. Откройте пользователя с ролью «Преподаватель», в блоке «Связь с CRM» привяжите его по телефону — затем войдите под этим преподавателем или откройте платформу из CRM."
+              : "Ваш аккаунт не связан с преподавателем в CRM. Попросите администратора: «Пользователи» → ваш профиль → «Связь с CRM» → привязка по телефону. Телефон в LP и CRM должен совпадать."
+          }
+          action={
+            isAdmin ? (
+              <Link
+                href="/admin/users?role=teacher"
+                className="inline-flex items-center gap-2 rounded-full bg-ink px-5 py-3 text-sm font-bold text-white"
+              >
+                Открыть преподавателей <ArrowRight size={15} />
+              </Link>
+            ) : undefined
+          }
         />
       </>
     );

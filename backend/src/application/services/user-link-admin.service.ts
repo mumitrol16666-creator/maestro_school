@@ -65,20 +65,35 @@ export async function linkAdminUserToCrm(userId: string, crmUserId?: string) {
   }
 
   let targetCrmId = crmUserId;
+  let crmRole: string | undefined;
+
+  const lookup = await fetchCrmProfileByPhone(user.phone);
   if (!targetCrmId) {
-    const lookup = await fetchCrmProfileByPhone(user.phone);
     if (!lookup.found || !lookup.crmUserId) {
       throw new BadRequestError("В CRM не найден ученик/преподаватель с этим телефоном");
     }
     targetCrmId = lookup.crmUserId;
+    crmRole = lookup.role;
+  } else if (lookup.found && lookup.crmUserId === targetCrmId) {
+    crmRole = lookup.role;
   }
+
+  if (user.role.slug === "teacher" && crmRole === "student") {
+    throw new BadRequestError("Нельзя привязать преподавателя платформы к карточке ученика в CRM");
+  }
+  if (user.role.slug === "student" && crmRole === "teacher") {
+    throw new BadRequestError("Нельзя привязать ученика платформы к карточке преподавателя в CRM");
+  }
+
+  const isTeacherLink = crmRole === "teacher" || (!crmRole && user.role.slug === "teacher");
 
   const result = await postCrmUserLink({
     phone: user.phone,
     phoneNormalized: digits,
-    crmStudentId: targetCrmId,
+    ...(isTeacherLink ? { crmTeacherId: targetCrmId } : { crmStudentId: targetCrmId }),
     appUserId: user.id,
     initiatedBy: "learning-platform",
+    crmRole,
   });
 
   const updated = await prisma.user.findFirst({
