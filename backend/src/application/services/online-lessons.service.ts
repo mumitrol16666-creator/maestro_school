@@ -9,6 +9,7 @@ import { addMaestroCoins } from "./coins.service.js";
 import { createUserNotification } from "./notification.service.js";
 import { awardManualPoints } from "./points.service.js";
 import { sendPushToUser } from "./push-notification.service.js";
+import { postOnlineLessonBooking } from "../../infrastructure/crm/crm-client.js";
 
 const requestSelect = {
   id: true,
@@ -70,6 +71,7 @@ function assertCoinsReason(coins: number, reason?: string | null) {
 
 export async function createOnlineLessonRequest(params: {
   studentId: string;
+  requestType?: "trial" | "online_lesson";
   directionId?: string | null;
   directionTitle: string;
   level: string;
@@ -93,7 +95,7 @@ export async function createOnlineLessonRequest(params: {
   if (!params.level.trim()) throw new BadRequestError("Укажите уровень подготовки");
   if (!params.preferredTime.trim()) throw new BadRequestError("Укажите удобное время");
 
-  return prisma.onlineLessonRequest.create({
+  const request = await prisma.onlineLessonRequest.create({
     data: {
       studentId: params.studentId,
       directionId,
@@ -105,6 +107,30 @@ export async function createOnlineLessonRequest(params: {
     },
     select: requestSelect,
   });
+
+  try {
+    await postOnlineLessonBooking({
+      externalSourceId: request.id,
+      requestType: params.requestType,
+      name: request.student.firstName,
+      lastName: request.student.lastName,
+      phone: request.student.phone,
+      direction: request.directionTitle,
+      level: request.level,
+      preferredTime: request.preferredTime,
+      comment: request.comment ?? undefined,
+    });
+  } catch (error) {
+    await prisma.onlineLessonRequest.delete({ where: { id: request.id } }).catch(() => undefined);
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[online-lessons] Failed to create CRM booking:", message);
+    throw new BadRequestError(
+      "Заявка временно не отправлена администратору. Попробуйте ещё раз.",
+      "CRM_BOOKING_FAILED",
+    );
+  }
+
+  return request;
 }
 
 export async function listStudentOnlineLessonRequests(studentId: string) {

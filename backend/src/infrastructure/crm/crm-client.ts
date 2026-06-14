@@ -84,6 +84,24 @@ export async function fetchStudentFreezeStatus(crmStudentId: string, date?: stri
   );
 }
 
+export async function postOnlineLessonBooking(payload: {
+  externalSourceId: string;
+  requestType?: "trial" | "online_lesson";
+  name: string;
+  lastName: string;
+  phone: string;
+  direction: string;
+  level: string;
+  preferredTime: string;
+  comment?: string;
+}) {
+  return crmPost<{
+    crmBookingId: string;
+    externalSourceId: string;
+    status: string;
+  }>("/api/integration/v1/bookings/online-lesson", payload);
+}
+
 export type TeacherSubmitPayload = {
   crmTeacherId: string;
   topic?: string;

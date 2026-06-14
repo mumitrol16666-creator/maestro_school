@@ -10,7 +10,11 @@ export type SchoolOfflineLesson = {
   teacherName: string | null;
   roomName: string | null;
   topic: string | null;
+  lessonGoals: string | null;
+  lessonSummary: string | null;
   homework: string | null;
+  nextLessonFocus: string | null;
+  materials: Array<{ type?: string; url?: string; title?: string }>;
   attended: boolean | null;
   isPast?: boolean;
 };
@@ -18,10 +22,17 @@ export type SchoolOfflineLesson = {
 export type SchoolOfflineMembership = {
   crmMembershipId: string;
   type: string;
+  planName: string | null;
+  directionName: string | null;
   groupName: string;
+  teacherName: string | null;
+  lessonFormat: string;
   classesRemaining: number;
   totalClasses: number;
+  startDate: string;
   endDate: string;
+  totalPriceKzt: number;
+  paidAmountKzt: number;
   remainingAmountKzt: number;
   paymentStatus: string;
 };
@@ -39,6 +50,8 @@ export type StudentOfflineSummary = {
   balanceSnapshot: {
     classesRemainingTotal: number;
     debtAmountKzt: number;
+    totalPaidAmountKzt: number;
+    currentMembership: SchoolOfflineMembership | null;
     memberships: SchoolOfflineMembership[];
   };
   upcomingLessons: SchoolOfflineLesson[];

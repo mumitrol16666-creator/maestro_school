@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarClock, LoaderCircle, Send, Video } from "lucide-react";
+import { CalendarClock, Download, LoaderCircle, Send, Video } from "lucide-react";
 import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
@@ -20,12 +20,14 @@ export default function OnlineLessonsPage() {
 
   const [directionId, setDirectionId] = useState("");
   const [directionTitle, setDirectionTitle] = useState("");
+  const [requestType, setRequestType] = useState<"trial" | "online_lesson">("online_lesson");
   const [level, setLevel] = useState("beginner");
   const [preferredTime, setPreferredTime] = useState("");
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reportMonth, setReportMonth] = useState(() => new Date().toISOString().slice(0, 7));
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -37,6 +39,7 @@ export default function OnlineLessonsPage() {
         ? directions.data?.find((item) => item.id === directionId)?.title ?? directionTitle
         : directionTitle;
       await onlineLessonsApi.createRequest({
+        requestType,
         directionId: directionId || null,
         directionTitle: title,
         level: levelOptions.find((item) => item.value === level)?.label ?? level,
@@ -52,6 +55,32 @@ export default function OnlineLessonsPage() {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function downloadMonthlyReport() {
+    const completed = (requests.data ?? []).filter((item) => (
+      item.status === "completed"
+      && item.completedAt
+      && item.completedAt.slice(0, 7) === reportMonth
+    ));
+    const rows = [
+      ["Дата", "Направление", "Преподаватель", "Что проходили", "Что получилось", "Что доработать", "Комментарий"],
+      ...completed.map((item) => [
+        item.completedAt ? new Intl.DateTimeFormat("ru-RU").format(new Date(item.completedAt)) : "",
+        item.directionTitle,
+        item.teacher ? `${item.teacher.firstName} ${item.teacher.lastName}`.trim() : "",
+        item.coveredTopics || "",
+        item.whatWorked || "",
+        item.whatToImprove || "",
+        item.completionComment || "",
+      ]),
+    ];
+    const csv = rows.map((row) => row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(";")).join("\n");
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" }));
+    link.download = `maestro-online-report-${reportMonth}.csv`;
+    link.click();
+    URL.revokeObjectURL(link.href);
   }
 
   return (
@@ -90,6 +119,18 @@ export default function OnlineLessonsPage() {
           ) : null}
 
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+            <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
+              Тип заявки
+              <select
+                value={requestType}
+                onChange={(event) => setRequestType(event.target.value as "trial" | "online_lesson")}
+                className="mt-2 w-full rounded-2xl border border-stone-200 bg-white px-4 py-3 text-sm"
+              >
+                <option value="online_lesson">Онлайн-урок</option>
+                <option value="trial">Пробный урок</option>
+              </select>
+            </label>
+
             <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
               Направление
               <select
@@ -161,6 +202,21 @@ export default function OnlineLessonsPage() {
         <section className="rounded-[30px] border border-stone-200 bg-paper p-6 shadow-soft">
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">Мои заявки</p>
           <h2 className="font-display mt-3 text-3xl">Статус занятий</h2>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <input
+              type="month"
+              value={reportMonth}
+              onChange={(event) => setReportMonth(event.target.value)}
+              className="min-w-0 flex-1 rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm"
+            />
+            <button
+              type="button"
+              onClick={downloadMonthlyReport}
+              className="inline-flex items-center gap-2 rounded-xl bg-ink px-3 py-2 text-xs font-bold text-white"
+            >
+              <Download size={14} /> Отчёт
+            </button>
+          </div>
 
           {requests.loading ? <div className="mt-6"><LoadingState label="Загружаем заявки" /></div> : null}
           {requests.error ? <div className="mt-6"><ErrorState message={requests.error} retry={requests.reload} /></div> : null}

@@ -12,6 +12,7 @@ export const onlineLessonsApi = {
   myRequests: () => apiRequest<OnlineLessonRequest[]>("/online-lessons/requests"),
   myRequest: (id: string) => apiRequest<OnlineLessonRequest>(`/online-lessons/requests/${id}`),
   createRequest: (body: {
+    requestType?: "trial" | "online_lesson";
     directionId?: string | null;
     directionTitle: string;
     level: string;

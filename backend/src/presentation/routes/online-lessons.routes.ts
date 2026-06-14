@@ -75,6 +75,7 @@ export async function onlineLessonsRoutes(app: FastifyInstance) {
     { preHandler: [authenticate, requireStudent, requirePermission("online_lessons.request")] },
     async (request, reply) => {
       const body = z.object({
+        requestType: z.enum(["trial", "online_lesson"]).default("online_lesson"),
         directionId: z.string().uuid().nullable().optional(),
         directionTitle: z.string().trim().min(1).max(255),
         level: z.string().trim().min(1).max(128),

@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, Coins, Eye, EyeOff, GraduationCap, LoaderCircle, LogOut, Mail, Phone, Star, UserRound } from "lucide-react";
+import { BookOpen, Coins, Eye, EyeOff, GraduationCap, LoaderCircle, LogOut, Mail, Phone, Star, Ticket, UserRound, WalletCards } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
@@ -18,12 +18,18 @@ export default function SettingsPage() {
   const router = useRouter();
   const { user, logout } = useAuth();
   const resource = useApiResource(async () => {
-    const [profile, directions, progress] = await Promise.all([api.me(), api.directions(), api.progress()]);
+    const [profile, directions, progress, school] = await Promise.all([
+      api.me(),
+      api.directions(),
+      api.progress(),
+      api.studentOfflineSummary().catch(() => null),
+    ]);
     const activeDirectionIds = new Set(progress.enrollments.map((item) => item.course.directionId));
     return {
       profile,
       directions: directions.filter((item) => activeDirectionIds.has(item.id)),
       courses: progress.enrollments.map((item) => item.course),
+      school,
     };
   }, []);
 
@@ -46,6 +52,8 @@ export default function SettingsPage() {
   const initials = profile.firstName && profile.lastName ? `${profile.firstName[0]}${profile.lastName[0]}` : fullName.slice(0, 2).toUpperCase();
   const directions = resource.data?.directions ?? [];
   const courses = resource.data?.courses ?? [];
+  const school = resource.data?.school;
+  const currentMembership = school?.balanceSnapshot.currentMembership;
 
   return (
     <>
@@ -71,6 +79,29 @@ export default function SettingsPage() {
           </button>
         </section>
         <section className="space-y-5">
+          {school ? (
+            <div className="rounded-[30px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
+              <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold">Школа Maestro</p>
+              <h3 className="font-display mt-3 text-3xl">Абонемент и оплата</h3>
+              <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                <div className="rounded-2xl bg-stone-50 p-5">
+                  <Ticket size={18} className="text-gold" />
+                  <p className="font-display mt-3 text-3xl">{currentMembership?.classesRemaining ?? 0}</p>
+                  <p className="mt-1 text-xs text-stone-500">занятий в текущем абонементе</p>
+                </div>
+                <div className="rounded-2xl bg-stone-50 p-5">
+                  <WalletCards size={18} className="text-gold" />
+                  <p className="font-display mt-3 text-3xl">
+                    {school.balanceSnapshot.totalPaidAmountKzt.toLocaleString("ru-RU")} ₸
+                  </p>
+                  <p className="mt-1 text-xs text-stone-500">оплачено по активным абонементам</p>
+                </div>
+              </div>
+              <Link href="/school-lessons" className="mt-5 inline-flex rounded-2xl bg-ink px-5 py-3 text-sm font-bold text-white">
+                Открыть уроки и отчёты
+              </Link>
+            </div>
+          ) : null}
           <PwaInstallCard />
           <PushNotificationsCard />
           <PasswordChangeCard />

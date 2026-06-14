@@ -1,6 +1,7 @@
 "use client";
 
-import { CalendarDays, CheckCircle2, Clock3, MapPin, Ticket, UserRound, XCircle } from "lucide-react";
+import { CalendarDays, CheckCircle2, Clock3, Download, MapPin, Ticket, UserRound, WalletCards, XCircle } from "lucide-react";
+import { useState } from "react";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
 import { PageHeader } from "@/components/page-header";
 import { useApiResource } from "@/hooks/use-api-resource";
@@ -106,18 +107,56 @@ function LessonCard({ lesson, upcoming }: { lesson: SchoolOfflineLesson; upcomin
         </div>
       ) : null}
 
+      {!upcoming && lesson.status === "completed" && (
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <LessonReportField label="Цели урока" value={lesson.lessonGoals} />
+          <LessonReportField label="Что сделали" value={lesson.lessonSummary} />
+          <LessonReportField label="Что доработать дальше" value={lesson.nextLessonFocus} />
+        </div>
+      )}
+
       {lesson.homework ? (
         <div className="mt-3 rounded-2xl border border-amber-100 bg-amber-50/60 p-4">
           <p className="text-xs font-bold uppercase tracking-wider text-amber-800">Домашнее задание</p>
           <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-amber-950">{lesson.homework}</p>
         </div>
       ) : null}
+
+      {!upcoming && lesson.materials.length > 0 ? (
+        <div className="mt-3 rounded-2xl border border-stone-200 bg-white p-4">
+          <p className="text-xs font-bold uppercase tracking-wider text-stone-400">Материалы урока</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {lesson.materials.map((material, index) => material.url ? (
+              <a
+                key={`${material.url}-${index}`}
+                href={material.url}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-full bg-stone-100 px-3 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-200"
+              >
+                {material.title || `Материал ${index + 1}`}
+              </a>
+            ) : null)}
+          </div>
+        </div>
+      ) : null}
     </article>
+  );
+}
+
+function LessonReportField({ label, value }: { label: string; value: string | null }) {
+  if (!value) return null;
+  return (
+    <div className="rounded-2xl bg-stone-50 p-4">
+      <p className="text-xs font-bold uppercase tracking-wider text-stone-400">{label}</p>
+      <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-stone-700">{value}</p>
+    </div>
   );
 }
 
 export default function SchoolLessonsPage() {
   const resource = useApiResource(() => api.studentOfflineSummary(), []);
+  const [reportMonth, setReportMonth] = useState(() => new Date().toISOString().slice(0, 7));
 
   if (resource.loading) {
     return <LoadingState label="Загружаем расписание школы" />;
@@ -147,7 +186,33 @@ export default function SchoolLessonsPage() {
     return <ErrorState message="Не удалось загрузить данные" retry={resource.reload} />;
   }
 
-  const { balanceSnapshot, upcomingLessons, lessonHistory, profile } = data;
+  const { balanceSnapshot, upcomingLessons, lessonHistory } = data;
+  const currentMembership = balanceSnapshot.currentMembership;
+
+  function downloadMonthlyReport() {
+    const lessons = lessonHistory.filter((lesson) => (
+      lesson.status === "completed" && lesson.date.slice(0, 7) === reportMonth
+    ));
+    const rows = [
+      ["Дата", "Урок", "Преподаватель", "Тема", "Цели", "Что сделали", "Что доработать", "Домашнее задание"],
+      ...lessons.map((lesson) => [
+        formatLessonDate(lesson.date),
+        lesson.title,
+        lesson.teacherName || "",
+        lesson.topic || "",
+        lesson.lessonGoals || "",
+        lesson.lessonSummary || "",
+        lesson.nextLessonFocus || "",
+        lesson.homework || "",
+      ]),
+    ];
+    const csv = rows.map((row) => row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(";")).join("\n");
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" }));
+    link.download = `maestro-report-${reportMonth}.csv`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  }
 
   return (
     <>
@@ -160,8 +225,15 @@ export default function SchoolLessonsPage() {
       <section className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft">
           <Ticket className="text-gold" size={22} />
-          <p className="font-display mt-4 text-4xl">{balanceSnapshot.classesRemainingTotal}</p>
-          <p className="mt-1 text-sm text-stone-500">занятий осталось</p>
+          <p className="font-display mt-4 text-4xl">{currentMembership?.classesRemaining ?? 0}</p>
+          <p className="mt-1 text-sm text-stone-500">занятий в текущем абонементе</p>
+        </div>
+        <div className="rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft">
+          <WalletCards className="text-gold" size={22} />
+          <p className="font-display mt-4 text-3xl">
+            {balanceSnapshot.totalPaidAmountKzt.toLocaleString("ru-RU")} ₸
+          </p>
+          <p className="mt-1 text-sm text-stone-500">оплачено по активным абонементам</p>
         </div>
         {balanceSnapshot.debtAmountKzt > 0 ? (
           <div className="rounded-[28px] border border-red-100 bg-red-50 p-6 shadow-soft">
@@ -178,15 +250,25 @@ export default function SchoolLessonsPage() {
             <p className="mt-1 text-sm text-emerald-800/80">по активным абонементам</p>
           </div>
         )}
-        {profile.groups.length > 0 ? (
-          <div className="rounded-[28px] border border-stone-200 bg-ink p-6 text-white shadow-soft sm:col-span-2 xl:col-span-2">
-            <p className="text-xs font-bold uppercase tracking-[0.16em] text-gold">Группы</p>
-            <p className="mt-4 text-sm leading-7 text-white/80">
-              {profile.groups.map((g) => g.name).join(" · ")}
-            </p>
-          </div>
-        ) : null}
       </section>
+
+      {currentMembership ? (
+        <section className="mb-8 rounded-[28px] border border-gold/20 bg-ink p-6 text-white shadow-soft sm:p-8">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">Текущий абонемент</p>
+          <div className="mt-4 flex flex-wrap items-end justify-between gap-5">
+            <div>
+              <h2 className="font-display text-3xl">{currentMembership.planName || membershipTypeLabels[currentMembership.type] || currentMembership.type}</h2>
+              <p className="mt-2 text-sm text-white/65">
+                {[currentMembership.directionName, currentMembership.groupName, currentMembership.teacherName].filter(Boolean).join(" · ")}
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="font-display text-4xl text-gold">{currentMembership.classesRemaining} из {currentMembership.totalClasses}</p>
+              <p className="mt-1 text-xs text-white/50">до {formatLessonDate(currentMembership.endDate)}</p>
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       {balanceSnapshot.memberships.length > 0 ? (
         <section className="mb-10 rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
@@ -230,7 +312,27 @@ export default function SchoolLessonsPage() {
       </section>
 
       <section>
-        <h2 className="font-display mb-5 text-3xl">История уроков</h2>
+        <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">Подтверждено администратором</p>
+            <h2 className="font-display mt-2 text-3xl">История и отчёты по урокам</h2>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <input
+              type="month"
+              value={reportMonth}
+              onChange={(event) => setReportMonth(event.target.value)}
+              className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm"
+            />
+            <button
+              type="button"
+              onClick={downloadMonthlyReport}
+              className="inline-flex items-center gap-2 rounded-xl bg-ink px-4 py-2 text-sm font-bold text-white"
+            >
+              <Download size={15} /> Скачать отчёт за месяц
+            </button>
+          </div>
+        </div>
         {lessonHistory.length === 0 ? (
           <EmptyState title="История пуста" description="После проведённых занятий здесь появятся темы и домашние задания." />
         ) : (
