@@ -27,7 +27,7 @@ function safeNextPath(next: string | null, role?: string | null) {
 export default function LoginPage() {
   const router = useRouter();
   const { login, loginWithSso, user, loading: authLoading } = useAuth();
-  const [loginValue, setLoginValue] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -77,7 +77,7 @@ export default function LoginPage() {
     setSubmitting(true);
     setError(null);
     try {
-      const loggedInUser = await login(loginValue, password);
+      const loggedInUser = await login(phone, password);
       router.replace(homePathForRole(loggedInUser.role));
     } catch (reason) {
       setError(reason instanceof ApiError ? reason.message : "Не удалось войти в кабинет");
@@ -111,14 +111,14 @@ export default function LoginPage() {
 
           <form onSubmit={handleSubmit} className="mt-10 space-y-5">
             <label className="block">
-              <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-stone-500">Логин</span>
+              <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-stone-500">Телефон</span>
               <input
-                type="text"
+                type="tel"
                 required
-                autoComplete="username"
-                value={loginValue}
-                onChange={(event) => setLoginValue(event.target.value)}
-                placeholder="ivan_guitar"
+                autoComplete="tel"
+                value={phone}
+                onChange={(event) => setPhone(event.target.value)}
+                placeholder="+7 999 123-45-67"
                 className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-4 text-sm outline-none transition focus:border-gold"
               />
             </label>

@@ -107,10 +107,10 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
 }
 
 export const api = {
-  login: (login: string, password: string) =>
+  login: (phone: string, password: string) =>
     apiRequest<LoginResponse>("/auth/login", {
       method: "POST",
-      body: JSON.stringify({ login, password }),
+      body: JSON.stringify({ phone, password }),
     }),
   ssoExchange: (token: string) =>
     apiRequest<LoginResponse>("/auth/sso-exchange", {

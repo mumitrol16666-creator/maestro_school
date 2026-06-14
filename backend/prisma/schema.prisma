@@ -227,8 +227,8 @@ enum UserNotificationType {
 
 model User {
   id           String    @id @default(uuid()) @db.Uuid
-  login        String    @unique @db.VarChar(64)
-  email        String    @unique @db.VarChar(255)
+  login        String?   @unique @db.VarChar(64)
+  email        String?   @unique @db.VarChar(255)
   phone        String    @db.VarChar(32)
   passwordHash String    @map("password_hash") @db.VarChar(255)
   firstName    String    @map("first_name") @db.VarChar(128)
@@ -240,7 +240,7 @@ model User {
   // Integration: CRM user link
   crmStudentId         String?   @unique @map("crm_student_id") @db.VarChar(64)
   crmTeacherId         String?   @unique @map("crm_teacher_id") @db.VarChar(64)
-  phoneNormalized      String?   @map("phone_normalized") @db.VarChar(32)
+  phoneNormalized      String?   @unique @map("phone_normalized") @db.VarChar(32)
   externalLinkStatus   String?   @map("external_link_status") @db.VarChar(32)
   linkedAt             DateTime? @map("linked_at") @db.Timestamptz(6)
 
@@ -277,7 +277,7 @@ model User {
   @@index([login])
   @@index([isActive])
   @@index([deletedAt])
-  @@index([phoneNormalized])
+
   @@index([crmStudentId])
   @@index([crmTeacherId])
   @@map("users")

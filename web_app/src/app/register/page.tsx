@@ -14,7 +14,6 @@ export default function RegisterPage() {
   const { register, user, loading: authLoading } = useAuth();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [login, setLogin] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -34,10 +33,9 @@ export default function RegisterPage() {
       await register({
         firstName,
         lastName,
-        login: login.trim().toLowerCase(),
         phone: phone.trim(),
-        email,
         password,
+        ...(email.trim() ? { email: email.trim() } : {}),
       });
       router.replace("/courses");
     } catch (reason) {
@@ -61,15 +59,9 @@ export default function RegisterPage() {
               <label className="block"><span className="mb-2 block text-xs font-bold uppercase tracking-wider text-stone-500">Фамилия</span><input required maxLength={128} autoComplete="family-name" value={lastName} onChange={(event) => setLastName(event.target.value)} className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-4 text-sm outline-none focus:border-gold" /></label>
             </div>
             <label className="block">
-              <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-stone-500">Логин</span>
-              <input required minLength={3} maxLength={32} autoComplete="username" value={login} onChange={(event) => setLogin(event.target.value)} placeholder="ivan_guitar" className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-4 text-sm outline-none focus:border-gold" />
-              <span className="mt-2 block text-xs text-stone-400">Латиница, цифры и _ — для входа в кабинет</span>
-            </label>
-            <label className="block">
               <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-stone-500">Телефон WhatsApp</span>
               <input type="tel" required minLength={10} maxLength={32} autoComplete="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="+7 999 123-45-67" className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-4 text-sm outline-none focus:border-gold" />
             </label>
-            <label className="block"><span className="mb-2 block text-xs font-bold uppercase tracking-wider text-stone-500">Email</span><input type="email" required autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-4 text-sm outline-none focus:border-gold" /></label>
             <label className="block">
               <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-stone-500">Пароль</span>
               <span className="flex items-center rounded-2xl border border-stone-200 bg-white pr-4 focus-within:border-gold">
@@ -78,6 +70,7 @@ export default function RegisterPage() {
               </span>
               <span className="mt-2 block text-xs text-stone-400">От 8 до 72 символов</span>
             </label>
+            <label className="block"><span className="mb-2 block text-xs font-bold uppercase tracking-wider text-stone-500">Email <span className="normal-case tracking-normal font-normal text-stone-400">(необязательно)</span></span><input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-4 text-sm outline-none focus:border-gold" /></label>
             {error && <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</p>}
             <button disabled={submitting} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-ink px-5 py-4 text-sm font-bold text-white disabled:opacity-60">
               {submitting ? <><LoaderCircle size={17} className="animate-spin" /> Создаем аккаунт...</> : <>Создать аккаунт <ArrowRight size={17} /></>}

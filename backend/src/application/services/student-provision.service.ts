@@ -39,21 +39,13 @@ async function reserveUniqueLogin(base: string): Promise<string> {
   return candidate;
 }
 
-async function reserveUniqueEmail(crmStudentId: string, preferred?: string | null): Promise<string> {
+async function reserveUniqueEmail(preferred?: string | null): Promise<string | null> {
   const trimmed = preferred?.trim().toLowerCase();
   if (trimmed) {
     const existing = await findUserWithRoleByEmail(trimmed);
     if (!existing) return trimmed;
   }
-
-  const slug = crmStudentId.replace(/[^a-z0-9]/gi, "").slice(-16).toLowerCase() || "crm";
-  let candidate = `student.${slug}@maestro.local`;
-  let suffix = 0;
-  while (await findUserWithRoleByEmail(candidate)) {
-    suffix += 1;
-    candidate = `student.${slug}.${suffix}@maestro.local`;
-  }
-  return candidate;
+  return null;
 }
 
 export async function provisionStudentFromCrm(input: ProvisionStudentInput) {
@@ -108,7 +100,7 @@ export async function provisionStudentFromCrm(input: ProvisionStudentInput) {
   }
 
   const login = await reserveUniqueLogin(`s_${digits.slice(-10)}`);
-  const email = await reserveUniqueEmail(crmStudentId, input.email);
+  const email = await reserveUniqueEmail(input.email);
   const generatedPassword = input.password?.trim() || crypto.randomBytes(12).toString("base64url");
   const passwordHash = await bcrypt.hash(generatedPassword, 10);
 

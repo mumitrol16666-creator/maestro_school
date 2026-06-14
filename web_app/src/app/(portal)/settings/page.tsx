@@ -1,10 +1,11 @@
 "use client";
 
-import { BookOpen, Coins, GraduationCap, LogOut, Mail, Phone, Star, UserRound } from "lucide-react";
+import { BookOpen, Coins, Eye, EyeOff, GraduationCap, LoaderCircle, LogOut, Mail, Phone, Star, UserRound } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
+import { ApiError } from "@/lib/api-client";
 import { ErrorState, LoadingState } from "@/components/data-states";
 import { PageHeader } from "@/components/page-header";
 import { PwaInstallCard } from "@/components/pwa-install-card";
@@ -72,6 +73,7 @@ export default function SettingsPage() {
         <section className="space-y-5">
           <PwaInstallCard />
           <PushNotificationsCard />
+          <PasswordChangeCard />
           <div className="rounded-[30px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
             <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold">Обучение</p>
             <div className="mt-6 grid gap-4 sm:grid-cols-3">
@@ -112,5 +114,117 @@ export default function SettingsPage() {
         </section>
       </div>
     </>
+  );
+}
+
+function PasswordChangeCard() {
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+    setSuccess(false);
+
+    if (newPassword.length < 8) {
+      setError("Новый пароль должен содержать минимум 8 символов");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setError("Пароли не совпадают");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await api.changePassword(currentPassword, newPassword);
+      setSuccess(true);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (reason) {
+      setError(reason instanceof ApiError ? reason.message : "Не удалось сменить пароль");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="rounded-[30px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
+      <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold">Безопасность</p>
+      <h3 className="mt-3 text-lg font-bold">Сменить пароль</h3>
+      <form onSubmit={handleSubmit} className="mt-5 space-y-4">
+        <label className="block">
+          <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-stone-500">Текущий пароль</span>
+          <span className="flex items-center rounded-2xl border border-stone-200 bg-white pr-4 focus-within:border-gold">
+            <input
+              type={showCurrent ? "text" : "password"}
+              required
+              minLength={8}
+              maxLength={72}
+              autoComplete="current-password"
+              value={currentPassword}
+              onChange={(event) => setCurrentPassword(event.target.value)}
+              className="min-w-0 flex-1 rounded-2xl px-4 py-3 text-sm outline-none"
+            />
+            <button type="button" onClick={() => setShowCurrent((c) => !c)} aria-label={showCurrent ? "Скрыть пароль" : "Показать пароль"} className="text-stone-400">
+              {showCurrent ? <EyeOff size={17} /> : <Eye size={17} />}
+            </button>
+          </span>
+        </label>
+        <label className="block">
+          <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-stone-500">Новый пароль</span>
+          <span className="flex items-center rounded-2xl border border-stone-200 bg-white pr-4 focus-within:border-gold">
+            <input
+              type={showNew ? "text" : "password"}
+              required
+              minLength={8}
+              maxLength={72}
+              autoComplete="new-password"
+              value={newPassword}
+              onChange={(event) => setNewPassword(event.target.value)}
+              className="min-w-0 flex-1 rounded-2xl px-4 py-3 text-sm outline-none"
+            />
+            <button type="button" onClick={() => setShowNew((c) => !c)} aria-label={showNew ? "Скрыть пароль" : "Показать пароль"} className="text-stone-400">
+              {showNew ? <EyeOff size={17} /> : <Eye size={17} />}
+            </button>
+          </span>
+          <span className="mt-2 block text-xs text-stone-400">От 8 до 72 символов</span>
+        </label>
+        <label className="block">
+          <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-stone-500">Подтвердите новый пароль</span>
+          <input
+            type="password"
+            required
+            minLength={8}
+            maxLength={72}
+            autoComplete="new-password"
+            value={confirmPassword}
+            onChange={(event) => setConfirmPassword(event.target.value)}
+            className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-3 text-sm outline-none focus:border-gold"
+          />
+        </label>
+        {error && <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</p>}
+        {success && <p className="rounded-2xl bg-green-50 px-4 py-3 text-sm font-semibold text-green-700">Пароль успешно изменён</p>}
+        <button
+          disabled={submitting}
+          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-ink px-5 py-3 text-sm font-bold text-white transition hover:bg-stone-800 disabled:opacity-60"
+        >
+          {submitting ? (
+            <>
+              <LoaderCircle size={17} className="animate-spin" /> Сохраняем...
+            </>
+          ) : (
+            "Сменить пароль"
+          )}
+        </button>
+      </form>
+    </div>
   );
 }

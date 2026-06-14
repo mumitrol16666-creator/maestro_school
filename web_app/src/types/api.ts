@@ -31,8 +31,7 @@ export interface LoginResponse {
 export interface RegisterInput {
   firstName: string;
   lastName: string;
-  login: string;
-  email: string;
+  email?: string;
   phone: string;
   password: string;
 }

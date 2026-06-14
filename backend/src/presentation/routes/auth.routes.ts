@@ -2,12 +2,14 @@ import type { FastifyInstance } from "fastify";
 import { Prisma } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import crypto from "node:crypto";
 import {
   createStudentUser,
   findUserWithRoleByEmail,
   findUserWithRoleById,
   findUserWithRoleByLogin,
   findUserWithRoleByLoginOrEmail,
+  findUserWithRoleByPhone,
   updateUserPassword,
   updateUserProfile,
 } from "../../application/repositories/auth.repository.js";
@@ -28,15 +30,15 @@ const ssoExchangeSchema = z.object({
 });
 
 const loginSchema = z.object({
-  login: z.string().trim().min(1).max(255),
+  phone: z.string().trim().min(1).max(32),
   password: z.string().min(8).max(72),
 });
 
 const registerSchema = z.object({
   firstName: z.string().trim().min(1).max(128),
   lastName: z.string().trim().min(1).max(128),
-  login: z.string().trim().min(3).max(32),
-  email: z.string().trim().email().transform((value) => value.toLowerCase()),
+  login: z.string().trim().min(3).max(32).optional(),
+  email: z.string().trim().email().transform((value) => value.toLowerCase()).optional(),
   phone: z.string().trim().min(10).max(32),
   password: z.string().min(8).max(72),
 });
@@ -97,9 +99,21 @@ export async function authRoutes(app: FastifyInstance) {
 
   app.post("/auth/login", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (request, reply) => {
     const body = loginSchema.parse(request.body);
-    const user = await findUserWithRoleByLoginOrEmail(body.login);
+    const input = body.phone.trim();
+
+    let user;
+    const looksLikePhone = /^\+?\d[\d\s\-()]{5,}$/.test(input);
+    if (looksLikePhone) {
+      const digits = normalizePhoneDigits(input);
+      user = await findUserWithRoleByPhone(digits);
+    } else if (input.includes("@")) {
+      user = await findUserWithRoleByLoginOrEmail(input);
+    } else {
+      user = await findUserWithRoleByLoginOrEmail(input);
+    }
+
     if (!user || !(await bcrypt.compare(body.password, user.passwordHash))) {
-      throw new UnauthorizedError("Неверный логин или пароль");
+      throw new UnauthorizedError("Неверный телефон или пароль");
     }
 
     const token = await reply.jwtSign({ sub: user.id, role: user.role.slug });
@@ -115,30 +129,46 @@ export async function authRoutes(app: FastifyInstance) {
 
   app.post("/auth/register", { config: { rateLimit: { max: 5, timeWindow: "1 minute" } } }, async (request, reply) => {
     const body = registerSchema.parse(request.body);
-    const login = normalizeLogin(body.login);
-    if (!isValidLogin(login)) {
-      throw new BadRequestError("Логин: 3–32 символа, латиница, цифры и _");
-    }
     if (!isValidPhone(body.phone)) {
       throw new BadRequestError("Укажите корректный номер телефона");
     }
 
-    const [existingEmail, existingLogin] = await Promise.all([
-      findUserWithRoleByEmail(body.email),
-      findUserWithRoleByLogin(login),
-    ]);
-    if (existingEmail) {
-      throw new ConflictError("Пользователь с таким email уже зарегистрирован", "EMAIL_ALREADY_EXISTS");
+    // Auto-generate login if not provided
+    let login: string;
+    if (body.login) {
+      login = normalizeLogin(body.login);
+      if (!isValidLogin(login)) {
+        throw new BadRequestError("Логин: 3–32 символа, латиница, цифры и _");
+      }
+      const existingLogin = await findUserWithRoleByLogin(login);
+      if (existingLogin) {
+        throw new ConflictError("Этот логин уже занят", "LOGIN_ALREADY_EXISTS");
+      }
+    } else {
+      const digits = normalizePhoneDigits(body.phone);
+      let candidate = `s_${digits.slice(-10)}`.slice(0, 32);
+      let suffix = 0;
+      while (await findUserWithRoleByLogin(candidate)) {
+        suffix += 1;
+        candidate = `s_${digits.slice(-10)}_${suffix}`.slice(0, 32);
+      }
+      login = candidate;
     }
-    if (existingLogin) {
-      throw new ConflictError("Этот логин уже занят", "LOGIN_ALREADY_EXISTS");
+
+    // Use provided email or null
+    const email = body.email ?? null;
+    if (email) {
+      const existingEmail = await findUserWithRoleByEmail(email);
+      if (existingEmail) {
+        throw new ConflictError("Пользователь с таким email уже зарегистрирован", "EMAIL_ALREADY_EXISTS");
+      }
     }
 
     let user;
     try {
       user = await createStudentUser({
         login,
-        email: body.email,
+        email,
         phone: normalizePhoneDigits(body.phone),
         passwordHash: await bcrypt.hash(body.password, 10),
         firstName: body.firstName,
@@ -149,6 +179,9 @@ export async function authRoutes(app: FastifyInstance) {
         const target = Array.isArray(error.meta?.target) ? error.meta.target.join(",") : "";
         if (target.includes("login")) {
           throw new ConflictError("Этот логин уже занят", "LOGIN_ALREADY_EXISTS");
+        }
+        if (target.includes("phone_normalized")) {
+          throw new ConflictError("Пользователь с таким телефоном уже зарегистрирован", "PHONE_ALREADY_EXISTS");
         }
         throw new ConflictError("Пользователь с таким email уже зарегистрирован", "EMAIL_ALREADY_EXISTS");
       }
@@ -161,7 +194,7 @@ export async function authRoutes(app: FastifyInstance) {
       phone: user.phone,
       firstName: user.firstName,
       lastName: user.lastName,
-      email: user.email,
+      email: user.email ?? "",
     });
 
     return reply.status(201).send({
