@@ -27,7 +27,11 @@ export default function AdminOfflineLessonDetailPage() {
   const studentsResource = useApiResource(() => teacherOfflineApi.students(crmClassId), [crmClassId]);
 
   const [topic, setTopic] = useState("");
+  const [lessonGoals, setLessonGoals] = useState("");
+  const [lessonSummary, setLessonSummary] = useState("");
   const [homework, setHomework] = useState("");
+  const [nextLessonFocus, setNextLessonFocus] = useState("");
+  const [materialsText, setMaterialsText] = useState("");
   const [comment, setComment] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +44,14 @@ export default function AdminOfflineLessonDetailPage() {
   useEffect(() => {
     if (!lesson) return;
     if (lesson.topic) setTopic(lesson.topic);
+    if (lesson.lessonGoals) setLessonGoals(lesson.lessonGoals);
+    if (lesson.lessonSummary) setLessonSummary(lesson.lessonSummary);
     if (lesson.homeworkDraft) setHomework(lesson.homeworkDraft);
+    if (lesson.nextLessonFocus) setNextLessonFocus(lesson.nextLessonFocus);
+    if (lesson.materials) {
+      setMaterialsText(lesson.materials.map((item) => item.url || item.title || "").filter(Boolean).join("\n"));
+    }
+    if (lesson.teacherComment) setComment(lesson.teacherComment);
   }, [lesson]);
 
   async function runAction(action: string, fn: () => Promise<unknown>) {
@@ -68,16 +79,24 @@ export default function AdminOfflineLessonDetailPage() {
     await runAction("submit", () =>
       teacherOfflineApi.submit(crmClassId, {
         topic: topic.trim(),
+        lessonGoals: lessonGoals.trim() || undefined,
+        lessonSummary: lessonSummary.trim(),
         homeworkDraft: homework.trim(),
+        nextLessonFocus: nextLessonFocus.trim() || undefined,
+        materials: materialsText
+          .split("\n")
+          .map((url) => url.trim())
+          .filter(Boolean)
+          .map((url) => ({ type: "link", url, title: url })),
         comment: comment.trim() || undefined,
         teacherOutcomeHint: "held",
       }),
     );
   }
 
-  async function toggleAttendance(studentId: string, attended: boolean) {
+  async function updateAttendance(studentId: string, attendanceStatus: string, teacherNote?: string) {
     await runAction(`attendance-${studentId}`, () =>
-      teacherOfflineApi.attendance(crmClassId, studentId, attended),
+      teacherOfflineApi.attendance(crmClassId, studentId, attendanceStatus, teacherNote),
     );
   }
 
@@ -139,22 +158,37 @@ export default function AdminOfflineLessonDetailPage() {
             ) : (
               <div className="mt-6 space-y-3">
                 {students.map((student) => (
-                  <label
+                  <div
                     key={student.crmStudentId}
-                    className="flex cursor-pointer items-center justify-between rounded-2xl border border-stone-200 bg-white px-4 py-4"
+                    className="rounded-2xl border border-stone-200 bg-white px-4 py-4"
                   >
-                    <div>
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <p className="font-semibold">{student.name}</p>
-                      {student.phone ? <p className="text-xs text-stone-500">{student.phone}</p> : null}
+                      <select
+                        value={student.attendanceStatus ?? "unmarked"}
+                        disabled={!canEdit || busy != null}
+                        onChange={(event) => void updateAttendance(student.crmStudentId, event.target.value, student.teacherNote ?? undefined)}
+                        className="rounded-xl border border-stone-200 px-3 py-2 text-sm"
+                      >
+                        <option value="unmarked">Не отмечен</option>
+                        <option value="present">Присутствовал</option>
+                        <option value="late">Опоздал</option>
+                        <option value="excused_absence">Отсутствовал по уважительной причине</option>
+                        <option value="unexcused_absence">Отсутствовал без причины</option>
+                      </select>
                     </div>
-                    <input
-                      type="checkbox"
-                      checked={Boolean(student.attended)}
+                    <textarea
+                      defaultValue={student.teacherNote ?? ""}
                       disabled={!canEdit || busy != null}
-                      onChange={(event) => void toggleAttendance(student.crmStudentId, event.target.checked)}
-                      className="h-5 w-5 rounded border-stone-300 text-gold focus:ring-gold"
+                      onBlur={(event) => void updateAttendance(
+                        student.crmStudentId,
+                        student.attendanceStatus ?? "unmarked",
+                        event.target.value.trim() || undefined,
+                      )}
+                      className="mt-3 min-h-16 w-full rounded-xl border border-stone-200 px-3 py-2 text-sm"
+                      placeholder="Короткая заметка по ученику: успехи, сложности, рекомендации"
                     />
-                  </label>
+                  </div>
                 ))}
               </div>
             )}
@@ -176,6 +210,28 @@ export default function AdminOfflineLessonDetailPage() {
             </label>
 
             <label className="mt-4 block text-xs font-bold uppercase tracking-wider text-stone-500">
+              Цель урока
+              <textarea
+                value={lessonGoals}
+                onChange={(event) => setLessonGoals(event.target.value)}
+                disabled={!canEdit}
+                className="mt-2 min-h-20 w-full rounded-2xl border border-stone-200 px-4 py-3 text-sm"
+                placeholder="Что планировали освоить?"
+              />
+            </label>
+
+            <label className="mt-4 block text-xs font-bold uppercase tracking-wider text-stone-500">
+              Итог урока
+              <textarea
+                value={lessonSummary}
+                onChange={(event) => setLessonSummary(event.target.value)}
+                disabled={!canEdit}
+                className="mt-2 min-h-28 w-full rounded-2xl border border-stone-200 px-4 py-3 text-sm"
+                placeholder="Что получилось, что разобрали, какой результат?"
+              />
+            </label>
+
+            <label className="mt-4 block text-xs font-bold uppercase tracking-wider text-stone-500">
               Домашнее задание
               <textarea
                 value={homework}
@@ -183,6 +239,28 @@ export default function AdminOfflineLessonDetailPage() {
                 disabled={!canEdit}
                 className="mt-2 min-h-32 w-full rounded-2xl border border-stone-200 px-4 py-3 text-sm"
                 placeholder="Что отработать до следующего урока?"
+              />
+            </label>
+
+            <label className="mt-4 block text-xs font-bold uppercase tracking-wider text-stone-500">
+              Фокус следующего урока
+              <textarea
+                value={nextLessonFocus}
+                onChange={(event) => setNextLessonFocus(event.target.value)}
+                disabled={!canEdit}
+                className="mt-2 min-h-20 w-full rounded-2xl border border-stone-200 px-4 py-3 text-sm"
+                placeholder="С чего продолжить на следующем занятии?"
+              />
+            </label>
+
+            <label className="mt-4 block text-xs font-bold uppercase tracking-wider text-stone-500">
+              Материалы и ссылки
+              <textarea
+                value={materialsText}
+                onChange={(event) => setMaterialsText(event.target.value)}
+                disabled={!canEdit}
+                className="mt-2 min-h-20 w-full rounded-2xl border border-stone-200 px-4 py-3 text-sm"
+                placeholder="Одна ссылка на строку"
               />
             </label>
 
@@ -199,7 +277,7 @@ export default function AdminOfflineLessonDetailPage() {
             <div className="mt-6 flex flex-wrap gap-3">
               <button
                 type="submit"
-                disabled={!canEdit || busy != null}
+                disabled={!canEdit || busy != null || !topic.trim() || !lessonSummary.trim()}
                 className="inline-flex items-center gap-2 rounded-2xl bg-ink px-5 py-3 text-sm font-bold text-white disabled:opacity-50"
               >
                 {busy === "submit" ? <LoaderCircle className="animate-spin" size={16} /> : <Send size={16} />}

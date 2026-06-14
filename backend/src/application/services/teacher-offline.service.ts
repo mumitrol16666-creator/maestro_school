@@ -49,12 +49,18 @@ export async function getTeacherOfflineAgenda(
 }
 
 export async function getTeacherOfflineClass(appUserId: string, crmClassId: string) {
-  await requireCrmTeacherId(appUserId);
-  return fetchClassCard(crmClassId);
+  const crmTeacherId = await requireCrmTeacherId(appUserId);
+  const lesson = await fetchClassCard(crmClassId) as {
+    teacher?: { crmTeacherId?: string } | null;
+  };
+  if (lesson.teacher?.crmTeacherId !== crmTeacherId) {
+    throw new BadRequestError("Этот урок назначен другому преподавателю", "LESSON_NOT_ASSIGNED");
+  }
+  return lesson;
 }
 
 export async function getTeacherOfflineClassStudents(appUserId: string, crmClassId: string) {
-  await requireCrmTeacherId(appUserId);
+  await getTeacherOfflineClass(appUserId, crmClassId);
   return fetchClassStudents(crmClassId);
 }
 
@@ -94,8 +100,15 @@ export async function teacherOfflineSetAttendance(
   appUserId: string,
   crmClassId: string,
   studentId: string,
-  attended: boolean,
+  attendanceStatus: string,
+  teacherNote?: string,
 ) {
   const crmTeacherId = await requireCrmTeacherId(appUserId);
-  return postTeacherAttendance(crmClassId, { crmTeacherId, studentId, attended });
+  return postTeacherAttendance(crmClassId, {
+    crmTeacherId,
+    studentId,
+    attendanceStatus,
+    teacherNote,
+    attended: ["present", "late"].includes(attendanceStatus),
+  });
 }

@@ -72,7 +72,10 @@ export async function teacherOfflineRoutes(app: FastifyInstance) {
       const { crmClassId } = z.object({ crmClassId: z.string().min(1) }).parse(request.params);
       const body = z.object({
         topic: z.string().max(5000).optional(),
+        lessonGoals: z.string().max(5000).optional(),
+        lessonSummary: z.string().max(10000).optional(),
         homeworkDraft: z.string().max(10000).optional(),
+        nextLessonFocus: z.string().max(5000).optional(),
         teacherOutcomeHint: z.enum(["held", "not_held", "no_submission"]).optional(),
         comment: z.string().max(5000).optional(),
         materials: z.array(z.object({
@@ -102,14 +105,17 @@ export async function teacherOfflineRoutes(app: FastifyInstance) {
       const { crmClassId } = z.object({ crmClassId: z.string().min(1) }).parse(request.params);
       const body = z.object({
         studentId: z.string().min(1),
-        attended: z.boolean(),
+        attended: z.boolean().optional(),
+        attendanceStatus: z.enum(["unmarked", "present", "late", "excused_absence", "unexcused_absence"]),
+        teacherNote: z.string().max(3000).optional(),
       }).parse(request.body ?? {});
       return {
         data: await teacherOfflineSetAttendance(
           request.user!.id,
           crmClassId,
           body.studentId,
-          body.attended,
+          body.attendanceStatus,
+          body.teacherNote,
         ),
       };
     },

@@ -87,7 +87,10 @@ export async function fetchStudentFreezeStatus(crmStudentId: string, date?: stri
 export type TeacherSubmitPayload = {
   crmTeacherId: string;
   topic?: string;
+  lessonGoals?: string;
+  lessonSummary?: string;
   homeworkDraft?: string;
+  nextLessonFocus?: string;
   materials?: Array<{ type?: string; url?: string; title?: string }>;
   teacherOutcomeHint?: "held" | "not_held" | "no_submission";
   comment?: string;
@@ -129,7 +132,13 @@ export async function postTeacherMarkNotHeld(
 
 export async function postTeacherAttendance(
   crmClassId: string,
-  payload: { crmTeacherId: string; studentId: string; attended: boolean },
+  payload: {
+    crmTeacherId: string;
+    studentId: string;
+    attended?: boolean;
+    attendanceStatus: string;
+    teacherNote?: string;
+  },
 ) {
   return crmPost<Record<string, unknown>>(
     `/api/integration/v1/classes/${encodeURIComponent(crmClassId)}/teacher-attendance`,

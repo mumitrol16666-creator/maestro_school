@@ -33,7 +33,11 @@ export const teacherOfflineApi = {
     crmClassId: string,
     body: {
       topic?: string;
+      lessonGoals?: string;
+      lessonSummary?: string;
       homeworkDraft?: string;
+      nextLessonFocus?: string;
+      materials?: Array<{ type?: string; url?: string; title?: string }>;
       teacherOutcomeHint?: "held" | "not_held" | "no_submission";
       comment?: string;
     },
@@ -47,9 +51,9 @@ export const teacherOfflineApi = {
       `/teachers/me/offline-lessons/${encodeURIComponent(crmClassId)}/not-held`,
       { method: "POST", body: JSON.stringify({ comment }) },
     ),
-  attendance: (crmClassId: string, studentId: string, attended: boolean) =>
+  attendance: (crmClassId: string, studentId: string, attendanceStatus: string, teacherNote?: string) =>
     apiRequest<Record<string, unknown>>(
       `/teachers/me/offline-lessons/${encodeURIComponent(crmClassId)}/attendance`,
-      { method: "POST", body: JSON.stringify({ studentId, attended }) },
+      { method: "POST", body: JSON.stringify({ studentId, attendanceStatus, teacherNote }) },
     ),
 };
