@@ -5,6 +5,7 @@ import {
   createStudentUser,
   findUserWithRoleByEmail,
   findUserWithRoleByLogin,
+  updateUserPassword,
 } from "../repositories/auth.repository.js";
 import {
   applyUserLink,
@@ -60,6 +61,10 @@ export async function provisionStudentFromCrm(input: ProvisionStudentInput) {
 
   const byCrmId = await findUserByCrmStudentId(crmStudentId);
   if (byCrmId) {
+    if (input.password) {
+      const passwordHash = await bcrypt.hash(input.password.trim(), 10);
+      await updateUserPassword(byCrmId.id, passwordHash);
+    }
     return {
       created: false,
       linked: true,
@@ -74,6 +79,11 @@ export async function provisionStudentFromCrm(input: ProvisionStudentInput) {
   if (byPhone) {
     if (byPhone.crmStudentId && byPhone.crmStudentId !== crmStudentId) {
       throw new ConflictError("Телефон уже привязан к другому ученику CRM");
+    }
+
+    if (input.password) {
+      const passwordHash = await bcrypt.hash(input.password.trim(), 10);
+      await updateUserPassword(byPhone.id, passwordHash);
     }
 
     const linkResult = await applyUserLink({

@@ -1,7 +1,14 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { applyUserLink, getUserLinkStatus } from "../../application/repositories/user-link.repository.js";
-import { findUserWithRoleById } from "../../application/repositories/auth.repository.js";
+import bcrypt from "bcryptjs";
+import {
+  applyUserLink,
+  getUserLinkStatus,
+  findUserByCrmStudentId,
+  findUserByCrmTeacherId,
+  findUserByAppUserId,
+} from "../../application/repositories/user-link.repository.js";
+import { findUserWithRoleById, updateUserPassword } from "../../application/repositories/auth.repository.js";
 import { BadRequestError, ConflictError } from "../../domain/errors.js";
 import { requireIntegrationAuth } from "../guards/integration.guards.js";
 import { exchangeSsoBridgeToken } from "../../application/services/sso-bridge.service.js";
@@ -39,6 +46,13 @@ const provisionStudentSchema = z.object({
   lastName: z.string().trim().max(128).optional().nullable(),
   email: z.string().trim().email().optional().nullable(),
   password: z.string().min(4).max(72).optional().nullable(),
+});
+
+const updatePasswordSchema = z.object({
+  appUserId: z.string().uuid().optional(),
+  crmStudentId: z.string().optional(),
+  crmTeacherId: z.string().optional(),
+  password: z.string().min(4).max(72),
 });
 
 function integrationProfile(
@@ -94,6 +108,28 @@ export async function integrationRoutes(app: FastifyInstance) {
       lastName: body.lastName?.trim() || "",
     });
     return reply.status(result.created ? 201 : 200).send({ success: true, data: result });
+  });
+
+  app.post("/users/update-password", async (request, reply) => {
+    const { appUserId, crmStudentId, crmTeacherId, password } = updatePasswordSchema.parse(request.body);
+
+    let user = null;
+    if (appUserId) {
+      user = await findUserByAppUserId(appUserId);
+    } else if (crmStudentId) {
+      user = await findUserByCrmStudentId(crmStudentId);
+    } else if (crmTeacherId) {
+      user = await findUserByCrmTeacherId(crmTeacherId);
+    }
+
+    if (!user) {
+      throw new BadRequestError("Пользователь не найден в Learning Platform");
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    await updateUserPassword(user.id, passwordHash);
+
+    return { success: true, message: "Пароль успешно синхронизирован" };
   });
 
   app.post("/auth/sso-exchange", async (request, reply) => {
