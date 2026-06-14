@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/page-header";
 import { useAuth } from "@/components/auth-provider";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { isContentAdminRole } from "@/lib/role-labels";
+import { adminOfflineApi } from "@/lib/admin-offline-api";
 import { teacherOfflineApi } from "@/lib/teacher-offline-api";
 
 const statusLabels: Record<string, string> = {
@@ -36,25 +37,52 @@ function formatLessonDate(dateStr: string) {
 
 export default function AdminOfflineLessonsPage() {
   const { user } = useAuth();
+  const isAdmin = isContentAdminRole(user?.role);
   const resource = useApiResource(() => teacherOfflineApi.agenda(), []);
+  const pendingResource = useApiResource(
+    () => (isAdmin ? adminOfflineApi.pendingReview() : Promise.resolve({ classes: [] })),
+    [isAdmin],
+  );
 
-  if (resource.loading) return <LoadingState label="Загружаем расписание школы" />;
+  if (resource.loading || (isAdmin && pendingResource.loading)) {
+    return <LoadingState label="Загружаем расписание школы" />;
+  }
 
   if (resource.errorCode === "CRM_NOT_LINKED") {
-    const isAdmin = isContentAdminRole(user?.role);
+    const pendingClasses = pendingResource.data?.classes ?? [];
+
+    if (isAdmin && pendingClasses.length > 0) {
+      return (
+        <>
+          <PageHeader
+            eyebrow="Офлайн-школа"
+            title="Офлайн-уроки"
+            description="Уроки, ожидающие подтверждения администратора."
+          />
+          <section className="mb-10">
+            <h2 className="font-display mb-5 text-3xl">На подтверждении</h2>
+            <div className="space-y-3">
+              {pendingClasses.map((lesson) => (
+                <LessonRow key={lesson.crmClassId} lesson={lesson} highlight review />
+              ))}
+            </div>
+          </section>
+        </>
+      );
+    }
 
     return (
       <>
         <PageHeader
           eyebrow="Офлайн-школа"
           title="Офлайн-уроки"
-          description="Ваши занятия в студии Maestro: посещаемость, тема и домашнее задание."
+          description="Ваши занятия в студии Maestro: тема, домашнее задание и отчёт по уроку."
         />
         <EmptyState
           title="CRM-профиль не подключён"
           description={
             isAdmin
-              ? "Этот раздел показывает расписание конкретного преподавателя из CRM. Аккаунт администратора CMS (admin@…) не привязан к карточке преподавателя. Откройте пользователя с ролью «Преподаватель», в блоке «Связь с CRM» привяжите его по телефону — затем войдите под этим преподавателем или откройте платформу из CRM."
+              ? "Личное расписание преподавателя недоступно без привязки к CRM. Уроки на подтверждении отображаются выше, если они есть. Для просмотра расписания конкретного преподавателя привяжите его в разделе «Пользователи»."
               : "Ваш аккаунт не связан с преподавателем в CRM. Попросите администратора: «Пользователи» → ваш профиль → «Связь с CRM» → привязка по телефону. Телефон в LP и CRM должен совпадать."
           }
           action={
@@ -75,17 +103,35 @@ export default function AdminOfflineLessonsPage() {
   if (resource.error) return <ErrorState message={resource.error} retry={resource.reload} />;
 
   const classes = resource.data?.classes ?? [];
+  const pendingClasses = pendingResource.data?.classes ?? [];
   const todayKey = new Date().toDateString();
   const todayClasses = classes.filter((item) => new Date(item.date).toDateString() === todayKey);
   const upcomingClasses = classes.filter((item) => new Date(item.date) > new Date(todayKey + " 23:59:59"));
+
+  const isAdminUser = isContentAdminRole(user?.role);
 
   return (
     <>
       <PageHeader
         eyebrow="Офлайн-школа"
         title="Офлайн-уроки"
-        description="Расписание занятий в студии. Отмечайте посещаемость, заполняйте тему и ДЗ, отправляйте урок на подтверждение администратору."
+        description={
+          isAdminUser
+            ? "Расписание занятий в студии. Преподаватели заполняют отчёт, администратор подтверждает урок и отмечает посещаемость."
+            : "Ваше расписание в студии. Заполните отчёт по уроку и отправьте на подтверждение администратору."
+        }
       />
+
+      {isAdminUser && pendingClasses.length > 0 ? (
+        <section className="mb-10">
+          <h2 className="font-display mb-5 text-3xl">На подтверждении</h2>
+          <div className="space-y-3">
+            {pendingClasses.map((lesson) => (
+              <LessonRow key={lesson.crmClassId} lesson={lesson} highlight review />
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <section className="mb-8 rounded-[28px] border border-gold/20 bg-ink p-6 text-white shadow-soft sm:p-8">
         <div className="flex items-center gap-3">
@@ -132,6 +178,7 @@ export default function AdminOfflineLessonsPage() {
 function LessonRow({
   lesson,
   highlight,
+  review,
 }: {
   lesson: {
     crmClassId: string;
@@ -142,8 +189,10 @@ function LessonRow({
     status: string;
     group?: { name: string } | null;
     room?: { name: string } | null;
+    teacher?: { name: string } | null;
   };
   highlight?: boolean;
+  review?: boolean;
 }) {
   return (
     <Link
@@ -162,12 +211,15 @@ function LessonRow({
             <CalendarDays size={14} />
             {lesson.group?.name ?? "Индивидуальный урок"}
           </span>
+          {lesson.teacher?.name ? <span>Преподаватель: {lesson.teacher.name}</span> : null}
           {lesson.room?.name ? <span>Кабинет: {lesson.room.name}</span> : null}
         </p>
       </div>
       <div className="flex items-center gap-3">
-        <span className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase ${statusClasses[lesson.status] ?? "bg-stone-100 text-stone-600"}`}>
-          {statusLabels[lesson.status] ?? lesson.status}
+        <span className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase ${
+          review ? "bg-amber-50 text-amber-900" : (statusClasses[lesson.status] ?? "bg-stone-100 text-stone-600")
+        }`}>
+          {review ? "На подтверждении" : (statusLabels[lesson.status] ?? lesson.status)}
         </span>
         <ArrowRight size={18} className="text-gold" />
       </div>

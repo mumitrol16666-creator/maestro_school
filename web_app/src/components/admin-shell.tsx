@@ -4,7 +4,7 @@ import { BookOpen, ClipboardCheck, FolderOpen, GraduationCap, LayoutDashboard, L
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { roleLabel } from "@/lib/role-labels";
+import { isContentAdminRole, roleLabel } from "@/lib/role-labels";
 import { usePendingHomeworkCount } from "@/hooks/use-pending-homework-count";
 import { usePendingLessonQuestionsCount } from "@/hooks/use-pending-lesson-questions-count";
 import { usePendingOnlineLessonsCount } from "@/hooks/use-pending-online-lessons-count";
@@ -24,10 +24,14 @@ const accessNavigation = [
   { href: "/admin/users", label: "Пользователи", icon: UserCog },
 ];
 
-const teachingNavigation = [
-  { href: "/admin/students", label: "Ученики", icon: Users },
+const teacherNavigation = [
   { href: "/admin/offline-lessons", label: "Офлайн-уроки", icon: GraduationCap },
   { href: "/admin/online-lessons", label: "Онлайн-уроки", icon: Video },
+];
+
+const teachingNavigation = [
+  { href: "/admin/students", label: "Ученики", icon: Users },
+  ...teacherNavigation,
   { href: "/admin/homework-review", label: "Проверка ДЗ", icon: ClipboardCheck },
   { href: "/admin/lesson-questions", label: "Вопросы", icon: MessageCircleQuestion },
 ];
@@ -39,17 +43,12 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const { count: pendingHomeworkCount, reload: reloadPendingHomeworkCount } = usePendingHomeworkCount();
   const { count: pendingQuestionsCount, reload: reloadPendingQuestionsCount } = usePendingLessonQuestionsCount();
   const { count: pendingOnlineLessonsCount, reload: reloadPendingOnlineLessonsCount } = usePendingOnlineLessonsCount();
-  const isContentAdmin = user?.role === "admin" || user?.role === "owner";
-  const navigation = [
-    ...(isContentAdmin ? cmsNavigation : [
-      { href: "/admin/offline-lessons", label: "Офлайн-уроки", icon: GraduationCap },
-      { href: "/admin/online-lessons", label: "Онлайн-уроки", icon: Video },
-    ]),
-    ...(isContentAdmin ? accessNavigation : []),
-    ...teachingNavigation.filter((item) =>
-      isContentAdmin || ["/admin/online-lessons", "/admin/offline-lessons"].includes(item.href),
-    ),
-  ];
+  const isContentAdmin = isContentAdminRole(user?.role);
+  const navigation = isContentAdmin
+    ? [...cmsNavigation, ...accessNavigation, ...teachingNavigation]
+    : teacherNavigation;
+  const sidebarTitle = isContentAdmin ? "Content CMS" : "Кабинет преподавателя";
+  const headerTitle = isContentAdmin ? "Maestro Admin" : roleLabel(user?.role);
 
   useEffect(() => {
     if (pathname.startsWith("/admin/homework-review")) {
@@ -66,7 +65,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const sidebar = (
     <aside className="flex h-full flex-col bg-ink px-5 py-6 text-white">
       <div className="flex items-center justify-between"><Brand /><button className="lg:hidden" onClick={() => setOpen(false)}><X /></button></div>
-      <p className="mt-8 px-4 text-[10px] font-bold uppercase tracking-[0.2em] text-gold">Content CMS</p>
+      <p className="mt-8 px-4 text-[10px] font-bold uppercase tracking-[0.2em] text-gold">{sidebarTitle}</p>
       <nav className="mt-4 space-y-2">{navigation.map(({ href, label, icon: Icon }) => {
         const active = href === "/admin" ? pathname === href : pathname.startsWith(href);
         const pending = href === "/admin/homework-review"
@@ -110,7 +109,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       <header className="sticky top-0 z-30 flex h-20 items-center gap-4 border-b border-stone-200/80 bg-cream/90 px-5 backdrop-blur-xl sm:px-8">
         <button onClick={() => setOpen(true)} className="grid h-10 w-10 place-items-center rounded-full bg-white lg:hidden"><Menu size={20} /></button>
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">Maestro Admin</p>
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">{headerTitle}</p>
           <p className="text-sm font-semibold">{user?.email}</p>
           {pendingHomeworkCount != null && pendingHomeworkCount > 0 && (
             <Link href="/admin/homework-review?status=submitted" className="mt-1 inline-flex items-center gap-2 text-xs font-bold text-amber-700 hover:underline">

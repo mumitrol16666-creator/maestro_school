@@ -16,6 +16,7 @@ import { studentsAdminRoutes } from "./students-admin.routes.js";
 import { usersAdminRoutes } from "./users-admin.routes.js";
 import { schoolOfflineRoutes } from "./school-offline.routes.js";
 import { teacherOfflineRoutes } from "./teacher-offline.routes.js";
+import { adminOfflineRoutes } from "./admin-offline.routes.js";
 
 export async function registerRoutes(app: FastifyInstance) {
   await app.register(async (api) => {
@@ -36,5 +37,6 @@ export async function registerRoutes(app: FastifyInstance) {
     await api.register(usersAdminRoutes);
     await api.register(schoolOfflineRoutes);
     await api.register(teacherOfflineRoutes);
+    await api.register(adminOfflineRoutes);
   }, { prefix: "/api/v1" });
 }

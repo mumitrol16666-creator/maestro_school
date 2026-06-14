@@ -146,6 +146,48 @@ export async function postTeacherAttendance(
   );
 }
 
+export async function fetchPendingReviewClasses() {
+  return crmGet<{ classes: Array<Record<string, unknown>> }>(
+    "/api/integration/v1/classes/pending-review",
+  );
+}
+
+export async function postAdminAttendance(
+  crmClassId: string,
+  payload: {
+    studentId: string;
+    attended?: boolean;
+    attendanceStatus: string;
+    teacherNote?: string;
+  },
+) {
+  return crmPost<Record<string, unknown>>(
+    `/api/integration/v1/classes/${encodeURIComponent(crmClassId)}/admin-attendance`,
+    payload,
+  );
+}
+
+export async function postAdminApproveClass(
+  crmClassId: string,
+  payload: {
+    deduct?: boolean;
+    topic?: string;
+    lessonGoals?: string;
+    lessonSummary?: string;
+    homeworkDraft?: string;
+    nextLessonFocus?: string;
+    materials?: Array<{ type?: string; url?: string; title?: string }>;
+    teacherComment?: string;
+  },
+) {
+  return crmPost<{
+    crmClassId: string;
+    status: string;
+    class: Record<string, unknown>;
+    deductions: Array<{ studentId: string; deducted?: boolean }>;
+  }>(`/api/integration/v1/classes/${encodeURIComponent(crmClassId)}/approve`, payload);
+}
+
 export async function syncStudentFromApp(payload: {
   appUserId: string;
   phone: string;

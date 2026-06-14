@@ -6,7 +6,6 @@ import {
   getTeacherOfflineClassStudents,
   teacherOfflineFinish,
   teacherOfflineMarkNotHeld,
-  teacherOfflineSetAttendance,
   teacherOfflineStart,
   teacherOfflineSubmit,
 } from "../../application/services/teacher-offline.service.js";
@@ -95,29 +94,6 @@ export async function teacherOfflineRoutes(app: FastifyInstance) {
       const { crmClassId } = z.object({ crmClassId: z.string().min(1) }).parse(request.params);
       const body = z.object({ comment: z.string().max(5000).optional() }).parse(request.body ?? {});
       return { data: await teacherOfflineMarkNotHeld(request.user!.id, crmClassId, body.comment) };
-    },
-  );
-
-  app.post(
-    "/teachers/me/offline-lessons/:crmClassId/attendance",
-    { preHandler: writeGuards },
-    async (request) => {
-      const { crmClassId } = z.object({ crmClassId: z.string().min(1) }).parse(request.params);
-      const body = z.object({
-        studentId: z.string().min(1),
-        attended: z.boolean().optional(),
-        attendanceStatus: z.enum(["unmarked", "present", "late", "excused_absence", "unexcused_absence"]),
-        teacherNote: z.string().max(3000).optional(),
-      }).parse(request.body ?? {});
-      return {
-        data: await teacherOfflineSetAttendance(
-          request.user!.id,
-          crmClassId,
-          body.studentId,
-          body.attendanceStatus,
-          body.teacherNote,
-        ),
-      };
     },
   );
 }
