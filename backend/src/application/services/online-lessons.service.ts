@@ -9,7 +9,7 @@ import { addMaestroCoins } from "./coins.service.js";
 import { createUserNotification } from "./notification.service.js";
 import { awardManualPoints } from "./points.service.js";
 import { sendPushToUser } from "./push-notification.service.js";
-import { postOnlineLessonBooking } from "../../infrastructure/crm/crm-client.js";
+import { postOnlineLessonBooking, postOnlineLessonStatus } from "../../infrastructure/crm/crm-client.js";
 
 const requestSelect = {
   id: true,
@@ -66,6 +66,14 @@ const requestSelect = {
 function assertCoinsReason(coins: number, reason?: string | null) {
   if (coins > 0 && !reason?.trim()) {
     throw new BadRequestError("Укажите причину начисления Maestro Coins");
+  }
+}
+
+async function syncCrmStatus(requestId: string, status: "assigned" | "scheduled" | "completed" | "cancelled" | "no_show") {
+  try {
+    await postOnlineLessonStatus(requestId, status);
+  } catch (error) {
+    console.error("[online-lessons] Failed to sync CRM status:", error instanceof Error ? error.message : error);
   }
 }
 
@@ -226,11 +234,13 @@ export async function assignOnlineLessonRequest(requestId: string, teacherId: st
     throw new BadRequestError("Заявку нельзя взять в текущем статусе");
   }
 
-  return prisma.onlineLessonRequest.update({
+  const updated = await prisma.onlineLessonRequest.update({
     where: { id: requestId },
     data: { teacherId, status: "assigned" },
     select: requestSelect,
   });
+  await syncCrmStatus(requestId, "assigned");
+  return updated;
 }
 
 export async function scheduleOnlineLessonRequest(requestId: string, params: {
@@ -275,16 +285,19 @@ export async function scheduleOnlineLessonRequest(requestId: string, params: {
     tag: `online-lesson-${requestId}`,
   });
 
+  await syncCrmStatus(requestId, "scheduled");
   return updated;
 }
 
 export async function cancelOnlineLessonRequest(requestId: string) {
   await requireManageableRequest(requestId);
-  return prisma.onlineLessonRequest.update({
+  const updated = await prisma.onlineLessonRequest.update({
     where: { id: requestId },
     data: { status: "cancelled" },
     select: requestSelect,
   });
+  await syncCrmStatus(requestId, "cancelled");
+  return updated;
 }
 
 export async function markOnlineLessonNoShow(requestId: string) {
@@ -292,10 +305,55 @@ export async function markOnlineLessonNoShow(requestId: string) {
   if (item.status !== "scheduled") {
     throw new BadRequestError("Отметить неявку можно только для назначенного урока");
   }
-  return prisma.onlineLessonRequest.update({
+  const updated = await prisma.onlineLessonRequest.update({
     where: { id: requestId },
     data: { status: "no_show" },
     select: requestSelect,
+  });
+  await syncCrmStatus(requestId, "no_show");
+  return updated;
+}
+
+export async function syncOnlineLessonFromCrm(requestId: string, params: {
+  action: "schedule" | "cancel";
+  crmTeacherId?: string;
+  scheduledAt?: Date;
+  meetingUrl?: string;
+}) {
+  if (params.action === "cancel") {
+    const item = await getAdminOnlineLessonRequest(requestId);
+    if (item.status === "cancelled") return item;
+    return cancelOnlineLessonRequest(requestId);
+  }
+
+  if (!params.crmTeacherId || !params.scheduledAt || !params.meetingUrl?.trim()) {
+    throw new BadRequestError("Для назначения нужны преподаватель, дата и ссылка");
+  }
+
+  const teacher = await prisma.user.findFirst({
+    where: {
+      crmTeacherId: params.crmTeacherId,
+      isActive: true,
+      deletedAt: null,
+      role: { slug: "teacher" },
+    },
+    select: { id: true },
+  });
+  if (!teacher) {
+    throw new BadRequestError("Преподаватель CRM не подключён к приложению");
+  }
+
+  const item = await requireManageableRequest(requestId);
+  if (item.status === "new" || (item.status === "assigned" && item.teacherId !== teacher.id)) {
+    await prisma.onlineLessonRequest.update({
+      where: { id: requestId },
+      data: { teacherId: teacher.id, status: "assigned" },
+    });
+  }
+
+  return scheduleOnlineLessonRequest(requestId, {
+    scheduledAt: params.scheduledAt,
+    zoomUrl: params.meetingUrl,
   });
 }
 
@@ -405,6 +463,7 @@ export async function completeOnlineLessonRequest(requestId: string, params: {
     });
   }
 
+  await syncCrmStatus(requestId, "completed");
   return getAdminOnlineLessonRequest(requestId);
 }
 

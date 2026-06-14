@@ -133,11 +133,7 @@ export async function onlineLessonsRoutes(app: FastifyInstance) {
       }).parse(request.query);
 
       const authUser = request.user!;
-      const teacherScopedStatuses = new Set<typeof query.status>(["assigned", "scheduled"]);
-      const autoMine = authUser.roleSlug === "teacher"
-        && query.status
-        && teacherScopedStatuses.has(query.status);
-      const mine = query.mine ?? autoMine;
+      const mine = authUser.roleSlug === "teacher" ? true : (query.mine ?? false);
 
       const result = await listAdminOnlineLessonRequests({
         ...query,

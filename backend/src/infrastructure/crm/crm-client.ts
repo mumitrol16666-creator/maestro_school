@@ -102,6 +102,16 @@ export async function postOnlineLessonBooking(payload: {
   }>("/api/integration/v1/bookings/online-lesson", payload);
 }
 
+export async function postOnlineLessonStatus(
+  externalSourceId: string,
+  status: "new" | "assigned" | "scheduled" | "completed" | "cancelled" | "no_show",
+) {
+  return crmPost<{ crmBookingId: string; appStatus: string }>(
+    `/api/integration/v1/bookings/${encodeURIComponent(externalSourceId)}/app-status`,
+    { status },
+  );
+}
+
 export type TeacherSubmitPayload = {
   crmTeacherId: string;
   topic?: string;

@@ -14,6 +14,7 @@ import { requireIntegrationAuth } from "../guards/integration.guards.js";
 import { exchangeSsoBridgeToken } from "../../application/services/sso-bridge.service.js";
 import { provisionTeacherFromCrm } from "../../application/services/teacher-provision.service.js";
 import { provisionStudentFromCrm } from "../../application/services/student-provision.service.js";
+import { syncOnlineLessonFromCrm } from "../../application/services/online-lessons.service.js";
 
 const linkSchema = z.object({
   phone: z.string().optional(),
@@ -54,6 +55,16 @@ const updatePasswordSchema = z.object({
   crmTeacherId: z.string().optional(),
   password: z.string().min(4).max(72),
 });
+
+const onlineLessonSyncSchema = z.discriminatedUnion("action", [
+  z.object({
+    action: z.literal("schedule"),
+    crmTeacherId: z.string().min(1).max(64),
+    scheduledAt: z.coerce.date(),
+    meetingUrl: z.string().trim().url().max(1024),
+  }),
+  z.object({ action: z.literal("cancel") }),
+]);
 
 function integrationProfile(
   user: NonNullable<Awaited<ReturnType<typeof findUserWithRoleById>>>,
@@ -130,6 +141,15 @@ export async function integrationRoutes(app: FastifyInstance) {
     await updateUserPassword(user.id, passwordHash);
 
     return { success: true, message: "Пароль успешно синхронизирован" };
+  });
+
+  app.post("/online-lessons/:requestId/sync", async (request) => {
+    const { requestId } = z.object({ requestId: z.string().uuid() }).parse(request.params);
+    const body = onlineLessonSyncSchema.parse(request.body);
+    return {
+      success: true,
+      data: await syncOnlineLessonFromCrm(requestId, body),
+    };
   });
 
   app.post("/auth/sso-exchange", async (request, reply) => {
