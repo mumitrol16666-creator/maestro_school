@@ -180,6 +180,24 @@ async function main() {
     });
   }
 
+  const DIRECTIONS = [
+    { title: "Гитара", slug: "guitar", description: "Уроки гитары в Maestro" },
+    { title: "Электрогитара", slug: "electric-guitar", description: "Уроки электрогитары в Maestro" },
+    { title: "Басгитара", slug: "bass-guitar", description: "Уроки бас-гитары в Maestro" },
+    { title: "Вокал", slug: "vocal", description: "Уроки вокала в Maestro" },
+    { title: "Фортепиано", slug: "piano", description: "Уроки фортепиано в Maestro" },
+    { title: "Укулеле", slug: "ukulele", description: "Уроки укулеле в Maestro" },
+  ];
+
+  console.log("🎨 Seeding directions...");
+  for (const dir of DIRECTIONS) {
+    await prisma.direction.upsert({
+      where: { slug: dir.slug },
+      update: { title: dir.title, description: dir.description },
+      create: { title: dir.title, slug: dir.slug, description: dir.description, isPublished: true },
+    });
+  }
+
   console.log(
     adminEnv
       ? "Production seed complete: roles, permissions, achievements and first admin are ready."
