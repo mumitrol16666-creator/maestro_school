@@ -26,6 +26,8 @@ const membershipTypeLabels: Record<string, string> = {
   individual_package: "Пакет индивид.",
   single_class: "Разовое",
   custom: "Индивидуальный",
+  hybrid_1m: "Гибридный 1 мес.",
+  hybrid_2m: "Гибридный 2 мес.",
 };
 
 function formatLessonDate(dateStr: string) {
@@ -268,6 +270,29 @@ export default function SchoolLessonsPage() {
               <p className="mt-1 text-xs text-white/50">до {formatLessonDate(currentMembership.endDate)}</p>
             </div>
           </div>
+
+          {currentMembership.individualClassesRemaining !== null && currentMembership.individualClassesRemaining !== undefined && (
+            <div className="mt-6 border-t border-white/10 pt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+              <div className="rounded-2xl bg-white/5 p-4 border border-white/10">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-white/50">Индивидуальные</p>
+                <p className="font-display mt-2 text-2xl text-gold">{currentMembership.individualClassesRemaining} ост.</p>
+              </div>
+              <div className="rounded-2xl bg-white/5 p-4 border border-white/10">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-white/50">Групповые</p>
+                <p className="font-display mt-2 text-2xl text-gold">{currentMembership.groupClassesRemaining} ост.</p>
+              </div>
+              <div className="rounded-2xl bg-white/5 p-4 border border-white/10">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-white/50">Теория</p>
+                <p className="font-display mt-2 text-2xl text-gold">{currentMembership.theoryClassesRemaining} ост.</p>
+              </div>
+              <div className="rounded-2xl bg-white/5 p-4 border border-white/10">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-white/50">Заморозки (экс.)</p>
+                <p className="font-display mt-2 text-2xl text-white">
+                  {currentMembership.emergencyFreezesAvailable} <span className="text-white/40 text-xs">/ {currentMembership.emergencyFreezesUsed ?? 0} исп.</span>
+                </p>
+              </div>
+            </div>
+          )}
         </section>
       ) : null}
 
@@ -312,6 +337,26 @@ export default function SchoolLessonsPage() {
                     Долг: {m.remainingAmountKzt.toLocaleString("ru-RU")} ₸
                   </p>
                 ) : null}
+                {m.individualClassesRemaining !== null && m.individualClassesRemaining !== undefined && (
+                  <div className="mt-3 border-t border-stone-100 pt-3 text-xs text-stone-500 space-y-1">
+                    <div className="flex justify-between">
+                      <span>Индивидуальные:</span>
+                      <span className="font-semibold text-stone-800">{m.individualClassesRemaining}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Групповые:</span>
+                      <span className="font-semibold text-stone-800">{m.groupClassesRemaining}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Теория:</span>
+                      <span className="font-semibold text-stone-800">{m.theoryClassesRemaining}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Экстренные заморозки:</span>
+                      <span className="font-semibold text-stone-800">{m.emergencyFreezesAvailable} (исп. {m.emergencyFreezesUsed ?? 0})</span>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>

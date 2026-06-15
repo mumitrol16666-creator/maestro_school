@@ -28,6 +28,11 @@ export type SchoolOfflineMembership = {
   teacherName: string | null;
   lessonFormat: string;
   classesRemaining: number;
+  individualClassesRemaining?: number | null;
+  groupClassesRemaining?: number | null;
+  theoryClassesRemaining?: number | null;
+  emergencyFreezesAvailable?: number | null;
+  emergencyFreezesUsed?: number | null;
   totalClasses: number;
   startDate: string;
   endDate: string;

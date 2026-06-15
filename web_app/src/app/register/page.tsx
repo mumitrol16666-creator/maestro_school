@@ -25,6 +25,14 @@ export default function RegisterPage() {
     if (!authLoading && user) router.replace(["admin", "owner"].includes(user.role) ? "/admin" : "/courses");
   }, [authLoading, router, user]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    setFirstName(params.get("firstName") ?? "");
+    setLastName(params.get("lastName") ?? "");
+    setPhone(params.get("phone") ?? "");
+  }, []);
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitting(true);

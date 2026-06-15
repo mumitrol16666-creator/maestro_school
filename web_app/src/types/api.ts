@@ -36,6 +36,22 @@ export interface RegisterInput {
   password: string;
 }
 
+export interface TrialBookingInput {
+  firstName: string;
+  lastName: string;
+  phone: string;
+  direction: string;
+  level: string;
+  preferredTime: string;
+  comment?: string;
+}
+
+export interface TrialBookingResponse {
+  bookingId: string;
+  status: string;
+  replyChannel: "whatsapp";
+}
+
 export interface ApiCourseSummary {
   id: string;
   directionId: string;

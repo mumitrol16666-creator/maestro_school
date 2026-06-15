@@ -172,10 +172,10 @@ export default function LoginPage() {
           <div className="mt-8 rounded-2xl border border-stone-200 bg-white p-5">
             <p className="text-sm font-bold text-ink">Ещё не учитесь в Maestro?</p>
             <p className="mt-2 text-sm leading-6 text-stone-500">
-              Запишитесь на пробный урок и получите доступ к личному кабинету ученика.
+              Оставьте заявку без регистрации. Администратор ответит вам в WhatsApp.
             </p>
             <Link
-              href="/register"
+              href="/trial-lesson"
               className="mt-4 inline-flex items-center gap-2 text-sm font-bold text-gold transition hover:text-ink"
             >
               Записаться на пробный урок <ArrowRight size={15} />

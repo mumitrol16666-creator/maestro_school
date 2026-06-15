@@ -14,6 +14,8 @@ import type {
   StartLessonResponse,
   StudentAchievementItem,
   StudentAchievementsMeta,
+  TrialBookingInput,
+  TrialBookingResponse,
 } from "@/types/api";
 import type { StudentOfflineSummary } from "@/types/school-offline";
 
@@ -119,6 +121,11 @@ export const api = {
     }),
   register: (body: RegisterInput) =>
     apiRequest<LoginResponse>("/auth/register", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  createTrialBooking: (body: TrialBookingInput) =>
+    apiRequest<TrialBookingResponse>("/trial-bookings", {
       method: "POST",
       body: JSON.stringify(body),
     }),
