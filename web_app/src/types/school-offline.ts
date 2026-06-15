@@ -45,7 +45,12 @@ export type StudentOfflineSummary = {
   profile: {
     name: string;
     phone: string;
-    groups: Array<{ crmGroupId?: string; name: string; direction?: string }>;
+    groups: Array<{
+      crmGroupId?: string;
+      name: string;
+      instruments?: Array<{ name: string; quantity: number }>;
+      schedules?: Array<{ dayOfWeek: number; time: string; duration?: number }>;
+    }>;
   };
   balanceSnapshot: {
     classesRemainingTotal: number;

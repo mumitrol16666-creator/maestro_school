@@ -188,6 +188,7 @@ export default function SchoolLessonsPage() {
 
   const { balanceSnapshot, upcomingLessons, lessonHistory } = data;
   const currentMembership = balanceSnapshot.currentMembership;
+  const groupDayNames = ["", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
   function downloadMonthlyReport() {
     const lessons = lessonHistory.filter((lesson) => (
@@ -266,6 +267,28 @@ export default function SchoolLessonsPage() {
               <p className="font-display text-4xl text-gold">{currentMembership.classesRemaining} из {currentMembership.totalClasses}</p>
               <p className="mt-1 text-xs text-white/50">до {formatLessonDate(currentMembership.endDate)}</p>
             </div>
+          </div>
+        </section>
+      ) : null}
+
+      {data.profile.groups.length > 0 ? (
+        <section className="mb-10 rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">Мои группы</p>
+          <h2 className="font-display mt-3 text-3xl">Ансамбли и расписание</h2>
+          <div className="mt-6 grid gap-4 sm:grid-cols-2">
+            {data.profile.groups.map((group) => (
+              <div key={group.crmGroupId ?? group.name} className="rounded-2xl border border-gold/20 bg-white p-5">
+                <p className="font-display text-2xl text-ink">{group.name}</p>
+                <p className="mt-3 text-sm font-semibold text-stone-700">
+                  {(group.schedules ?? []).map((item) => `${groupDayNames[item.dayOfWeek]} ${item.time}`).join(" · ") || "Расписание уточняется"}
+                </p>
+                {(group.instruments ?? []).length > 0 ? (
+                  <p className="mt-2 text-xs text-stone-500">
+                    {(group.instruments ?? []).map((item) => `${item.name} ×${item.quantity}`).join(", ")}
+                  </p>
+                ) : null}
+              </div>
+            ))}
           </div>
         </section>
       ) : null}
