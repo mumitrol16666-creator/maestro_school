@@ -1,4 +1,5 @@
 import { env } from "../../config/env.js";
+import { AppError } from "../../domain/errors.js";
 
 type CrmResponse<T> = { success: boolean; data?: T; error?: string };
 
@@ -25,7 +26,7 @@ async function crmGet<T>(path: string): Promise<T> {
 
   const body = (await response.json()) as CrmResponse<T>;
   if (!response.ok || !body.success || !body.data) {
-    throw new Error(body.error || `CRM request failed (${response.status})`);
+    throw new AppError(response.status, body.error || `CRM request failed (${response.status})`);
   }
   return body.data;
 }
@@ -42,7 +43,7 @@ async function crmPost<T>(path: string, payload: Record<string, unknown>): Promi
 
   const body = (await response.json()) as CrmResponse<T>;
   if (!response.ok || !body.success || !body.data) {
-    throw new Error(body.error || `CRM request failed (${response.status})`);
+    throw new AppError(response.status, body.error || `CRM request failed (${response.status})`);
   }
   return body.data;
 }
