@@ -22,7 +22,7 @@ export function usePendingOnlineLessonsCount(pollMs = 60_000) {
   }, [pollMs, reload]);
 
   const count = counts
-    ? counts.newRequests + counts.myInWork + counts.submissions
+    ? counts.newRequests + counts.myInWork
     : null;
 
   return { count, counts, reload };
