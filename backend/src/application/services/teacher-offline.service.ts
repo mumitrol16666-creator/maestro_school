@@ -36,16 +36,31 @@ function defaultAgendaRange() {
   return { from: start.toISOString(), to: end.toISOString() };
 }
 
+function dedupeOfflineClasses<T extends { crmClassId?: unknown }>(classes: T[]): T[] {
+  const seen = new Set<string>();
+  return classes.filter((item) => {
+    const crmClassId = typeof item.crmClassId === "string" ? item.crmClassId : "";
+    if (!crmClassId) return true;
+    if (seen.has(crmClassId)) return false;
+    seen.add(crmClassId);
+    return true;
+  });
+}
+
 export async function getTeacherOfflineAgenda(
   appUserId: string,
   params?: { from?: string; to?: string },
 ) {
   const crmTeacherId = await requireCrmTeacherId(appUserId);
   const fallback = defaultAgendaRange();
-  return fetchTeacherOfflineClasses(crmTeacherId, {
+  const agenda = await fetchTeacherOfflineClasses(crmTeacherId, {
     from: params?.from ?? fallback.from,
     to: params?.to ?? fallback.to,
   });
+  return {
+    ...agenda,
+    classes: Array.isArray(agenda.classes) ? dedupeOfflineClasses(agenda.classes) : [],
+  };
 }
 
 export async function getTeacherOfflineClass(appUserId: string, crmClassId: string) {
