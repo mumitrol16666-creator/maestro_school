@@ -35,6 +35,39 @@ function formatLessonDate(dateStr: string) {
   }).format(new Date(dateStr));
 }
 
+function dedupeLessons<T extends {
+  crmClassId: string;
+  title?: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  teacher?: { name: string } | null;
+  group?: { name: string } | null;
+  room?: { name: string } | null;
+}>(lessons: T[]) {
+  const seenIds = new Set<string>();
+  const seenSignatures = new Set<string>();
+
+  return lessons.filter((lesson) => {
+    if (seenIds.has(lesson.crmClassId)) return false;
+    seenIds.add(lesson.crmClassId);
+
+    const signature = [
+      lesson.date,
+      lesson.startTime,
+      lesson.endTime,
+      lesson.title,
+      lesson.teacher?.name,
+      lesson.group?.name,
+      lesson.room?.name,
+    ].map((value) => String(value ?? "").trim()).join("|");
+
+    if (seenSignatures.has(signature)) return false;
+    seenSignatures.add(signature);
+    return true;
+  });
+}
+
 export default function AdminOfflineLessonsPage() {
   const { user } = useAuth();
   const isAdmin = isContentAdminRole(user?.role);
@@ -102,8 +135,9 @@ export default function AdminOfflineLessonsPage() {
 
   if (resource.error) return <ErrorState message={resource.error} retry={resource.reload} />;
 
-  const classes = resource.data?.classes ?? [];
-  const pendingClasses = pendingResource.data?.classes ?? [];
+  const pendingClasses = dedupeLessons(pendingResource.data?.classes ?? []);
+  const pendingClassIds = new Set(pendingClasses.map((lesson) => lesson.crmClassId));
+  const classes = dedupeLessons(resource.data?.classes ?? []).filter((lesson) => !pendingClassIds.has(lesson.crmClassId));
   const todayKey = new Date().toDateString();
   const todayClasses = classes.filter((item) => new Date(item.date).toDateString() === todayKey);
   const upcomingClasses = classes.filter((item) => new Date(item.date) > new Date(todayKey + " 23:59:59"));

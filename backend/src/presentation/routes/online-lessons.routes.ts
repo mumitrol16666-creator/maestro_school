@@ -156,7 +156,10 @@ export async function onlineLessonsRoutes(app: FastifyInstance) {
     "/admin/online-lesson-requests/pending-count",
     { preHandler: manageGuards() },
     async (request) => ({
-      data: await countPendingOnlineLessonRequests(request.user!.id),
+      data: await countPendingOnlineLessonRequests({
+        teacherId: request.user!.id,
+        includeNewRequests: request.user!.roleSlug !== "teacher",
+      }),
     }),
   );
 

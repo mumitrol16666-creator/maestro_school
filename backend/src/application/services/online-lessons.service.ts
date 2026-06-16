@@ -206,9 +206,13 @@ export async function getAdminOnlineLessonRequest(requestId: string) {
   return item;
 }
 
-export async function countPendingOnlineLessonRequests(teacherId?: string) {
+export async function countPendingOnlineLessonRequests(params?: { teacherId?: string; includeNewRequests?: boolean }) {
+  const teacherId = params?.teacherId;
+  const includeNewRequests = params?.includeNewRequests ?? true;
   const [newRequests, myInWork, submissions] = await Promise.all([
-    prisma.onlineLessonRequest.count({ where: { status: "new" } }),
+    includeNewRequests
+      ? prisma.onlineLessonRequest.count({ where: { status: "new" } })
+      : Promise.resolve(0),
     teacherId
       ? prisma.onlineLessonRequest.count({
           where: { teacherId, status: { in: ["assigned", "scheduled"] } },

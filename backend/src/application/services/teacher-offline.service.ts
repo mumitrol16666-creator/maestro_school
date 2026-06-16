@@ -36,13 +36,40 @@ function defaultAgendaRange() {
   return { from: start.toISOString(), to: end.toISOString() };
 }
 
-function dedupeOfflineClasses<T extends { crmClassId?: unknown }>(classes: T[]): T[] {
-  const seen = new Set<string>();
+function dedupeOfflineClasses<T extends {
+  crmClassId?: unknown;
+  title?: unknown;
+  date?: unknown;
+  startTime?: unknown;
+  endTime?: unknown;
+  teacher?: { crmTeacherId?: unknown } | null;
+  group?: { crmGroupId?: unknown; name?: unknown } | null;
+  crmIndividualStudentId?: unknown;
+}>(classes: T[]): T[] {
+  const seenIds = new Set<string>();
+  const seenSignatures = new Set<string>();
   return classes.filter((item) => {
     const crmClassId = typeof item.crmClassId === "string" ? item.crmClassId : "";
-    if (!crmClassId) return true;
-    if (seen.has(crmClassId)) return false;
-    seen.add(crmClassId);
+    if (crmClassId) {
+      if (seenIds.has(crmClassId)) return false;
+      seenIds.add(crmClassId);
+    }
+
+    const signature = [
+      item.date,
+      item.startTime,
+      item.endTime,
+      item.title,
+      item.teacher?.crmTeacherId,
+      item.group?.crmGroupId ?? item.group?.name,
+      item.crmIndividualStudentId,
+    ].map((value) => String(value ?? "").trim()).join("|");
+
+    if (signature.replace(/\|/g, "")) {
+      if (seenSignatures.has(signature)) return false;
+      seenSignatures.add(signature);
+    }
+
     return true;
   });
 }
