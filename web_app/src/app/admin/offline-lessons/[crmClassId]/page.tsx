@@ -68,7 +68,7 @@ export default function AdminOfflineLessonDetailPage() {
 
   const lesson = lessonResource.data;
   const students = studentsResource.data?.students ?? [];
-  const canEditTeacherReport = !isAdmin && lesson && !["completed", "cancelled", "pending_admin_review"].includes(lesson.status);
+  const canEditTeacherReport = !isAdmin && lesson && lesson.status === "started";
   const canEditAdminReview = isAdmin && lesson?.status === "pending_admin_review";
   const canEditReport = Boolean(canEditTeacherReport || canEditAdminReview);
   const canApprove = isAdmin && lesson?.status === "pending_admin_review";
@@ -379,6 +379,67 @@ export default function AdminOfflineLessonDetailPage() {
           ) : null}
         </aside>
       </div>
+
+      {!isAdmin && lesson.status === "scheduled" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/80 p-4 backdrop-blur-md">
+          <div className="w-full max-w-md overflow-hidden rounded-[32px] border border-stone-200 bg-paper p-6 shadow-2xl sm:p-8">
+            <div className="flex flex-col items-center text-center animate-in fade-in zoom-in-95 duration-200">
+              <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+                <Play className="fill-emerald-600 text-emerald-600" size={32} />
+              </div>
+              <h3 className="font-display text-2xl font-bold text-stone-900">Начать урок</h3>
+              <p className="mt-3 text-sm text-stone-500 leading-relaxed">
+                Вы собираетесь начать офлайн-урок <strong className="text-stone-700">{lesson.title}</strong>.
+                {lesson.group?.name ? ` Группа: ${lesson.group.name}.` : ""}
+              </p>
+              
+              <div className="mt-5 rounded-2xl bg-stone-50 p-4 text-xs text-stone-600 w-full text-left space-y-2 border border-stone-100">
+                <div className="flex justify-between">
+                  <span className="font-medium text-stone-400">Дата урока:</span>
+                  <span className="font-bold text-stone-700">
+                    {new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" }).format(new Date(lesson.date))}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium text-stone-400">Время начала:</span>
+                  <span className="font-bold text-stone-700">{lesson.startTime}</span>
+                </div>
+              </div>
+
+              {error ? (
+                <div className="mt-5 w-full rounded-2xl border border-red-100 bg-red-50 p-3 text-left text-xs font-semibold text-red-700">
+                  {error}
+                </div>
+              ) : null}
+
+              <div className="mt-6 flex flex-col gap-3 w-full">
+                <button
+                  disabled={busy != null}
+                  onClick={() => void runAction("start", () => teacherOfflineApi.start(crmClassId))}
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-700 px-5 py-4 text-sm font-bold text-white transition-all hover:bg-emerald-800 disabled:opacity-50"
+                >
+                  {busy === "start" ? (
+                    <LoaderCircle className="animate-spin" size={16} />
+                  ) : (
+                    <Play size={16} />
+                  )}
+                  Начать урок
+                </button>
+                <Link
+                  href="/admin/offline-lessons"
+                  className="flex w-full items-center justify-center rounded-2xl border border-stone-200 bg-stone-50 px-5 py-3.5 text-sm font-bold text-stone-600 transition-all hover:bg-stone-100"
+                >
+                  Вернуться в расписание
+                </Link>
+              </div>
+
+              <p className="mt-5 text-xs text-stone-400 leading-normal">
+                Начать урок можно не ранее чем за 15 минут до его начала.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <SuccessModal
         open={Boolean(success)}
