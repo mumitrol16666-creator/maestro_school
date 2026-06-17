@@ -234,6 +234,10 @@ model User {
   firstName    String    @map("first_name") @db.VarChar(128)
   lastName     String    @map("last_name") @db.VarChar(128)
   avatar       String?   @db.VarChar(512)
+  profileBio   String?   @map("profile_bio") @db.Text
+  profileInstrument String? @map("profile_instrument") @db.VarChar(128)
+  profileInterests String[] @default([]) @map("profile_interests")
+  profilePublic Boolean @default(false) @map("profile_public")
   roleId       String    @map("role_id") @db.Uuid
   isActive     Boolean   @default(true) @map("is_active")
 

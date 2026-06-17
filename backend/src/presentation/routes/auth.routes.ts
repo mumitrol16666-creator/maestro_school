@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import crypto from "node:crypto";
+import path from "node:path";
 import {
   createStudentUser,
   findUserWithRoleByEmail,
@@ -20,6 +21,12 @@ import { getStudentCoins } from "../../application/services/coins.service.js";
 import { getStudentPointsBalance } from "../../application/services/points.service.js";
 import { authenticate } from "../guards/auth.guards.js";
 import { syncNewStudentToCrm } from "../../application/services/crm-sync.service.js";
+import { postStudentAvatarToCrm } from "../../infrastructure/crm/crm-client.js";
+import {
+  inferMimeType,
+  mediaPublicUrl,
+  writeMediaFile,
+} from "../../application/services/media-storage.service.js";
 import {
   buildAuthUserProfile,
   exchangeSsoBridgeToken,
@@ -47,6 +54,16 @@ const profileUpdateSchema = z.object({
   firstName: z.string().trim().min(1).max(128).optional(),
   lastName: z.string().trim().min(1).max(128).optional(),
   phone: z.string().trim().min(10).max(32).optional(),
+  profileBio: z.string().trim().max(1000).optional().nullable(),
+  profileInstrument: z.string().trim().max(128).optional().nullable(),
+  profileInterests: z.array(z.string().trim().min(1).max(40)).max(12).optional(),
+  profilePublic: z.boolean().optional(),
+});
+
+const avatarUploadSchema = z.object({
+  filename: z.string().min(1).max(255),
+  mimeType: z.string().min(1).max(255),
+  base64: z.string().min(1),
 });
 
 const passwordChangeSchema = z.object({
@@ -66,6 +83,10 @@ function profile(
     firstName: user.firstName,
     lastName: user.lastName,
     avatar: user.avatar,
+    profileBio: user.profileBio,
+    profileInstrument: user.profileInstrument,
+    profileInterests: user.profileInterests,
+    profilePublic: user.profilePublic,
     phone: user.phone,
     role: user.role.slug,
     permissions: user.role.rolePermissions.map((item) => item.permission.code),
@@ -219,7 +240,15 @@ export async function authRoutes(app: FastifyInstance) {
   app.patch("/auth/me", { preHandler: [authenticate] }, async (request) => {
     const authUser = request.user!;
     const body = profileUpdateSchema.parse(request.body);
-    if (!body.firstName && !body.lastName && !body.phone) {
+    if (
+      !body.firstName &&
+      !body.lastName &&
+      !body.phone &&
+      body.profileBio === undefined &&
+      body.profileInstrument === undefined &&
+      body.profileInterests === undefined &&
+      body.profilePublic === undefined
+    ) {
       throw new BadRequestError("Укажите хотя бы одно поле для обновления");
     }
     if (body.phone && !isValidPhone(body.phone)) {
@@ -230,12 +259,49 @@ export async function authRoutes(app: FastifyInstance) {
       ...(body.firstName ? { firstName: body.firstName } : {}),
       ...(body.lastName ? { lastName: body.lastName } : {}),
       ...(body.phone ? { phone: normalizePhoneDigits(body.phone) } : {}),
+      ...(body.profileBio !== undefined ? { profileBio: body.profileBio || null } : {}),
+      ...(body.profileInstrument !== undefined ? { profileInstrument: body.profileInstrument || null } : {}),
+      ...(body.profileInterests !== undefined
+        ? { profileInterests: Array.from(new Set(body.profileInterests.map((item) => item.trim()).filter(Boolean))) }
+        : {}),
+      ...(body.profilePublic !== undefined ? { profilePublic: body.profilePublic } : {}),
     });
     const stats = await studentStats(authUser.id, authUser.roleSlug);
 
     return {
       data: profile(user, stats),
     };
+  });
+
+  app.post("/auth/me/avatar", { preHandler: [authenticate] }, async (request, reply) => {
+    const authUser = request.user!;
+    const user = await findUserWithRoleById(authUser.id);
+    if (!user) throw new UnauthorizedError();
+
+    const body = avatarUploadSchema.parse(request.body);
+    const bytes = Buffer.from(body.base64, "base64");
+    if (bytes.length > 5 * 1024 * 1024) throw new BadRequestError("Файл больше 5 МБ");
+
+    const mimeType = inferMimeType(body.filename, body.mimeType);
+    if (!["image/jpeg", "image/png", "image/webp"].includes(mimeType)) {
+      throw new BadRequestError("Загрузите JPG, PNG или WebP");
+    }
+
+    const extension = path.extname(body.filename).toLowerCase().replace(/[^a-z0-9.]/g, "") || ".jpg";
+    const filename = `${crypto.randomUUID()}${extension}`;
+    await writeMediaFile("images", filename, bytes, { originalFilename: body.filename, mimeType });
+    const avatarUrl = mediaPublicUrl(request, "images", filename);
+
+    if (user.crmStudentId) {
+      await postStudentAvatarToCrm(user.crmStudentId, avatarUrl);
+    }
+
+    const updated = await updateUserProfile(authUser.id, { avatar: avatarUrl });
+    const stats = await studentStats(authUser.id, authUser.roleSlug);
+
+    return reply.status(201).send({
+      data: profile(updated, stats),
+    });
   });
 
   app.patch("/auth/me/password", { preHandler: [authenticate] }, async (request) => {
