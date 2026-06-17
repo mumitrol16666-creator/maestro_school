@@ -12,7 +12,6 @@ import {
   MapPin,
   RefreshCw,
   Sparkles,
-  Ticket,
   UserRound,
   WalletCards,
   XCircle,
@@ -580,18 +579,13 @@ export default function SchoolLessonsPage() {
       {activeTab === "overview" && (
         <>
           {/* balance cards */}
-          <section className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft">
-              <Ticket className="text-gold" size={22} />
-              <p className="font-display mt-4 text-4xl">{currentMembership?.classesRemaining ?? 0}</p>
-              <p className="mt-1 text-sm text-stone-500">занятий в текущем абонементе</p>
-            </div>
+          <section className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             <div className="rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft">
               <WalletCards className="text-gold" size={22} />
               <p className="font-display mt-4 text-3xl">
-                {balanceSnapshot.totalPaidAmountKzt.toLocaleString("ru-RU")} ₸
+                {balanceSnapshot.accountBalanceKzt.toLocaleString("ru-RU")} ₸
               </p>
-              <p className="mt-1 text-sm text-stone-500">оплачено по активным абонементам</p>
+              <p className="mt-1 text-sm text-stone-500">на балансе в CRM</p>
             </div>
             {balanceSnapshot.debtAmountKzt > 0 ? (
               <div className="rounded-[28px] border border-red-100 bg-red-50 p-6 shadow-soft">
