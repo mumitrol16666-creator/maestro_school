@@ -10,6 +10,7 @@ import {
   GraduationCap,
   History,
   MapPin,
+  RefreshCw,
   Sparkles,
   Ticket,
   UserRound,
@@ -457,6 +458,9 @@ export default function SchoolLessonsPage() {
   const resource = useApiResource(() => api.studentOfflineSummary(), []);
   const [activeTab, setActiveTab] = useState<Tab>("overview");
   const [reportMonth, setReportMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
 
   if (resource.loading) {
     return <LoadingState label="Загружаем расписание школы" />;
@@ -489,6 +493,19 @@ export default function SchoolLessonsPage() {
   const { balanceSnapshot, upcomingLessons, lessonHistory } = data;
   const currentMembership = balanceSnapshot.currentMembership;
   const groupDayNames = ["", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+
+  async function refreshFromCrm() {
+    setRefreshing(true);
+    setRefreshError(null);
+    try {
+      resource.setData(await api.studentOfflineSummary());
+      setLastRefreshedAt(new Date());
+    } catch {
+      setRefreshError("Не удалось обновить данные из CRM");
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   /* ── CSV download ──────────────────── */
 
@@ -536,6 +553,25 @@ export default function SchoolLessonsPage() {
         eyebrow="Офлайн-школа"
         title="Уроки в школе"
         description="Расписание занятий в студии, прогресс обучения и домашние задания."
+        action={
+          <div className="flex flex-col items-start gap-2 sm:items-end">
+            <button
+              type="button"
+              onClick={refreshFromCrm}
+              disabled={refreshing}
+              className="inline-flex items-center gap-2 rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-sm font-bold text-ink shadow-soft transition hover:border-gold/50 hover:text-gold disabled:cursor-wait disabled:opacity-70"
+            >
+              <RefreshCw size={16} className={refreshing ? "animate-spin" : undefined} />
+              {refreshing ? "Обновляем" : "Обновить из CRM"}
+            </button>
+            {lastRefreshedAt ? (
+              <p className="text-xs font-semibold text-stone-400">
+                Обновлено {lastRefreshedAt.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}
+              </p>
+            ) : null}
+            {refreshError ? <p className="text-xs font-semibold text-red-600">{refreshError}</p> : null}
+          </div>
+        }
       />
 
       <TabNav active={activeTab} onChange={setActiveTab} />
