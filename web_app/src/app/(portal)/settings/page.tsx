@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, Coins, Eye, EyeOff, GraduationCap, LoaderCircle, LogOut, Mail, Phone, Star, Ticket, UserRound, WalletCards } from "lucide-react";
+import { BookOpen, Coins, Eye, EyeOff, GraduationCap, LoaderCircle, LogOut, Mail, Phone, Star, UserRound, WalletCards } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
@@ -85,16 +85,11 @@ export default function SettingsPage() {
               <h3 className="font-display mt-3 text-3xl">Абонемент и оплата</h3>
               <div className="mt-6 grid gap-4 sm:grid-cols-2">
                 <div className="rounded-2xl bg-stone-50 p-5">
-                  <Ticket size={18} className="text-gold" />
-                  <p className="font-display mt-3 text-3xl">{currentMembership?.classesRemaining ?? 0}</p>
-                  <p className="mt-1 text-xs text-stone-500">занятий в текущем абонементе</p>
-                </div>
-                <div className="rounded-2xl bg-stone-50 p-5">
                   <WalletCards size={18} className="text-gold" />
                   <p className="font-display mt-3 text-3xl">
-                    {school.balanceSnapshot.totalPaidAmountKzt.toLocaleString("ru-RU")} ₸
+                    {school.balanceSnapshot.accountBalanceKzt.toLocaleString("ru-RU")} ₸
                   </p>
-                  <p className="mt-1 text-xs text-stone-500">оплачено по активным абонементам</p>
+                  <p className="mt-1 text-xs text-stone-500">на балансе в CRM</p>
                 </div>
               </div>
               <Link href="/school-lessons" className="mt-5 inline-flex rounded-2xl bg-ink px-5 py-3 text-sm font-bold text-white">

@@ -60,6 +60,7 @@ export type StudentOfflineSummary = {
   balanceSnapshot: {
     classesRemainingTotal: number;
     debtAmountKzt: number;
+    accountBalanceKzt: number;
     totalPaidAmountKzt: number;
     currentMembership: SchoolOfflineMembership | null;
     memberships: SchoolOfflineMembership[];
