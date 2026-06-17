@@ -292,15 +292,24 @@ export async function authRoutes(app: FastifyInstance) {
     await writeMediaFile("images", filename, bytes, { originalFilename: body.filename, mimeType });
     const avatarUrl = mediaPublicUrl(request, "images", filename);
 
-    if (user.crmStudentId) {
-      await postStudentAvatarToCrm(user.crmStudentId, avatarUrl);
-    }
-
     const updated = await updateUserProfile(authUser.id, { avatar: avatarUrl });
     const stats = await studentStats(authUser.id, authUser.roleSlug);
+    let avatarSyncStatus: "synced" | "not_linked" | "failed" = user.crmStudentId ? "synced" : "not_linked";
+
+    if (user.crmStudentId) {
+      try {
+        await postStudentAvatarToCrm(user.crmStudentId, avatarUrl);
+      } catch (error) {
+        request.log.warn({ error, userId: user.id }, "Failed to sync student avatar to CRM");
+        avatarSyncStatus = "failed";
+      }
+    }
 
     return reply.status(201).send({
-      data: profile(updated, stats),
+      data: {
+        ...profile(updated, stats),
+        avatarSyncStatus,
+      },
     });
   });
 

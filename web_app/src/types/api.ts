@@ -20,6 +20,7 @@ export interface ApiAuthUser {
   profileInstrument?: string | null;
   profileInterests?: string[];
   profilePublic?: boolean;
+  avatarSyncStatus?: "synced" | "not_linked" | "failed";
   phone?: string | null;
   role: string;
   permissions?: string[];
