@@ -53,6 +53,7 @@ export default function SettingsPage() {
   const directions = resource.data?.directions ?? [];
   const courses = resource.data?.courses ?? [];
   const school = resource.data?.school;
+  const offlineGroups = school?.profile.groups ?? [];
 
   return (
     <>
@@ -66,10 +67,10 @@ export default function SettingsPage() {
             ) : initials}
           </div>
           <h2 className="font-display mt-7 text-4xl">{fullName}</h2>
-          <p className="mt-2 text-sm text-white/45">{roleLabel(profile.role)} Maestro</p>
+          <p className="mt-2 text-sm text-white/45">Ученик Maestro</p>
           <div className="mt-8 space-y-3 border-t border-white/10 pt-6 text-sm">
-            <div className="flex items-center gap-3 text-white/60"><GraduationCap size={16} className="text-gold" /> {directions.length ? directions.map((item) => item.title).join(", ") : "Направления пока не выбраны"}</div>
-            <div className="flex items-center gap-3 text-white/60"><UserRound size={16} className="text-gold" /> Роль: {roleLabel(profile.role)}</div>
+            <div className="flex items-center gap-3 text-white/60"><GraduationCap size={16} className="text-gold" /> {offlineGroups.length ? offlineGroups.map((item) => item.name).join(", ") : "Офлайн-группы пока не подключены"}</div>
+            <div className="flex items-center gap-3 text-white/60"><BookOpen size={16} className="text-gold" /> {directions.length ? directions.map((item) => item.title).join(", ") : "Онлайн-курсы пока не начаты"}</div>
             <div className="flex items-center gap-3 text-white/60"><Mail size={16} className="text-gold" /> {profile.email}</div>
             <div className="flex items-center gap-3 text-white/60"><Phone size={16} className="text-gold" /> {profile.phone && profile.phone !== "00000000000" ? profile.phone : "Телефон не указан"}</div>
           </div>
@@ -115,7 +116,7 @@ export default function SettingsPage() {
             <div className="mt-6 grid gap-4 sm:grid-cols-3">
               <div className="rounded-2xl bg-stone-50 p-5">
                 <GraduationCap size={18} className="text-gold" />
-                <p className="mt-3 text-xs font-bold uppercase tracking-wider text-stone-400">Направления</p>
+                <p className="mt-3 text-xs font-bold uppercase tracking-wider text-stone-400">Онлайн-курсы</p>
                 <p className="font-display mt-3 text-2xl">{directions.length || 0}</p>
               </div>
               <div className="rounded-2xl bg-stone-50 p-5">
@@ -125,9 +126,9 @@ export default function SettingsPage() {
               </div>
               <div className="rounded-2xl bg-amber-50 p-5">
                 <Coins size={18} className="text-gold" />
-                <p className="mt-3 text-xs font-bold uppercase tracking-wider text-amber-700">Maestro Coins</p>
+                <p className="mt-3 text-xs font-bold uppercase tracking-wider text-amber-700">Бонусы Maestro</p>
                 <p className="font-display mt-3 text-2xl text-amber-950">{(profile.coins ?? 0).toLocaleString("ru-RU")}</p>
-                <p className="mt-2 text-xs leading-5 text-amber-800">Награда от преподавателя после онлайн-уроков и ДЗ</p>
+                <p className="mt-2 text-xs leading-5 text-amber-800">Награда от преподавателя после онлайн-уроков и домашних заданий</p>
               </div>
             </div>
           </div>
@@ -192,6 +193,7 @@ function ProfileEditCard({
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [avatarSyncNotice, setAvatarSyncNotice] = useState<string | null>(null);
 
   useEffect(() => {
     setFirstName(profile.firstName ?? "");
@@ -208,6 +210,7 @@ function ProfileEditCard({
     if (!file) return;
     setError(null);
     setSuccess(false);
+    setAvatarSyncNotice(null);
 
     if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
       setError("Загрузите JPG, PNG или WebP");
@@ -220,13 +223,20 @@ function ProfileEditCard({
 
     setUploadingAvatar(true);
     try {
-      await api.uploadAvatar({
+      const updated = await api.uploadAvatar({
         filename: file.name,
         mimeType: file.type,
         base64: await fileToBase64(file),
       });
       await onSaved();
       setSuccess(true);
+      if (updated.avatarSyncStatus === "failed") {
+        setAvatarSyncNotice("Фото сохранено в приложении. CRM временно не ответила, синхронизацию можно повторить позже.");
+      } else if (updated.avatarSyncStatus === "not_linked") {
+        setAvatarSyncNotice("Фото сохранено в приложении. Аккаунт пока не связан с CRM.");
+      } else {
+        setAvatarSyncNotice("Фото сохранено и отправлено в CRM.");
+      }
     } catch (reason) {
       setError(reason instanceof ApiError ? reason.message : "Не удалось загрузить фото");
     } finally {
@@ -288,6 +298,9 @@ function ProfileEditCard({
           <TextField label="Фамилия" value={lastName} onChange={setLastName} maxLength={128} required />
         </div>
         <TextField label="Телефон" value={phone} onChange={setPhone} maxLength={32} required />
+        <p className="-mt-2 text-xs leading-5 text-stone-400">
+          Эти данные используются в приложении. В CRM из этой карточки отправляется только фото.
+        </p>
         <TextField label="Инструмент" value={profileInstrument} onChange={setProfileInstrument} maxLength={128} />
         <label className="block">
           <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-stone-500">О себе</span>
@@ -309,10 +322,11 @@ function ProfileEditCard({
           />
           <span>
             <span className="block text-sm font-bold text-ink">Публичная карточка</span>
-            <span className="mt-1 block text-xs leading-5 text-stone-500">Позже эта карточка будет видна на стене и в общем чате учеников.</span>
+            <span className="mt-1 block text-xs leading-5 text-stone-500">Подготовить карточку для будущей стены и общего чата учеников.</span>
           </span>
         </label>
         {error && <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</p>}
+        {avatarSyncNotice && <p className="rounded-2xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">{avatarSyncNotice}</p>}
         {success && <p className="rounded-2xl bg-green-50 px-4 py-3 text-sm font-semibold text-green-700">Профиль сохранён</p>}
         <button
           disabled={saving || uploadingAvatar}
