@@ -232,6 +232,13 @@ export async function syncStudentFromApp(payload: {
   }>("/api/integration/v1/users/sync-from-app", payload);
 }
 
+export async function postStudentAvatarToCrm(crmStudentId: string, avatarUrl: string) {
+  return crmPost<{
+    crmStudentId: string;
+    studentAvatar: string;
+  }>(`/api/integration/v1/students/${encodeURIComponent(crmStudentId)}/avatar`, { avatarUrl });
+}
+
 export async function postCrmUserLink(payload: {
   phone: string;
   phoneNormalized?: string;

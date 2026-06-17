@@ -130,9 +130,22 @@ export const api = {
       body: JSON.stringify(body),
     }),
   me: () => apiRequest<ApiAuthUser>("/auth/me"),
-  updateProfile: (body: { firstName?: string; lastName?: string; phone?: string }) =>
+  updateProfile: (body: {
+    firstName?: string;
+    lastName?: string;
+    phone?: string;
+    profileBio?: string | null;
+    profileInstrument?: string | null;
+    profileInterests?: string[];
+    profilePublic?: boolean;
+  }) =>
     apiRequest<ApiAuthUser>("/auth/me", {
       method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  uploadAvatar: (body: { filename: string; mimeType: string; base64: string }) =>
+    apiRequest<ApiAuthUser>("/auth/me/avatar", {
+      method: "POST",
       body: JSON.stringify(body),
     }),
   changePassword: (currentPassword: string, newPassword: string) =>

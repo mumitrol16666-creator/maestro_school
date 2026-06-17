@@ -53,7 +53,16 @@ export async function updateUserPassword(userId: string, passwordHash: string) {
 
 export async function updateUserProfile(
   userId: string,
-  params: { firstName?: string; lastName?: string; phone?: string },
+  params: {
+    firstName?: string;
+    lastName?: string;
+    phone?: string;
+    avatar?: string | null;
+    profileBio?: string | null;
+    profileInstrument?: string | null;
+    profileInterests?: string[];
+    profilePublic?: boolean;
+  },
 ) {
   return prisma.user.update({
     where: { id: userId },

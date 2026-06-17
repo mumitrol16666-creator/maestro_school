@@ -16,6 +16,10 @@ export interface ApiAuthUser {
   firstName?: string;
   lastName?: string;
   avatar?: string | null;
+  profileBio?: string | null;
+  profileInstrument?: string | null;
+  profileInterests?: string[];
+  profilePublic?: boolean;
   phone?: string | null;
   role: string;
   permissions?: string[];
