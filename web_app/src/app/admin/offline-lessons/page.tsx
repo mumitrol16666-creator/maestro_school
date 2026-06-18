@@ -1,7 +1,16 @@
 "use client";
 
-import { ArrowRight, CalendarDays, GraduationCap } from "lucide-react";
+import {
+  AlertCircle,
+  ArrowRight,
+  CalendarDays,
+  CheckCircle2,
+  Clock3,
+  FileCheck2,
+  Send,
+} from "lucide-react";
 import Link from "next/link";
+import { useState } from "react";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
 import { PageHeader } from "@/components/page-header";
 import { useAuth } from "@/components/auth-provider";
@@ -9,23 +18,87 @@ import { useApiResource } from "@/hooks/use-api-resource";
 import { isContentAdminRole } from "@/lib/role-labels";
 import { adminOfflineApi } from "@/lib/admin-offline-api";
 import { teacherOfflineApi } from "@/lib/teacher-offline-api";
+import type { TeacherOfflineClass } from "@/types/teacher-offline";
 
-const statusLabels: Record<string, string> = {
-  scheduled: "Запланирован",
-  started: "Идёт",
-  pending_admin_review: "На проверке",
-  completed: "Проведён",
-  not_filled: "Не заполнен",
-  cancelled: "Отменён",
+type LessonTab = "today" | "upcoming" | "processing" | "accepted" | "all";
+type LessonStage = "fix" | "report" | "scheduled" | "processing" | "accepted" | "cancelled";
+
+const tabs: Array<{ id: LessonTab; label: string }> = [
+  { id: "today", label: "Сегодня" },
+  { id: "upcoming", label: "Ближайшие" },
+  { id: "processing", label: "На обработке" },
+  { id: "accepted", label: "Принятые" },
+  { id: "all", label: "Все" },
+];
+
+const stageMeta: Record<LessonStage, {
+  label: string;
+  action: string;
+  badge: string;
+  border: string;
+  muted?: boolean;
+}> = {
+  fix: {
+    label: "Нужно исправить",
+    action: "Исправить отчёт",
+    badge: "bg-red-50 text-red-800",
+    border: "border-red-200 bg-red-50/30",
+  },
+  report: {
+    label: "Нужен отчёт",
+    action: "Заполнить отчёт",
+    badge: "bg-amber-100 text-amber-950",
+    border: "border-gold/45 bg-amber-50/45",
+  },
+  scheduled: {
+    label: "Запланирован",
+    action: "Открыть урок",
+    badge: "bg-sky-50 text-sky-900",
+    border: "border-stone-200 bg-white",
+  },
+  processing: {
+    label: "На обработке",
+    action: "Посмотреть отчёт",
+    badge: "bg-[#f4ead2] text-[#6f5420]",
+    border: "border-[#dfc991] bg-[#fffaf0]",
+  },
+  accepted: {
+    label: "Принят",
+    action: "Просмотр",
+    badge: "bg-emerald-50 text-emerald-800",
+    border: "border-stone-200 bg-stone-50",
+    muted: true,
+  },
+  cancelled: {
+    label: "Отменён",
+    action: "Просмотр",
+    badge: "bg-stone-100 text-stone-600",
+    border: "border-stone-200 bg-stone-50",
+    muted: true,
+  },
 };
 
-const statusClasses: Record<string, string> = {
-  scheduled: "bg-sky-50 text-sky-900",
-  started: "bg-emerald-50 text-emerald-900",
-  pending_admin_review: "bg-amber-50 text-amber-900",
-  completed: "bg-stone-100 text-stone-700",
-  cancelled: "bg-red-50 text-red-800",
-};
+function lessonDateTime(lesson: TeacherOfflineClass, field: "startTime" | "endTime") {
+  const date = new Date(lesson.date);
+  const [hours, minutes] = lesson[field].split(":").map(Number);
+  date.setHours(hours || 0, minutes || 0, 0, 0);
+  return date;
+}
+
+function isSameDay(left: Date, right: Date) {
+  return left.getFullYear() === right.getFullYear()
+    && left.getMonth() === right.getMonth()
+    && left.getDate() === right.getDate();
+}
+
+function lessonStage(lesson: TeacherOfflineClass, now: Date): LessonStage {
+  if (["rejected", "needs_revision"].includes(lesson.status)) return "fix";
+  if (lesson.status === "pending_admin_review") return "processing";
+  if (lesson.status === "completed") return "accepted";
+  if (lesson.status === "cancelled") return "cancelled";
+  if (lesson.status === "not_filled" || lessonDateTime(lesson, "endTime") < now) return "report";
+  return "scheduled";
+}
 
 function formatLessonDate(dateStr: string) {
   return new Intl.DateTimeFormat("ru-RU", {
@@ -35,23 +108,27 @@ function formatLessonDate(dateStr: string) {
   }).format(new Date(dateStr));
 }
 
-function dedupeLessons<T extends {
-  crmClassId: string;
-  title?: string;
-  date: string;
-  startTime: string;
-  endTime: string;
-  teacher?: { name: string } | null;
-  group?: { name: string } | null;
-  room?: { name: string } | null;
-}>(lessons: T[]) {
+function formatTimeStamp(value?: string | null) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit" }).format(date);
+}
+
+function elapsedLabel(lesson: TeacherOfflineClass, now: Date) {
+  const minutes = Math.max(0, Math.round((now.getTime() - lessonDateTime(lesson, "endTime").getTime()) / 60000));
+  if (minutes < 60) return `Урок завершился ${minutes} мин назад`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `Урок завершился ${hours} ч назад`;
+  return `Урок завершился ${Math.floor(hours / 24)} дн. назад`;
+}
+
+function dedupeLessons(lessons: TeacherOfflineClass[]) {
   const seenIds = new Set<string>();
   const seenSignatures = new Set<string>();
-
   return lessons.filter((lesson) => {
     if (seenIds.has(lesson.crmClassId)) return false;
     seenIds.add(lesson.crmClassId);
-
     const signature = [
       lesson.date,
       lesson.startTime,
@@ -61,7 +138,6 @@ function dedupeLessons<T extends {
       lesson.group?.name,
       lesson.room?.name,
     ].map((value) => String(value ?? "").trim()).join("|");
-
     if (seenSignatures.has(signature)) return false;
     seenSignatures.add(signature);
     return true;
@@ -71,6 +147,7 @@ function dedupeLessons<T extends {
 export default function AdminOfflineLessonsPage() {
   const { user } = useAuth();
   const isAdmin = isContentAdminRole(user?.role);
+  const [activeTab, setActiveTab] = useState<LessonTab>("today");
   const resource = useApiResource(() => teacherOfflineApi.agenda(), []);
   const pendingResource = useApiResource(
     () => (isAdmin ? adminOfflineApi.pendingReview() : Promise.resolve({ classes: [] })),
@@ -82,52 +159,16 @@ export default function AdminOfflineLessonsPage() {
   }
 
   if (resource.errorCode === "CRM_NOT_LINKED") {
-    const pendingClasses = pendingResource.data?.classes ?? [];
-
-    if (isAdmin && pendingClasses.length > 0) {
-      return (
-        <>
-          <PageHeader
-            eyebrow="Офлайн-школа"
-            title="Офлайн-уроки"
-            description="Уроки, ожидающие подтверждения администратора."
-          />
-          <section className="mb-10">
-            <h2 className="font-display mb-5 text-3xl">На подтверждении</h2>
-            <div className="space-y-3">
-              {pendingClasses.map((lesson) => (
-                <LessonRow key={lesson.crmClassId} lesson={lesson} highlight review />
-              ))}
-            </div>
-          </section>
-        </>
-      );
-    }
-
     return (
       <>
         <PageHeader
           eyebrow="Офлайн-школа"
           title="Офлайн-уроки"
-          description="Ваши занятия в студии Maestro: тема, домашнее задание и отчёт по уроку."
+          description="Расписание, отчёты и статусы уроков."
         />
         <EmptyState
           title="CRM-профиль не подключён"
-          description={
-            isAdmin
-              ? "Личное расписание преподавателя недоступно без привязки к CRM. Уроки на подтверждении отображаются выше, если они есть. Для просмотра расписания конкретного преподавателя привяжите его в разделе «Пользователи»."
-              : "Ваш аккаунт не связан с преподавателем в CRM. Попросите администратора: «Пользователи» → ваш профиль → «Связь с CRM» → привязка по телефону. Телефон в LP и CRM должен совпадать."
-          }
-          action={
-            isAdmin ? (
-              <Link
-                href="/admin/users?role=teacher"
-                className="inline-flex items-center gap-2 rounded-full bg-ink px-5 py-3 text-sm font-bold text-white"
-              >
-                Открыть преподавателей <ArrowRight size={15} />
-              </Link>
-            ) : undefined
-          }
+          description="Аккаунт не связан с преподавателем в CRM. Попросите администратора проверить привязку по телефону."
         />
       </>
     );
@@ -135,14 +176,47 @@ export default function AdminOfflineLessonsPage() {
 
   if (resource.error) return <ErrorState message={resource.error} retry={resource.reload} />;
 
+  const now = new Date();
   const pendingClasses = dedupeLessons(pendingResource.data?.classes ?? []);
-  const pendingClassIds = new Set(pendingClasses.map((lesson) => lesson.crmClassId));
-  const classes = dedupeLessons(resource.data?.classes ?? []).filter((lesson) => !pendingClassIds.has(lesson.crmClassId));
-  const todayKey = new Date().toDateString();
-  const todayClasses = classes.filter((item) => new Date(item.date).toDateString() === todayKey);
-  const upcomingClasses = classes.filter((item) => new Date(item.date) > new Date(todayKey + " 23:59:59"));
+  const pendingIds = new Set(pendingClasses.map((lesson) => lesson.crmClassId));
+  const classes = dedupeLessons(resource.data?.classes ?? [])
+    .filter((lesson) => !pendingIds.has(lesson.crmClassId));
+  const lessons = isAdmin ? dedupeLessons([...pendingClasses, ...classes]) : classes;
+  const staged = lessons.map((lesson) => ({ lesson, stage: lessonStage(lesson, now) }));
 
-  const isAdminUser = isContentAdminRole(user?.role);
+  const counts = {
+    today: staged.filter(({ lesson }) => isSameDay(new Date(lesson.date), now)).length,
+    report: staged.filter(({ stage }) => stage === "report" || stage === "fix").length,
+    processing: staged.filter(({ stage }) => stage === "processing").length,
+    accepted: staged.filter(({ stage }) => stage === "accepted").length,
+  };
+
+  const filtered = staged.filter(({ lesson, stage }) => {
+    if (activeTab === "today") return isSameDay(new Date(lesson.date), now);
+    if (activeTab === "upcoming") return lessonDateTime(lesson, "startTime") > now && !isSameDay(new Date(lesson.date), now);
+    if (activeTab === "processing") return stage === "processing" || stage === "fix";
+    if (activeTab === "accepted") return stage === "accepted";
+    return true;
+  });
+
+  const priority: Record<LessonStage, number> = {
+    fix: 0,
+    report: 1,
+    scheduled: 2,
+    processing: 3,
+    accepted: 4,
+    cancelled: 5,
+  };
+  filtered.sort((left, right) => {
+    const stageDiff = priority[left.stage] - priority[right.stage];
+    if (stageDiff) return stageDiff;
+    return lessonDateTime(left.lesson, "startTime").getTime() - lessonDateTime(right.lesson, "startTime").getTime();
+  });
+
+  const grouped = filtered.reduce<Record<LessonStage, TeacherOfflineClass[]>>((acc, item) => {
+    acc[item.stage].push(item.lesson);
+    return acc;
+  }, { fix: [], report: [], scheduled: [], processing: [], accepted: [], cancelled: [] });
 
   return (
     <>
@@ -150,113 +224,162 @@ export default function AdminOfflineLessonsPage() {
         eyebrow="Офлайн-школа"
         title="Офлайн-уроки"
         description={
-          isAdminUser
-            ? "Расписание занятий в студии. Преподаватели заполняют отчёт, администратор подтверждает урок и отмечает посещаемость."
-            : "Ваше расписание в студии. Заполните отчёт по уроку и отправьте на подтверждение администратору."
+          isAdmin
+            ? "Проверяйте отчёты преподавателей и контролируйте закрытие уроков."
+            : "Сначала показаны уроки, где от вас требуется действие."
         }
       />
 
-      {isAdminUser && pendingClasses.length > 0 ? (
-        <section className="mb-10">
-          <h2 className="font-display mb-5 text-3xl">На подтверждении</h2>
-          <div className="space-y-3">
-            {pendingClasses.map((lesson) => (
-              <LessonRow key={lesson.crmClassId} lesson={lesson} highlight review />
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      <section className="mb-8 rounded-[28px] border border-gold/20 bg-ink p-6 text-white shadow-soft sm:p-8">
-        <div className="flex items-center gap-3">
-          <GraduationCap className="text-gold" size={24} />
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">Сегодня</p>
-            <h2 className="font-display text-3xl">{todayClasses.length} занятий</h2>
-          </div>
-        </div>
+      <section className="mb-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <SummaryCard icon={CalendarDays} label="Сегодня" value={counts.today} tone="sky" />
+        <SummaryCard icon={AlertCircle} label="Нужно заполнить отчёт" value={counts.report} tone="amber" />
+        <SummaryCard icon={Send} label="На проверке у администратора" value={counts.processing} tone="cream" />
+        <SummaryCard icon={CheckCircle2} label="Принято" value={counts.accepted} tone="green" />
       </section>
 
-      {todayClasses.length > 0 ? (
-        <section className="mb-10">
-          <h2 className="font-display mb-5 text-3xl">Уроки на сегодня</h2>
-          <div className="space-y-3">
-            {todayClasses.map((lesson) => (
-              <LessonRow key={lesson.crmClassId} lesson={lesson} highlight />
-            ))}
-          </div>
-        </section>
-      ) : null}
+      <nav className="mb-8 flex gap-1 overflow-x-auto border-b border-stone-200" aria-label="Разделы уроков">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setActiveTab(tab.id)}
+            className={`shrink-0 border-b-2 px-4 py-3 text-sm font-bold transition ${
+              activeTab === tab.id
+                ? "border-ink text-ink"
+                : "border-transparent text-stone-500 hover:text-ink"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </nav>
 
-      <section>
-        <h2 className="font-display mb-5 text-3xl">
-          {todayClasses.length ? "Ближайшие" : "Расписание"}
-        </h2>
-        {(todayClasses.length ? upcomingClasses : classes).length === 0 ? (
-          <EmptyState
-            title="Уроков пока нет"
-            description="Когда администратор назначит вам занятия в CRM, они появятся здесь."
+      {filtered.length === 0 ? (
+        <EmptyState
+          title="В этом разделе уроков нет"
+          description="Когда статус урока изменится, он автоматически появится в нужной вкладке."
+        />
+      ) : (
+        <div className="space-y-10">
+          <LessonSection title="Нужно исправить" lessons={grouped.fix} stage="fix" now={now} />
+          <LessonSection title="Нужно заполнить отчёт" lessons={grouped.report} stage="report" now={now} />
+          <LessonSection
+            title={activeTab === "upcoming" ? "Ближайшие уроки" : "Запланированные"}
+            lessons={grouped.scheduled}
+            stage="scheduled"
+            now={now}
           />
-        ) : (
-          <div className="space-y-3">
-            {(todayClasses.length ? upcomingClasses : classes).map((lesson) => (
-              <LessonRow key={lesson.crmClassId} lesson={lesson} />
-            ))}
-          </div>
-        )}
-      </section>
+          <LessonSection title="На проверке администратора" lessons={grouped.processing} stage="processing" now={now} />
+          <LessonSection title="Принято администратором" lessons={grouped.accepted} stage="accepted" now={now} />
+          <LessonSection title="Отменённые" lessons={grouped.cancelled} stage="cancelled" now={now} />
+        </div>
+      )}
     </>
+  );
+}
+
+function SummaryCard({
+  icon: Icon,
+  label,
+  value,
+  tone,
+}: {
+  icon: typeof CalendarDays;
+  label: string;
+  value: number;
+  tone: "sky" | "amber" | "cream" | "green";
+}) {
+  const tones = {
+    sky: "border-sky-200 bg-sky-50 text-sky-900",
+    amber: "border-amber-200 bg-amber-50 text-amber-950",
+    cream: "border-[#dfc991] bg-[#fffaf0] text-[#6f5420]",
+    green: "border-emerald-200 bg-emerald-50 text-emerald-900",
+  };
+  return (
+    <article className={`min-h-[126px] border p-5 ${tones[tone]}`}>
+      <Icon size={20} />
+      <p className="mt-4 text-sm font-bold">{label}</p>
+      <p className="font-display mt-1 text-3xl">{value} {value === 1 ? "урок" : "уроков"}</p>
+    </article>
+  );
+}
+
+function LessonSection({
+  title,
+  lessons,
+  stage,
+  now,
+}: {
+  title: string;
+  lessons: TeacherOfflineClass[];
+  stage: LessonStage;
+  now: Date;
+}) {
+  if (!lessons.length) return null;
+  return (
+    <section>
+      <div className="mb-4 flex items-center gap-3">
+        <h2 className="font-display text-3xl">{title}</h2>
+        <span className="rounded-full bg-stone-100 px-2.5 py-1 text-xs font-bold text-stone-600">{lessons.length}</span>
+      </div>
+      <div className="space-y-3">
+        {lessons.map((lesson) => (
+          <LessonRow key={lesson.crmClassId} lesson={lesson} stage={stage} now={now} />
+        ))}
+      </div>
+    </section>
   );
 }
 
 function LessonRow({
   lesson,
-  highlight,
-  review,
+  stage,
+  now,
 }: {
-  lesson: {
-    crmClassId: string;
-    title: string;
-    date: string;
-    startTime: string;
-    endTime: string;
-    status: string;
-    group?: { name: string } | null;
-    room?: { name: string } | null;
-    teacher?: { name: string } | null;
-  };
-  highlight?: boolean;
-  review?: boolean;
+  lesson: TeacherOfflineClass;
+  stage: LessonStage;
+  now: Date;
 }) {
+  const meta = stageMeta[stage];
+  const submittedAt = formatTimeStamp(lesson.submittedAt);
+  const reviewedAt = formatTimeStamp(lesson.reviewedAt);
+  const detail = stage === "report"
+    ? elapsedLabel(lesson, now)
+    : stage === "processing" && submittedAt
+      ? `Отправлено: ${submittedAt}`
+      : stage === "accepted" && reviewedAt
+        ? `Принято администратором: ${reviewedAt}`
+        : null;
+
   return (
-    <Link
-      href={`/admin/offline-lessons/${lesson.crmClassId}`}
-      className={`card-hover flex flex-col gap-4 rounded-[24px] border p-5 shadow-soft sm:flex-row sm:items-center ${
-        highlight ? "border-gold/25 bg-white" : "border-stone-200 bg-paper"
-      }`}
-    >
-      <div className="flex-1">
-        <p className="text-xs font-bold uppercase tracking-[0.16em] text-stone-400">
+    <article className={`flex flex-col gap-5 border p-5 shadow-soft sm:flex-row sm:items-center ${meta.border} ${meta.muted ? "opacity-90" : ""}`}>
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-bold uppercase text-stone-400">
           {formatLessonDate(lesson.date)} · {lesson.startTime}–{lesson.endTime}
         </p>
         <h3 className="font-display mt-2 text-2xl">{lesson.title}</h3>
-        <p className="mt-2 flex flex-wrap items-center gap-3 text-sm text-stone-500">
-          <span className="inline-flex items-center gap-1.5">
-            <CalendarDays size={14} />
-            {lesson.group?.name ?? "Индивидуальный урок"}
-          </span>
-          {lesson.teacher?.name ? <span>Преподаватель: {lesson.teacher.name}</span> : null}
+        <p className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-stone-500">
+          <span>{lesson.group?.name ?? "Индивидуальный урок"}</span>
           {lesson.room?.name ? <span>Кабинет: {lesson.room.name}</span> : null}
+          {lesson.teacher?.name ? <span>Преподаватель: {lesson.teacher.name}</span> : null}
         </p>
       </div>
-      <div className="flex items-center gap-3">
-        <span className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase ${
-          review ? "bg-amber-50 text-amber-900" : (statusClasses[lesson.status] ?? "bg-stone-100 text-stone-600")
-        }`}>
-          {review ? "На подтверждении" : (statusLabels[lesson.status] ?? lesson.status)}
-        </span>
-        <ArrowRight size={18} className="text-gold" />
+      <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
+        <span className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase ${meta.badge}`}>{meta.label}</span>
+        {detail ? <span className="text-xs text-stone-500">{detail}</span> : null}
+        <Link
+          href={`/admin/offline-lessons/${lesson.crmClassId}`}
+          className={`mt-1 inline-flex min-h-10 items-center gap-2 px-4 text-sm font-bold ${
+            stage === "report" || stage === "fix"
+              ? "bg-ink text-white"
+              : "border border-stone-300 bg-white text-ink"
+          }`}
+        >
+          {stage === "accepted" ? <FileCheck2 size={15} /> : stage === "processing" ? <Clock3 size={15} /> : null}
+          {meta.action}
+          <ArrowRight size={15} />
+        </Link>
       </div>
-    </Link>
+    </article>
   );
 }

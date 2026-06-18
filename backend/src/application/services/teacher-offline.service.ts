@@ -31,8 +31,9 @@ async function requireCrmTeacherId(appUserId: string) {
 function defaultAgendaRange() {
   const now = new Date();
   const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  start.setDate(start.getDate() - 30);
   const end = new Date(start);
-  end.setDate(end.getDate() + 14);
+  end.setDate(end.getDate() + 60);
   return { from: start.toISOString(), to: end.toISOString() };
 }
 
