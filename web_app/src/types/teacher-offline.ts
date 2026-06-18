@@ -18,6 +18,10 @@ export type TeacherOfflineClass = {
   materials?: Array<{ type?: string; url?: string; title?: string }> | null;
   teacherComment?: string | null;
   teacherOutcomeHint?: string | null;
+  startedAt?: string | null;
+  finishedAt?: string | null;
+  submittedAt?: string | null;
+  reviewedAt?: string | null;
 };
 
 export type TeacherOfflineAgenda = {
