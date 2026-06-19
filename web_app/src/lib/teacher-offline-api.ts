@@ -51,6 +51,11 @@ export const teacherOfflineApi = {
       `/teachers/me/offline-lessons/${encodeURIComponent(crmClassId)}/not-held`,
       { method: "POST", body: JSON.stringify({ comment }) },
     ),
+  withdraw: (crmClassId: string, reason: string) =>
+    apiRequest<Record<string, unknown>>(
+      `/teachers/me/offline-lessons/${encodeURIComponent(crmClassId)}/withdraw`,
+      { method: "POST", body: JSON.stringify({ reason }) },
+    ),
   attendance: (crmClassId: string, studentId: string, attendanceStatus: string, teacherNote?: string) =>
     apiRequest<Record<string, unknown>>(
       `/teachers/me/offline-lessons/${encodeURIComponent(crmClassId)}/attendance`,

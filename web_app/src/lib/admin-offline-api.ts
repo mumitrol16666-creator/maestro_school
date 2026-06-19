@@ -16,6 +16,8 @@ export type ApproveOfflineLessonResult = {
 };
 
 export const adminOfflineApi = {
+  agenda: () =>
+    apiRequest<{ from: string; to: string; classes: TeacherOfflineClass[] }>("/admin/offline-lessons"),
   pendingReview: () =>
     apiRequest<PendingReviewAgenda>("/admin/offline-lessons/pending-review"),
   classCard: (crmClassId: string) =>
@@ -45,5 +47,15 @@ export const adminOfflineApi = {
     apiRequest<ApproveOfflineLessonResult>(
       `/admin/offline-lessons/${encodeURIComponent(crmClassId)}/approve`,
       { method: "POST", body: JSON.stringify(body) },
+    ),
+  returnToTeacher: (crmClassId: string, reason: string) =>
+    apiRequest<Record<string, unknown>>(
+      `/admin/offline-lessons/${encodeURIComponent(crmClassId)}/return-to-teacher`,
+      { method: "POST", body: JSON.stringify({ reason }) },
+    ),
+  reopen: (crmClassId: string, reason: string) =>
+    apiRequest<Record<string, unknown>>(
+      `/admin/offline-lessons/${encodeURIComponent(crmClassId)}/reopen`,
+      { method: "POST", body: JSON.stringify({ reason }) },
     ),
 };

@@ -6,6 +6,7 @@ import {
   getTeacherOfflineClassStudents,
   teacherOfflineFinish,
   teacherOfflineMarkNotHeld,
+  teacherOfflineWithdraw,
   teacherOfflineStart,
   teacherOfflineSubmit,
 } from "../../application/services/teacher-offline.service.js";
@@ -101,6 +102,16 @@ export async function teacherOfflineRoutes(app: FastifyInstance) {
       const { crmClassId } = z.object({ crmClassId: z.string().min(1) }).parse(request.params);
       const body = z.object({ comment: z.string().max(5000).optional() }).parse(request.body ?? {});
       return { data: await teacherOfflineMarkNotHeld(request.user!.id, crmClassId, body.comment) };
+    },
+  );
+
+  app.post(
+    "/teachers/me/offline-lessons/:crmClassId/withdraw",
+    { preHandler: [authenticate, requireTeacher] },
+    async (request) => {
+      const { crmClassId } = z.object({ crmClassId: z.string().min(1) }).parse(request.params);
+      const body = z.object({ reason: z.string().min(3).max(1000) }).parse(request.body ?? {});
+      return { data: await teacherOfflineWithdraw(request.user!.id, crmClassId, body.reason) };
     },
   );
 }

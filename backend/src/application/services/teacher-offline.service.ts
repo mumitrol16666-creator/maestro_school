@@ -6,6 +6,7 @@ import {
   fetchTeacherOfflineClasses,
   postTeacherFinish,
   postTeacherMarkNotHeld,
+  postTeacherWithdraw,
   postTeacherStart,
   postTeacherSubmit,
   postTeacherAttendance,
@@ -137,6 +138,11 @@ export async function teacherOfflineMarkNotHeld(
 ) {
   const crmTeacherId = await requireCrmTeacherId(appUserId);
   return postTeacherMarkNotHeld(crmClassId, { crmTeacherId, comment });
+}
+
+export async function teacherOfflineWithdraw(appUserId: string, crmClassId: string, reason?: string) {
+  const crmTeacherId = await requireCrmTeacherId(appUserId);
+  return postTeacherWithdraw(crmClassId, { crmTeacherId, reason });
 }
 
 export async function teacherOfflineSetAttendance(

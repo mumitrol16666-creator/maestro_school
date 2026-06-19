@@ -1,14 +1,21 @@
 import {
   fetchClassCard,
   fetchClassStudents,
+  fetchAdminOfflineClasses,
   fetchPendingReviewClasses,
   postAdminApproveClass,
   postAdminAttendance,
+  postAdminReopenClass,
+  postAdminReturnClass,
 } from "../../infrastructure/crm/crm-client.js";
 
 export async function getPendingReviewAgenda() {
   const result = await fetchPendingReviewClasses();
   return { classes: result.classes };
+}
+
+export async function getAdminOfflineAgenda() {
+  return fetchAdminOfflineClasses();
 }
 
 export async function getAdminOfflineClass(crmClassId: string) {
@@ -47,4 +54,12 @@ export async function adminOfflineApprove(
   },
 ) {
   return postAdminApproveClass(crmClassId, payload);
+}
+
+export async function adminOfflineReturn(crmClassId: string, reason?: string) {
+  return postAdminReturnClass(crmClassId, reason);
+}
+
+export async function adminOfflineReopen(crmClassId: string, reason?: string) {
+  return postAdminReopenClass(crmClassId, reason);
 }

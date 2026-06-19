@@ -2,8 +2,11 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import {
   adminOfflineApprove,
+  adminOfflineReopen,
+  adminOfflineReturn,
   adminOfflineSetAttendance,
   getAdminOfflineClass,
+  getAdminOfflineAgenda,
   getAdminOfflineClassStudents,
   getPendingReviewAgenda,
 } from "../../application/services/admin-offline.service.js";
@@ -13,6 +16,12 @@ const readGuards = [authenticate, requireContentAdmin, requirePermission("offlin
 const writeGuards = [authenticate, requireContentAdmin, requirePermission("offline_school.write")];
 
 export async function adminOfflineRoutes(app: FastifyInstance) {
+  app.get(
+    "/admin/offline-lessons",
+    { preHandler: readGuards },
+    async () => ({ data: await getAdminOfflineAgenda() }),
+  );
+
   app.get(
     "/admin/offline-lessons/pending-review",
     { preHandler: readGuards },
@@ -79,6 +88,26 @@ export async function adminOfflineRoutes(app: FastifyInstance) {
         })).optional(),
       }).parse(request.body ?? {});
       return { data: await adminOfflineApprove(crmClassId, body) };
+    },
+  );
+
+  app.post(
+    "/admin/offline-lessons/:crmClassId/return-to-teacher",
+    { preHandler: writeGuards },
+    async (request) => {
+      const { crmClassId } = z.object({ crmClassId: z.string().min(1) }).parse(request.params);
+      const body = z.object({ reason: z.string().min(3).max(1000) }).parse(request.body ?? {});
+      return { data: await adminOfflineReturn(crmClassId, body.reason) };
+    },
+  );
+
+  app.post(
+    "/admin/offline-lessons/:crmClassId/reopen",
+    { preHandler: writeGuards },
+    async (request) => {
+      const { crmClassId } = z.object({ crmClassId: z.string().min(1) }).parse(request.params);
+      const body = z.object({ reason: z.string().min(3).max(1000) }).parse(request.body ?? {});
+      return { data: await adminOfflineReopen(crmClassId, body.reason) };
     },
   );
 }

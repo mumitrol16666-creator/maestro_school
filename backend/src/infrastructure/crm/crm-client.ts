@@ -203,6 +203,16 @@ export async function postTeacherMarkNotHeld(
   );
 }
 
+export async function postTeacherWithdraw(
+  crmClassId: string,
+  payload: { crmTeacherId: string; reason?: string },
+) {
+  return crmPost<Record<string, unknown>>(
+    `/api/integration/v1/classes/${encodeURIComponent(crmClassId)}/teacher-withdraw`,
+    payload,
+  );
+}
+
 export async function postTeacherAttendance(
   crmClassId: string,
   payload: {
@@ -223,6 +233,14 @@ export async function fetchPendingReviewClasses() {
   return crmGet<{ classes: Array<Record<string, unknown>> }>(
     "/api/integration/v1/classes/pending-review",
   );
+}
+
+export async function fetchAdminOfflineClasses() {
+  return crmGet<{
+    from: string;
+    to: string;
+    classes: Array<Record<string, unknown>>;
+  }>("/api/integration/v1/classes/admin-agenda");
 }
 
 export async function postAdminAttendance(
@@ -259,6 +277,20 @@ export async function postAdminApproveClass(
     class: Record<string, unknown>;
     deductions: Array<{ studentId: string; deducted?: boolean }>;
   }>(`/api/integration/v1/classes/${encodeURIComponent(crmClassId)}/approve`, payload);
+}
+
+export async function postAdminReturnClass(crmClassId: string, reason?: string) {
+  return crmPost<Record<string, unknown>>(
+    `/api/integration/v1/classes/${encodeURIComponent(crmClassId)}/return-to-teacher`,
+    { reason },
+  );
+}
+
+export async function postAdminReopenClass(crmClassId: string, reason?: string) {
+  return crmPost<Record<string, unknown>>(
+    `/api/integration/v1/classes/${encodeURIComponent(crmClassId)}/reopen`,
+    { reason },
+  );
 }
 
 export async function syncStudentFromApp(payload: {

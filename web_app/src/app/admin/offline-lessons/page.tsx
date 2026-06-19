@@ -148,7 +148,10 @@ export default function AdminOfflineLessonsPage() {
   const { user } = useAuth();
   const isAdmin = isContentAdminRole(user?.role);
   const [activeTab, setActiveTab] = useState<LessonTab>("today");
-  const resource = useApiResource(() => teacherOfflineApi.agenda(), []);
+  const resource = useApiResource(
+    () => (isAdmin ? adminOfflineApi.agenda() : teacherOfflineApi.agenda()),
+    [isAdmin],
+  );
   const pendingResource = useApiResource(
     () => (isAdmin ? adminOfflineApi.pendingReview() : Promise.resolve({ classes: [] })),
     [isAdmin],
@@ -158,7 +161,7 @@ export default function AdminOfflineLessonsPage() {
     return <LoadingState label="Загружаем расписание школы" />;
   }
 
-  if (resource.errorCode === "CRM_NOT_LINKED") {
+  if (!isAdmin && resource.errorCode === "CRM_NOT_LINKED") {
     return (
       <>
         <PageHeader

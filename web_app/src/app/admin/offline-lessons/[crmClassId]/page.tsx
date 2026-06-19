@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, LoaderCircle, Send, Play, XCircle, ShieldCheck } from "lucide-react";
+import { CheckCircle2, LoaderCircle, Send, Play, XCircle, ShieldCheck, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
@@ -72,6 +72,7 @@ export default function AdminOfflineLessonDetailPage() {
   const canEditAdminReview = isAdmin && lesson?.status === "pending_admin_review";
   const canEditReport = Boolean(canEditTeacherReport || canEditAdminReview);
   const canApprove = isAdmin && lesson?.status === "pending_admin_review";
+  const isNotHeld = lesson?.teacherOutcomeHint === "not_held";
   const unmarkedCount = students.filter((student) => (student.attendanceStatus ?? "unmarked") === "unmarked").length;
 
   useEffect(() => {
@@ -101,6 +102,12 @@ export default function AdminOfflineLessonDetailPage() {
         setSuccess("Урок начат");
       } else if (action === "approve") {
         setSuccess("Урок подтверждён и опубликован для ученика");
+      } else if (action === "return") {
+        setSuccess("Урок возвращён преподавателю для исправления");
+      } else if (action === "withdraw") {
+        setSuccess("Отправка отозвана — урок снова доступен для редактирования");
+      } else if (action === "reopen") {
+        setSuccess("Урок открыт повторно, списания возвращены");
       }
     } catch (reason) {
       setError(reason instanceof ApiError ? reason.message : "Не удалось выполнить действие");
@@ -111,6 +118,10 @@ export default function AdminOfflineLessonDetailPage() {
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
+    const confirmed = window.confirm(
+      `Отправить на подтверждение именно этот урок?\n\n${lesson?.title ?? ""}\n${lesson ? new Intl.DateTimeFormat("ru-RU").format(new Date(lesson.date)) : ""} · ${lesson?.startTime ?? ""}`,
+    );
+    if (!confirmed) return;
     await runAction("submit", () =>
       teacherOfflineApi.submit(crmClassId, {
         topic: topic.trim(),
@@ -137,13 +148,13 @@ export default function AdminOfflineLessonDetailPage() {
   }
 
   async function handleApprove() {
-    if (unmarkedCount > 0) {
+    if (!isNotHeld && unmarkedCount > 0) {
       setError(`Отметьте посещаемость у всех учеников (осталось: ${unmarkedCount})`);
       return;
     }
     await runAction("approve", () =>
       adminOfflineApi.approve(crmClassId, {
-        deduct: true,
+        deduct: !isNotHeld,
         topic: topic.trim() || undefined,
         lessonGoals: lessonGoals.trim() || undefined,
         lessonSummary: lessonSummary.trim() || undefined,
@@ -157,6 +168,16 @@ export default function AdminOfflineLessonDetailPage() {
           .map((url) => ({ type: "link", url, title: url })),
       }),
     );
+  }
+
+  function askReason(message: string) {
+    if (!window.confirm(message)) return null;
+    const reason = window.prompt("Укажите причину — она нужна для контроля изменений:")?.trim();
+    if (!reason || reason.length < 3) {
+      setError("Укажите причину изменения");
+      return null;
+    }
+    return reason;
   }
 
   if (lessonResource.loading || studentsResource.loading) {
@@ -195,6 +216,18 @@ export default function AdminOfflineLessonDetailPage() {
           </span>
         ) : null}
       </div>
+
+      {isNotHeld ? (
+        <div className="mb-6 rounded-[24px] border border-red-200 bg-red-50 p-5">
+          <p className="text-sm font-bold text-red-900">Преподаватель отметил: урок не состоялся</p>
+          <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-red-800/80">
+            {lesson.teacherComment || "Причина не указана."}
+          </p>
+          <p className="mt-2 text-xs font-semibold text-red-700">
+            При подтверждении списаний не будет. Если отметка ошибочна — верните урок преподавателю.
+          </p>
+        </div>
+      ) : null}
 
       {error ? (
         <p className="mb-5 rounded-2xl border border-red-100 bg-red-50 p-4 text-sm font-semibold text-red-700">
@@ -329,7 +362,12 @@ export default function AdminOfflineLessonDetailPage() {
           {!isAdmin && canEditTeacherReport ? (
             <button
               disabled={busy != null}
-              onClick={() => void runAction("not-held", () => teacherOfflineApi.notHeld(crmClassId, comment.trim() || undefined))}
+              onClick={() => {
+                const reason = askReason(
+                  `Отметить, что именно этот урок не состоялся?\n\n${lesson.title} · ${new Intl.DateTimeFormat("ru-RU").format(new Date(lesson.date))} · ${lesson.startTime}`,
+                );
+                if (reason) void runAction("not-held", () => teacherOfflineApi.notHeld(crmClassId, reason));
+              }}
               className="flex w-full items-center justify-center gap-2 rounded-[24px] border border-red-200 bg-red-50 px-5 py-4 text-sm font-bold text-red-800 disabled:opacity-50"
             >
               {busy === "not-held" ? <LoaderCircle className="animate-spin" size={16} /> : <XCircle size={16} />}
@@ -339,7 +377,7 @@ export default function AdminOfflineLessonDetailPage() {
 
           {canApprove ? (
             <button
-              disabled={busy != null || !topic.trim() || !lessonSummary.trim()}
+              disabled={busy != null || (!isNotHeld && (!topic.trim() || !lessonSummary.trim()))}
               onClick={() => void handleApprove()}
               className="flex w-full items-center justify-center gap-2 rounded-[24px] bg-emerald-700 px-5 py-4 text-sm font-bold text-white disabled:opacity-50"
             >
@@ -348,7 +386,53 @@ export default function AdminOfflineLessonDetailPage() {
             </button>
           ) : null}
 
-          {canApprove && unmarkedCount > 0 ? (
+          {canApprove ? (
+            <button
+              disabled={busy != null}
+              onClick={() => {
+                const reason = askReason("Вернуть урок преподавателю для исправления?");
+                if (reason) void runAction("return", () => adminOfflineApi.returnToTeacher(crmClassId, reason));
+              }}
+              className="flex w-full items-center justify-center gap-2 rounded-[24px] border border-amber-300 bg-amber-50 px-5 py-4 text-sm font-bold text-amber-900 disabled:opacity-50"
+            >
+              {busy === "return" ? <LoaderCircle className="animate-spin" size={16} /> : <RotateCcw size={16} />}
+              Вернуть преподавателю
+            </button>
+          ) : null}
+
+          {!isAdmin && lesson.status === "pending_admin_review" ? (
+            <button
+              disabled={busy != null}
+              onClick={() => {
+                const reason = askReason("Отозвать отправленный урок и снова открыть редактирование?");
+                if (reason) void runAction("withdraw", () => teacherOfflineApi.withdraw(crmClassId, reason));
+              }}
+              className="flex w-full items-center justify-center gap-2 rounded-[24px] border border-amber-300 bg-amber-50 px-5 py-4 text-sm font-bold text-amber-900 disabled:opacity-50"
+            >
+              {busy === "withdraw" ? <LoaderCircle className="animate-spin" size={16} /> : <RotateCcw size={16} />}
+              Отозвать и исправить
+            </button>
+          ) : null}
+
+          {isAdmin && ["completed", "cancelled"].includes(lesson.status) ? (
+            <button
+              disabled={busy != null}
+              onClick={() => {
+                const reason = askReason(
+                  lesson.status === "cancelled"
+                    ? "Восстановить отменённый урок в расписании?"
+                    : "Открыть подтверждённый урок повторно? Все списания будут возвращены.",
+                );
+                if (reason) void runAction("reopen", () => adminOfflineApi.reopen(crmClassId, reason));
+              }}
+              className="flex w-full items-center justify-center gap-2 rounded-[24px] border border-violet-300 bg-violet-50 px-5 py-4 text-sm font-bold text-violet-900 disabled:opacity-50"
+            >
+              {busy === "reopen" ? <LoaderCircle className="animate-spin" size={16} /> : <RotateCcw size={16} />}
+              {lesson.status === "cancelled" ? "Восстановить урок" : "Пересмотреть урок"}
+            </button>
+          ) : null}
+
+          {canApprove && !isNotHeld && unmarkedCount > 0 ? (
             <p className="rounded-[20px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
               Перед подтверждением отметьте посещаемость у {unmarkedCount} ученик(ов).
             </p>
