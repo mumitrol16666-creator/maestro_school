@@ -1,5 +1,78 @@
 # Maestro REST API v1
 
+> Актуализация 19 июня 2026 года: кроме базового Learning Engine в API
+> реализованы онлайн-уроки, офлайн-школа через CRM, управление пользователями,
+> вопросы по урокам, уведомления и push. Ниже приведён индекс этих групп.
+
+## Реализованные расширения
+
+### Публичная заявка
+
+- `POST /trial-bookings` — публичная заявка на пробный урок с передачей в CRM.
+
+### Профиль
+
+- `PATCH /auth/me` — обновить профиль;
+- `POST /auth/me/avatar` — обновить аватар и синхронизировать его в CRM;
+- `PATCH /auth/me/password` — сменить пароль;
+- `POST /auth/sso-exchange` — обменять SSO token.
+
+### Уроки в школе
+
+- `GET /students/me/offline-summary` — расписание, история, абонементы,
+  долг, заморозки и опубликованные итоги ученика;
+- `GET /teachers/me/offline-lessons` — расписание преподавателя;
+- `GET /teachers/me/students` — офлайн- и онлайн-ученики текущего преподавателя;
+- `GET /teachers/me/offline-lessons/:crmClassId` — карточка урока;
+- `GET /teachers/me/offline-lessons/:crmClassId/students` — ученики;
+- `POST .../start`, `.../finish`, `.../submit`, `.../not-held`,
+  `.../attendance` — рабочий цикл преподавателя;
+- `GET /admin/offline-lessons/pending-review` — очередь администратора;
+- `POST /admin/offline-lessons/:crmClassId/attendance` — корректировка;
+- `POST /admin/offline-lessons/:crmClassId/approve` — подтверждение.
+
+### Онлайн-уроки и Coins
+
+- `GET /students/me/coins`;
+- `GET/POST /online-lessons/requests`;
+- `GET /online-lessons/requests/:id`;
+- `POST /online-lessons/requests/:id/submissions`;
+- `GET /admin/online-lesson-requests`;
+- `PATCH .../assign`, `.../schedule`, `.../cancel`, `.../no-show`;
+- `POST .../complete`;
+- `PATCH /admin/online-lesson-submissions/:id/review`.
+
+### Вопросы по уроку
+
+- `POST /lessons/:lessonId/questions`;
+- `POST /lessons/:lessonId/signup`;
+- `GET /admin/lesson-questions`;
+- `GET /admin/lesson-questions/pending-count`;
+- `PATCH /admin/lesson-questions/:id`.
+
+### Пользователи
+
+- `GET /admin/users/roles`;
+- `GET /admin/users`, `GET /admin/users/:id`;
+- `PATCH /admin/users/:id/role`;
+- `GET/POST /admin/users/:id/crm-link`;
+- `GET /admin/crm-lookup`;
+- `GET /admin/students`, `GET /admin/students/:id`.
+
+### Уведомления и push
+
+- `GET /students/me/notifications`;
+- `GET /students/me/notifications/unread-count`;
+- `PATCH /students/me/notifications/:id/read`;
+- `POST /students/me/notifications/read-all`;
+- `GET /push/vapid-public-key`;
+- `POST/DELETE /push/subscribe`;
+- `POST /push/test`.
+
+Фактические validation schema и guards находятся в
+`backend/src/presentation/routes/` и являются приоритетным источником при
+расхождении с примерами ниже.
+
 Base URL: `http://localhost:4000/api/v1`
 
 ## Общие соглашения
@@ -122,7 +195,8 @@ Query params:
 }
 ```
 
-> `progress` вычисляется при наличии JWT (опционально в будущем); сейчас 0 без auth context на публичных routes.
+> `progress` вычисляется при валидном JWT ученика. Для гостевого запроса
+> публичного каталога возвращается 0 и отсутствует активное зачисление.
 
 ### `GET /courses/:courseId`
 

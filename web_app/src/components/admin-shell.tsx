@@ -24,14 +24,19 @@ const accessNavigation = [
   { href: "/admin/users", label: "Пользователи", icon: UserCog },
 ];
 
-const teacherNavigation = [
+const lessonNavigation = [
   { href: "/admin/offline-lessons", label: "Офлайн-уроки", icon: GraduationCap },
   { href: "/admin/online-lessons", label: "Онлайн-уроки", icon: Video },
 ];
 
+const teacherNavigation = [
+  { href: "/admin/my-students", label: "Мои ученики", icon: Users },
+  ...lessonNavigation,
+];
+
 const teachingNavigation = [
   { href: "/admin/students", label: "Ученики", icon: Users },
-  ...teacherNavigation,
+  ...lessonNavigation,
   { href: "/admin/homework-review", label: "Проверка ДЗ", icon: ClipboardCheck },
   { href: "/admin/lesson-questions", label: "Вопросы", icon: MessageCircleQuestion },
 ];
@@ -46,7 +51,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const isContentAdmin = isContentAdminRole(user?.role);
   const navigation = isContentAdmin
     ? [...cmsNavigation, ...accessNavigation, ...teachingNavigation]
-    : teacherNavigation;
+    : user?.role === "teacher"
+      ? teacherNavigation
+      : lessonNavigation;
   const sidebarTitle = isContentAdmin ? "Content CMS" : "Кабинет преподавателя";
   const headerTitle = isContentAdmin ? "Maestro Admin" : roleLabel(user?.role);
 

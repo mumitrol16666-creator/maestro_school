@@ -55,19 +55,19 @@ presentation  →  application  →  infrastructure
 
 ---
 
-## RBAC (Phase 1)
+## RBAC
 
 ### Роли в БД (все заложены)
 
-| slug | name | Phase 1 |
-|------|------|---------|
-| `super_admin` | Super Admin | schema only |
-| `admin` | Admin | ✅ active |
-| `owner` | Owner | schema only |
-| `branch_manager` | Branch Manager | schema only |
-| `teacher` | Teacher | schema only |
-| `curator` | Curator | schema only |
-| `student` | Student | ✅ active |
+| slug | name | Текущее состояние |
+|------|------|-------------------|
+| `super_admin` | Super Admin | permissions заложены; CMS UI не считает роль content-admin |
+| `admin` | Admin | активная Education CMS и учебное администрирование |
+| `owner` | Owner | активная Education CMS и учебное администрирование |
+| `branch_manager` | Branch Manager | permissions активны, отдельный интерфейс не выделен |
+| `teacher` | Teacher | активны офлайн- и онлайн-уроки |
+| `curator` | Curator | permissions активны, отдельный интерфейс не выделен |
+| `student` | Student | активный ученический портал |
 
 ### Permissions (примеры)
 
@@ -77,6 +77,9 @@ presentation  →  application  →  infrastructure
 - `news.read`, `news.manage`
 - `catalog.manage`, `users.manage`
 - `points.read`
+- `online_lessons.read`, `online_lessons.request`, `online_lessons.manage`
+- `coins.read`, `coins.award`
+- `offline_school.read`, `offline_school.write`
 
 Проверка: `request.user.permissions.includes(code)`.
 
@@ -120,10 +123,10 @@ PointsTransaction (ledger) → SUM(amount) = balance
 
 ## Интеграция с frontend
 
-Frontend сейчас использует mock-данные в `web_app/src/mocks/`.
+Frontend подключён к API через централизованный data layer в
+`web_app/src/lib/`. Базовый URL задаётся через
+`NEXT_PUBLIC_API_URL=http://localhost:4000/api/v1`.
 
-Следующий агент подключает API без изменения UI-компонентов:
-
-1. `NEXT_PUBLIC_API_URL=http://localhost:4000/api/v1`
-2. Заменить mock-fetch на HTTP в data layer (не в компонентах)
-3. Маппинг полей: `sortOrder` ↔ `order`, `difficultyLevel` ↔ `level`
+Интеграция с CRM выполняется только backend-to-backend через подписанные
+integration endpoints. Идентичность ученика и преподавателя определяется по
+связям `crmStudentId` / `crmTeacherId`, а не по параметрам от frontend.

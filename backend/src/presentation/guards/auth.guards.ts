@@ -57,3 +57,10 @@ export async function requireStudent(request: FastifyRequest): Promise<void> {
     throw new ForbiddenError("Student account required");
   }
 }
+
+export async function requireTeacher(request: FastifyRequest): Promise<void> {
+  if (!request.user) throw new UnauthorizedError();
+  if (request.user.roleSlug !== "teacher") {
+    throw new ForbiddenError("Teacher account required");
+  }
+}

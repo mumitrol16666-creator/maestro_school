@@ -4,11 +4,13 @@ import { BookOpen, GraduationCap, Home, Menu, Newspaper, UserRound, Video, X } f
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { useStudentSchoolAlerts } from "@/hooks/use-student-school-alerts";
 import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
 import { isStaffRole, isStudentRole, roleLabel, settingsPathForRole } from "@/lib/role-labels";
 import { useAuth } from "./auth-provider";
 import { AdminPendingHomeworkBadge } from "./admin-pending-homework-badge";
 import { Brand } from "./brand";
+import { StudentEntryAlerts } from "./student-entry-alerts";
 import { UserMenu } from "./user-menu";
 
 const navigation = [
@@ -29,6 +31,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const points = user?.points ?? 0;
   const coins = user?.coins ?? 0;
   const { count: unreadNotifications } = useUnreadNotifications();
+  const { counts: schoolAlerts } = useStudentSchoolAlerts(student ? user?.id : undefined);
 
   const sidebar = (
     <aside className="flex h-full flex-col bg-ink px-5 py-6 text-white">
@@ -52,6 +55,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <span className="flex-1">{label}</span>
               {href === "/online-lessons" && unreadNotifications != null && unreadNotifications > 0 ? (
                 <AdminPendingHomeworkBadge count={unreadNotifications} />
+              ) : null}
+              {href === "/school-lessons" && schoolAlerts.totalUnread > 0 ? (
+                <AdminPendingHomeworkBadge count={schoolAlerts.totalUnread} />
               ) : null}
             </Link>
           );
@@ -89,6 +95,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </header>
         <main className="mx-auto max-w-[1500px] p-5 sm:p-8 lg:p-10">{children}</main>
       </div>
+      {student && user ? (
+        <StudentEntryAlerts
+          userId={user.id}
+          counts={schoolAlerts}
+          onlineUnread={unreadNotifications ?? 0}
+        />
+      ) : null}
     </div>
   );
 }

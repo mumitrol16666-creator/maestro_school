@@ -9,12 +9,19 @@ import {
   teacherOfflineStart,
   teacherOfflineSubmit,
 } from "../../application/services/teacher-offline.service.js";
-import { authenticate, requirePermission } from "../guards/auth.guards.js";
+import { listTeacherStudents } from "../../application/services/teacher-students.service.js";
+import { authenticate, requirePermission, requireTeacher } from "../guards/auth.guards.js";
 
 const readGuards = [authenticate, requirePermission("offline_school.read")];
 const writeGuards = [authenticate, requirePermission("offline_school.write")];
 
 export async function teacherOfflineRoutes(app: FastifyInstance) {
+  app.get(
+    "/teachers/me/students",
+    { preHandler: [authenticate, requireTeacher, requirePermission("offline_school.read")] },
+    async (request) => ({ data: await listTeacherStudents(request.user!.id) }),
+  );
+
   app.get(
     "/teachers/me/offline-lessons",
     { preHandler: readGuards },

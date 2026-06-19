@@ -16,11 +16,18 @@ import {
   WalletCards,
   XCircle,
 } from "lucide-react";
-import { useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useAuth } from "@/components/auth-provider";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
 import { PageHeader } from "@/components/page-header";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { api } from "@/lib/api-client";
+import {
+  getSchoolAlertCounts,
+  markSchoolAlertsSeen,
+  type SchoolAlertCounts,
+} from "@/lib/student-school-alerts";
 import type { SchoolOfflineLesson } from "@/types/school-offline";
 
 /* ─── label maps ────────────────────────────────────────────────────── */
@@ -430,7 +437,15 @@ function HomeworkCard({ lesson }: { lesson: SchoolOfflineLesson }) {
 
 /* ─── tab navigation ────────────────────────────────────────────────── */
 
-function TabNav({ active, onChange }: { active: Tab; onChange: (tab: Tab) => void }) {
+function TabNav({
+  active,
+  onChange,
+  alerts,
+}: {
+  active: Tab;
+  onChange: (tab: Tab) => void;
+  alerts: SchoolAlertCounts;
+}) {
   return (
     <nav className="mb-8 flex gap-1 overflow-x-auto rounded-2xl border border-stone-200 bg-white p-1.5 shadow-soft">
       {tabs.map(({ key, label, icon: Icon }) => (
@@ -445,6 +460,21 @@ function TabNav({ active, onChange }: { active: Tab; onChange: (tab: Tab) => voi
         >
           <Icon size={16} className={active === key ? "text-gold" : undefined} />
           <span className="hidden sm:inline">{label}</span>
+          {key === "homework" && alerts.homework > 0 ? (
+            <span className="grid min-w-5 place-items-center rounded-full bg-gold px-1.5 py-0.5 text-[10px] font-black text-ink">
+              {alerts.homework}
+            </span>
+          ) : null}
+          {key === "history" && alerts.reports > 0 ? (
+            <span className="grid min-w-5 place-items-center rounded-full bg-gold px-1.5 py-0.5 text-[10px] font-black text-ink">
+              {alerts.reports}
+            </span>
+          ) : null}
+          {key === "schedule" && alerts.todayLessons + alerts.tomorrowLessons > 0 ? (
+            <span className="grid min-w-5 place-items-center rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-black text-blue-800">
+              {alerts.todayLessons + alerts.tomorrowLessons}
+            </span>
+          ) : null}
         </button>
       ))}
     </nav>
@@ -454,12 +484,34 @@ function TabNav({ active, onChange }: { active: Tab; onChange: (tab: Tab) => voi
 /* ─── main page ─────────────────────────────────────────────────────── */
 
 export default function SchoolLessonsPage() {
+  const params = useSearchParams();
+  const { user } = useAuth();
   const resource = useApiResource(() => api.studentOfflineSummary(), []);
-  const [activeTab, setActiveTab] = useState<Tab>("overview");
+  const requestedTab = params.get("tab");
+  const initialTab = tabs.some((item) => item.key === requestedTab) ? requestedTab as Tab : "overview";
+  const [activeTab, setActiveTab] = useState<Tab>(initialTab);
   const [reportMonth, setReportMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
+  const [alerts, setAlerts] = useState<SchoolAlertCounts>({
+    homework: 0,
+    reports: 0,
+    totalUnread: 0,
+    todayLessons: 0,
+    tomorrowLessons: 0,
+  });
+
+  useEffect(() => {
+    if (!user || !resource.data) return;
+    if (activeTab === "homework") {
+      markSchoolAlertsSeen(user.id, resource.data, "homework");
+    }
+    if (activeTab === "history") {
+      markSchoolAlertsSeen(user.id, resource.data, "reports");
+    }
+    setAlerts(getSchoolAlertCounts(user.id, resource.data));
+  }, [activeTab, resource.data, user]);
 
   if (resource.loading) {
     return <LoadingState label="Загружаем расписание школы" />;
@@ -573,7 +625,7 @@ export default function SchoolLessonsPage() {
         }
       />
 
-      <TabNav active={activeTab} onChange={setActiveTab} />
+      <TabNav active={activeTab} onChange={setActiveTab} alerts={alerts} />
 
       {/* ═══════ TAB: Overview ═══════ */}
       {activeTab === "overview" && (

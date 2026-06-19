@@ -1,6 +1,6 @@
-# Maestro Student Portal
+# Maestro Learning Platform Web App
 
-Student portal connected to Maestro REST API.
+Web application for students, teachers and education administrators.
 
 ## Scope
 
@@ -9,10 +9,16 @@ Student portal connected to Maestro REST API.
 - API-driven dashboard, courses, lessons, progress, news, and profile;
 - lesson start and homework submission actions;
 - shared loading, error, and empty states.
-- separate `/admin` Education CMS for Admin and Owner.
+- `/admin` Education CMS for Admin and Owner;
+- teacher workspace for offline and online lessons;
+- student school schedule and membership summary from CRM;
+- online lesson requests, Zoom scheduling and assignments;
+- user/role administration and CRM account linking;
+- in-app notifications, web push and PWA installation.
 
-Payment, scheduling, chat, and student homework file upload are not included.
-The Admin CMS includes a local Media Library for content files.
+Payments remain in Maestro CRM. A general-purpose chat is not included.
+Homework attachments are submitted as external links; the Admin CMS includes
+a local Media Library for educational content files.
 
 ## Run
 

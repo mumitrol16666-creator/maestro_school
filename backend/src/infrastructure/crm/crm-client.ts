@@ -62,6 +62,50 @@ export async function fetchTeacherOfflineClasses(
   }>(`/api/integration/v1/teachers/${encodeURIComponent(crmTeacherId)}/offline-classes${qs ? `?${qs}` : ""}`);
 }
 
+export async function fetchTeacherStudents(crmTeacherId: string) {
+  return crmGet<{
+    crmTeacherId: string;
+    teacher: { crmTeacherId: string; name: string } | null;
+    students: Array<{
+      crmStudentId: string;
+      appUserId?: string | null;
+      externalLinkStatus?: string | null;
+      name: string;
+      firstName: string;
+      lastName: string;
+      phone: string;
+      avatarUrl?: string | null;
+      learningLevel?: string | null;
+      accountBalance: number;
+      directions: string[];
+      assignedDirectly: boolean;
+      groups: Array<{
+        crmGroupId: string;
+        name: string;
+        direction: string;
+        level: string;
+      }>;
+      schedules: Array<{
+        id: string;
+        dayOfWeek: number;
+        time: string;
+        duration: number;
+      }>;
+      memberships: Array<{
+        crmMembershipId: string;
+        type: string;
+        classesRemaining: number;
+        endDate: string;
+        group: {
+          crmGroupId: string;
+          name: string;
+          direction: string;
+        } | null;
+      }>;
+    }>;
+  }>(`/api/integration/v1/teachers/${encodeURIComponent(crmTeacherId)}/students`);
+}
+
 export async function fetchClassCard(crmClassId: string) {
   return crmGet<Record<string, unknown>>(`/api/integration/v1/classes/${encodeURIComponent(crmClassId)}`);
 }
