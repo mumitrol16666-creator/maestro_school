@@ -73,6 +73,17 @@ export async function listTeacherStudents(appTeacherId: string) {
     directions: string[];
     groups: Array<{ crmGroupId: string; name: string; direction: string; level: string }>;
     schedules: Array<{ id: string; dayOfWeek: number; time: string; duration: number }>;
+    attendanceHistory: Array<{
+      crmClassId: string;
+      title: string;
+      date: string;
+      startTime: string;
+      classStatus: string;
+      attended: boolean;
+      attendanceStatus: string;
+      chargeAmount: number;
+      chargeSource: string | null;
+    }>;
     memberships: Array<{
       crmMembershipId: string;
       type: string;
@@ -114,6 +125,7 @@ export async function listTeacherStudents(appTeacherId: string) {
       ])],
       groups: student.groups,
       schedules: student.schedules,
+      attendanceHistory: student.attendanceHistory,
       memberships: student.memberships,
       sources: linkedOnline.length ? ["offline", "online"] : ["offline"],
       onlineLessons: linkedOnline.map(({ student: _student, ...request }) => request),
@@ -155,6 +167,7 @@ export async function listTeacherStudents(appTeacherId: string) {
       directions: [...new Set(requests.map((request) => request.directionTitle))],
       groups: [],
       schedules: [],
+      attendanceHistory: [],
       memberships: [],
       sources: ["online"],
       onlineLessons: requests.map(({ student: _student, ...request }) => request),

@@ -91,6 +91,17 @@ export async function fetchTeacherStudents(crmTeacherId: string) {
         time: string;
         duration: number;
       }>;
+      attendanceHistory: Array<{
+        crmClassId: string;
+        title: string;
+        date: string;
+        startTime: string;
+        classStatus: string;
+        attended: boolean;
+        attendanceStatus: string;
+        chargeAmount: number;
+        chargeSource: string | null;
+      }>;
       memberships: Array<{
         crmMembershipId: string;
         type: string;

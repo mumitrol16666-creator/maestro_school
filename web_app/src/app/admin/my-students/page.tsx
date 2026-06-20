@@ -3,6 +3,9 @@
 import {
   BookOpenCheck,
   CalendarDays,
+  CheckCircle2,
+  CircleAlert,
+  CircleX,
   GraduationCap,
   Search,
   UserRound,
@@ -53,6 +56,45 @@ function formatDateTime(value: string) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value));
+}
+
+function formatLessonDate(value: string) {
+  return new Intl.DateTimeFormat("ru-RU", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(value));
+}
+
+function attendancePresentation(item: TeacherStudent["attendanceHistory"][number]) {
+  if (item.attendanceStatus === "present") {
+    return { label: "Присутствовал", className: "bg-emerald-50 text-emerald-800", icon: CheckCircle2 };
+  }
+  if (item.attendanceStatus === "late") {
+    return { label: "Опоздал", className: "bg-amber-50 text-amber-900", icon: CircleAlert };
+  }
+  if (item.attendanceStatus === "excused_absence") {
+    return { label: "Не был · уважительная причина", className: "bg-sky-50 text-sky-800", icon: CircleX };
+  }
+  if (item.attendanceStatus === "unexcused_absence") {
+    if (item.classStatus === "pending_admin_review") {
+      return { label: "Не был · прогул ожидает подтверждения", className: "bg-rose-50 text-rose-800", icon: CircleX };
+    }
+    if (item.chargeSource === "membership") {
+      return { label: "Не был · занятие списано", className: "bg-rose-50 text-rose-800", icon: CircleX };
+    }
+    if (item.chargeAmount > 0) {
+      return {
+        label: `Не был · списано ${item.chargeAmount.toLocaleString("ru-RU")} ₸`,
+        className: "bg-rose-50 text-rose-800",
+        icon: CircleX,
+      };
+    }
+    return { label: "Не был · прогул подтверждён", className: "bg-rose-50 text-rose-800", icon: CircleX };
+  }
+  return item.attended
+    ? { label: "Присутствовал", className: "bg-emerald-50 text-emerald-800", icon: CheckCircle2 }
+    : { label: "Не был", className: "bg-stone-100 text-stone-700", icon: CircleX };
 }
 
 export default function TeacherStudentsPage() {
@@ -163,6 +205,9 @@ export default function TeacherStudentsPage() {
 function StudentCard({ student }: { student: TeacherStudent }) {
   const upcomingOnline = nextOnlineLesson(student);
   const activeMembership = student.memberships[0];
+  const latestAttendance = student.attendanceHistory[0];
+  const latestAttendanceView = latestAttendance ? attendancePresentation(latestAttendance) : null;
+  const LatestAttendanceIcon = latestAttendanceView?.icon;
 
   return (
     <article className="rounded-[26px] border border-stone-200 bg-paper p-5 shadow-soft sm:p-6">
@@ -189,6 +234,12 @@ function StudentCard({ student }: { student: TeacherStudent }) {
                 {item === "offline" ? "Офлайн" : "Онлайн"}
               </span>
             ))}
+            {latestAttendanceView && LatestAttendanceIcon && !latestAttendance?.attended ? (
+              <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${latestAttendanceView.className}`}>
+                <LatestAttendanceIcon size={12} />
+                Последний урок пропущен
+              </span>
+            ) : null}
           </div>
           <p className="mt-1 text-sm font-semibold text-ink">{formatPhoneDisplay(student.phone)}</p>
           {student.email ? <p className="mt-1 truncate text-xs text-stone-500">{student.email}</p> : null}
@@ -229,6 +280,40 @@ function StudentCard({ student }: { student: TeacherStudent }) {
             : "Нет назначенных онлайн-уроков"}
         </InfoBlock>
       </div>
+
+      {student.attendanceHistory.length ? (
+        <section className="mt-5 overflow-hidden rounded-2xl border border-stone-200 bg-white">
+          <div className="flex items-center justify-between border-b border-stone-100 px-4 py-3">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-wider text-stone-400">
+                Последние офлайн-уроки
+              </p>
+              <p className="mt-1 text-xs text-stone-500">Посещаемость этого ученика</p>
+            </div>
+            <CalendarDays size={17} className="text-gold" />
+          </div>
+          <div className="divide-y divide-stone-100">
+            {student.attendanceHistory.map((item) => {
+              const view = attendancePresentation(item);
+              const StatusIcon = view.icon;
+              return (
+                <div key={item.crmClassId} className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-bold text-ink">{item.title || "Занятие"}</p>
+                    <p className="mt-0.5 text-xs text-stone-500">
+                      {formatLessonDate(item.date)} · {item.startTime}
+                    </p>
+                  </div>
+                  <span className={`inline-flex w-fit items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-bold ${view.className}`}>
+                    <StatusIcon size={13} />
+                    {view.label}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
 
       <div className="mt-5 flex flex-wrap gap-2 border-t border-stone-200 pt-5">
         <WhatsAppLink phone={student.phone} label="Написать в WhatsApp" />
