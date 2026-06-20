@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, ClipboardCheck, FolderOpen, GraduationCap, LayoutDashboard, Library, LogOut, Menu, MessageCircleQuestion, Newspaper, Settings, UserCog, Users, Video, X } from "lucide-react";
+import { ArrowRight, BookOpen, ChevronRight, ClipboardCheck, FolderOpen, GraduationCap, LayoutDashboard, Library, LogOut, Menu, MessageCircleQuestion, Newspaper, Settings, UserCog, Users, Video, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -57,6 +57,16 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       : lessonNavigation;
   const sidebarTitle = isContentAdmin ? "Content CMS" : "Кабинет преподавателя";
   const headerTitle = isContentAdmin ? "Maestro Admin" : roleLabel(user?.role);
+  const displayName = [user?.firstName, user?.lastName].filter(Boolean).join(" ")
+    || user?.login
+    || user?.email?.split("@")[0]
+    || roleLabel(user?.role);
+  const initials = [user?.firstName, user?.lastName]
+    .filter(Boolean)
+    .map((part) => part?.[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase() || "M";
 
   useEffect(() => {
     if (pathname.startsWith("/admin/homework-review")) {
@@ -71,10 +81,27 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   }, [pathname, reloadPendingHomeworkCount, reloadPendingQuestionsCount, reloadPendingOnlineLessonsCount]);
 
   const sidebar = (
-    <aside className="flex h-full flex-col bg-ink px-5 py-6 text-white">
-      <div className="flex items-center justify-between"><Brand /><button className="lg:hidden" onClick={() => setOpen(false)}><X /></button></div>
-      <p className="mt-8 px-4 text-[10px] font-bold uppercase tracking-[0.2em] text-gold">{sidebarTitle}</p>
-      <nav className="mt-4 space-y-2">{navigation.map(({ href, label, icon: Icon }) => {
+    <aside className="flex h-full flex-col overflow-y-auto bg-[#121311] px-4 py-5 text-white sm:px-5 sm:py-6">
+      <div className="flex items-center justify-between border-b border-white/10 pb-5">
+        <Brand href="/admin" />
+        <button
+          type="button"
+          aria-label="Закрыть меню"
+          className="grid h-10 w-10 place-items-center rounded-xl border border-white/10 bg-white/5 text-white/70 transition hover:bg-white/10 hover:text-white lg:hidden"
+          onClick={() => setOpen(false)}
+        >
+          <X size={19} />
+        </button>
+      </div>
+
+      <div className="mt-6 flex items-center justify-between px-2">
+        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gold">{sidebarTitle}</p>
+        <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2 py-1 text-[9px] font-black uppercase tracking-wide text-emerald-300">
+          Рабочий кабинет
+        </span>
+      </div>
+
+      <nav className="mt-4 space-y-1.5">{navigation.map(({ href, label, icon: Icon }) => {
         const active = href === "/admin" ? pathname === href : pathname.startsWith(href);
         const pending = href === "/admin/homework-review"
           ? pendingHomeworkCount
@@ -88,32 +115,69 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             key={href}
             href={href}
             onClick={() => setOpen(false)}
-            className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold ${
-              active ? "bg-white text-ink" : "text-white/55 hover:bg-white/5 hover:text-white"
+            aria-current={active ? "page" : undefined}
+            className={`group relative flex min-h-12 items-center gap-3 overflow-hidden rounded-2xl px-3.5 py-3 text-sm font-bold transition ${
+              active
+                ? "border border-gold/30 bg-gradient-to-r from-gold/20 to-white/10 text-white shadow-[0_10px_30px_rgba(0,0,0,0.18)]"
+                : "border border-transparent text-white/60 hover:border-white/10 hover:bg-white/5 hover:text-white"
             }`}
           >
-            <Icon size={18} />
+            {active ? <span className="absolute inset-y-3 left-0 w-0.5 rounded-full bg-gold" /> : null}
+            <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl transition ${
+              active ? "bg-gold text-ink" : "bg-white/5 text-white/60 group-hover:bg-white/10 group-hover:text-white"
+            }`}>
+              <Icon size={17} strokeWidth={2.2} />
+            </span>
             <span className="flex-1">{label}</span>
             {pending != null && pending > 0 && <AdminPendingHomeworkBadge count={pending} />}
+            <ChevronRight size={15} className={`transition ${active ? "text-gold" : "text-white/20 group-hover:translate-x-0.5 group-hover:text-white/50"}`} />
           </Link>
         );
       })}</nav>
+
+      {!isContentAdmin ? (
+        <div className="mt-6 rounded-[22px] border border-white/10 bg-white/[0.035] p-4">
+          <p className="text-[9px] font-black uppercase tracking-[0.18em] text-gold">Порядок после урока</p>
+          <div className="mt-3 flex items-center gap-2 text-[11px] font-bold text-white/65">
+            <span>Посещаемость</span>
+            <ArrowRight size={12} className="text-gold/60" />
+            <span>Отчёт</span>
+            <ArrowRight size={12} className="text-gold/60" />
+            <span>Отправить</span>
+          </div>
+          <Link
+            href="/admin/offline-lessons"
+            onClick={() => setOpen(false)}
+            className="mt-4 inline-flex items-center gap-2 text-xs font-bold text-white transition hover:text-gold"
+          >
+            Перейти к урокам
+            <ArrowRight size={13} />
+          </Link>
+        </div>
+      ) : null}
+
       <Link
         href="/admin/settings"
         onClick={() => setOpen(false)}
-        className="mt-auto rounded-3xl border border-white/10 bg-white/5 p-4 transition hover:border-gold/25 hover:bg-white/10"
+        className="group mt-auto flex items-center gap-3 rounded-[22px] border border-white/10 bg-white/[0.045] p-3.5 transition hover:border-gold/30 hover:bg-white/[0.075]"
       >
-        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gold">{roleLabel(user?.role)}</p>
-        <p className="mt-2 truncate text-sm font-semibold">{user?.email}</p>
-        <p className="mt-2 text-xs text-white/40">Настройки аккаунта →</p>
+        <span className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-2xl bg-gold text-sm font-black text-ink">
+          {user?.avatar ? <img src={user.avatar} alt="" className="h-full w-full object-cover" /> : initials}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[9px] font-black uppercase tracking-[0.16em] text-gold">{roleLabel(user?.role)}</span>
+          <span className="mt-1 block truncate text-sm font-bold text-white">{displayName}</span>
+          <span className="mt-0.5 block truncate text-[11px] text-white/40">{user?.email}</span>
+        </span>
+        <Settings size={16} className="shrink-0 text-white/30 transition group-hover:rotate-12 group-hover:text-gold" />
       </Link>
     </aside>
   );
   return <div className="min-h-screen bg-cream">
-    <div className="fixed inset-y-0 left-0 hidden w-64 lg:block">{sidebar}</div>
-    {open && <div className="fixed inset-y-0 left-0 z-50 w-72 shadow-2xl lg:hidden">{sidebar}</div>}
-    {open && <button className="fixed inset-0 z-40 bg-black/30 lg:hidden" onClick={() => setOpen(false)} aria-label="Закрыть меню" />}
-    <div className="lg:pl-64">
+    <div className="fixed inset-y-0 left-0 z-40 hidden w-[280px] lg:block">{sidebar}</div>
+    {open && <div className="fixed inset-y-0 left-0 z-50 w-[min(88vw,340px)] shadow-2xl lg:hidden">{sidebar}</div>}
+    {open && <button className="fixed inset-0 z-40 bg-black/55 backdrop-blur-[2px] lg:hidden" onClick={() => setOpen(false)} aria-label="Закрыть меню" />}
+    <div className="lg:pl-[280px]">
       <header className="sticky top-0 z-30 flex h-20 items-center gap-4 border-b border-stone-200/80 bg-cream/90 px-5 backdrop-blur-xl sm:px-8">
         <button onClick={() => setOpen(true)} className="grid h-10 w-10 place-items-center rounded-full bg-white lg:hidden"><Menu size={20} /></button>
         <div>
