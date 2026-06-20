@@ -5,6 +5,7 @@ import {
   ArrowRight,
   CalendarDays,
   CheckCircle2,
+  ChevronRight,
   Clock3,
   FileCheck2,
   Send,
@@ -20,11 +21,12 @@ import { adminOfflineApi } from "@/lib/admin-offline-api";
 import { teacherOfflineApi } from "@/lib/teacher-offline-api";
 import type { TeacherOfflineClass } from "@/types/teacher-offline";
 
-type LessonTab = "today" | "upcoming" | "processing" | "accepted" | "all";
+type LessonTab = "today" | "report" | "upcoming" | "processing" | "accepted" | "all";
 type LessonStage = "fix" | "report" | "scheduled" | "processing" | "accepted" | "cancelled";
 
 const tabs: Array<{ id: LessonTab; label: string }> = [
   { id: "today", label: "Сегодня" },
+  { id: "report", label: "Нужно заполнить" },
   { id: "upcoming", label: "Ближайшие" },
   { id: "processing", label: "На обработке" },
   { id: "accepted", label: "Принятые" },
@@ -196,8 +198,9 @@ export default function AdminOfflineLessonsPage() {
 
   const filtered = staged.filter(({ lesson, stage }) => {
     if (activeTab === "today") return isSameDay(new Date(lesson.date), now);
+    if (activeTab === "report") return stage === "report" || stage === "fix";
     if (activeTab === "upcoming") return lessonDateTime(lesson, "startTime") > now && !isSameDay(new Date(lesson.date), now);
-    if (activeTab === "processing") return stage === "processing" || stage === "fix";
+    if (activeTab === "processing") return stage === "processing";
     if (activeTab === "accepted") return stage === "accepted";
     return true;
   });
@@ -234,22 +237,54 @@ export default function AdminOfflineLessonsPage() {
       />
 
       <section className="mb-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard icon={CalendarDays} label="Сегодня" value={counts.today} tone="sky" />
-        <SummaryCard icon={AlertCircle} label="Нужно заполнить отчёт" value={counts.report} tone="amber" />
-        <SummaryCard icon={Send} label="На проверке у администратора" value={counts.processing} tone="cream" />
-        <SummaryCard icon={CheckCircle2} label="Принято" value={counts.accepted} tone="green" />
+        <SummaryCard
+          icon={CalendarDays}
+          label="Уроки сегодня"
+          hint="Расписание на текущий день"
+          value={counts.today}
+          tone="sky"
+          active={activeTab === "today"}
+          onClick={() => setActiveTab("today")}
+        />
+        <SummaryCard
+          icon={AlertCircle}
+          label="Требуют действия"
+          hint="Заполнить или исправить отчёт"
+          value={counts.report}
+          tone="amber"
+          active={activeTab === "report"}
+          onClick={() => setActiveTab("report")}
+        />
+        <SummaryCard
+          icon={Send}
+          label={isAdmin ? "Требуют подтверждения" : "Ждут подтверждения"}
+          hint={isAdmin ? "Отчёты преподавателей" : "Отправлены администратору"}
+          value={counts.processing}
+          tone="cream"
+          active={activeTab === "processing"}
+          onClick={() => setActiveTab("processing")}
+        />
+        <SummaryCard
+          icon={CheckCircle2}
+          label="Принятые уроки"
+          hint="Подтверждены администратором"
+          value={counts.accepted}
+          tone="green"
+          active={activeTab === "accepted"}
+          onClick={() => setActiveTab("accepted")}
+        />
       </section>
 
-      <nav className="mb-8 flex gap-1 overflow-x-auto border-b border-stone-200" aria-label="Разделы уроков">
+      <nav className="mb-8 flex gap-2 overflow-x-auto rounded-2xl border border-stone-200 bg-white p-1.5 shadow-sm" aria-label="Разделы уроков">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             type="button"
             onClick={() => setActiveTab(tab.id)}
-            className={`shrink-0 border-b-2 px-4 py-3 text-sm font-bold transition ${
+            className={`shrink-0 rounded-xl px-4 py-2.5 text-sm font-bold transition ${
               activeTab === tab.id
-                ? "border-ink text-ink"
-                : "border-transparent text-stone-500 hover:text-ink"
+                ? "bg-ink text-white shadow-sm"
+                : "text-stone-500 hover:bg-stone-50 hover:text-ink"
             }`}
           >
             {tab.label}
@@ -284,13 +319,19 @@ export default function AdminOfflineLessonsPage() {
 function SummaryCard({
   icon: Icon,
   label,
+  hint,
   value,
   tone,
+  active,
+  onClick,
 }: {
   icon: typeof CalendarDays;
   label: string;
+  hint: string;
   value: number;
   tone: "sky" | "amber" | "cream" | "green";
+  active: boolean;
+  onClick: () => void;
 }) {
   const tones = {
     sky: "border-sky-200 bg-sky-50 text-sky-900",
@@ -299,11 +340,24 @@ function SummaryCard({
     green: "border-emerald-200 bg-emerald-50 text-emerald-900",
   };
   return (
-    <article className={`min-h-[126px] border p-5 ${tones[tone]}`}>
-      <Icon size={20} />
-      <p className="mt-4 text-sm font-bold">{label}</p>
-      <p className="font-display mt-1 text-3xl">{value} {value === 1 ? "урок" : "уроков"}</p>
-    </article>
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`group min-h-[154px] rounded-[24px] border p-5 text-left shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 ${tones[tone]} ${
+        active ? "ring-2 ring-ink ring-offset-2" : ""
+      }`}
+    >
+      <span className="flex items-start justify-between gap-3">
+        <span className="grid h-10 w-10 place-items-center rounded-xl bg-white/70 shadow-sm">
+          <Icon size={19} />
+        </span>
+        <ChevronRight size={18} className={`transition group-hover:translate-x-1 ${active ? "opacity-100" : "opacity-45"}`} />
+      </span>
+      <span className="mt-4 block text-sm font-black">{label}</span>
+      <span className="mt-1 block text-xs opacity-65">{hint}</span>
+      <span className="font-display mt-3 block text-3xl">{value} {value === 1 ? "урок" : "уроков"}</span>
+    </button>
   );
 }
 
@@ -355,7 +409,7 @@ function LessonRow({
         : null;
 
   return (
-    <article className={`flex flex-col gap-5 border p-5 shadow-soft sm:flex-row sm:items-center ${meta.border} ${meta.muted ? "opacity-90" : ""}`}>
+    <article className={`flex flex-col gap-5 rounded-[24px] border p-5 shadow-soft transition hover:shadow-md sm:flex-row sm:items-center ${meta.border} ${meta.muted ? "opacity-90" : ""}`}>
       <div className="min-w-0 flex-1">
         <p className="text-xs font-bold uppercase text-stone-400">
           {formatLessonDate(lesson.date)} · {lesson.startTime}–{lesson.endTime}
@@ -372,7 +426,7 @@ function LessonRow({
         {detail ? <span className="text-xs text-stone-500">{detail}</span> : null}
         <Link
           href={`/admin/offline-lessons/${lesson.crmClassId}`}
-          className={`mt-1 inline-flex min-h-10 items-center gap-2 px-4 text-sm font-bold ${
+          className={`mt-1 inline-flex min-h-10 items-center gap-2 rounded-xl px-4 text-sm font-bold transition hover:-translate-y-0.5 ${
             stage === "report" || stage === "fix"
               ? "bg-ink text-white"
               : "border border-stone-300 bg-white text-ink"

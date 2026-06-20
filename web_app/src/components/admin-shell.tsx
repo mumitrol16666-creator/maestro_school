@@ -30,6 +30,7 @@ const lessonNavigation = [
 ];
 
 const teacherNavigation = [
+  { href: "/admin", label: "Главная", icon: LayoutDashboard },
   { href: "/admin/my-students", label: "Мои ученики", icon: Users },
   ...lessonNavigation,
 ];
@@ -45,10 +46,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
   const [open, setOpen] = useState(false);
-  const { count: pendingHomeworkCount, reload: reloadPendingHomeworkCount } = usePendingHomeworkCount();
-  const { count: pendingQuestionsCount, reload: reloadPendingQuestionsCount } = usePendingLessonQuestionsCount();
-  const { count: pendingOnlineLessonsCount, reload: reloadPendingOnlineLessonsCount } = usePendingOnlineLessonsCount();
   const isContentAdmin = isContentAdminRole(user?.role);
+  const { count: pendingHomeworkCount, reload: reloadPendingHomeworkCount } = usePendingHomeworkCount(60_000, isContentAdmin);
+  const { count: pendingQuestionsCount, reload: reloadPendingQuestionsCount } = usePendingLessonQuestionsCount(60_000, isContentAdmin);
+  const { count: pendingOnlineLessonsCount, reload: reloadPendingOnlineLessonsCount } = usePendingOnlineLessonsCount();
   const navigation = isContentAdmin
     ? [...cmsNavigation, ...accessNavigation, ...teachingNavigation]
     : user?.role === "teacher"
