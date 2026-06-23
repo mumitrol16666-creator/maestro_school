@@ -22,7 +22,7 @@ import { teacherOfflineApi } from "@/lib/teacher-offline-api";
 import type { TeacherOfflineClass } from "@/types/teacher-offline";
 
 type LessonTab = "today" | "report" | "upcoming" | "processing" | "accepted" | "all";
-type LessonStage = "fix" | "report" | "scheduled" | "processing" | "accepted" | "cancelled";
+type LessonStage = "fix" | "report" | "overdue" | "scheduled" | "processing" | "accepted" | "cancelled";
 
 const tabs: Array<{ id: LessonTab; label: string }> = [
   { id: "today", label: "Сегодня" },
@@ -45,6 +45,12 @@ const stageMeta: Record<LessonStage, {
     action: "Исправить отчёт",
     badge: "bg-red-50 text-red-800",
     border: "border-red-200 bg-red-50/30",
+  },
+  overdue: {
+    label: "Просрочен",
+    action: "Заполнить отчёт",
+    badge: "bg-red-600 text-white font-extrabold animate-pulse",
+    border: "border-red-500 bg-red-50/20 shadow-[0_0_12px_rgba(239,68,68,0.1)]",
   },
   report: {
     label: "Нужен отчёт",
@@ -98,7 +104,15 @@ function lessonStage(lesson: TeacherOfflineClass, now: Date): LessonStage {
   if (lesson.status === "pending_admin_review") return "processing";
   if (lesson.status === "completed") return "accepted";
   if (lesson.status === "cancelled") return "cancelled";
-  if (lesson.status === "not_filled" || lessonDateTime(lesson, "endTime") < now) return "report";
+  
+  if (lesson.status === "not_filled" || lessonDateTime(lesson, "endTime") < now) {
+    const end = lessonDateTime(lesson, "endTime");
+    const diffMs = now.getTime() - end.getTime();
+    if (diffMs > 60 * 60 * 1000) {
+      return "overdue";
+    }
+    return "report";
+  }
   return "scheduled";
 }
 
@@ -191,14 +205,14 @@ export default function AdminOfflineLessonsPage() {
 
   const counts = {
     today: staged.filter(({ lesson }) => isSameDay(new Date(lesson.date), now)).length,
-    report: staged.filter(({ stage }) => stage === "report" || stage === "fix").length,
+    report: staged.filter(({ stage }) => stage === "report" || stage === "overdue" || stage === "fix").length,
     processing: staged.filter(({ stage }) => stage === "processing").length,
     accepted: staged.filter(({ stage }) => stage === "accepted").length,
   };
 
   const filtered = staged.filter(({ lesson, stage }) => {
     if (activeTab === "today") return isSameDay(new Date(lesson.date), now);
-    if (activeTab === "report") return stage === "report" || stage === "fix";
+    if (activeTab === "report") return stage === "report" || stage === "overdue" || stage === "fix";
     if (activeTab === "upcoming") return lessonDateTime(lesson, "startTime") > now && !isSameDay(new Date(lesson.date), now);
     if (activeTab === "processing") return stage === "processing";
     if (activeTab === "accepted") return stage === "accepted";
@@ -207,11 +221,12 @@ export default function AdminOfflineLessonsPage() {
 
   const priority: Record<LessonStage, number> = {
     fix: 0,
-    report: 1,
-    scheduled: 2,
-    processing: 3,
-    accepted: 4,
-    cancelled: 5,
+    overdue: 1,
+    report: 2,
+    scheduled: 3,
+    processing: 4,
+    accepted: 5,
+    cancelled: 6,
   };
   filtered.sort((left, right) => {
     const stageDiff = priority[left.stage] - priority[right.stage];
@@ -222,7 +237,7 @@ export default function AdminOfflineLessonsPage() {
   const grouped = filtered.reduce<Record<LessonStage, TeacherOfflineClass[]>>((acc, item) => {
     acc[item.stage].push(item.lesson);
     return acc;
-  }, { fix: [], report: [], scheduled: [], processing: [], accepted: [], cancelled: [] });
+  }, { fix: [], report: [], overdue: [], scheduled: [], processing: [], accepted: [], cancelled: [] });
 
   return (
     <>
@@ -300,6 +315,7 @@ export default function AdminOfflineLessonsPage() {
       ) : (
         <div className="space-y-10">
           <LessonSection title="Нужно исправить" lessons={grouped.fix} stage="fix" now={now} />
+          <LessonSection title="Просроченные отчёты" lessons={grouped.overdue} stage="overdue" now={now} />
           <LessonSection title="Нужно заполнить отчёт" lessons={grouped.report} stage="report" now={now} />
           <LessonSection
             title={activeTab === "upcoming" ? "Ближайшие уроки" : "Запланированные"}
