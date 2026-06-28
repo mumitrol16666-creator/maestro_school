@@ -164,6 +164,16 @@ export default function AdminOfflineLessonsPage() {
   const { user } = useAuth();
   const isAdmin = isContentAdminRole(user?.role);
   const [activeTab, setActiveTab] = useState<LessonTab>("today");
+
+  const handleTabChange = (tab: LessonTab) => {
+    setActiveTab(tab);
+    setTimeout(() => {
+      document.getElementById("lessons-list-container")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start"
+      });
+    }, 80);
+  };
   const resource = useApiResource(
     () => (isAdmin ? adminOfflineApi.agenda() : teacherOfflineApi.agenda()),
     [isAdmin],
@@ -259,7 +269,7 @@ export default function AdminOfflineLessonsPage() {
           value={counts.today}
           tone="sky"
           active={activeTab === "today"}
-          onClick={() => setActiveTab("today")}
+          onClick={() => handleTabChange("today")}
         />
         <SummaryCard
           icon={AlertCircle}
@@ -268,7 +278,7 @@ export default function AdminOfflineLessonsPage() {
           value={counts.report}
           tone="amber"
           active={activeTab === "report"}
-          onClick={() => setActiveTab("report")}
+          onClick={() => handleTabChange("report")}
         />
         <SummaryCard
           icon={Send}
@@ -277,7 +287,7 @@ export default function AdminOfflineLessonsPage() {
           value={counts.processing}
           tone="cream"
           active={activeTab === "processing"}
-          onClick={() => setActiveTab("processing")}
+          onClick={() => handleTabChange("processing")}
         />
         <SummaryCard
           icon={CheckCircle2}
@@ -286,7 +296,7 @@ export default function AdminOfflineLessonsPage() {
           value={counts.accepted}
           tone="green"
           active={activeTab === "accepted"}
-          onClick={() => setActiveTab("accepted")}
+          onClick={() => handleTabChange("accepted")}
         />
       </section>
 
@@ -295,11 +305,11 @@ export default function AdminOfflineLessonsPage() {
           <button
             key={tab.id}
             type="button"
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => handleTabChange(tab.id)}
             className={`shrink-0 rounded-xl px-4 py-2.5 text-sm font-bold transition ${
               activeTab === tab.id
-                ? "bg-ink text-white shadow-sm"
-                : "text-stone-500 hover:bg-stone-50 hover:text-ink"
+                 ? "bg-ink text-white shadow-sm"
+                 : "text-stone-500 hover:bg-stone-50 hover:text-ink"
             }`}
           >
             {tab.label}
@@ -307,36 +317,38 @@ export default function AdminOfflineLessonsPage() {
         ))}
       </nav>
 
-      {filtered.length === 0 ? (
-        <EmptyState
-          title="В этом разделе уроков нет"
-          description="Когда статус урока изменится, он автоматически появится в нужной вкладке."
-        />
-      ) : (
-        <div className="space-y-10">
-          <LessonSection title="Нужно исправить" lessons={grouped.fix} stage="fix" now={now} />
-          <LessonSection title="Просроченные отчёты" lessons={grouped.overdue} stage="overdue" now={now} />
-          <LessonSection title="Нужно заполнить отчёт" lessons={grouped.report} stage="report" now={now} />
-          {(() => {
-            const todayLessons = grouped.scheduled.filter(l => isSameDay(new Date(l.date), now));
-            const tomorrowDate = new Date(now);
-            tomorrowDate.setDate(tomorrowDate.getDate() + 1);
-            const tomorrowLessons = grouped.scheduled.filter(l => isSameDay(new Date(l.date), tomorrowDate));
-            const otherLessons = grouped.scheduled.filter(l => !isSameDay(new Date(l.date), now) && !isSameDay(new Date(l.date), tomorrowDate));
-            
-            return (
-              <>
-                <LessonSection title="Запланированные на сегодня" lessons={todayLessons} stage="scheduled" now={now} />
-                <LessonSection title="Запланированные на завтра" lessons={tomorrowLessons} stage="scheduled" now={now} />
-                <LessonSection title={activeTab === "upcoming" ? "Ближайшие уроки" : "Запланированные предстоящие"} lessons={otherLessons} stage="scheduled" now={now} />
-              </>
-            );
-          })()}
-          <LessonSection title="На проверке администратора" lessons={grouped.processing} stage="processing" now={now} />
-          <LessonSection title="Принято администратором" lessons={grouped.accepted} stage="accepted" now={now} />
-          <LessonSection title="Отменённые" lessons={grouped.cancelled} stage="cancelled" now={now} />
-        </div>
-      )}
+      <div id="lessons-list-container" className="scroll-mt-28">
+        {filtered.length === 0 ? (
+          <EmptyState
+            title="В этом разделе уроков нет"
+            description="Когда статус урока изменится, он автоматически появится в нужной вкладке."
+          />
+        ) : (
+          <div className="space-y-10">
+            <LessonSection title="Нужно исправить" lessons={grouped.fix} stage="fix" now={now} />
+            <LessonSection title="Просроченные отчёты" lessons={grouped.overdue} stage="overdue" now={now} />
+            <LessonSection title="Нужно заполнить отчёт" lessons={grouped.report} stage="report" now={now} />
+            {(() => {
+              const todayLessons = grouped.scheduled.filter(l => isSameDay(new Date(l.date), now));
+              const tomorrowDate = new Date(now);
+              tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+              const tomorrowLessons = grouped.scheduled.filter(l => isSameDay(new Date(l.date), tomorrowDate));
+              const otherLessons = grouped.scheduled.filter(l => !isSameDay(new Date(l.date), now) && !isSameDay(new Date(l.date), tomorrowDate));
+              
+              return (
+                <>
+                  <LessonSection title="Запланированные на сегодня" lessons={todayLessons} stage="scheduled" now={now} />
+                  <LessonSection title="Запланированные на завтра" lessons={tomorrowLessons} stage="scheduled" now={now} />
+                  <LessonSection title={activeTab === "upcoming" ? "Ближайшие уроки" : "Запланированные предстоящие"} lessons={otherLessons} stage="scheduled" now={now} />
+                </>
+              );
+            })()}
+            <LessonSection title="На проверке администратора" lessons={grouped.processing} stage="processing" now={now} />
+            <LessonSection title="Принято администратором" lessons={grouped.accepted} stage="accepted" now={now} />
+            <LessonSection title="Отменённые" lessons={grouped.cancelled} stage="cancelled" now={now} />
+          </div>
+        )}
+      </div>
     </>
   );
 }
