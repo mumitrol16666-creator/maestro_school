@@ -9,6 +9,7 @@ import {
   teacherOfflineWithdraw,
   teacherOfflineStart,
   teacherOfflineSubmit,
+  getTeacherSalarySummary,
 } from "../../application/services/teacher-offline.service.js";
 import { listTeacherStudents } from "../../application/services/teacher-students.service.js";
 import { authenticate, requirePermission, requireTeacher } from "../guards/auth.guards.js";
@@ -21,6 +22,14 @@ export async function teacherOfflineRoutes(app: FastifyInstance) {
     "/teachers/me/students",
     { preHandler: [authenticate, requireTeacher, requirePermission("offline_school.read")] },
     async (request) => ({ data: await listTeacherStudents(request.user!.id) }),
+  );
+
+  app.get(
+    "/teachers/me/salary-summary",
+    { preHandler: [authenticate, requireTeacher] },
+    async (request) => {
+      return { data: await getTeacherSalarySummary(request.user!.id) };
+    },
   );
 
   app.get(

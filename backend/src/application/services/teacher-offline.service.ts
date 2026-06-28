@@ -10,6 +10,7 @@ import {
   postTeacherStart,
   postTeacherSubmit,
   postTeacherAttendance,
+  fetchTeacherSalarySummary,
   type TeacherSubmitPayload,
 } from "../../infrastructure/crm/crm-client.js";
 
@@ -160,4 +161,9 @@ export async function teacherOfflineSetAttendance(
     teacherNote,
     attended: ["present", "late"].includes(attendanceStatus),
   });
+}
+
+export async function getTeacherSalarySummary(appUserId: string) {
+  const crmTeacherId = await requireCrmTeacherId(appUserId);
+  return fetchTeacherSalarySummary(crmTeacherId);
 }

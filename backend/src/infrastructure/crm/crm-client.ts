@@ -369,3 +369,9 @@ export async function fetchCrmLinkStatusByPhone(phone: string) {
     `/api/integration/v1/users/link-status/${encodeURIComponent(digits || phone)}`,
   );
 }
+
+export async function fetchTeacherSalarySummary(crmTeacherId: string) {
+  return crmGet<Record<string, any>>(
+    `/api/integration/v1/teachers/${encodeURIComponent(crmTeacherId)}/salary-summary`
+  );
+}
