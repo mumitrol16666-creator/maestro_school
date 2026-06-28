@@ -806,19 +806,79 @@ export default function SchoolLessonsPage() {
                 title="Запланированных уроков нет"
                 description="Когда администратор добавит занятия в расписание, они появятся здесь."
               />
-            ) : (
-              <div className="space-y-4">
-                {[...upcomingLessons]
-                  .sort((a, b) => {
-                    const dateComp = a.date.localeCompare(b.date);
-                    if (dateComp !== 0) return dateComp;
-                    return a.startTime.localeCompare(b.startTime);
-                  })
-                  .map((lesson) => (
-                    <LessonCard key={lesson.crmClassId} lesson={lesson} upcoming />
-                  ))}
-              </div>
-            )}
+            ) : (() => {
+              const sortedUpcoming = [...upcomingLessons].sort((a, b) => {
+                const dateComp = a.date.localeCompare(b.date);
+                if (dateComp !== 0) return dateComp;
+                return a.startTime.localeCompare(b.startTime);
+              });
+
+              const localNow = new Date();
+              const getLocalDateString = (d: Date) => {
+                const year = d.getFullYear();
+                const month = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+              };
+              const todayStr = getLocalDateString(localNow);
+
+              const localTomorrow = new Date(localNow);
+              localTomorrow.setDate(localTomorrow.getDate() + 1);
+              const tomorrowStr = getLocalDateString(localTomorrow);
+
+              const todayLessons = sortedUpcoming.filter((l) => l.date === todayStr);
+              const tomorrowLessons = sortedUpcoming.filter((l) => l.date === tomorrowStr);
+              const otherLessons = sortedUpcoming.filter((l) => l.date !== todayStr && l.date !== tomorrowStr);
+
+              return (
+                <div className="space-y-8">
+                  {todayLessons.length > 0 && (
+                    <div>
+                      <div className="mb-4 flex items-center gap-2">
+                        <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                        <h3 className="font-display text-2xl text-stone-800">Сегодня</h3>
+                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-800">{todayLessons.length}</span>
+                      </div>
+                      <div className="space-y-4">
+                        {todayLessons.map((lesson) => (
+                          <LessonCard key={lesson.crmClassId} lesson={lesson} upcoming />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {tomorrowLessons.length > 0 && (
+                    <div>
+                      <div className="mb-4 flex items-center gap-2">
+                        <span className="h-2.5 w-2.5 rounded-full bg-blue-500" />
+                        <h3 className="font-display text-2xl text-stone-800">Завтра</h3>
+                        <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-bold text-blue-800">{tomorrowLessons.length}</span>
+                      </div>
+                      <div className="space-y-4">
+                        {tomorrowLessons.map((lesson) => (
+                          <LessonCard key={lesson.crmClassId} lesson={lesson} upcoming />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {otherLessons.length > 0 && (
+                    <div>
+                      <div className="mb-4 flex items-center gap-2">
+                        <span className="h-2.5 w-2.5 rounded-full bg-stone-400" />
+                        <h3 className="font-display text-2xl text-stone-800">Предстоящие уроки</h3>
+                        <span className="rounded-full bg-stone-100 px-2 py-0.5 text-xs font-bold text-stone-600">{otherLessons.length}</span>
+                      </div>
+                      <div className="space-y-4">
+                        {otherLessons.map((lesson) => (
+                          <LessonCard key={lesson.crmClassId} lesson={lesson} upcoming />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </section>
         </>
       )}

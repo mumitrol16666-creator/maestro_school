@@ -317,12 +317,21 @@ export default function AdminOfflineLessonsPage() {
           <LessonSection title="Нужно исправить" lessons={grouped.fix} stage="fix" now={now} />
           <LessonSection title="Просроченные отчёты" lessons={grouped.overdue} stage="overdue" now={now} />
           <LessonSection title="Нужно заполнить отчёт" lessons={grouped.report} stage="report" now={now} />
-          <LessonSection
-            title={activeTab === "upcoming" ? "Ближайшие уроки" : "Запланированные"}
-            lessons={grouped.scheduled}
-            stage="scheduled"
-            now={now}
-          />
+          {(() => {
+            const todayLessons = grouped.scheduled.filter(l => isSameDay(new Date(l.date), now));
+            const tomorrowDate = new Date(now);
+            tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+            const tomorrowLessons = grouped.scheduled.filter(l => isSameDay(new Date(l.date), tomorrowDate));
+            const otherLessons = grouped.scheduled.filter(l => !isSameDay(new Date(l.date), now) && !isSameDay(new Date(l.date), tomorrowDate));
+            
+            return (
+              <>
+                <LessonSection title="Запланированные на сегодня" lessons={todayLessons} stage="scheduled" now={now} />
+                <LessonSection title="Запланированные на завтра" lessons={tomorrowLessons} stage="scheduled" now={now} />
+                <LessonSection title={activeTab === "upcoming" ? "Ближайшие уроки" : "Запланированные предстоящие"} lessons={otherLessons} stage="scheduled" now={now} />
+              </>
+            );
+          })()}
           <LessonSection title="На проверке администратора" lessons={grouped.processing} stage="processing" now={now} />
           <LessonSection title="Принято администратором" lessons={grouped.accepted} stage="accepted" now={now} />
           <LessonSection title="Отменённые" lessons={grouped.cancelled} stage="cancelled" now={now} />
