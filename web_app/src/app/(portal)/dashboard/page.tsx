@@ -12,21 +12,24 @@ import { useApiResource } from "@/hooks/use-api-resource";
 import { api } from "@/lib/api-client";
 import { lessonStatusLabels } from "@/lib/ui";
 import { difficultyLabel, normalizeLessonStatus, toCourse } from "@/lib/adapters";
+import { getSchoolAlertCounts } from "@/lib/student-school-alerts";
 
 export default function DashboardPage() {
   const { user } = useAuth();
   const resource = useApiResource(async () => {
-    const [dashboard, news, achievements, courses] = await Promise.all([
+    const [dashboard, news, achievements, courses, offlineSummary] = await Promise.all([
       api.dashboard(),
       api.news(),
       api.achievements(),
       api.courses(),
+      api.studentOfflineSummary().catch(() => null),
     ]);
     return {
       dashboard,
       news,
       achievements,
       courses: courses.map((course, index) => toCourse(course, index)),
+      offlineSummary,
     };
   }, []);
 
@@ -48,15 +51,39 @@ export default function DashboardPage() {
     );
   }
 
-  const { dashboard, news, achievements } = data;
+  const { dashboard, news, achievements, offlineSummary } = data;
   const course = dashboard.currentCourse;
   if (!course) return <EmptyState title="Курс пока не назначен" description="После зачисления на курс здесь появятся уроки, прогресс и баллы." />;
   const nextLesson = dashboard.nextAvailableLesson;
   const latestPost = news[0];
   const firstName = user?.firstName || "ученик";
 
+  const schoolAlerts = user && offlineSummary ? getSchoolAlertCounts(user.id, offlineSummary) : null;
+
   return (
     <>
+      {schoolAlerts && schoolAlerts.homework > 0 && (
+        <div className="mb-6 rounded-[24px] border border-amber-200 bg-amber-50 p-5 flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-4 duration-300">
+          <div className="flex items-center gap-3">
+            <span className="grid h-10 w-10 place-items-center rounded-2xl bg-amber-100 text-gold flex-shrink-0">
+              <Trophy size={20} />
+            </span>
+            <div>
+              <p className="text-sm font-bold text-amber-950">Новые домашние задания!</p>
+              <p className="text-xs text-stone-500 mt-1">
+                Преподаватели оставили вам {schoolAlerts.homework} новых домашних заданий по офлайн-урокам.
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/school-lessons"
+            className="rounded-xl bg-gold px-4 py-2.5 text-xs font-bold text-white transition hover:bg-gold/80 flex-shrink-0"
+          >
+            Посмотреть ДЗ
+          </Link>
+        </div>
+      )}
+
       <div className="mb-9 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-gold">Личный кабинет Maestro</p>
