@@ -178,7 +178,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     {open && <div className="fixed inset-y-0 left-0 z-50 w-[min(88vw,340px)] shadow-2xl lg:hidden">{sidebar}</div>}
     {open && <button className="fixed inset-0 z-40 bg-black/55 backdrop-blur-[2px] lg:hidden" onClick={() => setOpen(false)} aria-label="Закрыть меню" />}
     <div className="lg:pl-[280px]">
-      <header className="sticky top-0 z-30 flex h-[calc(80px+env(safe-area-inset-top,0px))] pt-[env(safe-area-inset-top,0px)] items-center gap-4 border-b border-stone-200/80 bg-cream/90 px-5 backdrop-blur-xl sm:px-8">
+      <header className="sticky top-0 z-30 flex h-[calc(96px+env(safe-area-inset-top,0px))] lg:h-[calc(80px+env(safe-area-inset-top,0px))] pt-[calc(12px+env(safe-area-inset-top,0px))] lg:pt-[env(safe-area-inset-top,0px)] items-center gap-4 border-b border-stone-200/80 bg-cream/90 px-5 backdrop-blur-xl sm:px-8">
         <button onClick={() => setOpen(true)} className="grid h-10 w-10 place-items-center rounded-full bg-white lg:hidden"><Menu size={20} /></button>
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">{headerTitle}</p>
