@@ -87,7 +87,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {open && <div className="fixed inset-0 z-50 w-72 shadow-2xl lg:hidden">{sidebar}</div>}
       {open && <button className="fixed inset-0 z-40 bg-black/30 backdrop-blur-[2px] lg:hidden" onClick={() => setOpen(false)} aria-label="Закрыть меню по фону" />}
       <div className="lg:pl-64">
-        <header className="sticky top-0 z-30 flex h-[72px] items-center gap-4 border-b border-stone-200/70 bg-cream/85 px-5 backdrop-blur-xl sm:px-8">
+        <header className="sticky top-0 z-30 flex h-[calc(72px+env(safe-area-inset-top,0px))] pt-[env(safe-area-inset-top,0px)] items-center gap-4 border-b border-stone-200/70 bg-cream/85 px-5 backdrop-blur-xl sm:px-8">
           <button onClick={() => setOpen(true)} className="grid h-10 w-10 place-items-center rounded-full border border-stone-200/80 bg-white shadow-sm transition hover:border-gold/30 lg:hidden" aria-label="Открыть меню"><Menu size={20} /></button>
           <div className="ml-auto">
             <UserMenu />
