@@ -236,7 +236,7 @@ export default function AdminOfflineLessonDetailPage() {
       ) : null}
 
       <div className="grid gap-7 xl:grid-cols-[1fr_420px]">
-        <section className="space-y-7">
+        <section className="order-last xl:order-none space-y-7">
           <form onSubmit={handleSubmit} className="rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
             <h2 className="font-display text-3xl">Отчёт по уроку</h2>
             <p className="mt-2 text-sm text-stone-500">
@@ -347,7 +347,7 @@ export default function AdminOfflineLessonDetailPage() {
           />
         </section>
 
-        <aside className="space-y-4">
+        <aside className="order-first xl:order-none space-y-4">
           {!isAdmin && lesson.status === "scheduled" ? (
             <button
               disabled={busy != null}
