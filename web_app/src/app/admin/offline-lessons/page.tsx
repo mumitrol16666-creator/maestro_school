@@ -182,6 +182,10 @@ export default function AdminOfflineLessonsPage() {
     () => (isAdmin ? adminOfflineApi.pendingReview() : Promise.resolve({ classes: [] })),
     [isAdmin],
   );
+  const salaryResource = useApiResource(
+    () => (!isAdmin ? teacherOfflineApi.salarySummary() : Promise.resolve(null)),
+    [isAdmin],
+  );
 
   if (resource.loading || (isAdmin && pendingResource.loading)) {
     return <LoadingState label="Загружаем расписание школы" />;
@@ -260,6 +264,56 @@ export default function AdminOfflineLessonsPage() {
             : "Сначала показаны уроки, где от вас требуется действие."
         }
       />
+
+      {!isAdmin && salaryResource.data?.data && (
+        <div className="mb-8 overflow-hidden rounded-[28px] border border-stone-200 bg-white p-6 shadow-soft sm:p-8">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-gold">Мой баланс за {salaryResource.data.data.periodName}</p>
+              <h2 className="mt-1 font-display text-3xl font-bold">
+                {(
+                  salaryResource.data.data.calculatedSalary +
+                  salaryResource.data.data.paidSalary +
+                  salaryResource.data.data.pendingSalary +
+                  salaryResource.data.data.monthlyBonus -
+                  salaryResource.data.data.monthlyFine -
+                  salaryResource.data.data.monthlyAdvance
+                ).toLocaleString("ru-RU")}{" "}
+                ₸
+              </h2>
+              <p className="mt-1.5 text-xs text-stone-500">
+                Рассчитано и ожидает выплаты:{" "}
+                <strong className="text-stone-700">
+                  {salaryResource.data.data.calculatedSalary.toLocaleString("ru-RU")} ₸
+                </strong>
+                {" · "}Выплачено:{" "}
+                <strong className="text-emerald-700">
+                  {salaryResource.data.data.paidSalary.toLocaleString("ru-RU")} ₸
+                </strong>
+                {" · "}Проведено уроков (не в ведомости):{" "}
+                <strong className="text-stone-700">
+                  {salaryResource.data.data.pendingSalary.toLocaleString("ru-RU")} ₸
+                </strong>
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-2.5 rounded-2xl bg-stone-50 p-4 border border-stone-100 sm:self-center">
+              <div className="text-center px-3 border-r border-stone-200 last:border-0">
+                <span className="block text-[10px] uppercase font-bold text-stone-400 tracking-wider">Индивид.</span>
+                <strong className="block text-xs font-bold text-stone-700 mt-0.5">{salaryResource.data.data.rates?.individual || 0} ₸</strong>
+              </div>
+              <div className="text-center px-3 border-r border-stone-200 last:border-0">
+                <span className="block text-[10px] uppercase font-bold text-stone-400 tracking-wider">Группа</span>
+                <strong className="block text-xs font-bold text-stone-700 mt-0.5">{salaryResource.data.data.rates?.group || 0} ₸</strong>
+              </div>
+              <div className="text-center px-3 last:border-0">
+                <span className="block text-[10px] uppercase font-bold text-stone-400 tracking-wider">Другие</span>
+                <strong className="block text-xs font-bold text-stone-700 mt-0.5">{salaryResource.data.data.rates?.other || 0} ₸</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <section className="mb-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <SummaryCard
