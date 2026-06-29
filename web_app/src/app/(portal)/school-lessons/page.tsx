@@ -637,7 +637,7 @@ export default function SchoolLessonsPage() {
               <p className="font-display mt-4 text-3xl">
                 {balanceSnapshot.accountBalanceKzt.toLocaleString("ru-RU")} ₸
               </p>
-              <p className="mt-1 text-sm text-stone-500">на балансе в CRM</p>
+              <p className="mt-1 text-sm text-stone-500">на вашем балансе</p>
             </div>
             {balanceSnapshot.debtAmountKzt > 0 ? (
               <div className="rounded-[28px] border border-red-100 bg-red-50 p-6 shadow-soft">

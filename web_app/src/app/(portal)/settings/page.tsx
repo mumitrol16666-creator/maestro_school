@@ -100,7 +100,7 @@ export default function SettingsPage() {
                   <p className="font-display mt-3 text-3xl">
                     {school.balanceSnapshot.accountBalanceKzt.toLocaleString("ru-RU")} ₸
                   </p>
-                  <p className="mt-1 text-xs text-stone-500">на балансе в CRM</p>
+                  <p className="mt-1 text-xs text-stone-500">на вашем балансе</p>
                 </div>
               </div>
               <Link href="/school-lessons" className="mt-5 inline-flex rounded-2xl bg-ink px-5 py-3 text-sm font-bold text-white">
