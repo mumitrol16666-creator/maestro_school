@@ -15,6 +15,7 @@ export interface ApiAuthUser {
   email: string;
   firstName?: string;
   lastName?: string;
+  middleName?: string | null;
   avatar?: string | null;
   profileBio?: string | null;
   profileInstrument?: string | null;
@@ -36,6 +37,7 @@ export interface LoginResponse {
 export interface RegisterInput {
   firstName: string;
   lastName: string;
+  middleName?: string;
   email?: string;
   phone: string;
   password: string;
@@ -44,6 +46,7 @@ export interface RegisterInput {
 export interface TrialBookingInput {
   firstName: string;
   lastName: string;
+  middleName?: string;
   phone: string;
   direction: string;
   level: string;

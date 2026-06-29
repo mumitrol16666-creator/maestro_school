@@ -64,6 +64,7 @@ export function buildAuthUserProfile(
     email: user.email,
     firstName: user.firstName,
     lastName: user.lastName,
+    middleName: user.middleName,
     avatar: user.avatar,
     profileBio: user.profileBio,
     profileInstrument: user.profileInstrument,

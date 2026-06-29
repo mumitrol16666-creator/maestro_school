@@ -3,6 +3,7 @@
 import { ChevronDown, Coins, LogOut, Settings, Star } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { formatFio, initialsFromName } from "@/lib/name";
 import { isStudentRole, roleLabel, settingsPathForRole } from "@/lib/role-labels";
 import { useAuth } from "./auth-provider";
 
@@ -11,10 +12,8 @@ export function UserMenu() {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
-  const fullName = [user?.firstName, user?.lastName].filter(Boolean).join(" ") || user?.email || "Пользователь";
-  const initials = user?.firstName && user?.lastName
-    ? `${user.firstName[0]}${user.lastName[0]}`
-    : fullName.slice(0, 2).toUpperCase();
+  const fullName = (user ? formatFio(user) : "") || user?.email || "Пользователь";
+  const initials = user ? initialsFromName(user) : fullName.slice(0, 2).toUpperCase();
   const student = isStudentRole(user?.role);
   const settingsHref = settingsPathForRole(user?.role);
 

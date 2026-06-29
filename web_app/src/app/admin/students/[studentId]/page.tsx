@@ -7,6 +7,7 @@ import { AchievementsWall } from "@/components/achievements-wall";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
 import { StudentPhoneLine, WhatsAppLink } from "@/components/whatsapp-link";
 import { useApiResource } from "@/hooks/use-api-resource";
+import { formatFio } from "@/lib/name";
 import { onlineLessonStatusLabels } from "@/lib/online-lessons-ui";
 import { studentsApi } from "@/lib/students-api";
 
@@ -19,6 +20,7 @@ export default function AdminStudentDetailPage() {
   if (!resource.data) return <EmptyState title="Ученик не найден" description="Проверьте ссылку." />;
 
   const student = resource.data;
+  const studentName = student.fullName || formatFio(student);
 
   return (
     <>
@@ -28,7 +30,7 @@ export default function AdminStudentDetailPage() {
 
       <section className="rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
         <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">Карточка ученика</p>
-        <h1 className="font-display mt-2 text-4xl">{student.firstName} {student.lastName}</h1>
+        <h1 className="font-display mt-2 text-4xl">{studentName}</h1>
         <div className="mt-4">
           <StudentPhoneLine phone={student.phone} login={student.login} email={student.email} />
         </div>

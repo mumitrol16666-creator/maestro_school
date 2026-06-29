@@ -16,6 +16,7 @@ export interface OnlineLessonUserSummary {
   id: string;
   firstName: string;
   lastName: string;
+  middleName?: string | null;
   email: string;
   phone: string;
   login: string;

@@ -1,5 +1,6 @@
 import { prisma, notDeleted } from "../../infrastructure/database/prisma.js";
 import { NotFoundError } from "../../domain/errors.js";
+import { formatFio } from "../../domain/name.js";
 import { getStudentAchievementsOverview } from "./achievement.service.js";
 import { getStudentCoins } from "./coins.service.js";
 import { calculateStudentPoints } from "./points.service.js";
@@ -18,6 +19,7 @@ export async function listAdminStudents(input: {
           OR: [
             { firstName: { contains: input.search, mode: "insensitive" as const } },
             { lastName: { contains: input.search, mode: "insensitive" as const } },
+            { middleName: { contains: input.search, mode: "insensitive" as const } },
             { login: { contains: input.search, mode: "insensitive" as const } },
             { email: { contains: input.search, mode: "insensitive" as const } },
             { phone: { contains: input.search, mode: "insensitive" as const } },
@@ -38,6 +40,7 @@ export async function listAdminStudents(input: {
         login: true,
         firstName: true,
         lastName: true,
+        middleName: true,
         email: true,
         phone: true,
         createdAt: true,
@@ -47,12 +50,18 @@ export async function listAdminStudents(input: {
   ]);
 
   const enriched = await Promise.all(items.map(async (student) => {
-    const [points, coins, completedLessons] = await Promise.all([
+    const [pointsResult, coinsResult, completedLessonsResult] = await Promise.allSettled([
       calculateStudentPoints(student.id),
       getStudentCoins(student.id),
       countCompletedLessons(student.id),
     ]);
-    return { ...student, points, coins, completedLessons };
+    return {
+      ...student,
+      fullName: formatFio(student),
+      points: pointsResult.status === "fulfilled" ? pointsResult.value : 0,
+      coins: coinsResult.status === "fulfilled" ? coinsResult.value : 0,
+      completedLessons: completedLessonsResult.status === "fulfilled" ? completedLessonsResult.value : 0,
+    };
   }));
 
   return { items: enriched, total };
@@ -66,6 +75,7 @@ export async function getAdminStudent(studentId: string) {
       login: true,
       firstName: true,
       lastName: true,
+      middleName: true,
       email: true,
       phone: true,
       createdAt: true,
@@ -73,7 +83,7 @@ export async function getAdminStudent(studentId: string) {
   });
   if (!student) throw new NotFoundError("Student");
 
-  const [points, coins, completedLessons, achievements, enrollments, onlineLessons] = await Promise.all([
+  const [pointsResult, coinsResult, completedLessonsResult, achievementsResult, enrollmentsResult, onlineLessonsResult] = await Promise.allSettled([
     calculateStudentPoints(studentId),
     getStudentCoins(studentId),
     countCompletedLessons(studentId),
@@ -99,13 +109,17 @@ export async function getAdminStudent(studentId: string) {
     }),
   ]);
 
+  const achievements = achievementsResult.status === "fulfilled" ? achievementsResult.value : [];
+  const enrollments = enrollmentsResult.status === "fulfilled" ? enrollmentsResult.value : [];
+  const onlineLessons = onlineLessonsResult.status === "fulfilled" ? onlineLessonsResult.value : [];
   const earnedAchievements = achievements.filter((item) => item.earned);
 
   return {
     ...student,
-    points,
-    coins,
-    completedLessons,
+    fullName: formatFio(student),
+    points: pointsResult.status === "fulfilled" ? pointsResult.value : 0,
+    coins: coinsResult.status === "fulfilled" ? coinsResult.value : 0,
+    completedLessons: completedLessonsResult.status === "fulfilled" ? completedLessonsResult.value : 0,
     achievements,
     earnedAchievementsCount: earnedAchievements.length,
     enrollments: enrollments.map((item) => ({

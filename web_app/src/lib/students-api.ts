@@ -6,6 +6,8 @@ export interface AdminStudentSummary {
   login: string;
   firstName: string;
   lastName: string;
+  middleName?: string | null;
+  fullName?: string;
   email: string;
   phone: string;
   createdAt: string;

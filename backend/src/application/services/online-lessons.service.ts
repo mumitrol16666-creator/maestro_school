@@ -35,10 +35,10 @@ const requestSelect = {
   createdAt: true,
   updatedAt: true,
   student: {
-    select: { id: true, firstName: true, lastName: true, email: true, phone: true, login: true },
+    select: { id: true, firstName: true, lastName: true, middleName: true, email: true, phone: true, login: true },
   },
   teacher: {
-    select: { id: true, firstName: true, lastName: true, email: true },
+    select: { id: true, firstName: true, lastName: true, middleName: true, email: true },
   },
   assignment: {
     include: {
@@ -122,6 +122,7 @@ export async function createOnlineLessonRequest(params: {
       requestType: params.requestType,
       name: request.student.firstName,
       lastName: request.student.lastName,
+      middleName: request.student.middleName,
       phone: request.student.phone,
       direction: request.directionTitle,
       level: request.level,
@@ -176,6 +177,7 @@ export async function listAdminOnlineLessonRequests(input: {
             { comment: { contains: input.search, mode: "insensitive" as const } },
             { student: { firstName: { contains: input.search, mode: "insensitive" as const } } },
             { student: { lastName: { contains: input.search, mode: "insensitive" as const } } },
+            { student: { middleName: { contains: input.search, mode: "insensitive" as const } } },
             { student: { email: { contains: input.search, mode: "insensitive" as const } } },
           ],
         }

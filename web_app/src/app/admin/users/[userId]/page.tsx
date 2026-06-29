@@ -9,6 +9,7 @@ import { primaryButton } from "@/components/admin-ui";
 import { ErrorState, LoadingState } from "@/components/data-states";
 import { RoleBadge } from "@/components/role-badge";
 import { useApiResource } from "@/hooks/use-api-resource";
+import { formatFio } from "@/lib/name";
 import { isContentAdminRole, permissionLabel, roleLabel } from "@/lib/role-labels";
 import { formatPhoneDisplay } from "@/lib/phone";
 import { usersApi } from "@/lib/users-api";
@@ -36,6 +37,7 @@ export default function AdminUserDetailPage() {
   if (!resource.data) return <ErrorState message="Пользователь не найден" retry={resource.reload} />;
 
   const { user, roles } = resource.data;
+  const fullName = user.fullName || formatFio(user);
   const roleValue = selectedRole || user.role;
   const isSelf = currentUser?.id === user.id;
   const canAssignRoles = isContentAdminRole(currentUser?.role);
@@ -67,7 +69,7 @@ export default function AdminUserDetailPage() {
         <div className="space-y-6">
           <section className="rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="font-display text-4xl">{user.firstName} {user.lastName}</h1>
+            <h1 className="font-display text-4xl">{fullName}</h1>
             <RoleBadge role={user.role} />
           </div>
           <div className="mt-6 space-y-2 text-sm text-stone-600">

@@ -7,6 +7,7 @@ import { PageControls } from "@/components/admin-ui";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
 import { PageHeader } from "@/components/page-header";
 import { useApiResource } from "@/hooks/use-api-resource";
+import { formatFio } from "@/lib/name";
 import { formatPhoneDisplay } from "@/lib/phone";
 import { studentsApi } from "@/lib/students-api";
 
@@ -55,7 +56,7 @@ export default function AdminStudentsPage() {
               <Users size={20} />
             </span>
             <div className="min-w-0 flex-1">
-              <h2 className="font-display text-xl">{student.firstName} {student.lastName}</h2>
+              <h2 className="font-display text-xl">{student.fullName || formatFio(student)}</h2>
               <p className="mt-1 text-sm font-semibold text-ink">{formatPhoneDisplay(student.phone)}</p>
               <p className="mt-1 text-xs text-stone-500">@{student.login} · {student.email}</p>
               <p className="mt-2 text-sm text-stone-500">

@@ -4,6 +4,7 @@ import { ArrowRight, BookOpen, ChevronRight, ClipboardCheck, FolderOpen, Graduat
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { formatFio, initialsFromName } from "@/lib/name";
 import { isContentAdminRole, roleLabel } from "@/lib/role-labels";
 import { usePendingHomeworkCount } from "@/hooks/use-pending-homework-count";
 import { usePendingLessonQuestionsCount } from "@/hooks/use-pending-lesson-questions-count";
@@ -57,16 +58,11 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       : lessonNavigation;
   const sidebarTitle = isContentAdmin ? "Content CMS" : "Кабинет преподавателя";
   const headerTitle = isContentAdmin ? "Maestro Admin" : roleLabel(user?.role);
-  const displayName = [user?.firstName, user?.lastName].filter(Boolean).join(" ")
+  const displayName = (user ? formatFio(user) : "")
     || user?.login
     || user?.email?.split("@")[0]
     || roleLabel(user?.role);
-  const initials = [user?.firstName, user?.lastName]
-    .filter(Boolean)
-    .map((part) => part?.[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase() || "M";
+  const initials = user ? initialsFromName(user) : "M";
 
   useEffect(() => {
     if (pathname.startsWith("/admin/homework-review")) {

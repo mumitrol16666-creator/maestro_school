@@ -1,5 +1,6 @@
 import { prisma, notDeleted } from "../../infrastructure/database/prisma.js";
 import { BadRequestError, ForbiddenError, NotFoundError } from "../../domain/errors.js";
+import { formatFio } from "../../domain/name.js";
 
 export const ASSIGNABLE_ROLE_SLUGS = [
   "student",
@@ -37,6 +38,7 @@ export async function listAdminUsers(input: {
           OR: [
             { firstName: { contains: input.search, mode: "insensitive" as const } },
             { lastName: { contains: input.search, mode: "insensitive" as const } },
+            { middleName: { contains: input.search, mode: "insensitive" as const } },
             { login: { contains: input.search, mode: "insensitive" as const } },
             { email: { contains: input.search, mode: "insensitive" as const } },
             { phone: { contains: input.search, mode: "insensitive" as const } },
@@ -57,6 +59,7 @@ export async function listAdminUsers(input: {
         login: true,
         firstName: true,
         lastName: true,
+        middleName: true,
         email: true,
         phone: true,
         isActive: true,
@@ -73,6 +76,8 @@ export async function listAdminUsers(input: {
       login: user.login,
       firstName: user.firstName,
       lastName: user.lastName,
+      middleName: user.middleName,
+      fullName: formatFio(user),
       email: user.email,
       phone: user.phone,
       isActive: user.isActive,
@@ -92,6 +97,7 @@ export async function getAdminUser(userId: string) {
       login: true,
       firstName: true,
       lastName: true,
+      middleName: true,
       email: true,
       phone: true,
       isActive: true,
@@ -119,6 +125,8 @@ export async function getAdminUser(userId: string) {
     login: user.login,
     firstName: user.firstName,
     lastName: user.lastName,
+    middleName: user.middleName,
+    fullName: formatFio(user),
     email: user.email,
     phone: user.phone,
     isActive: user.isActive,
@@ -185,6 +193,7 @@ export async function updateAdminUserRole(input: {
       login: true,
       firstName: true,
       lastName: true,
+      middleName: true,
       email: true,
       phone: true,
       isActive: true,
@@ -198,6 +207,8 @@ export async function updateAdminUserRole(input: {
     login: updated.login,
     firstName: updated.firstName,
     lastName: updated.lastName,
+    middleName: updated.middleName,
+    fullName: formatFio(updated),
     email: updated.email,
     phone: updated.phone,
     isActive: updated.isActive,

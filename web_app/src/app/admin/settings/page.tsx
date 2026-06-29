@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/page-header";
 import { PushNotificationsCard } from "@/components/push-notifications-card";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { api, storeSession, getAccessToken } from "@/lib/api-client";
+import { formatFio, initialsFromName } from "@/lib/name";
 import { isContentAdminRole, permissionLabel, roleLabel } from "@/lib/role-labels";
 
 export default function AdminSettingsPage() {
@@ -28,10 +29,8 @@ export default function AdminSettingsPage() {
 
   if (resource.loading) return <LoadingState label="Загружаем настройки аккаунта" />;
   if (resource.error) return <ErrorState message={resource.error} retry={resource.reload} />;
-  const fullName = [profile.firstName, profile.lastName].filter(Boolean).join(" ") || profile.email || "Администратор";
-  const initials = profile.firstName && profile.lastName
-    ? `${profile.firstName[0]}${profile.lastName[0]}`
-    : fullName.slice(0, 2).toUpperCase();
+  const fullName = formatFio(profile) || profile.email || "Администратор";
+  const initials = initialsFromName(profile);
   const permissions = profile.permissions ?? [];
   const contentAdmin = isContentAdminRole(profile.role);
 

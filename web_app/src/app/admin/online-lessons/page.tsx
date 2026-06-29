@@ -9,6 +9,7 @@ import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
 import { PageHeader } from "@/components/page-header";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { usePendingOnlineLessonsCount } from "@/hooks/use-pending-online-lessons-count";
+import { formatFio } from "@/lib/name";
 import { onlineLessonStatusClasses, onlineLessonStatusLabels } from "@/lib/online-lessons-ui";
 import { formatPhoneDisplay } from "@/lib/phone";
 import { onlineLessonsApi } from "@/lib/online-lessons-api";
@@ -89,7 +90,7 @@ export default function AdminOnlineLessonsPage() {
             </span>
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="font-display text-xl">{item.student.firstName} {item.student.lastName}</h2>
+                <h2 className="font-display text-xl">{formatFio(item.student)}</h2>
                 <span className={`rounded-full px-3 py-1 text-xs font-bold ${onlineLessonStatusClasses[item.status]}`}>
                   {onlineLessonStatusLabels[item.status]}
                 </span>

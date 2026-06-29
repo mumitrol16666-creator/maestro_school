@@ -133,6 +133,7 @@ export const api = {
   updateProfile: (body: {
     firstName?: string;
     lastName?: string;
+    middleName?: string | null;
     phone?: string;
     profileBio?: string | null;
     profileInstrument?: string | null;

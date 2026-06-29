@@ -45,6 +45,7 @@ const provisionStudentSchema = z.object({
   phone: z.string().min(10).max(32),
   firstName: z.string().trim().min(1).max(128),
   lastName: z.string().trim().max(128).optional().nullable(),
+  middleName: z.string().trim().max(128).optional().nullable(),
   email: z.string().trim().email().optional().nullable(),
   password: z.string().min(4).max(72).optional().nullable(),
 });
@@ -75,6 +76,7 @@ function integrationProfile(
     email: user.email,
     firstName: user.firstName,
     lastName: user.lastName,
+    middleName: user.middleName,
     phone: user.phone,
     role: user.role.slug,
     crmStudentId: user.crmStudentId,
@@ -117,6 +119,7 @@ export async function integrationRoutes(app: FastifyInstance) {
     const result = await provisionStudentFromCrm({
       ...body,
       lastName: body.lastName?.trim() || "",
+      middleName: body.middleName?.trim() || null,
     });
     return reply.status(result.created ? 201 : 200).send({ success: true, data: result });
   });

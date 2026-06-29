@@ -8,6 +8,7 @@ import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
 import { PageHeader } from "@/components/page-header";
 import { RoleBadge } from "@/components/role-badge";
 import { useApiResource } from "@/hooks/use-api-resource";
+import { formatFio } from "@/lib/name";
 import { ASSIGNABLE_ROLES, roleLabel } from "@/lib/role-labels";
 import { formatPhoneDisplay } from "@/lib/phone";
 import { usersApi } from "@/lib/users-api";
@@ -76,7 +77,7 @@ export default function AdminUsersPage() {
             </span>
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-3">
-                <h2 className="font-display text-xl">{item.firstName} {item.lastName}</h2>
+                <h2 className="font-display text-xl">{item.fullName || formatFio(item)}</h2>
                 <RoleBadge role={item.role} />
               </div>
               <p className="mt-1 text-sm font-semibold text-ink">{formatPhoneDisplay(item.phone)}</p>

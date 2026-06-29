@@ -12,18 +12,22 @@ import { PwaInstallCard } from "@/components/pwa-install-card";
 import { PushNotificationsCard } from "@/components/push-notifications-card";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { api } from "@/lib/api-client";
+import { formatFio, initialsFromName } from "@/lib/name";
 import { isStudentRole, roleLabel, settingsPathForRole } from "@/lib/role-labels";
 
 export default function SettingsPage() {
   const router = useRouter();
   const { user, logout, refreshUser } = useAuth();
   const resource = useApiResource(async () => {
-    const [profile, directions, progress, school] = await Promise.all([
-      api.me(),
+    const profile = await api.me();
+    const [directionsResult, progressResult, schoolResult] = await Promise.allSettled([
       api.directions(),
       api.progress(),
-      api.studentOfflineSummary().catch(() => null),
+      api.studentOfflineSummary(),
     ]);
+    const directions = directionsResult.status === "fulfilled" ? directionsResult.value : [];
+    const progress = progressResult.status === "fulfilled" ? progressResult.value : { enrollments: [] };
+    const school = schoolResult.status === "fulfilled" ? schoolResult.value : null;
     const activeDirectionIds = new Set(progress.enrollments.map((item) => item.course.directionId));
     return {
       profile,
@@ -48,8 +52,8 @@ export default function SettingsPage() {
   if (resource.error) return <ErrorState message={resource.error} retry={resource.reload} />;
 
   const profile = { ...user, ...resource.data?.profile };
-  const fullName = [profile.firstName, profile.lastName].filter(Boolean).join(" ") || profile.email || "Пользователь Maestro";
-  const initials = profile.firstName && profile.lastName ? `${profile.firstName[0]}${profile.lastName[0]}` : fullName.slice(0, 2).toUpperCase();
+  const fullName = formatFio(profile) || "Пользователь Maestro";
+  const initials = initialsFromName(profile);
   const directions = resource.data?.directions ?? [];
   const courses = resource.data?.courses ?? [];
   const school = resource.data?.school;
@@ -173,6 +177,7 @@ function ProfileEditCard({
   profile: {
     firstName?: string | null;
     lastName?: string | null;
+    middleName?: string | null;
     phone?: string | null;
     avatar?: string | null;
     profileBio?: string | null;
@@ -184,6 +189,7 @@ function ProfileEditCard({
 }) {
   const [firstName, setFirstName] = useState(profile.firstName ?? "");
   const [lastName, setLastName] = useState(profile.lastName ?? "");
+  const [middleName, setMiddleName] = useState(profile.middleName ?? "");
   const [phone, setPhone] = useState(profile.phone ?? "");
   const [profileBio, setProfileBio] = useState(profile.profileBio ?? "");
   const [profileInstrument, setProfileInstrument] = useState(profile.profileInstrument ?? "");
@@ -198,6 +204,7 @@ function ProfileEditCard({
   useEffect(() => {
     setFirstName(profile.firstName ?? "");
     setLastName(profile.lastName ?? "");
+    setMiddleName(profile.middleName ?? "");
     setPhone(profile.phone ?? "");
     setProfileBio(profile.profileBio ?? "");
     setProfileInstrument(profile.profileInstrument ?? "");
@@ -254,6 +261,7 @@ function ProfileEditCard({
       await api.updateProfile({
         firstName,
         lastName,
+        middleName: middleName.trim() || null,
         phone,
         profileBio,
         profileInstrument,
@@ -294,9 +302,10 @@ function ProfileEditCard({
 
       <form onSubmit={handleSubmit} className="mt-6 space-y-4">
         <div className="grid gap-4 sm:grid-cols-2">
-          <TextField label="Имя" value={firstName} onChange={setFirstName} maxLength={128} required />
           <TextField label="Фамилия" value={lastName} onChange={setLastName} maxLength={128} required />
+          <TextField label="Имя" value={firstName} onChange={setFirstName} maxLength={128} required />
         </div>
+        <TextField label="Отчество" value={middleName} onChange={setMiddleName} maxLength={128} />
         <TextField label="Телефон" value={phone} onChange={setPhone} maxLength={32} required />
         <p className="-mt-2 text-xs leading-5 text-stone-400">
           Эти данные используются в приложении. В CRM из этой карточки отправляется только фото.

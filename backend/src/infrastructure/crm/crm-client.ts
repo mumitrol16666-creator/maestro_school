@@ -145,6 +145,7 @@ export async function postOnlineLessonBooking(payload: {
   requestType?: "trial" | "online_lesson";
   name: string;
   lastName: string;
+  middleName?: string | null;
   phone: string;
   direction: string;
   level: string;
@@ -309,6 +310,7 @@ export async function syncStudentFromApp(payload: {
   phone: string;
   firstName: string;
   lastName: string;
+  middleName?: string | null;
   email: string;
 }) {
   return crmPost<{

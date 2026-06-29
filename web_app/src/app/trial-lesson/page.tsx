@@ -14,6 +14,7 @@ export default function TrialLessonPage() {
   const [directions, setDirections] = useState<ApiDirection[]>([]);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [middleName, setMiddleName] = useState("");
   const [phone, setPhone] = useState("");
   const [direction, setDirection] = useState("");
   const [level, setLevel] = useState(LEVELS[0]);
@@ -34,8 +35,9 @@ export default function TrialLessonPage() {
 
   const registerHref = useMemo(() => {
     const params = new URLSearchParams({ firstName, lastName, phone });
+    if (middleName.trim()) params.set("middleName", middleName.trim());
     return `/register?${params.toString()}`;
-  }, [firstName, lastName, phone]);
+  }, [firstName, lastName, middleName, phone]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -45,6 +47,7 @@ export default function TrialLessonPage() {
       await api.createTrialBooking({
         firstName,
         lastName,
+        middleName: middleName.trim() || undefined,
         phone,
         direction,
         level,
@@ -116,9 +119,10 @@ export default function TrialLessonPage() {
 
           <form onSubmit={handleSubmit} className="mt-8 space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Имя"><input required maxLength={128} autoComplete="given-name" value={firstName} onChange={(e) => setFirstName(e.target.value)} className={inputClass} /></Field>
               <Field label="Фамилия"><input required maxLength={128} autoComplete="family-name" value={lastName} onChange={(e) => setLastName(e.target.value)} className={inputClass} /></Field>
+              <Field label="Имя"><input required maxLength={128} autoComplete="given-name" value={firstName} onChange={(e) => setFirstName(e.target.value)} className={inputClass} /></Field>
             </div>
+            <Field label="Отчество"><input maxLength={128} value={middleName} onChange={(e) => setMiddleName(e.target.value)} className={inputClass} /></Field>
             <Field label="Телефон WhatsApp"><input type="tel" required minLength={10} maxLength={32} autoComplete="tel" placeholder="+7 999 123-45-67" value={phone} onChange={(e) => setPhone(e.target.value)} className={inputClass} /></Field>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Направление">

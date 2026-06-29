@@ -56,6 +56,7 @@ export async function updateUserProfile(
   params: {
     firstName?: string;
     lastName?: string;
+    middleName?: string | null;
     phone?: string;
     avatar?: string | null;
     profileBio?: string | null;
@@ -78,6 +79,7 @@ export async function createStudentUser(params: {
   passwordHash: string;
   firstName: string;
   lastName: string;
+  middleName?: string | null;
   crmStudentId?: string;
 }) {
   const studentRole = await prisma.role.findUnique({ where: { slug: "student" } });
@@ -96,6 +98,7 @@ export async function createStudentUser(params: {
       passwordHash: params.passwordHash,
       firstName: params.firstName,
       lastName: params.lastName,
+      middleName: params.middleName,
       roleId: studentRole.id,
       ...(params.crmStudentId
         ? {
@@ -116,6 +119,7 @@ export async function createTeacherUser(params: {
   passwordHash: string;
   firstName: string;
   lastName: string;
+  middleName?: string | null;
   crmTeacherId: string;
   bio?: string | null;
 }) {
@@ -136,6 +140,7 @@ export async function createTeacherUser(params: {
         passwordHash: params.passwordHash,
         firstName: params.firstName,
         lastName: params.lastName,
+        middleName: params.middleName,
         roleId: teacherRole.id,
         crmTeacherId: params.crmTeacherId,
         externalLinkStatus: "linked",

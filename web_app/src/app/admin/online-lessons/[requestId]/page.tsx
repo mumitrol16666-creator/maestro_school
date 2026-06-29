@@ -8,6 +8,7 @@ import { inputClass, primaryButton, secondaryButton } from "@/components/admin-u
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { ApiError } from "@/lib/api-client";
+import { formatFio } from "@/lib/name";
 import { onlineLessonStatusClasses, onlineLessonStatusLabels } from "@/lib/online-lessons-ui";
 import { StudentPhoneLine, WhatsAppLink } from "@/components/whatsapp-link";
 import { onlineLessonsApi } from "@/lib/online-lessons-api";
@@ -60,6 +61,7 @@ export default function AdminOnlineLessonDetailPage() {
   if (!resource.data) return <EmptyState title="Заявка не найдена" description="Возможно, она была удалена." />;
 
   const item = resource.data;
+  const studentName = formatFio(item.student);
   const pendingSubmission = item.assignment?.submissions.find((sub) => sub.status === "submitted") ?? null;
 
   return (
@@ -72,7 +74,7 @@ export default function AdminOnlineLessonDetailPage() {
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">Заявка на онлайн-урок</p>
-            <h1 className="font-display mt-2 text-4xl">{item.student.firstName} {item.student.lastName}</h1>
+            <h1 className="font-display mt-2 text-4xl">{studentName}</h1>
             <div className="mt-3">
               <StudentPhoneLine
                 phone={item.student.phone}

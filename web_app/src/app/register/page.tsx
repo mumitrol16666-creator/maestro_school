@@ -14,6 +14,7 @@ export default function RegisterPage() {
   const { register, user, loading: authLoading } = useAuth();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [middleName, setMiddleName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -30,6 +31,7 @@ export default function RegisterPage() {
     const params = new URLSearchParams(window.location.search);
     setFirstName(params.get("firstName") ?? "");
     setLastName(params.get("lastName") ?? "");
+    setMiddleName(params.get("middleName") ?? "");
     setPhone(params.get("phone") ?? "");
   }, []);
 
@@ -41,6 +43,7 @@ export default function RegisterPage() {
       await register({
         firstName,
         lastName,
+        middleName: middleName.trim() || undefined,
         phone: phone.trim(),
         password,
         ...(email.trim() ? { email: email.trim() } : {}),
@@ -63,9 +66,10 @@ export default function RegisterPage() {
           <h2 className="font-display mt-3 text-5xl">Регистрация</h2>
           <form onSubmit={handleSubmit} className="mt-8 space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
-              <label className="block"><span className="mb-2 block text-xs font-bold uppercase tracking-wider text-stone-500">Имя</span><input required maxLength={128} autoComplete="given-name" value={firstName} onChange={(event) => setFirstName(event.target.value)} className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-4 text-sm outline-none focus:border-gold" /></label>
               <label className="block"><span className="mb-2 block text-xs font-bold uppercase tracking-wider text-stone-500">Фамилия</span><input required maxLength={128} autoComplete="family-name" value={lastName} onChange={(event) => setLastName(event.target.value)} className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-4 text-sm outline-none focus:border-gold" /></label>
+              <label className="block"><span className="mb-2 block text-xs font-bold uppercase tracking-wider text-stone-500">Имя</span><input required maxLength={128} autoComplete="given-name" value={firstName} onChange={(event) => setFirstName(event.target.value)} className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-4 text-sm outline-none focus:border-gold" /></label>
             </div>
+            <label className="block"><span className="mb-2 block text-xs font-bold uppercase tracking-wider text-stone-500">Отчество <span className="normal-case tracking-normal font-normal text-stone-400">(если есть)</span></span><input maxLength={128} value={middleName} onChange={(event) => setMiddleName(event.target.value)} className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-4 text-sm outline-none focus:border-gold" /></label>
             <label className="block">
               <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-stone-500">Телефон WhatsApp</span>
               <input type="tel" required minLength={10} maxLength={32} autoComplete="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="+7 999 123-45-67" className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-4 text-sm outline-none focus:border-gold" />

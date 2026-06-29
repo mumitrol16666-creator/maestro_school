@@ -7,6 +7,7 @@ import { postOnlineLessonBooking } from "../../infrastructure/crm/crm-client.js"
 const trialBookingSchema = z.object({
   firstName: z.string().trim().min(1).max(128),
   lastName: z.string().trim().min(1).max(128),
+  middleName: z.string().trim().max(128).optional(),
   phone: z.string().trim().min(10).max(32),
   direction: z.string().trim().min(1).max(255),
   level: z.string().trim().min(1).max(128),
@@ -35,6 +36,7 @@ export async function publicTrialRoutes(app: FastifyInstance) {
           requestType: "trial",
           name: body.firstName,
           lastName: body.lastName,
+          middleName: body.middleName || null,
           phone: body.phone,
           direction: body.direction,
           level: body.level,

@@ -44,6 +44,7 @@ const loginSchema = z.object({
 const registerSchema = z.object({
   firstName: z.string().trim().min(1).max(128),
   lastName: z.string().trim().min(1).max(128),
+  middleName: z.string().trim().max(128).optional(),
   login: z.string().trim().min(3).max(32).optional(),
   email: z.string().trim().email().transform((value) => value.toLowerCase()).optional(),
   phone: z.string().trim().min(10).max(32),
@@ -53,6 +54,7 @@ const registerSchema = z.object({
 const profileUpdateSchema = z.object({
   firstName: z.string().trim().min(1).max(128).optional(),
   lastName: z.string().trim().min(1).max(128).optional(),
+  middleName: z.string().trim().max(128).optional().nullable(),
   phone: z.string().trim().min(10).max(32).optional(),
   profileBio: z.string().trim().max(1000).optional().nullable(),
   profileInstrument: z.string().trim().max(128).optional().nullable(),
@@ -82,6 +84,7 @@ function profile(
     email: user.email,
     firstName: user.firstName,
     lastName: user.lastName,
+    middleName: user.middleName,
     avatar: user.avatar,
     profileBio: user.profileBio,
     profileInstrument: user.profileInstrument,
@@ -194,6 +197,7 @@ export async function authRoutes(app: FastifyInstance) {
         passwordHash: await bcrypt.hash(body.password, 10),
         firstName: body.firstName,
         lastName: body.lastName,
+        middleName: body.middleName || null,
       });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
@@ -215,6 +219,7 @@ export async function authRoutes(app: FastifyInstance) {
       phone: user.phone,
       firstName: user.firstName,
       lastName: user.lastName,
+      middleName: user.middleName,
       email: user.email ?? "",
     });
 
@@ -243,6 +248,7 @@ export async function authRoutes(app: FastifyInstance) {
     if (
       !body.firstName &&
       !body.lastName &&
+      body.middleName === undefined &&
       !body.phone &&
       body.profileBio === undefined &&
       body.profileInstrument === undefined &&
@@ -258,6 +264,7 @@ export async function authRoutes(app: FastifyInstance) {
     const user = await updateUserProfile(authUser.id, {
       ...(body.firstName ? { firstName: body.firstName } : {}),
       ...(body.lastName ? { lastName: body.lastName } : {}),
+      ...(body.middleName !== undefined ? { middleName: body.middleName || null } : {}),
       ...(body.phone ? { phone: normalizePhoneDigits(body.phone) } : {}),
       ...(body.profileBio !== undefined ? { profileBio: body.profileBio || null } : {}),
       ...(body.profileInstrument !== undefined ? { profileInstrument: body.profileInstrument || null } : {}),

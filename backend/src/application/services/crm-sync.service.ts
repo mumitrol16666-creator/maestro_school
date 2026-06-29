@@ -7,6 +7,7 @@ export async function syncNewStudentToCrm(params: {
   phone: string;
   firstName: string;
   lastName: string;
+  middleName?: string | null;
   email: string;
 }) {
   if (!process.env.INTEGRATION_SERVICE_SECRET) {
