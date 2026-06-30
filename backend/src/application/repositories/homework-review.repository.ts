@@ -1,4 +1,5 @@
 import type { HomeworkSubmissionStatus, Prisma } from "@prisma/client";
+import { formatFio } from "../../domain/name.js";
 import { prisma } from "../../infrastructure/database/prisma.js";
 
 export type AdminSubmissionFilterStatus = "submitted" | "reviewed" | "completed" | "rejected";
@@ -26,6 +27,7 @@ function buildSearchWhere(search: string): Prisma.HomeworkSubmissionWhereInput {
     OR: [
       { student: { firstName: insensitive } },
       { student: { lastName: insensitive } },
+      { student: { middleName: insensitive } },
       { student: { email: insensitive } },
       { homework: { lesson: { title: insensitive } } },
       { homework: { lesson: { module: { course: { title: insensitive } } } } },
@@ -53,8 +55,8 @@ export async function listAdminHomeworkSubmissions(input: ListAdminSubmissionsIn
       take: input.limit,
       orderBy: { createdAt: "desc" },
       include: {
-        student: { select: { id: true, firstName: true, lastName: true, email: true } },
-        reviewedBy: { select: { id: true, firstName: true, lastName: true } },
+        student: { select: { id: true, firstName: true, lastName: true, middleName: true, email: true } },
+        reviewedBy: { select: { id: true, firstName: true, lastName: true, middleName: true } },
         homework: {
           include: {
             lesson: {
@@ -95,7 +97,7 @@ export async function listAdminHomeworkSubmissions(input: ListAdminSubmissionsIn
       return {
         submissionId: s.id,
         studentId: s.student.id,
-        studentName: `${s.student.firstName} ${s.student.lastName}`.trim(),
+        studentName: formatFio(s.student),
         studentEmail: s.student.email,
         courseId: lesson.module.course.id,
         courseTitle: lesson.module.course.title,
@@ -116,7 +118,7 @@ export async function listAdminHomeworkSubmissions(input: ListAdminSubmissionsIn
         submittedAt: s.createdAt,
         reviewedAt: s.reviewedAt,
         reviewedBy: s.reviewedBy
-          ? `${s.reviewedBy.firstName} ${s.reviewedBy.lastName}`.trim()
+          ? formatFio(s.reviewedBy)
           : null,
         reviewComment: s.reviewComment,
       };
@@ -129,8 +131,8 @@ export async function getAdminHomeworkSubmission(submissionId: string) {
   const submission = await prisma.homeworkSubmission.findUnique({
     where: { id: submissionId },
     include: {
-      student: { select: { id: true, firstName: true, lastName: true, email: true } },
-      reviewedBy: { select: { id: true, firstName: true, lastName: true } },
+      student: { select: { id: true, firstName: true, lastName: true, middleName: true, email: true } },
+      reviewedBy: { select: { id: true, firstName: true, lastName: true, middleName: true } },
       homework: {
         include: {
           lesson: {
@@ -163,7 +165,7 @@ export async function getAdminHomeworkSubmission(submissionId: string) {
   return {
     submissionId: submission.id,
     studentId: submission.student.id,
-    studentName: `${submission.student.firstName} ${submission.student.lastName}`.trim(),
+    studentName: formatFio(submission.student),
     studentEmail: submission.student.email,
     courseId: lesson.module.course.id,
     courseTitle: lesson.module.course.title,
@@ -184,7 +186,7 @@ export async function getAdminHomeworkSubmission(submissionId: string) {
     submittedAt: submission.createdAt,
     reviewedAt: submission.reviewedAt,
     reviewedBy: submission.reviewedBy
-      ? `${submission.reviewedBy.firstName} ${submission.reviewedBy.lastName}`.trim()
+      ? formatFio(submission.reviewedBy)
       : null,
     reviewComment: submission.reviewComment,
     pointsReward: lesson.pointsReward,

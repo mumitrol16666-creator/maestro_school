@@ -21,6 +21,7 @@ export type ProvisionTeacherInput = {
   phone: string;
   firstName: string;
   lastName: string;
+  middleName?: string | null;
   email?: string | null;
   password?: string | null;
   bio?: string | null;
@@ -98,6 +99,7 @@ export async function provisionTeacherFromCrm(input: ProvisionTeacherInput) {
   const crmTeacherId = input.crmTeacherId.trim();
   const firstName = input.firstName.trim();
   const lastName = input.lastName.trim();
+  const middleName = input.middleName?.trim() || null;
   const digits = normalizePhoneDigits(input.phone);
 
   if (!crmTeacherId) throw new BadRequestError("crmTeacherId is required");
@@ -161,6 +163,7 @@ export async function provisionTeacherFromCrm(input: ProvisionTeacherInput) {
       passwordHash,
       firstName,
       lastName,
+      middleName,
       crmTeacherId,
       bio: input.bio,
     });

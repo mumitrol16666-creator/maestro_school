@@ -35,6 +35,7 @@ const provisionTeacherSchema = z.object({
   phone: z.string().min(10).max(32),
   firstName: z.string().trim().min(1).max(128),
   lastName: z.string().trim().min(1).max(128),
+  middleName: z.string().trim().max(128).optional().nullable(),
   email: z.string().trim().email().optional().nullable(),
   password: z.string().min(8).max(72).optional().nullable(),
   bio: z.string().max(5000).optional().nullable(),

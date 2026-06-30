@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/page-header";
 import { useAuth } from "@/components/auth-provider";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { ApiError, api } from "@/lib/api-client";
+import { formatFio } from "@/lib/name";
 import { levelOptions, onlineLessonStatusClasses, onlineLessonStatusLabels } from "@/lib/online-lessons-ui";
 import { formatPhoneDisplay } from "@/lib/phone";
 import { onlineLessonsApi } from "@/lib/online-lessons-api";
@@ -68,7 +69,7 @@ export default function OnlineLessonsPage() {
       ...completed.map((item) => [
         item.completedAt ? new Intl.DateTimeFormat("ru-RU").format(new Date(item.completedAt)) : "",
         item.directionTitle,
-        item.teacher ? `${item.teacher.firstName} ${item.teacher.lastName}`.trim() : "",
+        item.teacher ? formatFio(item.teacher) : "",
         item.coveredTopics || "",
         item.whatWorked || "",
         item.whatToImprove || "",

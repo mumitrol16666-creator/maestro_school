@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/page-header";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { usePendingLessonQuestionsCount } from "@/hooks/use-pending-lesson-questions-count";
 import { lessonQuestionsApi } from "@/lib/lesson-questions-api";
+import { formatFio } from "@/lib/name";
 
 const filters = [
   { value: "", label: "Все" },
@@ -105,7 +106,7 @@ export default function LessonQuestionsPage() {
                       {item.lesson.module.course.title} → {item.lesson.title}
                     </p>
                     <p className="mt-1 text-sm font-bold text-ink">
-                      {item.student.firstName} {item.student.lastName}
+                      {formatFio(item.student)}
                     </p>
                     <p className="text-xs text-stone-500">{item.student.email}</p>
                   </div>

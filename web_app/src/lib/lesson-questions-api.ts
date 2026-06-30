@@ -11,6 +11,7 @@ export interface AdminLessonQuestion {
     id: string;
     firstName: string;
     lastName: string;
+    middleName?: string | null;
     email: string;
   };
   lesson: {

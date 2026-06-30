@@ -1,4 +1,5 @@
 import type { HomeworkAttachmentType, HomeworkSubmissionStatus, Prisma } from "@prisma/client";
+import { formatFio } from "../../domain/name.js";
 import { prisma, notDeleted } from "../../infrastructure/database/prisma.js";
 import { NotFoundError } from "../../domain/errors.js";
 
@@ -69,7 +70,7 @@ function mapAttempts(
     status: string;
     reviewComment: string | null;
     reviewedAt: Date | null;
-    reviewedBy: { firstName: string; lastName: string } | null;
+    reviewedBy: { firstName: string; lastName: string; middleName?: string | null } | null;
     createdAt: Date;
   }>,
 ): HomeworkAttemptItem[] {
@@ -86,7 +87,7 @@ function mapAttempts(
     reviewComment: row.reviewComment,
     reviewedAt: row.reviewedAt,
     reviewedBy: row.reviewedBy
-      ? `${row.reviewedBy.firstName} ${row.reviewedBy.lastName}`.trim()
+      ? formatFio(row.reviewedBy)
       : null,
     createdAt: row.createdAt,
   }));
@@ -97,7 +98,7 @@ export async function listStudentHomeworkSubmissions(homeworkId: string, student
     where: { homeworkId, studentId },
     orderBy: { createdAt: "asc" },
     include: {
-      reviewedBy: { select: { firstName: true, lastName: true } },
+      reviewedBy: { select: { firstName: true, lastName: true, middleName: true } },
     },
   });
   return mapAttempts(rows);
@@ -117,7 +118,7 @@ export async function listHomeworkAttemptsBySubmission(submissionId: string) {
     },
     orderBy: { createdAt: "asc" },
     include: {
-      reviewedBy: { select: { firstName: true, lastName: true } },
+      reviewedBy: { select: { firstName: true, lastName: true, middleName: true } },
     },
   });
 

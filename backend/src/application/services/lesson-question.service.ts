@@ -84,7 +84,7 @@ export async function listAdminLessonQuestions(input: {
         createdAt: true,
         updatedAt: true,
         student: {
-          select: { id: true, firstName: true, lastName: true, email: true },
+          select: { id: true, firstName: true, lastName: true, middleName: true, email: true },
         },
         lesson: {
           select: {
