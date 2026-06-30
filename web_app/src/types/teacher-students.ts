@@ -6,7 +6,9 @@ export type TeacherStudent = {
   crmStudentId: string | null;
   firstName: string;
   lastName: string;
+  middleName: string;
   name: string;
+  dateOfBirth: string | null;
   phone: string;
   email: string | null;
   login: string | null;

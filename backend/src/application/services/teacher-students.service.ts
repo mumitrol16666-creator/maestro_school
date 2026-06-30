@@ -39,6 +39,7 @@ export async function listTeacherStudents(appTeacherId: string) {
             id: true,
             firstName: true,
             lastName: true,
+            middleName: true,
             login: true,
             email: true,
             phone: true,
@@ -62,7 +63,9 @@ export async function listTeacherStudents(appTeacherId: string) {
     crmStudentId: string | null;
     firstName: string;
     lastName: string;
+    middleName: string;
     name: string;
+    dateOfBirth: string | null;
     phone: string;
     email: string | null;
     login: string | null;
@@ -111,7 +114,9 @@ export async function listTeacherStudents(appTeacherId: string) {
       crmStudentId: student.crmStudentId,
       firstName: student.firstName,
       lastName: student.lastName,
+      middleName: student.middleName ?? "",
       name: student.name,
+      dateOfBirth: student.dateOfBirth ?? null,
       phone: student.phone,
       email: linkedOnline[0]?.student.email ?? null,
       login: linkedOnline[0]?.student.login ?? null,
@@ -156,7 +161,9 @@ export async function listTeacherStudents(appTeacherId: string) {
       crmStudentId: null,
       firstName: student.firstName,
       lastName: student.lastName,
-      name: `${student.firstName} ${student.lastName}`.trim(),
+      middleName: student.middleName ?? "",
+      name: `${student.lastName} ${student.firstName} ${student.middleName || ""}`.trim(),
+      dateOfBirth: null,
       phone: student.phone,
       email: student.email,
       login: student.login,

@@ -73,6 +73,8 @@ export async function fetchTeacherStudents(crmTeacherId: string) {
       name: string;
       firstName: string;
       lastName: string;
+      middleName?: string | null;
+      dateOfBirth?: string | null;
       phone: string;
       avatarUrl?: string | null;
       learningLevel?: string | null;

@@ -18,6 +18,7 @@ import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
 import { PageHeader } from "@/components/page-header";
 import { WhatsAppLink } from "@/components/whatsapp-link";
 import { useApiResource } from "@/hooks/use-api-resource";
+import { formatAge, formatFio } from "@/lib/name";
 import { formatPhoneDisplay } from "@/lib/phone";
 import { teacherStudentsApi } from "@/lib/teacher-students-api";
 import type { TeacherStudent, TeacherStudentSource } from "@/types/teacher-students";
@@ -109,6 +110,7 @@ export default function TeacherStudentsPage() {
       if (!query) return true;
       return [
         student.name,
+        student.middleName,
         student.phone,
         student.email,
         student.login,
@@ -208,6 +210,8 @@ function StudentCard({ student }: { student: TeacherStudent }) {
   const latestAttendance = student.attendanceHistory[0];
   const latestAttendanceView = latestAttendance ? attendancePresentation(latestAttendance) : null;
   const LatestAttendanceIcon = latestAttendanceView?.icon;
+  const displayName = formatFio(student) || student.name;
+  const ageLabel = formatAge(student.dateOfBirth);
 
   return (
     <article className="rounded-[26px] border border-stone-200 bg-paper p-5 shadow-soft sm:p-6">
@@ -221,7 +225,12 @@ function StudentCard({ student }: { student: TeacherStudent }) {
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="font-display text-2xl">{student.name}</h2>
+            <h2 className="font-display text-2xl">{displayName}</h2>
+            {ageLabel ? (
+              <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-black text-amber-900">
+                {ageLabel}
+              </span>
+            ) : null}
             {student.sources.map((item) => (
               <span
                 key={item}
