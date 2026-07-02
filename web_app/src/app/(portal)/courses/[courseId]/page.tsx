@@ -4,6 +4,7 @@ import { ArrowLeft, BookOpen, Check, ChevronRight, LoaderCircle, LockKeyhole, Pl
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
+import { MarkdownContent } from "@/components/markdown-content";
 import { ProgressBar } from "@/components/progress-bar";
 import { StatusBadge } from "@/components/status-badge";
 import { useApiResource } from "@/hooks/use-api-resource";
@@ -50,7 +51,15 @@ export default function CourseDetailPage() {
       <section className="relative overflow-hidden rounded-[34px] bg-ink p-7 text-white shadow-soft sm:p-10">
         <div className="noise absolute inset-0 opacity-20" />
         <div className="relative grid gap-10 lg:grid-cols-[1fr_300px] lg:items-end">
-          <div><p className="text-xs font-bold uppercase tracking-[0.2em] text-gold">{difficultyLabel(course.difficultyLevel)} · {course.modules.length} модуля</p><h1 className="font-display mt-4 text-5xl sm:text-6xl">{course.title}</h1><p className="mt-5 max-w-2xl text-sm leading-6 text-white/55">{course.description}</p></div>
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-gold">{difficultyLabel(course.difficultyLevel)} · {course.modules.length} модуля</p>
+            <h1 className="font-display mt-4 text-5xl sm:text-6xl">{course.title}</h1>
+            {course.description && (
+              <MarkdownContent className="mt-5 max-w-2xl text-white/65 [&_h2]:text-white [&_h3]:text-white [&_h4]:text-white [&_strong]:text-white">
+                {course.description}
+              </MarkdownContent>
+            )}
+          </div>
           <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
             {enrolled ? (
               <>

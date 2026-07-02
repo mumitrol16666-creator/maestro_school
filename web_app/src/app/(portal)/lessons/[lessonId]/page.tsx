@@ -14,7 +14,7 @@ import {
   Trophy,
 } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
 import { HomeworkAttemptHistory } from "@/components/homework-attempt-history";
@@ -79,6 +79,11 @@ export default function LessonPage() {
   const [submitting, setSubmitting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [showStartPrompt, setShowStartPrompt] = useState(false);
+
+  useEffect(() => {
+    setShowStartPrompt(resource.data?.lesson.status === "available");
+  }, [resource.data?.lesson.id, resource.data?.lesson.status]);
 
   if (resource.loading) return <LoadingState label="Открываем урок" />;
   if (resource.error) return <ErrorState message={resource.error} retry={resource.reload} />;
@@ -100,6 +105,7 @@ export default function LessonPage() {
     try {
       await api.startLesson(lessonId);
       await resource.reload();
+      setShowStartPrompt(false);
       setSuccess("Урок начат. Можно смотреть видео и готовить домашнее задание.");
     } catch (reason) {
       setActionError(reason instanceof ApiError ? reason.message : "Не удалось начать урок");
@@ -148,6 +154,47 @@ export default function LessonPage() {
 
   return (
     <>
+      {showStartPrompt && lesson.status === "available" && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/75 px-4 py-4 backdrop-blur-sm sm:items-center">
+          <div className="w-full max-w-xl rounded-[32px] border border-white/10 bg-paper p-6 shadow-soft sm:p-8">
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.2em] text-gold">Урок готов</p>
+                <h2 className="font-display mt-3 text-3xl leading-tight text-ink sm:text-4xl">{lesson.title}</h2>
+              </div>
+              <StatusBadge status={lesson.status} />
+            </div>
+
+            <div className="rounded-[24px] border border-amber-100 bg-amber-50 p-5 text-sm leading-6 text-amber-900">
+              Нажмите «Начать урок», чтобы открыть видео, материалы и домашнее задание. Так система поймёт, что ученик действительно приступил к этому уроку.
+            </div>
+
+            {actionError && (
+              <p className="mt-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{actionError}</p>
+            )}
+
+            <div className="mt-6 grid gap-3 sm:grid-cols-[1fr_auto]">
+              <button
+                type="button"
+                onClick={() => setShowStartPrompt(false)}
+                className="rounded-2xl border border-stone-200 px-5 py-3 text-sm font-bold text-stone-600"
+              >
+                Сначала посмотреть описание
+              </button>
+              <button
+                type="button"
+                onClick={handleStart}
+                disabled={starting}
+                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-ink px-6 py-3 text-sm font-bold text-white disabled:opacity-60"
+              >
+                {starting ? <LoaderCircle size={16} className="animate-spin" /> : <Play size={16} fill="currentColor" />}
+                Начать урок
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <Link
         href={`/courses/${detail.courseId}`}
         className="mb-6 inline-flex items-center gap-2 text-sm font-bold text-stone-500"
