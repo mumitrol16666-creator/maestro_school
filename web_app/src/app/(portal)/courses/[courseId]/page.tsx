@@ -48,14 +48,14 @@ export default function CourseDetailPage() {
   return (
     <>
       <Link href="/courses" className="mb-6 inline-flex items-center gap-2 text-sm font-bold text-stone-500"><ArrowLeft size={16} /> Назад к курсам</Link>
-      <section className="relative overflow-hidden rounded-[34px] bg-ink p-7 text-white shadow-soft sm:p-10">
+      <section className="relative overflow-hidden rounded-[28px] bg-ink p-5 text-white shadow-soft sm:rounded-[34px] sm:p-10">
         <div className="noise absolute inset-0 opacity-20" />
         <div className="relative grid gap-10 lg:grid-cols-[1fr_300px] lg:items-end">
-          <div>
+          <div className="min-w-0">
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-gold">{difficultyLabel(course.difficultyLevel)} · {course.modules.length} модуля</p>
-            <h1 className="font-display mt-4 text-5xl sm:text-6xl">{course.title}</h1>
+            <h1 className="font-display mt-4 break-words text-4xl leading-tight sm:text-6xl">{course.title}</h1>
             {course.description && (
-              <MarkdownContent className="mt-5 max-w-2xl text-white/65 [&_h2]:text-white [&_h3]:text-white [&_h4]:text-white [&_strong]:text-white">
+              <MarkdownContent className="mt-5 max-w-2xl break-words text-white/65 [&_h2]:break-words [&_h2]:text-white [&_h3]:break-words [&_h3]:text-white [&_h4]:break-words [&_h4]:text-white [&_strong]:text-white">
                 {course.description}
               </MarkdownContent>
             )}
@@ -90,10 +90,10 @@ export default function CourseDetailPage() {
               {moduleLessons.map((lesson) => {
                 const locked = lesson.status === "locked";
                 return (
-                  <Link href={locked ? `/courses/${course.id}` : `/lessons/${lesson.id}`} key={lesson.id} className={`card-hover flex items-center gap-4 rounded-[24px] border border-stone-200 bg-paper p-4 shadow-soft sm:p-5 ${locked ? "opacity-55" : ""}`}>
+                  <Link href={locked ? `/courses/${course.id}` : `/lessons/${lesson.id}`} key={lesson.id} className={`card-hover flex items-center gap-3 rounded-[24px] border border-stone-200 bg-paper p-4 shadow-soft sm:gap-4 sm:p-5 ${locked ? "opacity-55" : ""}`}>
                     <span className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl ${lesson.status === "completed" ? "bg-emerald-50 text-emerald-700" : "bg-stone-100"}`}>{locked ? <LockKeyhole size={18} /> : lesson.status === "completed" ? <Check size={18} /> : <span className="font-display text-lg">{lesson.order}</span>}</span>
-                    <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h3 className="font-display text-xl">{lesson.title}</h3><StatusBadge status={lesson.status} /></div><p className="mt-1 line-clamp-1 text-sm text-stone-500">{lesson.description}</p></div>
-                    <ChevronRight size={18} className="text-stone-300" />
+                    <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h3 className="font-display min-w-0 break-words text-xl">{lesson.title}</h3><StatusBadge status={lesson.status} /></div><p className="mt-1 line-clamp-2 break-words text-sm text-stone-500 sm:line-clamp-1">{lesson.description}</p></div>
+                    <ChevronRight size={18} className="shrink-0 text-stone-300" />
                   </Link>
                 );
               })}
