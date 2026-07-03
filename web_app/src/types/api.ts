@@ -67,6 +67,7 @@ export interface ApiCourseSummary {
   description: string | null;
   thumbnail: string | null;
   difficultyLevel: string;
+  completionCoinsReward: number;
   isPublished: boolean;
   direction: Pick<ApiDirection, "id" | "title" | "slug">;
   modulesCount: number;

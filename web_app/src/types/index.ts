@@ -40,6 +40,7 @@ export interface Course {
   accent: string;
   modulesCount: number;
   lessonsCount: number;
+  completionCoinsReward: number;
 }
 
 export interface Student {

@@ -20,6 +20,7 @@ const pageQuery = z.object({
 const nullableUrl = z.string().url().max(1024).nullable().optional();
 const publishBody = z.object({ isPublished: z.boolean() });
 const difficulty = z.enum(["beginner", "intermediate", "advanced", "all_levels"]);
+const completionCoinsReward = z.coerce.number().int().min(0).max(1_000_000);
 const materialType = z.enum(["pdf", "image", "file", "link"]);
 const homeworkType = z.enum(["assignment", "test"]);
 const testOption = z.object({ id: z.string().min(1).max(100), text: z.string().trim().min(1).max(500) });
@@ -118,12 +119,12 @@ export async function cmsRoutes(app: FastifyInstance) {
     const { id } = idParams.parse(request.params); return { data: await getAdminCourseTree(id) };
   });
   app.post("/admin/courses", { preHandler: catalogGuards() }, async (request, reply) => {
-    const body = z.object({ directionId: z.string().uuid(), title: z.string().min(1).max(255), description: z.string().nullable().optional(), thumbnail: nullableUrl, difficultyLevel: difficulty.default("beginner"), isPublished: z.boolean().optional() }).parse(request.body);
+    const body = z.object({ directionId: z.string().uuid(), title: z.string().min(1).max(255), description: z.string().nullable().optional(), thumbnail: nullableUrl, difficultyLevel: difficulty.default("beginner"), completionCoinsReward: completionCoinsReward.default(0), isPublished: z.boolean().optional() }).parse(request.body);
     const item = await createCourse(body); await audit(request, "course", item.id, "create"); return reply.status(201).send({ data: item });
   });
   app.patch("/admin/courses/:id", { preHandler: catalogGuards() }, async (request) => {
     const { id } = idParams.parse(request.params);
-    const body = z.object({ directionId: z.string().uuid().optional(), title: z.string().min(1).max(255).optional(), description: z.string().nullable().optional(), thumbnail: nullableUrl, difficultyLevel: difficulty.optional() }).parse(request.body);
+    const body = z.object({ directionId: z.string().uuid().optional(), title: z.string().min(1).max(255).optional(), description: z.string().nullable().optional(), thumbnail: nullableUrl, difficultyLevel: difficulty.optional(), completionCoinsReward: completionCoinsReward.optional() }).parse(request.body);
     const item = await updateCourse(id, body); await audit(request, "course", id, "update"); return { data: item };
   });
   app.post("/admin/courses/:id/publish", { preHandler: catalogGuards() }, async (request) => {

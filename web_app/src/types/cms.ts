@@ -22,6 +22,7 @@ export interface CmsCourse {
   description: string | null;
   thumbnail: string | null;
   difficultyLevel: string;
+  completionCoinsReward: number;
   isPublished: boolean;
   deletedAt: string | null;
   direction: { id: string; title: string };

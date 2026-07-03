@@ -31,6 +31,11 @@ export function CourseCard({ course }: { course: Course }) {
             {completed ? "Курс пройден" : enrolled ? `${course.progress}% пройдено` : "Можно начать сейчас"}
           </span>
         </div>
+        {course.completionCoinsReward > 0 && (
+          <p className="mt-3 rounded-full bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-900">
+            +{course.completionCoinsReward.toLocaleString("ru-RU")} Maestro Coins за завершение
+          </p>
+        )}
         <div className="mt-3">{enrolled ? <ProgressBar value={course.progress} /> : <div className="h-1.5 rounded-full bg-stone-100" />}</div>
         <div className="mt-5 flex items-center gap-2 text-sm font-bold text-ink">
           {completed ? <CheckCircle2 size={15} /> : enrolled ? <Play size={15} fill="currentColor" /> : <BookOpen size={15} />}

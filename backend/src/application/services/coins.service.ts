@@ -67,3 +67,40 @@ export async function addMaestroCoins(params: {
     return { awarded: true as const, balance: balanceAfter };
   });
 }
+
+export async function awardCourseCompletionCoins(params: {
+  studentId: string;
+  courseId: string;
+  createdBy: string;
+}) {
+  const course = await prisma.course.findUnique({
+    where: { id: params.courseId },
+    select: { id: true, title: true, completionCoinsReward: true },
+  });
+
+  if (!course || course.completionCoinsReward <= 0) {
+    return { awarded: false as const, balance: await getStudentCoins(params.studentId) };
+  }
+
+  const existing = await prisma.maestroCoinTransaction.findFirst({
+    where: {
+      studentId: params.studentId,
+      sourceType: "course",
+      sourceId: params.courseId,
+    },
+    select: { id: true, balanceAfter: true },
+  });
+
+  if (existing) {
+    return { awarded: false as const, balance: existing.balanceAfter };
+  }
+
+  return addMaestroCoins({
+    studentId: params.studentId,
+    amount: course.completionCoinsReward,
+    reason: `Завершение курса «${course.title}»`,
+    sourceType: "course",
+    sourceId: params.courseId,
+    createdBy: params.createdBy,
+  });
+}

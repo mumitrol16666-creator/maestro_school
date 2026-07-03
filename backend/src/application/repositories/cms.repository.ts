@@ -67,6 +67,7 @@ export async function getAdminCourseTree(id: string) {
       description: true,
       thumbnail: true,
       difficultyLevel: true,
+      completionCoinsReward: true,
       isPublished: true,
       deletedAt: true,
       direction: { select: { id: true, title: true } },
@@ -110,10 +111,10 @@ export async function getAdminCourseTree(id: string) {
   };
 }
 
-export const createCourse = (data: { directionId: string; title: string; description?: string | null; thumbnail?: string | null; difficultyLevel: DifficultyLevel; isPublished?: boolean }) =>
+export const createCourse = (data: { directionId: string; title: string; description?: string | null; thumbnail?: string | null; difficultyLevel: DifficultyLevel; completionCoinsReward?: number; isPublished?: boolean }) =>
   prisma.course.create({ data });
 
-export async function updateCourse(id: string, data: { directionId?: string; title?: string; description?: string | null; thumbnail?: string | null; difficultyLevel?: DifficultyLevel; isPublished?: boolean; deletedAt?: Date | null }) {
+export async function updateCourse(id: string, data: { directionId?: string; title?: string; description?: string | null; thumbnail?: string | null; difficultyLevel?: DifficultyLevel; completionCoinsReward?: number; isPublished?: boolean; deletedAt?: Date | null }) {
   await requireRecord(prisma.course.findUnique({ where: { id }, select: { id: true } }), "Course");
   return prisma.course.update({ where: { id }, data });
 }

@@ -49,6 +49,7 @@ export function toCourse(
     accent: courseAccents[index % courseAccents.length],
     modulesCount: course.modulesCount,
     lessonsCount: course.lessonsCount,
+    completionCoinsReward: course.completionCoinsReward ?? 0,
   };
 }
 

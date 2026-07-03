@@ -102,6 +102,7 @@ enum MaestroCoinTransactionType {
 enum MaestroCoinSourceType {
   online_lesson
   assignment
+  course
   manual
 }
 
@@ -321,6 +322,7 @@ model Course {
   description     String?         @db.Text
   thumbnail       String?         @db.VarChar(512)
   difficultyLevel DifficultyLevel @default(beginner) @map("difficulty_level")
+  completionCoinsReward Int       @default(0) @map("completion_coins_reward")
   isPublished     Boolean         @default(false) @map("is_published")
   createdAt       DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)

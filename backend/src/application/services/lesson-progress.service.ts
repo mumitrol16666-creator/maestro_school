@@ -113,6 +113,7 @@ export async function completeLesson(params: {
 
   const { unlockNextLesson } = await import("./lesson-unlock.service.js");
   const { awardLessonPoints } = await import("./points.service.js");
+  const { awardCourseCompletionCoins } = await import("./coins.service.js");
 
   await unlockNextLesson(params.studentId, params.courseId, params.lessonId);
   await awardLessonPoints({
@@ -122,7 +123,14 @@ export async function completeLesson(params: {
     reason: `Урок «${params.lessonTitle}»`,
     awardedBy: params.reviewerId,
   });
-  await syncCourseCompletionStatus(params.studentId, params.courseId);
+  const courseCompleted = await syncCourseCompletionStatus(params.studentId, params.courseId);
+  if (courseCompleted) {
+    await awardCourseCompletionCoins({
+      studentId: params.studentId,
+      courseId: params.courseId,
+      createdBy: params.reviewerId,
+    });
+  }
   await evaluateAchievements(params.studentId, params.courseId);
 
   return { alreadyCompleted: false, progress: updated };
