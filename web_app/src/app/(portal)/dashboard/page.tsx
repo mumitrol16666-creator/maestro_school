@@ -84,10 +84,10 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <div className="mb-9 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
+      <div className="mb-9 flex flex-col gap-3 pt-2 sm:flex-row sm:items-end sm:justify-between sm:pt-0">
+        <div className="min-w-0">
           <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-gold">Личный кабинет Maestro</p>
-          <h1 className="font-display text-4xl sm:text-5xl">Добрый день, {firstName}</h1>
+          <h1 className="font-display break-words text-4xl leading-tight sm:text-5xl">Добрый день, {firstName}</h1>
           <p className="mt-3 text-sm text-stone-500">Продолжим с того места, где остановились?</p>
         </div>
         {nextLesson && (
@@ -98,24 +98,24 @@ export default function DashboardPage() {
       </div>
 
       <section className="grid gap-5 xl:grid-cols-[1.55fr_0.85fr]">
-        <Link href={`/courses/${course.id}`} className="card-hover group relative block min-h-[350px] overflow-hidden rounded-[32px] bg-ink p-7 text-white shadow-soft sm:p-9">
+        <Link href={`/courses/${course.id}`} className="card-hover group relative block min-h-[350px] overflow-hidden rounded-[28px] bg-ink p-5 text-white shadow-soft sm:rounded-[32px] sm:p-9">
           <div className="noise absolute inset-0 opacity-20" />
           <div className="absolute -bottom-36 -right-24 h-[380px] w-[380px] rounded-full border border-gold/25" />
-          <div className="relative flex h-full flex-col">
-            <div className="flex items-center justify-between">
-              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/60">{course.direction.title} · {difficultyLabel(course.difficultyLevel)}</span>
-              <span className="flex items-center gap-2 font-display text-2xl text-gold">
+          <div className="relative flex h-full min-w-0 flex-col">
+            <div className="flex items-start justify-between gap-3">
+              <span className="min-w-0 break-words rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/60">{course.direction.title} · {difficultyLabel(course.difficultyLevel)}</span>
+              <span className="flex shrink-0 items-center gap-2 font-display text-2xl text-gold">
                 {dashboard.progressPercent}%
                 <ArrowRight size={18} className="opacity-0 transition group-hover:opacity-100" />
               </span>
             </div>
-            <div className="my-auto max-w-xl py-10">
+            <div className="my-auto max-w-xl py-8 sm:py-10">
               <p className="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-gold">Текущий курс</p>
-              <h2 className="font-display text-5xl leading-none sm:text-6xl">{course.title}</h2>
-              <p className="mt-5 max-w-lg text-sm leading-6 text-white/55">{course.description}</p>
+              <h2 className="font-display break-words text-4xl leading-tight sm:text-6xl sm:leading-none">{course.title}</h2>
+              <p className="mt-5 max-w-lg break-words text-sm leading-6 text-white/55">{course.description}</p>
             </div>
             <div>
-              <div className="mb-3 flex justify-between text-xs text-white/50"><span>Прогресс курса</span><span>{dashboard.completedLessonsCount} из {dashboard.totalLessonsCount} уроков</span></div>
+              <div className="mb-3 flex flex-wrap justify-between gap-2 text-xs text-white/50"><span>Прогресс курса</span><span>{dashboard.completedLessonsCount} из {dashboard.totalLessonsCount} уроков</span></div>
               <ProgressBar value={dashboard.progressPercent} dark />
             </div>
           </div>
