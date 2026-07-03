@@ -1,4 +1,4 @@
-import type { MaestroCoinSourceType } from "@prisma/client";
+import { Prisma, type MaestroCoinSourceType } from "@prisma/client";
 import { prisma } from "../../infrastructure/database/prisma.js";
 import { BadRequestError } from "../../domain/errors.js";
 
@@ -95,12 +95,28 @@ export async function awardCourseCompletionCoins(params: {
     return { awarded: false as const, balance: existing.balanceAfter };
   }
 
-  return addMaestroCoins({
-    studentId: params.studentId,
-    amount: course.completionCoinsReward,
-    reason: `Завершение курса «${course.title}»`,
-    sourceType: "course",
-    sourceId: params.courseId,
-    createdBy: params.createdBy,
-  });
+  try {
+    return await addMaestroCoins({
+      studentId: params.studentId,
+      amount: course.completionCoinsReward,
+      reason: `Завершение курса «${course.title}»`,
+      sourceType: "course",
+      sourceId: params.courseId,
+      createdBy: params.createdBy,
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      const awarded = await prisma.maestroCoinTransaction.findFirst({
+        where: {
+          studentId: params.studentId,
+          sourceType: "course",
+          sourceId: params.courseId,
+        },
+        select: { balanceAfter: true },
+      });
+      const balance = awarded?.balanceAfter ?? await getStudentCoins(params.studentId);
+      return { awarded: false as const, balance };
+    }
+    throw error;
+  }
 }

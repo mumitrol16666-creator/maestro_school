@@ -4,7 +4,6 @@ import { prisma } from "../../infrastructure/database/prisma.js";
 import {
   countCompletedLessons,
   countTotalPublishedLessons,
-  getCourseModules,
   getModuleLessons,
   updateStudentCourseStatus,
 } from "../repositories/learning.repository.js";
@@ -22,6 +21,10 @@ export async function calculateCourseProgressPercent(
   return calculateProgressPercent(completed, total);
 }
 
+export function isCourseCompletedByLessonCounts(completed: number, total: number): boolean {
+  return total > 0 && completed >= total;
+}
+
 export async function isModuleCompleted(studentId: string, moduleId: string): Promise<boolean> {
   const lessons = await getModuleLessons(moduleId);
   if (lessons.length === 0) return false;
@@ -29,22 +32,22 @@ export async function isModuleCompleted(studentId: string, moduleId: string): Pr
   const rows = await prisma.lessonProgress.findMany({
     where: {
       studentId,
-      lessonId: { in: lessons.map((l) => l.id) },
+      lessonId: { in: lessons.map((lesson) => lesson.id) },
     },
     select: { status: true },
   });
 
   if (rows.length < lessons.length) return false;
-  return rows.every((r) => isLessonCompleted(r.status));
+  return rows.every((row) => isLessonCompleted(row.status));
 }
 
 export async function isCourseCompleted(studentId: string, courseId: string): Promise<boolean> {
-  const modules = await getCourseModules(courseId);
-  for (const mod of modules) {
-    const completed = await isModuleCompleted(studentId, mod.id);
-    if (!completed) return false;
-  }
-  return modules.length > 0;
+  const [completed, total] = await Promise.all([
+    countCompletedLessons(studentId, courseId),
+    countTotalPublishedLessons(courseId),
+  ]);
+
+  return isCourseCompletedByLessonCounts(completed, total);
 }
 
 /** Updates StudentCourse.status to completed when all modules are done. */
