@@ -19,7 +19,7 @@ import type {
 } from "@/types/api";
 import type { StudentOfflineSummary } from "@/types/school-offline";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "/api/v1";
 const TOKEN_KEY = "maestro_access_token";
 const USER_KEY = "maestro_auth_user";
 

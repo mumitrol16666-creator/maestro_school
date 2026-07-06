@@ -39,6 +39,13 @@ const attendanceClasses: Record<string, string> = {
   unexcused_absence: "bg-red-50 text-red-800",
 };
 
+function lessonStartDateTime(date: string | Date, startTime: string) {
+  const base = new Date(date);
+  const [hours = 0, minutes = 0] = startTime.split(":").map(Number);
+  base.setHours(hours, minutes, 0, 0);
+  return base;
+}
+
 export default function AdminOfflineLessonDetailPage() {
   const params = useParams<{ crmClassId: string }>();
   const crmClassId = params.crmClassId;
@@ -74,6 +81,11 @@ export default function AdminOfflineLessonDetailPage() {
   const canApprove = isAdmin && lesson?.status === "pending_admin_review";
   const isNotHeld = lesson?.teacherOutcomeHint === "not_held";
   const unmarkedCount = students.filter((student) => (student.attendanceStatus ?? "unmarked") === "unmarked").length;
+  const canShowStartPrompt = Boolean(
+    !isAdmin
+      && lesson?.status === "scheduled"
+      && lessonStartDateTime(lesson.date, lesson.startTime).getTime() - Date.now() <= 15 * 60 * 1000,
+  );
 
   useEffect(() => {
     if (!lesson) return;
@@ -464,7 +476,7 @@ export default function AdminOfflineLessonDetailPage() {
         </aside>
       </div>
 
-      {!isAdmin && lesson.status === "scheduled" && (
+      {canShowStartPrompt && lesson && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/80 p-4 backdrop-blur-md">
           <div className="w-full max-w-md overflow-hidden rounded-[32px] border border-stone-200 bg-paper p-6 shadow-2xl sm:p-8">
             <div className="flex flex-col items-center text-center animate-in fade-in zoom-in-95 duration-200">

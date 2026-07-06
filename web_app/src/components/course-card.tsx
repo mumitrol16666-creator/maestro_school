@@ -24,7 +24,9 @@ export function CourseCard({ course }: { course: Course }) {
         </div>
       </div>
       <div className="p-6">
-        <p className="min-h-12 text-sm leading-6 text-stone-500">{course.description}</p>
+        <p className="min-h-12 overflow-hidden break-words text-sm leading-6 text-stone-500 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:3]">
+          {course.description}
+        </p>
         <div className="mt-5 flex items-center justify-between text-xs font-semibold text-stone-500">
           <span>{course.lessonsCount} уроков</span>
           <span>

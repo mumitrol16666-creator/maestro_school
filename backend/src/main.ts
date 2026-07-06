@@ -18,8 +18,9 @@ async function bootstrap() {
 
   app.setErrorHandler(errorHandler);
 
+  const corsOrigins = env.CORS_ORIGIN.split(",").map((origin) => origin.trim()).filter(Boolean);
   await app.register(cors, {
-    origin: env.CORS_ORIGIN,
+    origin: corsOrigins.length > 1 ? corsOrigins : corsOrigins[0],
     credentials: true,
   });
 

@@ -17,3 +17,12 @@ const envSchema = z.object({
 });
 
 export const env = envSchema.parse(process.env);
+
+if (process.env.NODE_ENV === "production") {
+  const missing: string[] = [];
+  if (!process.env.CORS_ORIGIN) missing.push("CORS_ORIGIN");
+  if (!process.env.CRM_API_URL) missing.push("CRM_API_URL");
+  if (missing.length) {
+    throw new Error(`Production environment is missing required variables: ${missing.join(", ")}`);
+  }
+}
