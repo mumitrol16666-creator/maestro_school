@@ -1,3 +1,58 @@
+export type TrialLessonReport = {
+  version?: number;
+  capturedAt?: string;
+  attendance?: {
+    outcome?: "attended" | "late" | "no_show" | "rescheduled";
+    arrivedWith?: "unknown" | "parent" | "alone" | "other";
+    parentPresent?: boolean;
+    durationFactMinutes?: number;
+  };
+  studentProfile?: {
+    direction?: string;
+    priorExperience?: "unknown" | "none" | "basic" | "medium" | "strong";
+    motivation?: "unclear" | "student" | "parent" | "both";
+    goalFromParent?: string;
+    goalFromStudent?: string;
+  };
+  teacherAssessment?: {
+    interestLevel?: number | null;
+    contactLevel?: number | null;
+    focusLevel?: number | null;
+    rhythm?: number | null;
+    hearing?: number | null;
+    coordination?: number | null;
+    memory?: number | null;
+    techniqueBase?: number | null;
+    emotionalReadiness?: number | null;
+  };
+  lessonFacts?: {
+    whatWasTested?: string;
+    whatWorkedWell?: string;
+    difficulties?: string;
+    reactionToTasks?: string;
+    parentReaction?: string;
+    homeworkGiven?: string;
+  };
+  recommendation?: {
+    recommendedFormat?: "undecided" | "group" | "individual" | "hybrid";
+    recommendedFrequency?: "undecided" | "1_per_week" | "2_per_week" | "3_per_week" | "custom";
+    recommendedLevel?: "beginner" | "basic" | "intermediate" | "advanced";
+    firstMonthFocus?: string;
+    nextStep?: "manager_call" | "sell_membership" | "second_trial" | "wait" | "reject";
+  };
+  salesSignals?: {
+    buyProbability?: number | null;
+    priceSensitivity?: "unknown" | "low" | "medium" | "high";
+    scheduleFit?: "unknown" | "good" | "medium" | "bad";
+    parentObjections?: string[];
+    teacherSalesComment?: string;
+  };
+  raw?: {
+    teacherFreeComment?: string;
+    adminComment?: string;
+  };
+};
+
 export type TeacherOfflineClass = {
   crmClassId: string;
   title: string;
@@ -18,6 +73,8 @@ export type TeacherOfflineClass = {
   materials?: Array<{ type?: string; url?: string; title?: string }> | null;
   teacherComment?: string | null;
   teacherOutcomeHint?: string | null;
+  trialReport?: TrialLessonReport | null;
+  trialAiAnalysis?: Record<string, unknown> | null;
   startedAt?: string | null;
   finishedAt?: string | null;
   submittedAt?: string | null;

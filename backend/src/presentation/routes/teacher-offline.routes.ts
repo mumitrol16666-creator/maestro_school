@@ -93,6 +93,7 @@ export async function teacherOfflineRoutes(app: FastifyInstance) {
         homeworkDraft: z.string().max(10000).optional(),
         nextLessonFocus: z.string().max(5000).optional(),
         teacherOutcomeHint: z.enum(["held", "not_held", "no_submission"]).optional(),
+        trialReport: z.record(z.string(), z.unknown()).optional(),
         comment: z.string().max(5000).optional(),
         materials: z.array(z.object({
           type: z.string().optional(),

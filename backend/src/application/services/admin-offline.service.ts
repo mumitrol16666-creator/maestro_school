@@ -51,6 +51,7 @@ export async function adminOfflineApprove(
     nextLessonFocus?: string;
     materials?: Array<{ type?: string; url?: string; title?: string }>;
     teacherComment?: string;
+    trialReport?: Record<string, unknown>;
   },
 ) {
   return postAdminApproveClass(crmClassId, payload);

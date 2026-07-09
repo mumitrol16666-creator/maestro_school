@@ -81,6 +81,7 @@ export async function adminOfflineRoutes(app: FastifyInstance) {
         homeworkDraft: z.string().max(10000).optional(),
         nextLessonFocus: z.string().max(5000).optional(),
         teacherComment: z.string().max(5000).optional(),
+        trialReport: z.record(z.string(), z.unknown()).optional(),
         materials: z.array(z.object({
           type: z.string().optional(),
           url: z.string().optional(),

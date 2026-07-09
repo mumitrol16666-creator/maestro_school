@@ -3,6 +3,7 @@ import type {
   TeacherOfflineAgenda,
   TeacherOfflineClass,
   TeacherOfflineClassStudents,
+  TrialLessonReport,
 } from "@/types/teacher-offline";
 
 export const teacherOfflineApi = {
@@ -41,6 +42,7 @@ export const teacherOfflineApi = {
       nextLessonFocus?: string;
       materials?: Array<{ type?: string; url?: string; title?: string }>;
       teacherOutcomeHint?: "held" | "not_held" | "no_submission";
+      trialReport?: TrialLessonReport;
       comment?: string;
     },
   ) =>

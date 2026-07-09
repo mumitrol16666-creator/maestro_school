@@ -2,6 +2,7 @@ import { apiRequest } from "@/lib/api-client";
 import type {
   TeacherOfflineClass,
   TeacherOfflineClassStudents,
+  TrialLessonReport,
 } from "@/types/teacher-offline";
 
 export type PendingReviewAgenda = {
@@ -42,6 +43,7 @@ export const adminOfflineApi = {
       nextLessonFocus?: string;
       teacherComment?: string;
       materials?: Array<{ type?: string; url?: string; title?: string }>;
+      trialReport?: TrialLessonReport;
     },
   ) =>
     apiRequest<ApproveOfflineLessonResult>(

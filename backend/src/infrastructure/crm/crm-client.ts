@@ -2,6 +2,7 @@ import { env } from "../../config/env.js";
 import { AppError } from "../../domain/errors.js";
 
 type CrmResponse<T> = { success: boolean; data?: T; error?: string };
+type TrialLessonReportPayload = Record<string, unknown>;
 
 function integrationHeaders(): Record<string, string> {
   const secret = process.env.INTEGRATION_SERVICE_SECRET;
@@ -180,6 +181,7 @@ export type TeacherSubmitPayload = {
   nextLessonFocus?: string;
   materials?: Array<{ type?: string; url?: string; title?: string }>;
   teacherOutcomeHint?: "held" | "not_held" | "no_submission";
+  trialReport?: TrialLessonReportPayload;
   comment?: string;
 };
 
@@ -283,6 +285,7 @@ export async function postAdminApproveClass(
     nextLessonFocus?: string;
     materials?: Array<{ type?: string; url?: string; title?: string }>;
     teacherComment?: string;
+    trialReport?: TrialLessonReportPayload;
   },
 ) {
   return crmPost<{
