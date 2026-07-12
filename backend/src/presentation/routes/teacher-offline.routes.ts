@@ -28,7 +28,11 @@ export async function teacherOfflineRoutes(app: FastifyInstance) {
     "/teachers/me/salary-summary",
     { preHandler: [authenticate, requireTeacher] },
     async (request) => {
-      return { data: await getTeacherSalarySummary(request.user!.id) };
+      const query = z.object({
+        from: z.string().optional(),
+        to: z.string().optional(),
+      }).parse(request.query);
+      return { data: await getTeacherSalarySummary(request.user!.id, query) };
     },
   );
 

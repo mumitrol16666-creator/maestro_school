@@ -14,8 +14,13 @@ export const teacherOfflineApi = {
     const qs = query.toString();
     return apiRequest<TeacherOfflineAgenda>(`/teachers/me/offline-lessons${qs ? `?${qs}` : ""}`);
   },
-  salarySummary: () =>
-    apiRequest<any>("/teachers/me/salary-summary"),
+  salarySummary: (params?: { from?: string; to?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.from) query.set("from", params.from);
+    if (params?.to) query.set("to", params.to);
+    const qs = query.toString();
+    return apiRequest<any>(`/teachers/me/salary-summary${qs ? `?${qs}` : ""}`);
+  },
   classCard: (crmClassId: string) =>
     apiRequest<TeacherOfflineClass>(`/teachers/me/offline-lessons/${encodeURIComponent(crmClassId)}`),
   students: (crmClassId: string) =>

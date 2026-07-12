@@ -99,6 +99,36 @@ function isSameDay(left: Date, right: Date) {
     && left.getDate() === right.getDate();
 }
 
+function dateInputValue(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function monthPeriod(offset = 0, anchor = new Date()) {
+  const start = new Date(anchor.getFullYear(), anchor.getMonth() + offset, 1);
+  const end = new Date(anchor.getFullYear(), anchor.getMonth() + offset + 1, 0);
+  return { from: dateInputValue(start), to: dateInputValue(end) };
+}
+
+function shiftPeriodMonth(period: { from: string; to: string }, delta: number) {
+  const [year, month] = period.from.split("-").map(Number);
+  const anchor = Number.isFinite(year) && Number.isFinite(month)
+    ? new Date(year, month - 1 + delta, 1)
+    : new Date();
+  return monthPeriod(0, anchor);
+}
+
+function periodQuery(period: { from: string; to: string }) {
+  const from = new Date(`${period.from}T00:00:00`);
+  const to = new Date(`${period.to}T23:59:59.999`);
+  return {
+    from: Number.isNaN(from.getTime()) ? undefined : from.toISOString(),
+    to: Number.isNaN(to.getTime()) ? undefined : to.toISOString(),
+  };
+}
+
 function lessonStage(lesson: TeacherOfflineClass, now: Date): LessonStage {
   if (["rejected", "needs_revision"].includes(lesson.status)) return "fix";
   if (lesson.status === "pending_admin_review") return "processing";
@@ -164,6 +194,8 @@ export default function AdminOfflineLessonsPage() {
   const { user } = useAuth();
   const isAdmin = isContentAdminRole(user?.role);
   const [activeTab, setActiveTab] = useState<LessonTab>("today");
+  const [period, setPeriod] = useState(() => monthPeriod());
+  const selectedPeriod = periodQuery(period);
 
   const handleTabChange = (tab: LessonTab) => {
     setActiveTab(tab);
@@ -175,16 +207,16 @@ export default function AdminOfflineLessonsPage() {
     }, 80);
   };
   const resource = useApiResource(
-    () => (isAdmin ? adminOfflineApi.agenda() : teacherOfflineApi.agenda()),
-    [isAdmin],
+    () => (isAdmin ? adminOfflineApi.agenda() : teacherOfflineApi.agenda(selectedPeriod)),
+    [isAdmin, selectedPeriod.from, selectedPeriod.to],
   );
   const pendingResource = useApiResource(
     () => (isAdmin ? adminOfflineApi.pendingReview() : Promise.resolve({ classes: [] })),
     [isAdmin],
   );
   const salaryResource = useApiResource(
-    () => (!isAdmin ? teacherOfflineApi.salarySummary() : Promise.resolve(null)),
-    [isAdmin],
+    () => (!isAdmin ? teacherOfflineApi.salarySummary(selectedPeriod) : Promise.resolve(null)),
+    [isAdmin, selectedPeriod.from, selectedPeriod.to],
   );
 
   if (resource.loading || (isAdmin && pendingResource.loading)) {
@@ -264,6 +296,60 @@ export default function AdminOfflineLessonsPage() {
             : "Сначала показаны уроки, где от вас требуется действие."
         }
       />
+
+      {!isAdmin && (
+        <section className="mb-6 rounded-[24px] border border-stone-200 bg-white p-4 shadow-sm sm:p-5">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-stone-400">Период кабинета</p>
+              <h2 className="mt-1 font-display text-2xl">Уроки и баланс за выбранные даты</h2>
+            </div>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+              <div className="grid gap-1">
+                <label className="text-[10px] font-bold uppercase tracking-[0.16em] text-stone-400">С</label>
+                <input
+                  type="date"
+                  value={period.from}
+                  onChange={(event) => setPeriod((current) => ({ ...current, from: event.target.value }))}
+                  className="h-11 rounded-xl border border-stone-200 bg-white px-3 text-sm font-bold text-ink"
+                />
+              </div>
+              <div className="grid gap-1">
+                <label className="text-[10px] font-bold uppercase tracking-[0.16em] text-stone-400">По</label>
+                <input
+                  type="date"
+                  value={period.to}
+                  onChange={(event) => setPeriod((current) => ({ ...current, to: event.target.value }))}
+                  className="h-11 rounded-xl border border-stone-200 bg-white px-3 text-sm font-bold text-ink"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPeriod((current) => shiftPeriodMonth(current, -1))}
+                  className="h-11 rounded-xl border border-stone-200 bg-white px-3 text-sm font-bold text-stone-600 transition hover:bg-stone-50"
+                >
+                  Прошлый
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPeriod(monthPeriod())}
+                  className="h-11 rounded-xl bg-ink px-3 text-sm font-bold text-white transition hover:-translate-y-0.5"
+                >
+                  Текущий
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPeriod((current) => shiftPeriodMonth(current, 1))}
+                  className="h-11 rounded-xl border border-stone-200 bg-white px-3 text-sm font-bold text-stone-600 transition hover:bg-stone-50"
+                >
+                  Следующий
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
 
       {!isAdmin && salaryResource.data?.data && (
         <div className="mb-8 overflow-hidden rounded-[28px] border border-stone-200 bg-white p-6 shadow-soft sm:p-8">

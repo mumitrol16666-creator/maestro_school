@@ -163,7 +163,10 @@ export async function teacherOfflineSetAttendance(
   });
 }
 
-export async function getTeacherSalarySummary(appUserId: string) {
+export async function getTeacherSalarySummary(
+  appUserId: string,
+  params?: { from?: string; to?: string },
+) {
   const crmTeacherId = await requireCrmTeacherId(appUserId);
-  return fetchTeacherSalarySummary(crmTeacherId);
+  return fetchTeacherSalarySummary(crmTeacherId, params);
 }

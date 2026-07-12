@@ -377,8 +377,15 @@ export async function fetchCrmLinkStatusByPhone(phone: string) {
   );
 }
 
-export async function fetchTeacherSalarySummary(crmTeacherId: string) {
+export async function fetchTeacherSalarySummary(
+  crmTeacherId: string,
+  params?: { from?: string; to?: string },
+) {
+  const query = new URLSearchParams();
+  if (params?.from) query.set("from", params.from);
+  if (params?.to) query.set("to", params.to);
+  const qs = query.toString();
   return crmGet<Record<string, any>>(
-    `/api/integration/v1/teachers/${encodeURIComponent(crmTeacherId)}/salary-summary`
+    `/api/integration/v1/teachers/${encodeURIComponent(crmTeacherId)}/salary-summary${qs ? `?${qs}` : ""}`
   );
 }
