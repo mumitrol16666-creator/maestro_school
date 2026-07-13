@@ -3,6 +3,7 @@
 .env.local
 node_modules/
 .next/
+*.tsbuildinfo
 __pycache__/
 *.pyc
 .venv/
