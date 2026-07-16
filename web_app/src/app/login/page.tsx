@@ -1,7 +1,6 @@
 "use client";
 
 import { ArrowRight, Eye, EyeOff, LoaderCircle } from "lucide-react";
-import Link from "next/link";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AuthHeroPanel } from "@/components/auth-hero-panel";
@@ -23,6 +22,9 @@ function safeNextPath(next: string | null, role?: string | null) {
   }
   return next;
 }
+
+const TRIAL_LANDING_URL =
+  process.env.NEXT_PUBLIC_TRIAL_LANDING_URL ?? "https://app-maestro-school.duckdns.org/trial.html";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -162,24 +164,24 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <p className="mt-8 text-center text-sm text-stone-500">
-            Новый ученик Maestro?{" "}
-            <Link href="/register" className="font-bold text-ink">
-              Зарегистрироваться
-            </Link>
-          </p>
+          <div className="mt-8 rounded-2xl border border-gold/20 bg-gold/5 px-4 py-4 text-center">
+            <p className="text-sm font-bold text-ink">Платформа Maestro — для учеников школы</p>
+            <p className="mt-2 text-sm leading-6 text-stone-500">
+              Это внутренняя экосистема: уроки, домашние задания, материалы и прогресс. Доступ выдаём после записи в школу.
+            </p>
+          </div>
 
           <div className="mt-8 rounded-2xl border border-stone-200 bg-white p-5">
-            <p className="text-sm font-bold text-ink">Ещё не учитесь в Maestro?</p>
+            <p className="text-sm font-bold text-ink">Хотите стать учеником Maestro?</p>
             <p className="mt-2 text-sm leading-6 text-stone-500">
-              Оставьте заявку без регистрации. Администратор ответит вам в WhatsApp.
+              Запишитесь на пробный урок на сайте. Администратор свяжется с вами и подберёт удобное время.
             </p>
-            <Link
-              href="/trial-lesson"
+            <a
+              href={TRIAL_LANDING_URL}
               className="mt-4 inline-flex items-center gap-2 text-sm font-bold text-gold transition hover:text-ink"
             >
               Записаться на пробный урок <ArrowRight size={15} />
-            </Link>
+            </a>
           </div>
         </div>
       </section>
