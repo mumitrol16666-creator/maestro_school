@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, BookOpen, ChevronRight, ClipboardCheck, FolderOpen, GraduationCap, LayoutDashboard, Library, LogOut, Menu, MessageCircleQuestion, Newspaper, Settings, UserCog, Users, Video, X } from "lucide-react";
+import { ArrowRight, BookMarked, ChevronRight, ClipboardPenLine, FolderKanban, LayoutDashboard, LibraryBig, LogOut, Megaphone, Menu, MessagesSquare, MonitorPlay, Presentation, Settings, UserCog, UsersRound, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -15,10 +15,10 @@ import { Brand } from "./brand";
 
 const cmsNavigation = [
   { href: "/admin", label: "Обзор", icon: LayoutDashboard },
-  { href: "/admin/directions", label: "Направления", icon: FolderOpen },
-  { href: "/admin/courses", label: "Курсы", icon: BookOpen },
-  { href: "/admin/news", label: "Доска Maestro", icon: Newspaper },
-  { href: "/admin/media", label: "Медиатека", icon: Library },
+  { href: "/admin/directions", label: "Направления", icon: FolderKanban },
+  { href: "/admin/courses", label: "Курсы", icon: BookMarked },
+  { href: "/admin/news", label: "Доска Maestro", icon: Megaphone },
+  { href: "/admin/media", label: "Медиатека", icon: LibraryBig },
 ];
 
 const accessNavigation = [
@@ -26,21 +26,21 @@ const accessNavigation = [
 ];
 
 const lessonNavigation = [
-  { href: "/admin/offline-lessons", label: "Офлайн-уроки", icon: GraduationCap },
-  { href: "/admin/online-lessons", label: "Онлайн-уроки", icon: Video },
+  { href: "/admin/offline-lessons", label: "Офлайн-уроки", icon: Presentation },
+  { href: "/admin/online-lessons", label: "Онлайн-уроки", icon: MonitorPlay },
 ];
 
 const teacherNavigation = [
   { href: "/admin", label: "Главная", icon: LayoutDashboard },
-  { href: "/admin/my-students", label: "Мои ученики", icon: Users },
+  { href: "/admin/my-students", label: "Мои ученики", icon: UsersRound },
   ...lessonNavigation,
 ];
 
 const teachingNavigation = [
-  { href: "/admin/students", label: "Ученики", icon: Users },
+  { href: "/admin/students", label: "Ученики", icon: UsersRound },
   ...lessonNavigation,
-  { href: "/admin/homework-review", label: "Проверка ДЗ", icon: ClipboardCheck },
-  { href: "/admin/lesson-questions", label: "Вопросы", icon: MessageCircleQuestion },
+  { href: "/admin/homework-review", label: "Проверка ДЗ", icon: ClipboardPenLine },
+  { href: "/admin/lesson-questions", label: "Вопросы", icon: MessagesSquare },
 ];
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
@@ -77,7 +77,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   }, [pathname, reloadPendingHomeworkCount, reloadPendingQuestionsCount, reloadPendingOnlineLessonsCount]);
 
   const sidebar = (
-    <aside className="flex h-full flex-col overflow-y-auto bg-[#121311] px-4 py-5 text-white sm:px-5 sm:py-6">
+    <aside className="flex h-full flex-col overflow-y-auto border-r border-white/10 bg-[#151613] px-4 py-5 text-white sm:px-5 sm:py-6">
       <div className="flex items-center justify-between border-b border-white/10 pb-5">
         <Brand href="/admin" />
         <button
@@ -90,7 +90,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         </button>
       </div>
 
-      <div className="mt-6 flex items-center justify-between px-2">
+      <div className="mt-6 flex items-center justify-between gap-3 px-2">
         <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gold">{sidebarTitle}</p>
         <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2 py-1 text-[9px] font-black uppercase tracking-wide text-emerald-300">
           Рабочий кабинет
@@ -112,21 +112,21 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             href={href}
             onClick={() => setOpen(false)}
             aria-current={active ? "page" : undefined}
-            className={`group relative flex min-h-12 items-center gap-3 overflow-hidden rounded-2xl px-3.5 py-3 text-sm font-bold transition ${
+            className={`group relative flex min-h-12 items-center gap-3 overflow-hidden rounded-2xl border px-3 py-2.5 text-sm font-bold transition ${
               active
-                ? "border border-gold/30 bg-gradient-to-r from-gold/20 to-white/10 text-white shadow-[0_10px_30px_rgba(0,0,0,0.18)]"
-                : "border border-transparent text-white/60 hover:border-white/10 hover:bg-white/5 hover:text-white"
+                ? "border-gold/30 bg-white text-ink shadow-[0_14px_34px_rgba(0,0,0,0.18)]"
+                : "border-transparent text-white/60 hover:border-white/10 hover:bg-white/5 hover:text-white"
             }`}
           >
             {active ? <span className="absolute inset-y-3 left-0 w-0.5 rounded-full bg-gold" /> : null}
             <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl transition ${
-              active ? "bg-gold text-ink" : "bg-white/5 text-white/60 group-hover:bg-white/10 group-hover:text-white"
+              active ? "bg-gold/15 text-gold" : "bg-white/5 text-white/55 group-hover:bg-white/10 group-hover:text-white"
             }`}>
               <Icon size={17} strokeWidth={2.2} />
             </span>
-            <span className="flex-1">{label}</span>
+            <span className="min-w-0 flex-1 truncate">{label}</span>
             {pending != null && pending > 0 && <AdminPendingHomeworkBadge count={pending} />}
-            <ChevronRight size={15} className={`transition ${active ? "text-gold" : "text-white/20 group-hover:translate-x-0.5 group-hover:text-white/50"}`} />
+            <ChevronRight size={15} className={`shrink-0 transition ${active ? "text-gold" : "text-white/20 group-hover:translate-x-0.5 group-hover:text-white/50"}`} />
           </Link>
         );
       })}</nav>
@@ -170,12 +170,12 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     </aside>
   );
   return <div className="min-h-screen bg-cream">
-    <div className="fixed inset-y-0 left-0 z-40 hidden w-[280px] lg:block">{sidebar}</div>
-    {open && <div className="fixed inset-y-0 left-0 z-50 w-[min(88vw,340px)] shadow-2xl lg:hidden">{sidebar}</div>}
-    {open && <button className="fixed inset-0 z-40 bg-black/55 backdrop-blur-[2px] lg:hidden" onClick={() => setOpen(false)} aria-label="Закрыть меню" />}
-    <div className="lg:pl-[280px]">
+    <div className="fixed inset-y-0 left-0 z-40 hidden w-[272px] lg:block">{sidebar}</div>
+    {open && <div className="fixed inset-y-0 left-0 z-50 w-[min(86vw,320px)] shadow-2xl lg:hidden">{sidebar}</div>}
+    {open && <button className="fixed inset-0 z-40 bg-black/45 backdrop-blur-[2px] lg:hidden" onClick={() => setOpen(false)} aria-label="Закрыть меню" />}
+    <div className="lg:pl-[272px]">
       <header className="sticky top-0 z-30 flex h-[calc(96px+env(safe-area-inset-top,0px))] lg:h-[calc(80px+env(safe-area-inset-top,0px))] pt-[calc(12px+env(safe-area-inset-top,0px))] lg:pt-[env(safe-area-inset-top,0px)] items-center gap-4 border-b border-stone-200/80 bg-cream/90 px-5 backdrop-blur-xl sm:px-8">
-        <button onClick={() => setOpen(true)} className="grid h-10 w-10 place-items-center rounded-full bg-white lg:hidden"><Menu size={20} /></button>
+        <button onClick={() => setOpen(true)} className="grid h-10 w-10 place-items-center rounded-xl border border-stone-200/80 bg-white shadow-sm transition hover:border-gold/30 lg:hidden"><Menu size={20} /></button>
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">{headerTitle}</p>
           <p className="text-sm font-semibold">{user?.email}</p>
