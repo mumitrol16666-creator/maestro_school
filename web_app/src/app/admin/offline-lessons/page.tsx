@@ -10,6 +10,7 @@ import {
   Clock3,
   FileCheck2,
   Send,
+  UsersRound,
   UserX,
 } from "lucide-react";
 import Link from "next/link";
@@ -196,6 +197,7 @@ export default function AdminOfflineLessonsPage() {
   const { user } = useAuth();
   const isAdmin = isOfflineCoordinatorRole(user?.role);
   const [activeTab, setActiveTab] = useState<LessonTab>("today");
+  const [selectedTeacherId, setSelectedTeacherId] = useState("");
   const [period, setPeriod] = useState(() => monthPeriod());
   const selectedPeriod = periodQuery(period);
 
@@ -250,6 +252,14 @@ export default function AdminOfflineLessonsPage() {
     .filter((lesson) => !pendingIds.has(lesson.crmClassId));
   const lessons = isAdmin ? dedupeLessons([...pendingClasses, ...classes]) : classes;
   const staged = lessons.map((lesson) => ({ lesson, stage: lessonStage(lesson, now) }));
+  const teacherOptions = Array.from(new Map(
+    lessons
+      .filter((lesson) => lesson.teacher?.crmTeacherId)
+      .map((lesson) => [
+        lesson.teacher!.crmTeacherId,
+        lesson.teacher!.name || "Преподаватель",
+      ]),
+  ).entries()).sort((left, right) => left[1].localeCompare(right[1], "ru"));
 
   const counts = {
     today: staged.filter(({ lesson }) => isSameDay(new Date(lesson.date), now)).length,
@@ -259,6 +269,12 @@ export default function AdminOfflineLessonsPage() {
   };
 
   const filtered = staged.filter(({ lesson, stage }) => {
+    if (selectedTeacherId === "unassigned" && lesson.teacher?.crmTeacherId) return false;
+    if (
+      selectedTeacherId
+      && selectedTeacherId !== "unassigned"
+      && lesson.teacher?.crmTeacherId !== selectedTeacherId
+    ) return false;
     if (activeTab === "today") return isSameDay(new Date(lesson.date), now);
     if (activeTab === "report") return stage === "report" || stage === "overdue" || stage === "fix";
     if (activeTab === "upcoming") return lessonDateTime(lesson, "startTime") > now && !isSameDay(new Date(lesson.date), now);
@@ -286,15 +302,34 @@ export default function AdminOfflineLessonsPage() {
     acc[item.stage].push(item.lesson);
     return acc;
   }, { fix: [], report: [], overdue: [], scheduled: [], processing: [], accepted: [], cancelled: [] });
+  const teacherGroups = Array.from(filtered.reduce((acc, item) => {
+    const key = item.lesson.teacher?.crmTeacherId || "unassigned";
+    const group = acc.get(key) ?? {
+      key,
+      name: item.lesson.teacher?.name || "Преподаватель не назначен",
+      items: [] as Array<{ lesson: TeacherOfflineClass; stage: LessonStage }>,
+    };
+    group.items.push(item);
+    acc.set(key, group);
+    return acc;
+  }, new Map<string, {
+    key: string;
+    name: string;
+    items: Array<{ lesson: TeacherOfflineClass; stage: LessonStage }>;
+  }>()).values()).sort((left, right) => {
+    if (left.key === "unassigned") return 1;
+    if (right.key === "unassigned") return -1;
+    return left.name.localeCompare(right.name, "ru");
+  });
 
   return (
     <>
       <PageHeader
         eyebrow="Офлайн-школа"
-        title="Офлайн-уроки"
+        title={isAdmin ? "Уроки школы" : "Офлайн-уроки"}
         description={
           isAdmin
-            ? "Проверяйте отчёты преподавателей и контролируйте закрытие уроков."
+            ? "Все занятия школы по преподавателям. Можно открыть урок, помочь заполнить отчёт и проверить результат."
             : "Сначала показаны уроки, где от вас требуется действие."
         }
       />
@@ -463,6 +498,25 @@ export default function AdminOfflineLessonsPage() {
         ))}
       </nav>
 
+      {isAdmin ? (
+        <section className="mb-8 rounded-[24px] border border-stone-200 bg-white p-4 shadow-sm sm:p-5">
+          <label className="block text-xs font-bold uppercase tracking-[0.16em] text-stone-400">
+            Преподаватель
+            <select
+              value={selectedTeacherId}
+              onChange={(event) => setSelectedTeacherId(event.target.value)}
+              className="mt-2 h-12 w-full rounded-2xl border border-stone-200 bg-white px-4 text-sm font-bold text-ink outline-none focus:border-gold sm:max-w-md"
+            >
+              <option value="">Все преподаватели</option>
+              {teacherOptions.map(([teacherId, teacherName]) => (
+                <option key={teacherId} value={teacherId}>{teacherName}</option>
+              ))}
+              <option value="unassigned">Без преподавателя</option>
+            </select>
+          </label>
+        </section>
+      ) : null}
+
       <div id="lessons-list-container" className="scroll-mt-28">
         {filtered.length === 0 ? (
           <EmptyState
@@ -470,32 +524,81 @@ export default function AdminOfflineLessonsPage() {
             description="Когда статус урока изменится, он автоматически появится в нужной вкладке."
           />
         ) : (
-          <div className="space-y-10">
-            <LessonSection title="Нужно исправить" lessons={grouped.fix} stage="fix" now={now} />
-            <LessonSection title="Просроченные отчёты" lessons={grouped.overdue} stage="overdue" now={now} />
-            <LessonSection title="Нужно заполнить отчёт" lessons={grouped.report} stage="report" now={now} />
-            {(() => {
-              const todayLessons = grouped.scheduled.filter(l => isSameDay(new Date(l.date), now));
-              const tomorrowDate = new Date(now);
-              tomorrowDate.setDate(tomorrowDate.getDate() + 1);
-              const tomorrowLessons = grouped.scheduled.filter(l => isSameDay(new Date(l.date), tomorrowDate));
-              const otherLessons = grouped.scheduled.filter(l => !isSameDay(new Date(l.date), now) && !isSameDay(new Date(l.date), tomorrowDate));
-              
-              return (
-                <>
-                  <LessonSection title="Запланированные на сегодня" lessons={todayLessons} stage="scheduled" now={now} />
-                  <LessonSection title="Запланированные на завтра" lessons={tomorrowLessons} stage="scheduled" now={now} />
-                  <LessonSection title={activeTab === "upcoming" ? "Ближайшие уроки" : "Запланированные предстоящие"} lessons={otherLessons} stage="scheduled" now={now} />
-                </>
-              );
-            })()}
-            <LessonSection title="На проверке администратора" lessons={grouped.processing} stage="processing" now={now} />
-            <LessonSection title="Принято администратором" lessons={grouped.accepted} stage="accepted" now={now} />
-            <LessonSection title="Отменённые" lessons={grouped.cancelled} stage="cancelled" now={now} />
-          </div>
+          isAdmin ? (
+            <div className="space-y-10">
+              {teacherGroups.map((group) => (
+                <TeacherLessonSection
+                  key={group.key}
+                  name={group.name}
+                  items={group.items}
+                  now={now}
+                  unassigned={group.key === "unassigned"}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-10">
+              <LessonSection title="Нужно исправить" lessons={grouped.fix} stage="fix" now={now} />
+              <LessonSection title="Просроченные отчёты" lessons={grouped.overdue} stage="overdue" now={now} />
+              <LessonSection title="Нужно заполнить отчёт" lessons={grouped.report} stage="report" now={now} />
+              {(() => {
+                const todayLessons = grouped.scheduled.filter(l => isSameDay(new Date(l.date), now));
+                const tomorrowDate = new Date(now);
+                tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+                const tomorrowLessons = grouped.scheduled.filter(l => isSameDay(new Date(l.date), tomorrowDate));
+                const otherLessons = grouped.scheduled.filter(l => !isSameDay(new Date(l.date), now) && !isSameDay(new Date(l.date), tomorrowDate));
+
+                return (
+                  <>
+                    <LessonSection title="Запланированные на сегодня" lessons={todayLessons} stage="scheduled" now={now} />
+                    <LessonSection title="Запланированные на завтра" lessons={tomorrowLessons} stage="scheduled" now={now} />
+                    <LessonSection title={activeTab === "upcoming" ? "Ближайшие уроки" : "Запланированные предстоящие"} lessons={otherLessons} stage="scheduled" now={now} />
+                  </>
+                );
+              })()}
+              <LessonSection title="На проверке администратора" lessons={grouped.processing} stage="processing" now={now} />
+              <LessonSection title="Принято администратором" lessons={grouped.accepted} stage="accepted" now={now} />
+              <LessonSection title="Отменённые" lessons={grouped.cancelled} stage="cancelled" now={now} />
+            </div>
+          )
         )}
       </div>
     </>
+  );
+}
+
+function TeacherLessonSection({
+  name,
+  items,
+  now,
+  unassigned,
+}: {
+  name: string;
+  items: Array<{ lesson: TeacherOfflineClass; stage: LessonStage }>;
+  now: Date;
+  unassigned: boolean;
+}) {
+  return (
+    <section>
+      <div className="mb-4 flex min-w-0 items-center gap-3">
+        <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-2xl ${
+          unassigned ? "bg-amber-100 text-amber-900" : "bg-ink text-white"
+        }`}>
+          {unassigned ? <AlertCircle size={18} /> : <UsersRound size={18} />}
+        </span>
+        <div className="min-w-0">
+          <h2 className="truncate font-display text-2xl sm:text-3xl">{name}</h2>
+          <p className="text-xs font-semibold text-stone-400">
+            {items.length} {items.length === 1 ? "урок" : "уроков"} в выбранном разделе
+          </p>
+        </div>
+      </div>
+      <div className="space-y-3">
+        {items.map(({ lesson, stage }) => (
+          <LessonRow key={lesson.crmClassId} lesson={lesson} stage={stage} now={now} />
+        ))}
+      </div>
+    </section>
   );
 }
 

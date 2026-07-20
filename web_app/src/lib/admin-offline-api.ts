@@ -29,6 +29,33 @@ export const adminOfflineApi = {
     apiRequest<TeacherOfflineClassStudents>(
       `/admin/offline-lessons/${encodeURIComponent(crmClassId)}/students`,
     ),
+  startForTeacher: (crmClassId: string) =>
+    apiRequest(`/admin/offline-lessons/${encodeURIComponent(crmClassId)}/start-for-teacher`, {
+      method: "POST",
+    }),
+  submitForTeacher: (
+    crmClassId: string,
+    payload: {
+      topic?: string;
+      lessonGoals?: string;
+      lessonSummary?: string;
+      homeworkDraft?: string;
+      nextLessonFocus?: string;
+      materials?: Array<{ type?: string; url?: string; title?: string }>;
+      teacherOutcomeHint?: "held" | "not_held" | "no_submission";
+      trialReport?: TrialLessonReport;
+      comment?: string;
+    },
+  ) =>
+    apiRequest(`/admin/offline-lessons/${encodeURIComponent(crmClassId)}/submit-for-teacher`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  notHeldForTeacher: (crmClassId: string, comment: string) =>
+    apiRequest(`/admin/offline-lessons/${encodeURIComponent(crmClassId)}/not-held-for-teacher`, {
+      method: "POST",
+      body: JSON.stringify({ comment }),
+    }),
   attendance: (
     crmClassId: string,
     studentId: string,

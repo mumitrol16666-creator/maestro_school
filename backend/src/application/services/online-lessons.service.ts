@@ -4,7 +4,7 @@ import type {
   OnlineLessonRequestStatus,
 } from "@prisma/client";
 import { prisma } from "../../infrastructure/database/prisma.js";
-import { BadRequestError, NotFoundError } from "../../domain/errors.js";
+import { BadRequestError, ForbiddenError, NotFoundError } from "../../domain/errors.js";
 import { addMaestroCoins } from "./coins.service.js";
 import { createUserNotification } from "./notification.service.js";
 import { awardManualPoints } from "./points.service.js";
@@ -38,7 +38,15 @@ const requestSelect = {
     select: { id: true, firstName: true, lastName: true, middleName: true, email: true, phone: true, login: true },
   },
   teacher: {
-    select: { id: true, firstName: true, lastName: true, middleName: true, email: true },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      middleName: true,
+      email: true,
+      phone: true,
+      login: true,
+    },
   },
   assignment: {
     include: {
@@ -165,11 +173,16 @@ export async function listAdminOnlineLessonRequests(input: {
   page: number;
   limit: number;
   teacherId?: string;
+  unassigned?: boolean;
   mine?: boolean;
 }) {
   const where = {
     ...(input.status ? { status: input.status } : {}),
-    ...(input.mine && input.teacherId ? { teacherId: input.teacherId } : {}),
+    ...(input.unassigned
+      ? { teacherId: null }
+      : input.teacherId
+        ? { teacherId: input.teacherId }
+        : {}),
     ...(input.search
       ? {
           OR: [
@@ -208,6 +221,36 @@ export async function getAdminOnlineLessonRequest(requestId: string) {
   return item;
 }
 
+export async function getStaffOnlineLessonRequest(
+  requestId: string,
+  actor: { id: string; roleSlug: string },
+) {
+  const item = await getAdminOnlineLessonRequest(requestId);
+  if (actor.roleSlug === "teacher" && item.teacherId !== actor.id) {
+    throw new ForbiddenError("Этот онлайн-урок назначен другому преподавателю");
+  }
+  return item;
+}
+
+export async function listOnlineLessonTeachers() {
+  return prisma.user.findMany({
+    where: {
+      isActive: true,
+      deletedAt: null,
+      role: { slug: "teacher" },
+    },
+    orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      middleName: true,
+      email: true,
+      crmTeacherId: true,
+    },
+  });
+}
+
 export async function countPendingOnlineLessonRequests(params?: { teacherId?: string; includeNewRequests?: boolean }) {
   const teacherId = params?.teacherId;
   const includeNewRequests = params?.includeNewRequests ?? true;
@@ -219,7 +262,7 @@ export async function countPendingOnlineLessonRequests(params?: { teacherId?: st
       ? prisma.onlineLessonRequest.count({
           where: { teacherId, status: { in: ["assigned", "scheduled"] } },
         })
-      : prisma.onlineLessonRequest.count({ where: { status: "assigned" } }),
+      : prisma.onlineLessonRequest.count({ where: { status: { in: ["assigned", "scheduled"] } } }),
     countPendingOnlineAssignmentSubmissions(),
   ]);
 
@@ -234,10 +277,30 @@ async function requireManageableRequest(requestId: string) {
   return item;
 }
 
-export async function assignOnlineLessonRequest(requestId: string, teacherId: string) {
+export async function assignOnlineLessonRequest(
+  requestId: string,
+  teacherId: string,
+  options?: { allowReassign?: boolean },
+) {
   const item = await requireManageableRequest(requestId);
   if (item.status !== "new" && item.status !== "assigned") {
     throw new BadRequestError("Заявку нельзя взять в текущем статусе");
+  }
+  if (item.teacherId && item.teacherId !== teacherId && !options?.allowReassign) {
+    throw new ForbiddenError("Заявка уже назначена другому преподавателю");
+  }
+
+  const teacher = await prisma.user.findFirst({
+    where: {
+      id: teacherId,
+      isActive: true,
+      deletedAt: null,
+      role: { slug: "teacher" },
+    },
+    select: { id: true },
+  });
+  if (!teacher) {
+    throw new BadRequestError("Выбранный преподаватель не найден или отключён");
   }
 
   const updated = await prisma.onlineLessonRequest.update({
@@ -256,6 +319,9 @@ export async function scheduleOnlineLessonRequest(requestId: string, params: {
   const item = await requireManageableRequest(requestId);
   if (!["assigned", "scheduled", "new"].includes(item.status)) {
     throw new BadRequestError("Нельзя назначить урок в текущем статусе");
+  }
+  if (!item.teacherId) {
+    throw new BadRequestError("Сначала назначьте преподавателя");
   }
   const zoomUrl = params.zoomUrl.trim();
   if (!zoomUrl) throw new BadRequestError("Добавьте Zoom-ссылку");
@@ -518,6 +584,7 @@ export async function submitOnlineLessonAssignment(params: {
 
 export async function reviewOnlineLessonAssignment(submissionId: string, params: {
   reviewerId: string;
+  reviewerRole?: string;
   action: "approve" | "approve_with_remarks" | "return";
   reviewComment?: string;
   reviewPoints: number;
@@ -528,11 +595,26 @@ export async function reviewOnlineLessonAssignment(submissionId: string, params:
     where: { id: submissionId },
     include: {
       assignment: {
-        include: { request: { select: { id: true, studentId: true, directionTitle: true } } },
+        include: {
+          request: {
+            select: {
+              id: true,
+              studentId: true,
+              teacherId: true,
+              directionTitle: true,
+            },
+          },
+        },
       },
     },
   });
   if (!submission) throw new NotFoundError("Assignment submission");
+  if (
+    params.reviewerRole === "teacher"
+    && submission.assignment.request.teacherId !== params.reviewerId
+  ) {
+    throw new ForbiddenError("Это задание относится к уроку другого преподавателя");
+  }
   if (submission.status !== "submitted") {
     throw new BadRequestError("Работа уже проверена");
   }

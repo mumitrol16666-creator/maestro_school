@@ -7,7 +7,8 @@ import {
   countPendingOnlineAssignmentSubmissions,
   countPendingOnlineLessonRequests,
   createOnlineLessonRequest,
-  getAdminOnlineLessonRequest,
+  getStaffOnlineLessonRequest,
+  listOnlineLessonTeachers,
   getStudentOnlineLessonRequest,
   listAdminOnlineLessonRequests,
   listStudentOnlineLessonRequests,
@@ -17,6 +18,7 @@ import {
   submitOnlineLessonAssignment,
 } from "../../application/services/online-lessons.service.js";
 import { getStudentCoins } from "../../application/services/coins.service.js";
+import { BadRequestError } from "../../domain/errors.js";
 import {
   authenticate,
   requirePermission,
@@ -128,6 +130,8 @@ export async function onlineLessonsRoutes(app: FastifyInstance) {
         status: z.enum(["new", "assigned", "scheduled", "completed", "cancelled", "no_show"]).optional(),
         search: z.string().trim().optional(),
         mine: z.coerce.boolean().optional(),
+        teacherId: z.string().uuid().optional(),
+        unassigned: z.coerce.boolean().optional(),
         page: z.coerce.number().int().min(1).default(1),
         limit: z.coerce.number().int().min(1).max(50).default(20),
       }).parse(request.query);
@@ -138,7 +142,8 @@ export async function onlineLessonsRoutes(app: FastifyInstance) {
       const result = await listAdminOnlineLessonRequests({
         ...query,
         mine,
-        teacherId: mine ? authUser.id : undefined,
+        teacherId: mine ? authUser.id : query.teacherId,
+        unassigned: mine ? false : query.unassigned,
       });
       return {
         data: result.items,
@@ -157,10 +162,16 @@ export async function onlineLessonsRoutes(app: FastifyInstance) {
     { preHandler: manageGuards() },
     async (request) => ({
       data: await countPendingOnlineLessonRequests({
-        teacherId: request.user!.id,
+        teacherId: request.user!.roleSlug === "teacher" ? request.user!.id : undefined,
         includeNewRequests: request.user!.roleSlug !== "teacher",
       }),
     }),
+  );
+
+  app.get(
+    "/admin/online-lesson-teachers",
+    { preHandler: manageGuards() },
+    async () => ({ data: await listOnlineLessonTeachers() }),
   );
 
   app.get(
@@ -168,7 +179,12 @@ export async function onlineLessonsRoutes(app: FastifyInstance) {
     { preHandler: manageGuards() },
     async (request) => {
       const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
-      return { data: await getAdminOnlineLessonRequest(id) };
+      return {
+        data: await getStaffOnlineLessonRequest(id, {
+          id: request.user!.id,
+          roleSlug: request.user!.roleSlug,
+        }),
+      };
     },
   );
 
@@ -177,7 +193,17 @@ export async function onlineLessonsRoutes(app: FastifyInstance) {
     { preHandler: manageGuards() },
     async (request) => {
       const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
-      return { data: await assignOnlineLessonRequest(id, request.user!.id) };
+      const body = z.object({ teacherId: z.string().uuid().optional() }).parse(request.body ?? {});
+      const actor = request.user!;
+      const teacherId = actor.roleSlug === "teacher" ? actor.id : body.teacherId;
+      if (!teacherId) {
+        throw new BadRequestError("Выберите преподавателя");
+      }
+      return {
+        data: await assignOnlineLessonRequest(id, teacherId, {
+          allowReassign: actor.roleSlug !== "teacher",
+        }),
+      };
     },
   );
 
@@ -186,6 +212,10 @@ export async function onlineLessonsRoutes(app: FastifyInstance) {
     { preHandler: manageGuards() },
     async (request) => {
       const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+      await getStaffOnlineLessonRequest(id, {
+        id: request.user!.id,
+        roleSlug: request.user!.roleSlug,
+      });
       const body = z.object({
         scheduledAt: z.coerce.date(),
         zoomUrl: z.string().trim().url().max(1024),
@@ -199,6 +229,10 @@ export async function onlineLessonsRoutes(app: FastifyInstance) {
     { preHandler: manageGuards() },
     async (request) => {
       const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+      await getStaffOnlineLessonRequest(id, {
+        id: request.user!.id,
+        roleSlug: request.user!.roleSlug,
+      });
       return { data: await cancelOnlineLessonRequest(id) };
     },
   );
@@ -208,6 +242,10 @@ export async function onlineLessonsRoutes(app: FastifyInstance) {
     { preHandler: manageGuards() },
     async (request) => {
       const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+      await getStaffOnlineLessonRequest(id, {
+        id: request.user!.id,
+        roleSlug: request.user!.roleSlug,
+      });
       return { data: await markOnlineLessonNoShow(id) };
     },
   );
@@ -217,6 +255,10 @@ export async function onlineLessonsRoutes(app: FastifyInstance) {
     { preHandler: manageGuards() },
     async (request) => {
       const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+      await getStaffOnlineLessonRequest(id, {
+        id: request.user!.id,
+        roleSlug: request.user!.roleSlug,
+      });
       const body = completeBodySchema.parse(request.body);
       return {
         data: await completeOnlineLessonRequest(id, {
@@ -243,6 +285,7 @@ export async function onlineLessonsRoutes(app: FastifyInstance) {
       return {
         data: await reviewOnlineLessonAssignment(id, {
           reviewerId: request.user!.id,
+          reviewerRole: request.user!.roleSlug,
           ...body,
         }),
       };

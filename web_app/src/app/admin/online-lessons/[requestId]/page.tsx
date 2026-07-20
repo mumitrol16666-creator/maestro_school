@@ -1,9 +1,10 @@
 "use client";
 
-import { ArrowLeft, CheckCircle2, LoaderCircle, RotateCcw } from "lucide-react";
+import { ArrowLeft, CheckCircle2, LoaderCircle, RotateCcw, UserRound } from "lucide-react";
 import Link from "next/link";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import { useAuth } from "@/components/auth-provider";
 import { inputClass, primaryButton, secondaryButton } from "@/components/admin-ui";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
 import { useApiResource } from "@/hooks/use-api-resource";
@@ -15,7 +16,13 @@ import { onlineLessonsApi } from "@/lib/online-lessons-api";
 
 export default function AdminOnlineLessonDetailPage() {
   const { requestId } = useParams<{ requestId: string }>();
+  const { user } = useAuth();
+  const isTeacher = user?.role === "teacher";
   const resource = useApiResource(() => onlineLessonsApi.adminGet(requestId), [requestId]);
+  const teachersResource = useApiResource(
+    () => (isTeacher ? Promise.resolve([]) : onlineLessonsApi.teachers()),
+    [isTeacher],
+  );
   const [acting, setActing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -41,6 +48,12 @@ export default function AdminOnlineLessonDetailPage() {
   const [reviewPoints, setReviewPoints] = useState(0);
   const [reviewCoins, setReviewCoins] = useState(0);
   const [reviewCoinsReason, setReviewCoinsReason] = useState("");
+  const [selectedTeacherId, setSelectedTeacherId] = useState("");
+  const item = resource.data;
+
+  useEffect(() => {
+    if (item?.teacherId) setSelectedTeacherId(item.teacherId);
+  }, [item?.teacherId]);
 
   async function runAction(action: () => Promise<void>) {
     setActing(true);
@@ -58,9 +71,8 @@ export default function AdminOnlineLessonDetailPage() {
 
   if (resource.loading) return <LoadingState label="Открываем заявку" />;
   if (resource.error) return <ErrorState message={resource.error} retry={resource.reload} />;
-  if (!resource.data) return <EmptyState title="Заявка не найдена" description="Возможно, она была удалена." />;
+  if (!item) return <EmptyState title="Заявка не найдена" description="Возможно, она была удалена." />;
 
-  const item = resource.data;
   const studentName = formatFio(item.student);
   const pendingSubmission = item.assignment?.submissions.find((sub) => sub.status === "submitted") ?? null;
 
@@ -96,6 +108,16 @@ export default function AdminOnlineLessonDetailPage() {
           <Info label="Уровень" value={item.level} />
           <Info label="Удобное время" value={item.preferredTime} />
           <Info label="Создана" value={new Intl.DateTimeFormat("ru-RU").format(new Date(item.createdAt))} />
+          <Info label="Преподаватель" value={item.teacher ? formatFio(item.teacher) : "Не назначен"} />
+          {item.scheduledAt ? (
+            <Info
+              label="Дата урока"
+              value={new Intl.DateTimeFormat("ru-RU", {
+                dateStyle: "medium",
+                timeStyle: "short",
+              }).format(new Date(item.scheduledAt))}
+            />
+          ) : null}
         </div>
         {item.comment && <p className="mt-6 rounded-2xl bg-stone-50 p-4 text-sm leading-7 text-stone-600">{item.comment}</p>}
 
@@ -103,7 +125,7 @@ export default function AdminOnlineLessonDetailPage() {
         {error && <p className="mt-4 rounded-2xl bg-red-50 p-4 text-sm font-semibold text-red-700">{error}</p>}
 
         <div className="mt-6 flex flex-wrap gap-2">
-          {item.status === "new" && (
+          {isTeacher && item.status === "new" && (
             <button disabled={acting} onClick={() => void runAction(async () => {
               await onlineLessonsApi.assign(requestId);
               setMessage("Заявка взята в работу и перемещена в «Уроки в работе».");
@@ -124,7 +146,44 @@ export default function AdminOnlineLessonDetailPage() {
         </div>
       </section>
 
-      {["new", "assigned", "scheduled"].includes(item.status) && (
+      {!isTeacher && ["new", "assigned"].includes(item.status) ? (
+        <section className="mt-6 rounded-[28px] border border-violet-200 bg-violet-50 p-6">
+          <div className="flex items-center gap-3">
+            <span className="grid h-11 w-11 place-items-center rounded-2xl bg-white text-violet-800">
+              <UserRound size={19} />
+            </span>
+            <div>
+              <h2 className="font-display text-2xl">Назначить преподавателя</h2>
+              <p className="mt-1 text-sm text-violet-900/70">Урок останется в общей очереди, но будет закреплён за выбранным педагогом.</p>
+            </div>
+          </div>
+          <div className="mt-5 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+            <select
+              value={selectedTeacherId}
+              onChange={(event) => setSelectedTeacherId(event.target.value)}
+              className={inputClass}
+            >
+              <option value="">Выберите преподавателя</option>
+              {teachersResource.data?.map((teacher) => (
+                <option key={teacher.id} value={teacher.id}>{formatFio(teacher)}</option>
+              ))}
+            </select>
+            <button
+              type="button"
+              disabled={acting || !selectedTeacherId}
+              onClick={() => void runAction(async () => {
+                await onlineLessonsApi.assign(requestId, selectedTeacherId);
+                setMessage(item.teacherId ? "Преподаватель изменён." : "Преподаватель назначен.");
+              })}
+              className={primaryButton}
+            >
+              {item.teacherId ? "Сменить" : "Назначить"}
+            </button>
+          </div>
+        </section>
+      ) : null}
+
+      {["new", "assigned", "scheduled"].includes(item.status) && item.teacherId && (
         <section className="mt-6 rounded-[28px] border border-stone-200 bg-white p-6">
           <h2 className="font-display text-2xl">Назначить урок</h2>
           <form
@@ -149,6 +208,12 @@ export default function AdminOnlineLessonDetailPage() {
           </form>
         </section>
       )}
+
+      {["new", "assigned", "scheduled"].includes(item.status) && !item.teacherId ? (
+        <section className="mt-6 rounded-[24px] border border-amber-200 bg-amber-50 p-5 text-sm text-amber-950">
+          Сначала назначьте преподавателя. После этого появятся дата, ссылка на урок и форма завершения.
+        </section>
+      ) : null}
 
       {["assigned", "scheduled"].includes(item.status) && (
         <section className="mt-6 rounded-[28px] border border-stone-200 bg-white p-6">
@@ -240,6 +305,32 @@ export default function AdminOnlineLessonDetailPage() {
         </section>
       )}
 
+      {item.status === "completed" ? (
+        <section className="mt-6 rounded-[28px] border border-emerald-200 bg-white p-6 shadow-sm sm:p-8">
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-700">Урок завершён</p>
+          <h2 className="font-display mt-2 text-3xl">Итоги занятия</h2>
+          <div className="mt-5 grid gap-4">
+            <LessonResult label="Что проходили" value={item.coveredTopics} />
+            <LessonResult label="Что получилось" value={item.whatWorked} />
+            <LessonResult label="Что доработать" value={item.whatToImprove} />
+            {item.completionComment ? (
+              <LessonResult label="Комментарий преподавателя" value={item.completionComment} />
+            ) : null}
+          </div>
+          <div className="mt-5 flex flex-wrap gap-2 text-xs font-bold">
+            <span className="rounded-full bg-stone-100 px-3 py-2">Баллы: {item.lessonPoints}</span>
+            <span className="rounded-full bg-amber-50 px-3 py-2 text-amber-900">Maestro Coins: {item.lessonCoins}</span>
+          </div>
+          {item.assignment ? (
+            <div className="mt-6 rounded-[22px] border border-stone-200 bg-stone-50 p-5">
+              <p className="text-xs font-bold uppercase tracking-wider text-stone-400">Домашнее задание</p>
+              <h3 className="mt-2 text-lg font-bold text-ink">{item.assignment.title}</h3>
+              <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-stone-600">{item.assignment.description}</p>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
       {pendingSubmission && (
         <section className="mt-6 rounded-[28px] border border-stone-200 bg-white p-6">
           <h2 className="font-display text-2xl">Проверка домашнего задания</h2>
@@ -292,6 +383,15 @@ function Info({ label, value }: { label: string; value: string }) {
     <div className="rounded-2xl bg-stone-50 p-4">
       <p className="text-xs font-bold uppercase tracking-wider text-stone-400">{label}</p>
       <p className="mt-1 text-sm font-semibold text-stone-700">{value}</p>
+    </div>
+  );
+}
+
+function LessonResult({ label, value }: { label: string; value: string | null }) {
+  return (
+    <div>
+      <p className="text-xs font-bold uppercase tracking-wider text-stone-400">{label}</p>
+      <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-stone-700">{value || "Не указано"}</p>
     </div>
   );
 }

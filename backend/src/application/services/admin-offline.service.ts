@@ -3,17 +3,42 @@ import {
   fetchClassStudents,
   fetchAdminOfflineClasses,
   fetchPendingReviewClasses,
+  postTeacherMarkNotHeld,
+  postTeacherStart,
+  postTeacherSubmit,
   postAdminApproveClass,
   postAdminAttendance,
   postAdminReopenClass,
   postAdminReturnClass,
+  type TeacherSubmitPayload,
 } from "../../infrastructure/crm/crm-client.js";
+import { BadRequestError } from "../../domain/errors.js";
 import {
   mergeOfflineLessonStudentChecks,
   saveOfflineLessonStudentCheck,
   type OfflineHomeworkReviewInput,
 } from "./offline-lesson-student-check.service.js";
+import { validateOfflineLessonSubmission } from "./offline-lesson-submission-policy.js";
 import { generateWhatsappHomeworkDrafts } from "./whatsapp-homework-message.service.js";
+
+type AdminOfflineLesson = {
+  teacher?: { crmTeacherId?: string; name?: string } | null;
+  classType?: string | null;
+  group?: unknown;
+  [key: string]: unknown;
+};
+
+async function getLessonWithAssignedTeacher(crmClassId: string) {
+  const lesson = await fetchClassCard(crmClassId) as AdminOfflineLesson;
+  const crmTeacherId = lesson.teacher?.crmTeacherId;
+  if (!crmTeacherId) {
+    throw new BadRequestError(
+      "У урока не назначен преподаватель. Сначала назначьте его в расписании CRM.",
+      "LESSON_TEACHER_REQUIRED",
+    );
+  }
+  return { lesson, crmTeacherId };
+}
 
 export async function getPendingReviewAgenda() {
   const result = await fetchPendingReviewClasses();
@@ -31,6 +56,38 @@ export async function getAdminOfflineClass(crmClassId: string) {
 export async function getAdminOfflineClassStudents(crmClassId: string) {
   const roster = await fetchClassStudents(crmClassId);
   return mergeOfflineLessonStudentChecks(crmClassId, roster);
+}
+
+export async function adminOfflineStart(crmClassId: string) {
+  const { crmTeacherId } = await getLessonWithAssignedTeacher(crmClassId);
+  return postTeacherStart(crmClassId, crmTeacherId);
+}
+
+export async function adminOfflineSubmit(
+  crmClassId: string,
+  payload: Omit<TeacherSubmitPayload, "crmTeacherId">,
+) {
+  const { lesson, crmTeacherId } = await getLessonWithAssignedTeacher(crmClassId);
+  const roster = await mergeOfflineLessonStudentChecks(crmClassId, await fetchClassStudents(crmClassId));
+  const validation = validateOfflineLessonSubmission({
+    lesson,
+    students: roster.students,
+    payload,
+  });
+  if (!validation.valid) {
+    throw new BadRequestError(validation.message, validation.code);
+  }
+
+  return postTeacherSubmit(crmClassId, {
+    ...payload,
+    teacherOutcomeHint: validation.outcome,
+    crmTeacherId,
+  });
+}
+
+export async function adminOfflineMarkNotHeld(crmClassId: string, comment: string) {
+  const { crmTeacherId } = await getLessonWithAssignedTeacher(crmClassId);
+  return postTeacherMarkNotHeld(crmClassId, { crmTeacherId, comment });
 }
 
 export async function adminOfflineSetAttendance(

@@ -3,6 +3,7 @@ import { AppError } from "../../domain/errors.js";
 
 type CrmResponse<T> = { success: boolean; data?: T; error?: string };
 type TrialLessonReportPayload = Record<string, unknown>;
+const CRM_REQUEST_TIMEOUT_MS = 20_000;
 
 function integrationHeaders(): Record<string, string> {
   const secret = process.env.INTEGRATION_SERVICE_SECRET;
@@ -21,11 +22,22 @@ function crmBaseUrl(): string {
 }
 
 async function crmGet<T>(path: string): Promise<T> {
-  const response = await fetch(`${crmBaseUrl()}${path}`, {
-    headers: integrationHeaders(),
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${crmBaseUrl()}${path}`, {
+      headers: integrationHeaders(),
+      signal: AbortSignal.timeout(CRM_REQUEST_TIMEOUT_MS),
+    });
+  } catch (error) {
+    const timedOut = error instanceof Error && error.name === "TimeoutError";
+    throw new AppError(
+      timedOut ? 504 : 502,
+      timedOut ? "CRM не ответила вовремя. Проверьте состояние урока и повторите действие." : "Не удалось связаться с CRM.",
+      timedOut ? "CRM_TIMEOUT" : "CRM_UNAVAILABLE",
+    );
+  }
 
-  const body = (await response.json()) as CrmResponse<T>;
+  const body = (await response.json().catch(() => ({}))) as CrmResponse<T>;
   if (!response.ok || !body.success || !body.data) {
     throw new AppError(response.status, body.error || `CRM request failed (${response.status})`);
   }
@@ -33,16 +45,27 @@ async function crmGet<T>(path: string): Promise<T> {
 }
 
 async function crmPost<T>(path: string, payload: Record<string, unknown>): Promise<T> {
-  const response = await fetch(`${crmBaseUrl()}${path}`, {
-    method: "POST",
-    headers: {
-      ...integrationHeaders(),
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${crmBaseUrl()}${path}`, {
+      method: "POST",
+      headers: {
+        ...integrationHeaders(),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(CRM_REQUEST_TIMEOUT_MS),
+    });
+  } catch (error) {
+    const timedOut = error instanceof Error && error.name === "TimeoutError";
+    throw new AppError(
+      timedOut ? 504 : 502,
+      timedOut ? "CRM не ответила вовремя. Проверяем, сохранилось ли действие." : "Не удалось связаться с CRM.",
+      timedOut ? "CRM_TIMEOUT" : "CRM_UNAVAILABLE",
+    );
+  }
 
-  const body = (await response.json()) as CrmResponse<T>;
+  const body = (await response.json().catch(() => ({}))) as CrmResponse<T>;
   if (!response.ok || !body.success || !body.data) {
     throw new AppError(response.status, body.error || `CRM request failed (${response.status})`);
   }

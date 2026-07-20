@@ -28,7 +28,7 @@ import { SuccessModal } from "@/components/success-modal";
 import { PageHeader } from "@/components/page-header";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { ApiError } from "@/lib/api-client";
-import { isOfflineCoordinatorRole } from "@/lib/role-labels";
+import { isContentAdminRole, isOfflineCoordinatorRole } from "@/lib/role-labels";
 import { adminOfflineApi } from "@/lib/admin-offline-api";
 import { teacherOfflineApi } from "@/lib/teacher-offline-api";
 import type {
@@ -178,6 +178,7 @@ export default function AdminOfflineLessonDetailPage() {
   const crmClassId = params.crmClassId;
   const { user } = useAuth();
   const isAdmin = isOfflineCoordinatorRole(user?.role);
+  const canActForTeacher = isContentAdminRole(user?.role);
 
   const lessonResource = useApiResource(
     () => (isAdmin ? adminOfflineApi.classCard(crmClassId) : teacherOfflineApi.classCard(crmClassId)),
@@ -209,7 +210,11 @@ export default function AdminOfflineLessonDetailPage() {
   const students = studentsResource.data?.students ?? [];
   const isTrialLesson = lesson?.classType === "trial";
   const isTrialReportReady = isTrialLesson ? trialReportReady(trialReport) : true;
-  const canEditTeacherReport = !isAdmin && lesson && lesson.status === "started";
+  const canEditTeacherReport = Boolean(
+    lesson
+      && lesson.status === "started"
+      && (!isAdmin || canActForTeacher),
+  );
   const canEditAdminReview = isAdmin && lesson?.status === "pending_admin_review";
   const canEditReport = Boolean(canEditTeacherReport || canEditAdminReview);
   const canManageAttendance = canEditReport;
@@ -302,13 +307,16 @@ export default function AdminOfflineLessonDetailPage() {
   async function runAction(action: string, fn: () => Promise<unknown>) {
     setBusy(action);
     setError(null);
+    setSuccess(null);
     try {
       await fn();
-      await Promise.all([lessonResource.reload(), studentsResource.reload()]);
+      await Promise.allSettled([lessonResource.reload(), studentsResource.reload()]);
       if (action === "submit") {
         setSuccess({
           title: "Урок отправлен на проверку",
-          description: "Посещаемость, результат домашнего задания и отчёт сохранены. Администратор проверит урок и опубликует новое задание ученику.",
+          description: canActForTeacher
+            ? "Отчёт сохранён за назначенного преподавателя. Теперь урок можно проверить и подтвердить."
+            : "Посещаемость, результат домашнего задания и отчёт сохранены. Администратор проверит урок и опубликует новое задание ученику.",
         });
       } else if (action === "submit-absence") {
         setSuccess({
@@ -346,8 +354,25 @@ export default function AdminOfflineLessonDetailPage() {
           description: "Теперь его можно проверить и оформить заново.",
         });
       }
+      return true;
     } catch (reason) {
+      if (action === "submit" || action === "submit-absence") {
+        const refreshedLesson = await (isAdmin
+          ? adminOfflineApi.classCard(crmClassId)
+          : teacherOfflineApi.classCard(crmClassId)
+        ).catch(() => null);
+        if (refreshedLesson?.status === "pending_admin_review") {
+          lessonResource.setData(refreshedLesson);
+          await studentsResource.reload();
+          setSuccess({
+            title: action === "submit-absence" ? "Отсутствие передано администратору" : "Урок отправлен на проверку",
+            description: "Ответ сервера прервался, но CRM подтвердила, что данные сохранены.",
+          });
+          return true;
+        }
+      }
       setError(reason instanceof ApiError ? reason.message : "Не удалось выполнить действие");
+      return false;
     } finally {
       setBusy(null);
     }
@@ -393,26 +418,29 @@ export default function AdminOfflineLessonDetailPage() {
   }
 
   async function saveStudentChecks() {
-    await Promise.all(students.map((student) => {
-      const draft = draftFor(student);
-      const attended = ["present", "late"].includes(draft.attendanceStatus);
-      const homeworkReview = isIndividualLesson && attended ? draft.homeworkReview : undefined;
-      return isAdmin
-        ? adminOfflineApi.attendance(
-            crmClassId,
-            student.crmStudentId,
-            draft.attendanceStatus,
-            draft.teacherNote.trim() || undefined,
-            homeworkReview,
-          )
-        : teacherOfflineApi.attendance(
-            crmClassId,
-            student.crmStudentId,
-            draft.attendanceStatus,
-            draft.teacherNote.trim() || undefined,
-            homeworkReview,
-          );
-    }));
+    const batchSize = 3;
+    for (let index = 0; index < students.length; index += batchSize) {
+      await Promise.all(students.slice(index, index + batchSize).map((student) => {
+        const draft = draftFor(student);
+        const attended = ["present", "late"].includes(draft.attendanceStatus);
+        const homeworkReview = isIndividualLesson && attended ? draft.homeworkReview : undefined;
+        return isAdmin
+          ? adminOfflineApi.attendance(
+              crmClassId,
+              student.crmStudentId,
+              draft.attendanceStatus,
+              draft.teacherNote.trim() || undefined,
+              homeworkReview,
+            )
+          : teacherOfflineApi.attendance(
+              crmClassId,
+              student.crmStudentId,
+              draft.attendanceStatus,
+              draft.teacherNote.trim() || undefined,
+              homeworkReview,
+            );
+      }));
+    }
   }
 
   function handleSubmit(event: FormEvent) {
@@ -427,11 +455,10 @@ export default function AdminOfflineLessonDetailPage() {
   }
 
   async function confirmSubmit() {
-    setSubmitConfirmationOpen(false);
     const absenceOnly = allStudentsAbsent;
-    await runAction(absenceOnly ? "submit-absence" : "submit", async () => {
+    const submitted = await runAction(absenceOnly ? "submit-absence" : "submit", async () => {
       await saveStudentChecks();
-      return teacherOfflineApi.submit(crmClassId, {
+      const payload = {
         topic: isTrialLesson || absenceOnly ? undefined : topic.trim(),
         lessonGoals: absenceOnly ? undefined : lessonGoals.trim() || undefined,
         lessonSummary: isTrialLesson || absenceOnly ? undefined : lessonSummary.trim(),
@@ -446,16 +473,25 @@ export default function AdminOfflineLessonDetailPage() {
         trialReport: isTrialLesson && !absenceOnly
           ? { ...trialReport, capturedAt: new Date().toISOString() }
           : undefined,
-        teacherOutcomeHint: absenceOnly ? "no_submission" : "held",
-      });
+        teacherOutcomeHint: absenceOnly ? "no_submission" as const : "held" as const,
+      };
+      return canActForTeacher
+        ? adminOfflineApi.submitForTeacher(crmClassId, payload)
+        : teacherOfflineApi.submit(crmClassId, payload);
     });
+    if (submitted) setSubmitConfirmationOpen(false);
   }
 
   async function confirmNotHeld() {
     const reason = notHeldReason.trim();
     if (reason.length < 3) return;
     setNotHeldOpen(false);
-    await runAction("not-held", () => teacherOfflineApi.notHeld(crmClassId, reason));
+    await runAction(
+      "not-held",
+      () => canActForTeacher
+        ? adminOfflineApi.notHeldForTeacher(crmClassId, reason)
+        : teacherOfflineApi.notHeld(crmClassId, reason),
+    );
     setNotHeldReason("");
   }
 
@@ -555,7 +591,27 @@ export default function AdminOfflineLessonDetailPage() {
             {lesson.room.name}
           </span>
         ) : null}
+        {lesson.teacher?.name ? (
+          <span className="rounded-full bg-violet-50 px-4 py-2 text-xs font-bold text-violet-900">
+            Преподаватель: {lesson.teacher.name}
+          </span>
+        ) : (
+          <span className="rounded-full bg-red-50 px-4 py-2 text-xs font-bold text-red-800">
+            Преподаватель не назначен
+          </span>
+        )}
       </div>
+
+      {canActForTeacher && lesson.teacher?.name && ["scheduled", "started"].includes(lesson.status) ? (
+        <div className="mb-6 rounded-[24px] border border-violet-200 bg-violet-50 p-5">
+          <p className="text-sm font-bold text-violet-950">
+            Вы работаете за преподавателя: {lesson.teacher.name}
+          </p>
+          <p className="mt-2 text-sm leading-6 text-violet-900/75">
+            Отчёт и посещаемость будут записаны в этот урок. Преподаватель урока и его начисления не изменятся.
+          </p>
+        </div>
+      ) : null}
 
       {isNotHeld ? (
         <div className="mb-6 rounded-[24px] border border-red-200 bg-red-50 p-5">
@@ -711,7 +767,7 @@ export default function AdminOfflineLessonDetailPage() {
             </label>
             </div>
 
-            {!isAdmin ? (
+            {canEditTeacherReport ? (
               <div className="mt-6">
                 <button
                   type="submit"
@@ -719,7 +775,11 @@ export default function AdminOfflineLessonDetailPage() {
                   className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-ink px-5 py-3 text-sm font-bold text-white disabled:opacity-50 sm:w-auto"
                 >
                   {["submit", "submit-absence"].includes(busy ?? "") ? <LoaderCircle className="animate-spin" size={16} /> : <Send size={16} />}
-                  {allStudentsAbsent ? "Передать отметку об отсутствии" : "Отправить на проверку"}
+                  {allStudentsAbsent
+                    ? "Передать отметку об отсутствии"
+                    : canActForTeacher
+                      ? "Сдать за преподавателя"
+                      : "Отправить на проверку"}
                 </button>
                 {teacherSubmissionIssue ? (
                   <p className="mt-3 max-w-xl text-sm font-semibold text-amber-800">{teacherSubmissionIssue}</p>
@@ -731,14 +791,19 @@ export default function AdminOfflineLessonDetailPage() {
         </section>
 
         <aside className="order-first xl:order-none space-y-4">
-          {!isAdmin && lesson.status === "scheduled" ? (
+          {lesson.status === "scheduled" && (!isAdmin || canActForTeacher) ? (
             <button
-              disabled={busy != null}
-              onClick={() => void runAction("start", () => teacherOfflineApi.start(crmClassId))}
+              disabled={busy != null || !lesson.teacher?.crmTeacherId}
+              onClick={() => void runAction(
+                "start",
+                () => canActForTeacher
+                  ? adminOfflineApi.startForTeacher(crmClassId)
+                  : teacherOfflineApi.start(crmClassId),
+              )}
               className="flex w-full items-center justify-center gap-2 rounded-[24px] bg-emerald-700 px-5 py-4 text-sm font-bold text-white disabled:opacity-50"
             >
               {busy === "start" ? <LoaderCircle className="animate-spin" size={16} /> : <Play size={16} />}
-              Начать урок
+              {canActForTeacher ? "Начать за преподавателя" : "Начать урок"}
             </button>
           ) : null}
 
@@ -855,7 +920,7 @@ export default function AdminOfflineLessonDetailPage() {
         />
       ) : null}
 
-      {!isAdmin && canEditTeacherReport ? (
+      {canEditTeacherReport ? (
         <section className="mt-8 flex flex-col gap-4 border-t border-stone-200 pt-7 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-bold text-stone-700">Урок не проводился?</p>
@@ -881,6 +946,7 @@ export default function AdminOfflineLessonDetailPage() {
         studentsCount={students.length}
         absenceOnly={allStudentsAbsent}
         busy={["submit", "submit-absence"].includes(busy ?? "")}
+        error={error}
         onClose={() => setSubmitConfirmationOpen(false)}
         onConfirm={() => void confirmSubmit()}
       />
@@ -1116,6 +1182,7 @@ function SubmitLessonConfirmation({
   studentsCount,
   absenceOnly,
   busy,
+  error,
   onClose,
   onConfirm,
 }: {
@@ -1124,6 +1191,7 @@ function SubmitLessonConfirmation({
   studentsCount: number;
   absenceOnly: boolean;
   busy: boolean;
+  error: string | null;
   onClose: () => void;
   onConfirm: () => void;
 }) {
@@ -1159,6 +1227,11 @@ function SubmitLessonConfirmation({
             Отмечено учеников: {studentsCount}
           </p>
         </div>
+        {error ? (
+          <p className="mt-4 rounded-2xl border border-red-100 bg-red-50 p-4 text-sm font-semibold text-red-700">
+            {error}
+          </p>
+        ) : null}
         <div className="mt-6 grid grid-cols-2 gap-3">
           <button
             type="button"

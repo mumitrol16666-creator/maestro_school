@@ -22,6 +22,15 @@ export interface OnlineLessonUserSummary {
   login: string;
 }
 
+export interface OnlineLessonTeacherOption {
+  id: string;
+  firstName: string;
+  lastName: string;
+  middleName?: string | null;
+  email?: string | null;
+  crmTeacherId?: string | null;
+}
+
 export interface OnlineLessonAssignmentMaterial {
   id: string;
   type: "youtube" | "link" | "text" | "pdf" | "image" | "file";

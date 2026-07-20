@@ -2,20 +2,49 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import {
   adminOfflineApprove,
+  adminOfflineMarkNotHeld,
   adminOfflineReopen,
   adminOfflineReturn,
   adminOfflineSetAttendance,
+  adminOfflineStart,
+  adminOfflineSubmit,
   adminOfflineWhatsappDrafts,
   getAdminOfflineClass,
   getAdminOfflineAgenda,
   getAdminOfflineClassStudents,
   getPendingReviewAgenda,
 } from "../../application/services/admin-offline.service.js";
-import { authenticate, requireOfflineCoordinator, requirePermission } from "../guards/auth.guards.js";
+import {
+  authenticate,
+  requireContentAdmin,
+  requireOfflineCoordinator,
+  requirePermission,
+} from "../guards/auth.guards.js";
 import { offlineLessonStudentCheckSchema } from "./offline-lesson.schemas.js";
 
 const readGuards = [authenticate, requireOfflineCoordinator, requirePermission("offline_school.read")];
 const writeGuards = [authenticate, requireOfflineCoordinator, requirePermission("offline_school.write")];
+const actForTeacherGuards = [
+  authenticate,
+  requireContentAdmin,
+  requirePermission("offline_school.write"),
+];
+
+const teacherReportSchema = z.object({
+  topic: z.string().max(5000).optional(),
+  lessonGoals: z.string().max(5000).optional(),
+  lessonSummary: z.string().max(10000).optional(),
+  homeworkDraft: z.string().max(10000).optional(),
+  nextLessonFocus: z.string().max(5000).optional(),
+  comment: z.string().max(5000).optional(),
+  teacherOutcomeHint: z.enum(["held", "not_held", "no_submission"]).optional(),
+  trialReport: z.record(z.string(), z.unknown()).optional(),
+  materials: z.array(z.object({
+    type: z.string().optional(),
+    url: z.string().optional(),
+    title: z.string().optional(),
+  })).optional(),
+});
 
 export async function adminOfflineRoutes(app: FastifyInstance) {
   app.get(
@@ -63,6 +92,35 @@ export async function adminOfflineRoutes(app: FastifyInstance) {
           body.homeworkReview,
         ),
       };
+    },
+  );
+
+  app.post(
+    "/admin/offline-lessons/:crmClassId/start-for-teacher",
+    { preHandler: actForTeacherGuards },
+    async (request) => {
+      const { crmClassId } = z.object({ crmClassId: z.string().min(1) }).parse(request.params);
+      return { data: await adminOfflineStart(crmClassId) };
+    },
+  );
+
+  app.post(
+    "/admin/offline-lessons/:crmClassId/submit-for-teacher",
+    { preHandler: actForTeacherGuards },
+    async (request) => {
+      const { crmClassId } = z.object({ crmClassId: z.string().min(1) }).parse(request.params);
+      const body = teacherReportSchema.parse(request.body ?? {});
+      return { data: await adminOfflineSubmit(crmClassId, body) };
+    },
+  );
+
+  app.post(
+    "/admin/offline-lessons/:crmClassId/not-held-for-teacher",
+    { preHandler: actForTeacherGuards },
+    async (request) => {
+      const { crmClassId } = z.object({ crmClassId: z.string().min(1) }).parse(request.params);
+      const body = z.object({ comment: z.string().trim().min(3).max(5000) }).parse(request.body ?? {});
+      return { data: await adminOfflineMarkNotHeld(crmClassId, body.comment) };
     },
   );
 
