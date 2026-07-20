@@ -17,7 +17,7 @@ import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
 import { PageHeader } from "@/components/page-header";
 import { useAuth } from "@/components/auth-provider";
 import { useApiResource } from "@/hooks/use-api-resource";
-import { isContentAdminRole } from "@/lib/role-labels";
+import { isOfflineCoordinatorRole } from "@/lib/role-labels";
 import { adminOfflineApi } from "@/lib/admin-offline-api";
 import { teacherOfflineApi } from "@/lib/teacher-offline-api";
 import type { TeacherOfflineClass } from "@/types/teacher-offline";
@@ -193,7 +193,7 @@ function dedupeLessons(lessons: TeacherOfflineClass[]) {
 
 export default function AdminOfflineLessonsPage() {
   const { user } = useAuth();
-  const isAdmin = isContentAdminRole(user?.role);
+  const isAdmin = isOfflineCoordinatorRole(user?.role);
   const [activeTab, setActiveTab] = useState<LessonTab>("today");
   const [period, setPeriod] = useState(() => monthPeriod());
   const selectedPeriod = periodQuery(period);

@@ -4,6 +4,7 @@ import type {
   TeacherOfflineClassStudents,
   OfflineHomeworkReview,
   TrialLessonReport,
+  WhatsappHomeworkMessageDraft,
 } from "@/types/teacher-offline";
 
 export type PendingReviewAgenda = {
@@ -66,5 +67,10 @@ export const adminOfflineApi = {
     apiRequest<Record<string, unknown>>(
       `/admin/offline-lessons/${encodeURIComponent(crmClassId)}/reopen`,
       { method: "POST", body: JSON.stringify({ reason }) },
+    ),
+  whatsappHomeworkDrafts: (crmClassId: string, studentId?: string) =>
+    apiRequest<{ drafts: WhatsappHomeworkMessageDraft[] }>(
+      `/admin/offline-lessons/${encodeURIComponent(crmClassId)}/whatsapp-homework-drafts`,
+      { method: "POST", body: JSON.stringify({ studentId }) },
     ),
 };

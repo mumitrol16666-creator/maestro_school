@@ -1,7 +1,7 @@
 import type { FastifyRequest } from "fastify";
 import { UnauthorizedError, ForbiddenError } from "../../domain/errors.js";
 import { findUserWithRoleById } from "../../application/repositories/auth.repository.js";
-import { isContentAdminRole } from "../../domain/cms-access.js";
+import { isContentAdminRole, isOfflineCoordinatorRole } from "../../domain/cms-access.js";
 
 /**
  * Auth guards as plain functions — safe inside encapsulated route plugins.
@@ -48,6 +48,13 @@ export async function requireContentAdmin(request: FastifyRequest): Promise<void
   if (!request.user) throw new UnauthorizedError();
   if (!isContentAdminRole(request.user.roleSlug)) {
     throw new ForbiddenError("Content CMS is available only to Admin and Owner");
+  }
+}
+
+export async function requireOfflineCoordinator(request: FastifyRequest): Promise<void> {
+  if (!request.user) throw new UnauthorizedError();
+  if (!isOfflineCoordinatorRole(request.user.roleSlug)) {
+    throw new ForbiddenError("Offline school coordination access required");
   }
 }
 

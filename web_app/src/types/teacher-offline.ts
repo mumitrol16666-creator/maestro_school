@@ -95,15 +95,25 @@ export type OfflineHomeworkReview = {
   notCompletedReason?: string | null;
 };
 
+export type HomeworkNotificationRecipient = {
+  phone: string;
+  label: string;
+  audience: "student" | "parent" | "family";
+  recipientName?: string | null;
+  source: "primary" | "additional";
+};
+
 export type TeacherOfflineStudent = {
   crmStudentId: string;
   appUserId?: string | null;
   name: string;
+  firstName?: string;
   phone?: string;
   attended: boolean | null;
   attendanceStatus: "unmarked" | "present" | "late" | "excused_absence" | "unexcused_absence";
   teacherNote?: string | null;
   homeworkReview?: OfflineHomeworkReview | null;
+  homeworkRecipient?: HomeworkNotificationRecipient | null;
   markedAt?: string | null;
   appMarkedAt?: string | null;
   groupStatus?: string;
@@ -113,4 +123,14 @@ export type TeacherOfflineClassStudents = {
   crmClassId: string;
   group: { crmGroupId: string; name: string } | null;
   students: TeacherOfflineStudent[];
+};
+
+export type WhatsappHomeworkMessageDraft = {
+  crmStudentId: string;
+  studentName: string;
+  recipient: HomeworkNotificationRecipient | null;
+  message: string | null;
+  source: "ai" | "template" | "unavailable";
+  model: string | null;
+  note?: string;
 };

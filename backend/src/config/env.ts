@@ -14,6 +14,9 @@ const envSchema = z.object({
   INTEGRATION_SERVICE_SECRET: z.string().min(16).optional(),
   INTEGRATION_SSO_SECRET: z.string().min(16).optional(),
   CRM_API_URL: z.string().default("http://127.0.0.1:5000"),
+  OPENAI_API_KEY: z.string().min(1).optional(),
+  WHATSAPP_MESSAGE_AI_MODEL: z.string().default("gpt-4o-mini"),
+  WHATSAPP_MESSAGE_AI_TIMEOUT_MS: z.coerce.number().int().positive().default(15000),
 });
 
 export const env = envSchema.parse(process.env);

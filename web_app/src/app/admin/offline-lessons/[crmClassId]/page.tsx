@@ -6,12 +6,16 @@ import {
   Check,
   CheckCircle2,
   CircleSlash2,
+  ClipboardCopy,
   Clock3,
   LoaderCircle,
+  MessageCircle,
   Play,
+  RefreshCw,
   RotateCcw,
   Send,
   ShieldCheck,
+  Sparkles,
   UserX,
   XCircle,
 } from "lucide-react";
@@ -24,13 +28,14 @@ import { SuccessModal } from "@/components/success-modal";
 import { PageHeader } from "@/components/page-header";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { ApiError } from "@/lib/api-client";
-import { isContentAdminRole } from "@/lib/role-labels";
+import { isOfflineCoordinatorRole } from "@/lib/role-labels";
 import { adminOfflineApi } from "@/lib/admin-offline-api";
 import { teacherOfflineApi } from "@/lib/teacher-offline-api";
 import type {
   OfflineHomeworkReview,
   TeacherOfflineStudent,
   TrialLessonReport,
+  WhatsappHomeworkMessageDraft,
 } from "@/types/teacher-offline";
 
 const statusLabels: Record<string, string> = {
@@ -172,7 +177,7 @@ export default function AdminOfflineLessonDetailPage() {
   const params = useParams<{ crmClassId: string }>();
   const crmClassId = params.crmClassId;
   const { user } = useAuth();
-  const isAdmin = isContentAdminRole(user?.role);
+  const isAdmin = isOfflineCoordinatorRole(user?.role);
 
   const lessonResource = useApiResource(
     () => (isAdmin ? adminOfflineApi.classCard(crmClassId) : teacherOfflineApi.classCard(crmClassId)),
@@ -198,6 +203,7 @@ export default function AdminOfflineLessonDetailPage() {
   const [submitConfirmationOpen, setSubmitConfirmationOpen] = useState(false);
   const [notHeldOpen, setNotHeldOpen] = useState(false);
   const [notHeldReason, setNotHeldReason] = useState("");
+  const [whatsappDrafts, setWhatsappDrafts] = useState<WhatsappHomeworkMessageDraft[]>([]);
 
   const lesson = lessonResource.data;
   const students = studentsResource.data?.students ?? [];
@@ -463,6 +469,25 @@ export default function AdminOfflineLessonDetailPage() {
           .map((url) => ({ type: "link", url, title: url })),
       });
     });
+  }
+
+  async function generateWhatsappDrafts(studentId?: string) {
+    const action = `whatsapp:${studentId || "all"}`;
+    setBusy(action);
+    setError(null);
+    try {
+      const result = await adminOfflineApi.whatsappHomeworkDrafts(crmClassId, studentId);
+      setWhatsappDrafts((current) => {
+        if (!studentId) return result.drafts;
+        const updated = new Map(current.map((draft) => [draft.crmStudentId, draft]));
+        for (const draft of result.drafts) updated.set(draft.crmStudentId, draft);
+        return Array.from(updated.values());
+      });
+    } catch (reason) {
+      setError(reason instanceof ApiError ? reason.message : "Не удалось подготовить сообщение");
+    } finally {
+      setBusy(null);
+    }
   }
 
   function askReason(message: string) {
@@ -769,6 +794,19 @@ export default function AdminOfflineLessonDetailPage() {
         </aside>
       </div>
 
+      {isAdmin && lesson.status === "completed" && !isTrialLesson ? (
+        <WhatsappHomeworkDrafts
+          drafts={whatsappDrafts}
+          busy={busy}
+          onGenerate={(studentId) => void generateWhatsappDrafts(studentId)}
+          onMessageChange={(studentId, message) => {
+            setWhatsappDrafts((current) => current.map((draft) =>
+              draft.crmStudentId === studentId ? { ...draft, message } : draft
+            ));
+          }}
+        />
+      ) : null}
+
       {!isAdmin && canEditTeacherReport ? (
         <section className="mt-8 flex flex-col gap-4 border-t border-stone-200 pt-7 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -879,6 +917,147 @@ export default function AdminOfflineLessonDetailPage() {
         onClose={() => setSuccess(null)}
       />
     </>
+  );
+}
+
+function WhatsappHomeworkDrafts({
+  drafts,
+  busy,
+  onGenerate,
+  onMessageChange,
+}: {
+  drafts: WhatsappHomeworkMessageDraft[];
+  busy: string | null;
+  onGenerate: (studentId?: string) => void;
+  onMessageChange: (studentId: string, message: string) => void;
+}) {
+  const preparingAll = busy === "whatsapp:all";
+  const [copiedStudentId, setCopiedStudentId] = useState<string | null>(null);
+
+  function whatsappUrl(phone: string, message: string) {
+    let digits = phone.replace(/\D/g, "");
+    if (digits.length === 11 && digits.startsWith("8")) digits = `7${digits.slice(1)}`;
+    if (digits.length === 10) digits = `7${digits}`;
+    return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
+  }
+
+  async function copyMessage(studentId: string, message: string) {
+    await navigator.clipboard.writeText(message);
+    setCopiedStudentId(studentId);
+    window.setTimeout(() => {
+      setCopiedStudentId((current) => current === studentId ? null : current);
+    }, 1800);
+  }
+
+  return (
+    <section className="mt-8 border-t border-stone-200 pt-8">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-emerald-700">
+            <Sparkles size={15} />
+            Сообщения после урока
+          </p>
+          <h2 className="font-display mt-2 text-3xl">Черновики для WhatsApp</h2>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-500">
+            Подготовим мягкий текст из отчёта и проверки ДЗ. Сообщение можно исправить перед отправкой.
+            Все вопросы направляются куратору.
+          </p>
+        </div>
+        <button
+          type="button"
+          disabled={busy != null}
+          onClick={() => onGenerate()}
+          className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-ink px-5 text-sm font-bold text-white disabled:opacity-50"
+        >
+          {preparingAll ? <LoaderCircle size={17} className="animate-spin" /> : <Sparkles size={17} />}
+          {drafts.length ? "Обновить все" : "Подготовить сообщения"}
+        </button>
+      </div>
+
+      {drafts.length ? (
+        <div className="mt-6 grid gap-4 lg:grid-cols-2">
+          {drafts.map((draft) => {
+            const message = draft.message ?? "";
+            const regenerating = busy === `whatsapp:${draft.crmStudentId}`;
+            return (
+              <article key={draft.crmStudentId} className="rounded-2xl border border-stone-200 bg-paper p-5 shadow-soft">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h3 className="font-bold text-ink">{draft.studentName}</h3>
+                    <p className="mt-1 text-sm text-stone-500">
+                      {draft.recipient
+                        ? `${draft.recipient.label} · ${draft.recipient.phone}`
+                        : "Получатель не выбран"}
+                    </p>
+                  </div>
+                  {draft.source !== "unavailable" ? (
+                    <span className={`rounded-full px-3 py-1 text-xs font-bold ${
+                      draft.source === "ai"
+                        ? "bg-emerald-50 text-emerald-800"
+                        : "bg-amber-50 text-amber-900"
+                    }`}>
+                      {draft.source === "ai" ? "AI-черновик" : "Стандартный черновик"}
+                    </span>
+                  ) : null}
+                </div>
+
+                {draft.note ? (
+                  <p className="mt-4 rounded-xl bg-amber-50 px-3 py-2 text-xs font-semibold leading-5 text-amber-900">
+                    {draft.note}
+                  </p>
+                ) : null}
+
+                {draft.recipient && draft.message ? (
+                  <>
+                    <label className="mt-4 block text-xs font-bold uppercase tracking-wider text-stone-500">
+                      Текст сообщения
+                      <textarea
+                        value={message}
+                        onChange={(event) => onMessageChange(draft.crmStudentId, event.target.value)}
+                        className="mt-2 min-h-52 w-full rounded-xl border border-stone-200 bg-white px-3 py-3 text-sm font-medium normal-case leading-6 tracking-normal text-stone-800"
+                      />
+                    </label>
+                    <div className="mt-4 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+                      <button
+                        type="button"
+                        disabled={!message.trim()}
+                        onClick={() => void copyMessage(draft.crmStudentId, message)}
+                        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-stone-200 px-3 text-xs font-bold text-stone-700 disabled:opacity-50"
+                      >
+                        <ClipboardCopy size={15} />
+                        {copiedStudentId === draft.crmStudentId ? "Скопировано" : "Скопировать"}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy != null}
+                        onClick={() => onGenerate(draft.crmStudentId)}
+                        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-stone-200 px-3 text-xs font-bold text-stone-700 disabled:opacity-50"
+                      >
+                        {regenerating ? <LoaderCircle size={15} className="animate-spin" /> : <RefreshCw size={15} />}
+                        Заново
+                      </button>
+                      <a
+                        href={whatsappUrl(draft.recipient.phone, message)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="col-span-2 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 text-xs font-bold text-white sm:ml-auto"
+                      >
+                        <MessageCircle size={16} />
+                        Открыть WhatsApp
+                      </a>
+                    </div>
+                  </>
+                ) : null}
+              </article>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="mt-6 rounded-2xl border border-dashed border-stone-300 px-5 py-7 text-sm text-stone-500">
+          Нажмите «Подготовить сообщения». Ничего не отправится автоматически.
+        </div>
+      )}
+    </section>
   );
 }
 

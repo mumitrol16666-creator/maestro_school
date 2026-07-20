@@ -63,6 +63,10 @@ export function isContentAdminRole(role?: string | null) {
   return !!role && (CONTENT_ADMIN_ROLES as readonly string[]).includes(role);
 }
 
+export function isOfflineCoordinatorRole(role?: string | null) {
+  return !!role && ["admin", "owner", "curator", "branch_manager"].includes(role);
+}
+
 export function settingsPathForRole(role?: string | null) {
   return isStudentRole(role) ? "/settings" : "/admin/settings";
 }

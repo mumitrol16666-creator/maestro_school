@@ -13,6 +13,7 @@ import {
   saveOfflineLessonStudentCheck,
   type OfflineHomeworkReviewInput,
 } from "./offline-lesson-student-check.service.js";
+import { generateWhatsappHomeworkDrafts } from "./whatsapp-homework-message.service.js";
 
 export async function getPendingReviewAgenda() {
   const result = await fetchPendingReviewClasses();
@@ -78,4 +79,10 @@ export async function adminOfflineReturn(crmClassId: string, reason?: string) {
 
 export async function adminOfflineReopen(crmClassId: string, reason?: string) {
   return postAdminReopenClass(crmClassId, reason);
+}
+
+export async function adminOfflineWhatsappDrafts(crmClassId: string, studentId?: string) {
+  return {
+    drafts: await generateWhatsappHomeworkDrafts(crmClassId, studentId),
+  };
 }

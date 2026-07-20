@@ -125,7 +125,32 @@ export async function fetchClassCard(crmClassId: string) {
 }
 
 export async function fetchClassStudents(crmClassId: string) {
-  return crmGet<{ crmClassId: string; students: Array<Record<string, unknown>> }>(
+  return crmGet<{
+    crmClassId: string;
+    students: Array<{
+      crmStudentId: string;
+      appUserId?: string | null;
+      name: string;
+      firstName?: string;
+      phone?: string;
+      attended?: boolean | null;
+      attendanceStatus?: string;
+      teacherNote?: string | null;
+      homeworkReview?: {
+        status: "not_checked" | "completed" | "partial" | "not_completed" | "not_assigned";
+        completionPercent?: number | null;
+        difficulties?: string | null;
+        notCompletedReason?: string | null;
+      } | null;
+      homeworkRecipient?: {
+        phone: string;
+        label: string;
+        audience: "student" | "parent" | "family";
+        recipientName?: string | null;
+        source: "primary" | "additional";
+      } | null;
+    }>;
+  }>(
     `/api/integration/v1/classes/${encodeURIComponent(crmClassId)}/students`,
   );
 }
