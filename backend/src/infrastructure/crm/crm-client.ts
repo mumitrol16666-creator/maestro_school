@@ -320,6 +320,62 @@ export async function fetchAdminOfflineClasses() {
   }>("/api/integration/v1/classes/admin-agenda");
 }
 
+export type ManagementDayOverview = {
+  date: string;
+  generatedAt: string;
+  lessons: {
+    summary: {
+      total: number;
+      upcoming: number;
+      inProgress: number;
+      awaitingReport: number;
+      pendingReview: number;
+      completed: number;
+      cancelled: number;
+      notHeld: number;
+    };
+    items: Array<{
+      crmClassId: string;
+      title: string;
+      date: string;
+      startTime: string;
+      endTime: string;
+      status: string;
+      classType?: string | null;
+      audienceName: string;
+      teacherOutcomeHint?: string | null;
+      teacher?: { crmTeacherId: string; name: string } | null;
+      room?: { crmRoomId: string; name: string } | null;
+    }>;
+  };
+  payments: {
+    thresholdKzt: number;
+    count: number;
+    debtCount: number;
+    expectedRevenueKzt: number;
+    students: Array<{
+      crmStudentId: string;
+      name: string;
+      phone: string;
+      accountBalanceKzt: number;
+      expectedTopUpKzt: number;
+      hasDebt: boolean;
+      direction?: string | null;
+      planName?: string | null;
+    }>;
+  };
+  attention: {
+    pendingReview: number;
+    overdueReports: number;
+    newBookings: number;
+    total: number;
+  };
+};
+
+export async function fetchManagementDayOverview() {
+  return crmGet<ManagementDayOverview>("/api/integration/v1/management/day-overview");
+}
+
 export async function postAdminAttendance(
   crmClassId: string,
   payload: {
