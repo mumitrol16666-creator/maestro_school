@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "kz.maestro.school",
+      "sha256_cert_fingerprints": [
+        "1C:59:17:CC:E8:67:AD:C9:8C:A6:96:73:04:A1:52:5E:D4:75:1D:A5:31:54:7D:D6:19:23:5E:EC:57:80:37:A6"
+      ]
+    }
+  }
+]

@@ -8,6 +8,7 @@ Learning Engine и интеграционному API Maestro CRM.
 
 ```text
 maestro_school/
+├── android/    Android Trusted Web Activity wrapper
 ├── web_app/    Next.js frontend с API-интеграцией
 └── backend/    PostgreSQL + Prisma + Fastify API
 ```
@@ -66,3 +67,4 @@ client, JWT-авторизация, typed responses и состояния заг
 - Логин: https://maestro-school.duckdns.org/login
 - Админка: https://maestro-school.duckdns.org/admin
 - Nginx config: [deploy/nginx-maestro-school.conf](./deploy/nginx-maestro-school.conf)
+- Android APK: https://maestro-school.duckdns.org/downloads/maestro-school.apk

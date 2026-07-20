@@ -7,6 +7,7 @@ import { ChangePasswordForm } from "@/components/change-password-form";
 import { ErrorState, LoadingState } from "@/components/data-states";
 import { PageHeader } from "@/components/page-header";
 import { PushNotificationsCard } from "@/components/push-notifications-card";
+import { AndroidAppDownloadCard } from "@/components/android-app-download";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { api, storeSession, getAccessToken } from "@/lib/api-client";
 import { formatFio, initialsFromName } from "@/lib/name";
@@ -134,6 +135,7 @@ export default function AdminSettingsPage() {
             </form>
           </div>
 
+          <AndroidAppDownloadCard />
           <PushNotificationsCard />
 
           <div className="rounded-[30px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">

@@ -10,6 +10,7 @@ import { ErrorState, LoadingState } from "@/components/data-states";
 import { PageHeader } from "@/components/page-header";
 import { PwaInstallCard } from "@/components/pwa-install-card";
 import { PushNotificationsCard } from "@/components/push-notifications-card";
+import { AndroidAppDownloadCard } from "@/components/android-app-download";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { api } from "@/lib/api-client";
 import { formatFio, initialsFromName } from "@/lib/name";
@@ -112,6 +113,7 @@ export default function SettingsPage() {
               </Link>
             </div>
           ) : null}
+          <AndroidAppDownloadCard />
           <PwaInstallCard />
           <PushNotificationsCard />
           <PasswordChangeCard />

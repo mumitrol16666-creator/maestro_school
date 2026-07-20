@@ -4,6 +4,7 @@ import { ArrowRight, Eye, EyeOff, LoaderCircle } from "lucide-react";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AuthHeroPanel } from "@/components/auth-hero-panel";
+import { AndroidAppDownloadLink } from "@/components/android-app-download";
 import { Brand } from "@/components/brand";
 import { useAuth } from "@/components/auth-provider";
 import { ApiError } from "@/lib/api-client";
@@ -163,6 +164,8 @@ export default function LoginPage() {
               )}
             </button>
           </form>
+
+          <AndroidAppDownloadLink />
 
           <div className="mt-8 rounded-2xl border border-gold/20 bg-gold/5 px-4 py-4 text-center">
             <p className="text-sm font-bold text-ink">Платформа Maestro — для учеников школы</p>
