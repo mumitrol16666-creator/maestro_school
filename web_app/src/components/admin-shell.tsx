@@ -63,6 +63,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     || user?.email?.split("@")[0]
     || roleLabel(user?.role);
   const initials = user ? initialsFromName(user) : "M";
+  const teacherMobileNavigation = user?.role === "teacher" ? teacherNavigation : [];
 
   useEffect(() => {
     if (pathname.startsWith("/admin/homework-review")) {
@@ -174,36 +175,80 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     {open && <div className="fixed inset-y-0 left-0 z-50 w-[min(86vw,320px)] shadow-2xl lg:hidden">{sidebar}</div>}
     {open && <button className="fixed inset-0 z-40 bg-black/45 backdrop-blur-[2px] lg:hidden" onClick={() => setOpen(false)} aria-label="Закрыть меню" />}
     <div className="lg:pl-[272px]">
-      <header className="sticky top-0 z-30 flex h-[calc(96px+env(safe-area-inset-top,0px))] lg:h-[calc(80px+env(safe-area-inset-top,0px))] pt-[calc(12px+env(safe-area-inset-top,0px))] lg:pt-[env(safe-area-inset-top,0px)] items-center gap-4 border-b border-stone-200/80 bg-cream/90 px-5 backdrop-blur-xl sm:px-8">
-        <button onClick={() => setOpen(true)} className="grid h-10 w-10 place-items-center rounded-xl border border-stone-200/80 bg-white shadow-sm transition hover:border-gold/30 lg:hidden"><Menu size={20} /></button>
-        <div>
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">{headerTitle}</p>
-          <p className="text-sm font-semibold">{user?.email}</p>
+      <header className="sticky top-0 z-30 flex h-[calc(68px+env(safe-area-inset-top,0px))] items-center gap-3 border-b border-stone-200/80 bg-cream/90 px-4 pt-[env(safe-area-inset-top,0px)] backdrop-blur-xl sm:h-[calc(80px+env(safe-area-inset-top,0px))] sm:px-8">
+        {user?.role === "teacher" ? (
+          <span className="lg:hidden">
+            <Brand compact href="/admin" />
+          </span>
+        ) : (
+          <button onClick={() => setOpen(true)} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-stone-200/80 bg-white shadow-sm transition hover:border-gold/30 lg:hidden" aria-label="Открыть меню"><Menu size={20} /></button>
+        )}
+        <div className="min-w-0">
+          <p className="truncate text-[10px] font-bold uppercase tracking-[0.16em] text-gold sm:text-xs sm:tracking-[0.18em]">{headerTitle}</p>
+          <p className="hidden truncate text-sm font-semibold sm:block">{user?.email}</p>
           {pendingHomeworkCount != null && pendingHomeworkCount > 0 && (
-            <Link href="/admin/homework-review?status=submitted" className="mt-1 inline-flex items-center gap-2 text-xs font-bold text-amber-700 hover:underline">
+            <Link href="/admin/homework-review?status=submitted" className="mt-1 hidden items-center gap-2 text-xs font-bold text-amber-700 hover:underline sm:inline-flex">
               На проверке: <AdminPendingHomeworkBadge count={pendingHomeworkCount} />
             </Link>
           )}
         </div>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex shrink-0 items-center gap-2">
           <Link
             href="/admin/settings"
-            className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-bold transition ${
+            aria-label="Настройки"
+            className={`inline-flex h-10 items-center justify-center gap-2 rounded-xl border px-3 text-xs font-bold transition sm:rounded-full sm:px-4 ${
               pathname.startsWith("/admin/settings")
                 ? "border-gold/30 bg-amber-50 text-amber-900"
                 : "border-stone-200 bg-white text-stone-600 hover:border-gold/30"
             }`}
           >
             <Settings size={14} />
-            Настройки
+            <span className="hidden sm:inline">Настройки</span>
           </Link>
-          <button onClick={logout} className="inline-flex items-center gap-2 rounded-full border border-stone-200 bg-white px-4 py-2 text-xs font-bold text-stone-600 transition hover:border-red-200 hover:bg-red-50 hover:text-red-700">
+          <button onClick={logout} aria-label="Выйти" className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-stone-200 bg-white px-3 text-xs font-bold text-stone-600 transition hover:border-red-200 hover:bg-red-50 hover:text-red-700 sm:rounded-full sm:px-4">
             <LogOut size={14} />
-            Выйти
+            <span className="hidden sm:inline">Выйти</span>
           </button>
         </div>
       </header>
-      <main className="mx-auto max-w-[1500px] p-5 sm:p-8 lg:p-10">{children}</main>
+      <main className={`mobile-safe mx-auto max-w-[1500px] p-4 sm:p-8 lg:p-10 ${
+        teacherMobileNavigation.length
+          ? "pb-[calc(6.75rem+env(safe-area-inset-bottom,0px))] sm:pb-[calc(6.75rem+env(safe-area-inset-bottom,0px))] lg:pb-10"
+          : ""
+      }`}>{children}</main>
     </div>
+    {teacherMobileNavigation.length ? (
+      <nav
+        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-stone-200/90 bg-paper/95 px-2 pb-[env(safe-area-inset-bottom,0px)] shadow-[0_-12px_35px_rgba(37,33,25,0.08)] backdrop-blur-xl lg:hidden"
+        aria-label="Навигация преподавателя"
+      >
+        {teacherMobileNavigation.map(({ href, label, icon: Icon }) => {
+          const active = href === "/admin" ? pathname === href : pathname.startsWith(href);
+          const pending = href === "/admin/online-lessons" ? pendingOnlineLessonsCount : null;
+          return (
+            <Link
+              key={href}
+              href={href}
+              aria-current={active ? "page" : undefined}
+              className={`relative flex min-w-0 flex-col items-center justify-center gap-1 px-1 py-2 text-[10px] font-bold transition ${
+                active ? "text-ink" : "text-stone-400"
+              }`}
+            >
+              <span className={`relative grid h-9 w-12 place-items-center rounded-xl ${
+                active ? "bg-amber-50 text-gold" : ""
+              }`}>
+                <Icon size={19} strokeWidth={2.15} />
+                {pending != null && pending > 0 ? (
+                  <span className="absolute -right-0.5 -top-0.5 grid min-h-4 min-w-4 place-items-center rounded-full bg-gold px-1 text-[9px] font-black leading-none text-ink">
+                    {pending > 9 ? "9+" : pending}
+                  </span>
+                ) : null}
+              </span>
+              <span className="w-full truncate text-center">{label.replace("-уроки", "")}</span>
+            </Link>
+          );
+        })}
+      </nav>
+    ) : null}
   </div>;
 }

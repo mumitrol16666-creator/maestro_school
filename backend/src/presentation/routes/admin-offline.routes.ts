@@ -11,6 +11,7 @@ import {
   getPendingReviewAgenda,
 } from "../../application/services/admin-offline.service.js";
 import { authenticate, requireContentAdmin, requirePermission } from "../guards/auth.guards.js";
+import { offlineLessonStudentCheckSchema } from "./offline-lesson.schemas.js";
 
 const readGuards = [authenticate, requireContentAdmin, requirePermission("offline_school.read")];
 const writeGuards = [authenticate, requireContentAdmin, requirePermission("offline_school.write")];
@@ -51,18 +52,14 @@ export async function adminOfflineRoutes(app: FastifyInstance) {
     { preHandler: writeGuards },
     async (request) => {
       const { crmClassId } = z.object({ crmClassId: z.string().min(1) }).parse(request.params);
-      const body = z.object({
-        studentId: z.string().min(1),
-        attended: z.boolean().optional(),
-        attendanceStatus: z.enum(["unmarked", "present", "late", "excused_absence", "unexcused_absence"]),
-        teacherNote: z.string().max(3000).optional(),
-      }).parse(request.body ?? {});
+      const body = offlineLessonStudentCheckSchema.parse(request.body ?? {});
       return {
         data: await adminOfflineSetAttendance(
           crmClassId,
           body.studentId,
           body.attendanceStatus,
           body.teacherNote,
+          body.homeworkReview,
         ),
       };
     },

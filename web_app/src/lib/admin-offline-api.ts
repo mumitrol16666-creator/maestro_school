@@ -2,6 +2,7 @@ import { apiRequest } from "@/lib/api-client";
 import type {
   TeacherOfflineClass,
   TeacherOfflineClassStudents,
+  OfflineHomeworkReview,
   TrialLessonReport,
 } from "@/types/teacher-offline";
 
@@ -27,10 +28,16 @@ export const adminOfflineApi = {
     apiRequest<TeacherOfflineClassStudents>(
       `/admin/offline-lessons/${encodeURIComponent(crmClassId)}/students`,
     ),
-  attendance: (crmClassId: string, studentId: string, attendanceStatus: string, teacherNote?: string) =>
+  attendance: (
+    crmClassId: string,
+    studentId: string,
+    attendanceStatus: string,
+    teacherNote?: string,
+    homeworkReview?: OfflineHomeworkReview,
+  ) =>
     apiRequest<Record<string, unknown>>(
       `/admin/offline-lessons/${encodeURIComponent(crmClassId)}/attendance`,
-      { method: "POST", body: JSON.stringify({ studentId, attendanceStatus, teacherNote }) },
+      { method: "POST", body: JSON.stringify({ studentId, attendanceStatus, teacherNote, homeworkReview }) },
     ),
   approve: (
     crmClassId: string,

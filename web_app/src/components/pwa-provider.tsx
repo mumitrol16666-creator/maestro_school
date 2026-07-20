@@ -64,7 +64,7 @@ export function PwaProvider() {
   if (installed || !visible) return null;
 
   return (
-    <div className="fixed inset-x-4 bottom-4 z-[60] mx-auto max-w-lg rounded-[22px] border border-stone-200 bg-paper p-4 shadow-soft sm:inset-x-auto sm:right-6 sm:bottom-6">
+    <div className="fixed inset-x-4 bottom-[calc(6.5rem+env(safe-area-inset-bottom,0px))] z-[60] mx-auto max-w-lg rounded-[22px] border border-stone-200 bg-paper p-4 shadow-soft lg:inset-x-auto lg:bottom-6 lg:right-6">
       <div className="flex items-start gap-3">
         <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-ink text-gold">
           <Smartphone size={18} />

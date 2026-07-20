@@ -8,6 +8,11 @@ import {
   postAdminReopenClass,
   postAdminReturnClass,
 } from "../../infrastructure/crm/crm-client.js";
+import {
+  mergeOfflineLessonStudentChecks,
+  saveOfflineLessonStudentCheck,
+  type OfflineHomeworkReviewInput,
+} from "./offline-lesson-student-check.service.js";
 
 export async function getPendingReviewAgenda() {
   const result = await fetchPendingReviewClasses();
@@ -23,7 +28,8 @@ export async function getAdminOfflineClass(crmClassId: string) {
 }
 
 export async function getAdminOfflineClassStudents(crmClassId: string) {
-  return fetchClassStudents(crmClassId);
+  const roster = await fetchClassStudents(crmClassId);
+  return mergeOfflineLessonStudentChecks(crmClassId, roster);
 }
 
 export async function adminOfflineSetAttendance(
@@ -31,13 +37,22 @@ export async function adminOfflineSetAttendance(
   studentId: string,
   attendanceStatus: string,
   teacherNote?: string,
+  homeworkReview?: OfflineHomeworkReviewInput,
 ) {
-  return postAdminAttendance(crmClassId, {
+  const crmResult = await postAdminAttendance(crmClassId, {
     studentId,
     attendanceStatus,
     teacherNote,
     attended: ["present", "late"].includes(attendanceStatus),
   });
+  const lessonCheck = await saveOfflineLessonStudentCheck({
+    crmClassId,
+    crmStudentId: studentId,
+    attendanceStatus,
+    teacherNote,
+    homeworkReview,
+  });
+  return { crmResult, lessonCheck };
 }
 
 export async function adminOfflineApprove(

@@ -13,6 +13,11 @@ import {
   fetchTeacherSalarySummary,
   type TeacherSubmitPayload,
 } from "../../infrastructure/crm/crm-client.js";
+import {
+  mergeOfflineLessonStudentChecks,
+  saveOfflineLessonStudentCheck,
+  type OfflineHomeworkReviewInput,
+} from "./offline-lesson-student-check.service.js";
 
 async function requireCrmTeacherId(appUserId: string) {
   const user = await prisma.user.findFirst({
@@ -106,7 +111,8 @@ export async function getTeacherOfflineClass(appUserId: string, crmClassId: stri
 
 export async function getTeacherOfflineClassStudents(appUserId: string, crmClassId: string) {
   await getTeacherOfflineClass(appUserId, crmClassId);
-  return fetchClassStudents(crmClassId);
+  const roster = await fetchClassStudents(crmClassId);
+  return mergeOfflineLessonStudentChecks(crmClassId, roster);
 }
 
 export async function teacherOfflineStart(appUserId: string, crmClassId: string) {
@@ -152,15 +158,26 @@ export async function teacherOfflineSetAttendance(
   studentId: string,
   attendanceStatus: string,
   teacherNote?: string,
+  homeworkReview?: OfflineHomeworkReviewInput,
 ) {
+  await getTeacherOfflineClass(appUserId, crmClassId);
   const crmTeacherId = await requireCrmTeacherId(appUserId);
-  return postTeacherAttendance(crmClassId, {
+  const crmResult = await postTeacherAttendance(crmClassId, {
     crmTeacherId,
     studentId,
     attendanceStatus,
     teacherNote,
     attended: ["present", "late"].includes(attendanceStatus),
   });
+  const lessonCheck = await saveOfflineLessonStudentCheck({
+    crmClassId,
+    crmStudentId: studentId,
+    teacherUserId: appUserId,
+    attendanceStatus,
+    teacherNote,
+    homeworkReview,
+  });
+  return { crmResult, lessonCheck };
 }
 
 export async function getTeacherSalarySummary(

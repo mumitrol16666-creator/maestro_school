@@ -5,6 +5,7 @@ import {
   ArrowRight,
   CalendarDays,
   CheckCircle2,
+  ChevronLeft,
   ChevronRight,
   Clock3,
   FileCheck2,
@@ -323,27 +324,31 @@ export default function AdminOfflineLessonsPage() {
                   className="h-11 rounded-xl border border-stone-200 bg-white px-3 text-sm font-bold text-ink"
                 />
               </div>
-              <div className="flex gap-2">
+              <div className="grid grid-cols-[44px_minmax(0,1fr)_44px] gap-2">
                 <button
                   type="button"
                   onClick={() => setPeriod((current) => shiftPeriodMonth(current, -1))}
-                  className="h-11 rounded-xl border border-stone-200 bg-white px-3 text-sm font-bold text-stone-600 transition hover:bg-stone-50"
+                  className="grid h-11 w-11 place-items-center rounded-xl border border-stone-200 bg-white text-stone-600 transition hover:bg-stone-50"
+                  aria-label="Предыдущий месяц"
+                  title="Предыдущий месяц"
                 >
-                  Прошлый
+                  <ChevronLeft size={18} />
                 </button>
                 <button
                   type="button"
                   onClick={() => setPeriod(monthPeriod())}
-                  className="h-11 rounded-xl bg-ink px-3 text-sm font-bold text-white transition hover:-translate-y-0.5"
+                  className="h-11 min-w-0 rounded-xl bg-ink px-2 text-sm font-bold text-white transition hover:-translate-y-0.5"
                 >
                   Текущий
                 </button>
                 <button
                   type="button"
                   onClick={() => setPeriod((current) => shiftPeriodMonth(current, 1))}
-                  className="h-11 rounded-xl border border-stone-200 bg-white px-3 text-sm font-bold text-stone-600 transition hover:bg-stone-50"
+                  className="grid h-11 w-11 place-items-center rounded-xl border border-stone-200 bg-white text-stone-600 transition hover:bg-stone-50"
+                  aria-label="Следующий месяц"
+                  title="Следующий месяц"
                 >
-                  Следующий
+                  <ChevronRight size={18} />
                 </button>
               </div>
             </div>
@@ -440,13 +445,13 @@ export default function AdminOfflineLessonsPage() {
         />
       </section>
 
-      <nav className="mb-8 flex gap-2 overflow-x-auto rounded-2xl border border-stone-200 bg-white p-1.5 shadow-sm" aria-label="Разделы уроков">
+      <nav className="mb-8 grid grid-cols-2 gap-1.5 rounded-2xl border border-stone-200 bg-white p-1.5 shadow-sm sm:grid-cols-3 xl:grid-cols-6" aria-label="Разделы уроков">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             type="button"
             onClick={() => handleTabChange(tab.id)}
-            className={`shrink-0 rounded-xl px-4 py-2.5 text-sm font-bold transition ${
+            className={`min-w-0 rounded-xl px-2 py-2.5 text-xs font-bold leading-tight transition sm:px-3 sm:text-sm ${
               activeTab === tab.id
                  ? "bg-ink text-white shadow-sm"
                  : "text-stone-500 hover:bg-stone-50 hover:text-ink"

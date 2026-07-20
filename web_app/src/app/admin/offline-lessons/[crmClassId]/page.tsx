@@ -1,6 +1,20 @@
 "use client";
 
-import { CheckCircle2, LoaderCircle, Send, Play, XCircle, ShieldCheck, RotateCcw } from "lucide-react";
+import {
+  AlertTriangle,
+  BookCheck,
+  Check,
+  CheckCircle2,
+  CircleSlash2,
+  Clock3,
+  LoaderCircle,
+  Play,
+  RotateCcw,
+  Send,
+  ShieldCheck,
+  UserX,
+  XCircle,
+} from "lucide-react";
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
@@ -13,7 +27,11 @@ import { ApiError } from "@/lib/api-client";
 import { isContentAdminRole } from "@/lib/role-labels";
 import { adminOfflineApi } from "@/lib/admin-offline-api";
 import { teacherOfflineApi } from "@/lib/teacher-offline-api";
-import type { TeacherOfflineStudent, TrialLessonReport } from "@/types/teacher-offline";
+import type {
+  OfflineHomeworkReview,
+  TeacherOfflineStudent,
+  TrialLessonReport,
+} from "@/types/teacher-offline";
 
 const statusLabels: Record<string, string> = {
   scheduled: "Запланирован",
@@ -131,12 +149,30 @@ function lessonStartDateTime(date: string | Date, startTime: string) {
   return base;
 }
 
+type StudentLessonCheckDraft = {
+  attendanceStatus: TeacherOfflineStudent["attendanceStatus"];
+  teacherNote: string;
+  homeworkReview: OfflineHomeworkReview;
+};
+
+function studentLessonCheckDraft(student: TeacherOfflineStudent): StudentLessonCheckDraft {
+  return {
+    attendanceStatus: student.attendanceStatus ?? "unmarked",
+    teacherNote: student.teacherNote ?? "",
+    homeworkReview: normalizeHomeworkReview(student.homeworkReview),
+  };
+}
+
+type FeedbackMessage = {
+  title: string;
+  description: string;
+};
+
 export default function AdminOfflineLessonDetailPage() {
   const params = useParams<{ crmClassId: string }>();
   const crmClassId = params.crmClassId;
   const { user } = useAuth();
   const isAdmin = isContentAdminRole(user?.role);
-  const canManageAttendance = isAdmin;
 
   const lessonResource = useApiResource(
     () => (isAdmin ? adminOfflineApi.classCard(crmClassId) : teacherOfflineApi.classCard(crmClassId)),
@@ -155,9 +191,13 @@ export default function AdminOfflineLessonDetailPage() {
   const [materialsText, setMaterialsText] = useState("");
   const [comment, setComment] = useState("");
   const [trialReport, setTrialReport] = useState<TrialLessonReport>(() => mergeTrialReport());
+  const [studentCheckDrafts, setStudentCheckDrafts] = useState<Record<string, StudentLessonCheckDraft>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  const [success, setSuccess] = useState<FeedbackMessage | null>(null);
+  const [submitConfirmationOpen, setSubmitConfirmationOpen] = useState(false);
+  const [notHeldOpen, setNotHeldOpen] = useState(false);
+  const [notHeldReason, setNotHeldReason] = useState("");
 
   const lesson = lessonResource.data;
   const students = studentsResource.data?.students ?? [];
@@ -166,9 +206,22 @@ export default function AdminOfflineLessonDetailPage() {
   const canEditTeacherReport = !isAdmin && lesson && lesson.status === "started";
   const canEditAdminReview = isAdmin && lesson?.status === "pending_admin_review";
   const canEditReport = Boolean(canEditTeacherReport || canEditAdminReview);
+  const canManageAttendance = canEditReport;
   const canApprove = isAdmin && lesson?.status === "pending_admin_review";
   const isNotHeld = lesson?.teacherOutcomeHint === "not_held";
-  const unmarkedCount = students.filter((student) => (student.attendanceStatus ?? "unmarked") === "unmarked").length;
+  const isIndividualLesson = Boolean(
+    !isTrialLesson
+      && (lesson?.classType === "individual" || (!lesson?.group && students.length === 1)),
+  );
+  const draftFor = (student: TeacherOfflineStudent) =>
+    studentCheckDrafts[student.crmStudentId] ?? studentLessonCheckDraft(student);
+  const unmarkedCount = students.filter((student) => draftFor(student).attendanceStatus === "unmarked").length;
+  const homeworkReviewPendingCount = isIndividualLesson
+    ? students.filter((student) =>
+        ["present", "late"].includes(draftFor(student).attendanceStatus)
+          && draftFor(student).homeworkReview.status === "not_checked",
+      ).length
+    : 0;
   const canShowStartPrompt = Boolean(
     !isAdmin
       && lesson?.status === "scheduled"
@@ -190,6 +243,18 @@ export default function AdminOfflineLessonDetailPage() {
       setTrialReport(mergeTrialReport(lesson.trialReport));
     }
   }, [lesson]);
+
+  useEffect(() => {
+    const loadedStudents = studentsResource.data?.students;
+    if (!loadedStudents) return;
+    setStudentCheckDrafts((current) => {
+      const next: Record<string, StudentLessonCheckDraft> = {};
+      for (const student of loadedStudents) {
+        next[student.crmStudentId] = current[student.crmStudentId] ?? studentLessonCheckDraft(student);
+      }
+      return next;
+    });
+  }, [studentsResource.data]);
 
   const updateTrialSection: TrialSectionUpdater = function updateTrialSection<K extends keyof TrialLessonReport>(
     section: K,
@@ -229,19 +294,40 @@ export default function AdminOfflineLessonDetailPage() {
       await fn();
       await Promise.all([lessonResource.reload(), studentsResource.reload()]);
       if (action === "submit") {
-        setSuccess("Урок отправлен на подтверждение администратору");
+        setSuccess({
+          title: "Урок отправлен на проверку",
+          description: "Посещаемость, результат домашнего задания и отчёт сохранены. Администратор проверит урок и опубликует новое задание ученику.",
+        });
       } else if (action === "not-held") {
-        setSuccess("Отмечено: урок не состоялся");
+        setSuccess({
+          title: "Урок отмечен как несостоявшийся",
+          description: "Причина сохранена в истории. Администратор увидит отметку и проверит её.",
+        });
       } else if (action === "start") {
-        setSuccess("Урок начат");
+        setSuccess({
+          title: "Урок начат",
+          description: "Теперь можно отметить посещаемость, проверить прошлое домашнее задание и заполнить итог урока.",
+        });
       } else if (action === "approve") {
-        setSuccess("Урок подтверждён и опубликован для ученика");
+        setSuccess({
+          title: "Урок подтверждён",
+          description: "Итоги урока и новое домашнее задание опубликованы для ученика.",
+        });
       } else if (action === "return") {
-        setSuccess("Урок возвращён преподавателю для исправления");
+        setSuccess({
+          title: "Урок возвращён преподавателю",
+          description: "Преподаватель сможет исправить отчёт и снова отправить его на проверку.",
+        });
       } else if (action === "withdraw") {
-        setSuccess("Отправка отозвана — урок снова доступен для редактирования");
+        setSuccess({
+          title: "Урок снова доступен для редактирования",
+          description: "Исправьте данные и повторно отправьте урок на проверку.",
+        });
       } else if (action === "reopen") {
-        setSuccess("Урок открыт повторно, списания возвращены");
+        setSuccess({
+          title: "Урок открыт повторно",
+          description: "Теперь его можно проверить и оформить заново.",
+        });
       }
     } catch (reason) {
       setError(reason instanceof ApiError ? reason.message : "Не удалось выполнить действие");
@@ -250,14 +336,77 @@ export default function AdminOfflineLessonDetailPage() {
     }
   }
 
-  async function handleSubmit(event: FormEvent) {
+  function submissionValidationError() {
+    if (unmarkedCount > 0) {
+      return `Отметьте посещаемость у всех учеников. Осталось: ${unmarkedCount}.`;
+    }
+    if (homeworkReviewPendingCount > 0) {
+      return "Укажите, как выполнено прошлое домашнее задание.";
+    }
+
+    if (isIndividualLesson) {
+      for (const student of students) {
+        const draft = draftFor(student);
+        if (!["present", "late"].includes(draft.attendanceStatus)) continue;
+        if (draft.homeworkReview.status === "partial" && !draft.homeworkReview.difficulties?.trim()) {
+          return `Укажите для ${student.name}, что осталось доделать по домашнему заданию.`;
+        }
+        if (
+          draft.homeworkReview.status === "not_completed"
+          && !draft.homeworkReview.notCompletedReason?.trim()
+        ) {
+          return `Укажите причину невыполненного домашнего задания для ${student.name}.`;
+        }
+      }
+    }
+
+    if (isTrialLesson && !isTrialReportReady) {
+      return "Заполните обязательные пункты анкеты пробного урока.";
+    }
+    if (!isTrialLesson && !topic.trim()) return "Укажите тему урока.";
+    if (!isTrialLesson && !lessonSummary.trim()) return "Заполните итог урока.";
+    return null;
+  }
+
+  async function saveStudentChecks() {
+    await Promise.all(students.map((student) => {
+      const draft = draftFor(student);
+      const attended = ["present", "late"].includes(draft.attendanceStatus);
+      const homeworkReview = isIndividualLesson && attended ? draft.homeworkReview : undefined;
+      return isAdmin
+        ? adminOfflineApi.attendance(
+            crmClassId,
+            student.crmStudentId,
+            draft.attendanceStatus,
+            draft.teacherNote.trim() || undefined,
+            homeworkReview,
+          )
+        : teacherOfflineApi.attendance(
+            crmClassId,
+            student.crmStudentId,
+            draft.attendanceStatus,
+            draft.teacherNote.trim() || undefined,
+            homeworkReview,
+          );
+    }));
+  }
+
+  function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    const confirmed = window.confirm(
-      `Отправить на подтверждение именно этот урок?\n\n${lesson?.title ?? ""}\n${lesson ? new Intl.DateTimeFormat("ru-RU").format(new Date(lesson.date)) : ""} · ${lesson?.startTime ?? ""}`,
-    );
-    if (!confirmed) return;
-    await runAction("submit", () =>
-      teacherOfflineApi.submit(crmClassId, {
+    const validationError = submissionValidationError();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    setError(null);
+    setSubmitConfirmationOpen(true);
+  }
+
+  async function confirmSubmit() {
+    setSubmitConfirmationOpen(false);
+    await runAction("submit", async () => {
+      await saveStudentChecks();
+      return teacherOfflineApi.submit(crmClassId, {
         topic: isTrialLesson ? undefined : topic.trim(),
         lessonGoals: lessonGoals.trim() || undefined,
         lessonSummary: isTrialLesson ? undefined : lessonSummary.trim(),
@@ -273,15 +422,16 @@ export default function AdminOfflineLessonDetailPage() {
           ? { ...trialReport, capturedAt: new Date().toISOString() }
           : undefined,
         teacherOutcomeHint: "held",
-      }),
-    );
+      });
+    });
   }
 
-  async function updateAttendance(studentId: string, attendanceStatus: string, teacherNote?: string) {
-    if (!canManageAttendance) return;
-    await runAction(`attendance-${studentId}`, () =>
-      adminOfflineApi.attendance(crmClassId, studentId, attendanceStatus, teacherNote),
-    );
+  async function confirmNotHeld() {
+    const reason = notHeldReason.trim();
+    if (reason.length < 3) return;
+    setNotHeldOpen(false);
+    await runAction("not-held", () => teacherOfflineApi.notHeld(crmClassId, reason));
+    setNotHeldReason("");
   }
 
   async function handleApprove() {
@@ -289,8 +439,13 @@ export default function AdminOfflineLessonDetailPage() {
       setError(`Отметьте посещаемость у всех учеников (осталось: ${unmarkedCount})`);
       return;
     }
-    await runAction("approve", () =>
-      adminOfflineApi.approve(crmClassId, {
+    if (!isNotHeld && homeworkReviewPendingCount > 0) {
+      setError("Зафиксируйте выполнение прошлого домашнего задания");
+      return;
+    }
+    await runAction("approve", async () => {
+      if (!isNotHeld) await saveStudentChecks();
+      return adminOfflineApi.approve(crmClassId, {
         deduct: !isNotHeld,
         topic: topic.trim() || undefined,
         lessonGoals: lessonGoals.trim() || undefined,
@@ -306,15 +461,15 @@ export default function AdminOfflineLessonDetailPage() {
           .map((url) => url.trim())
           .filter(Boolean)
           .map((url) => ({ type: "link", url, title: url })),
-      }),
-    );
+      });
+    });
   }
 
   function askReason(message: string) {
     if (!window.confirm(message)) return null;
-    const reason = window.prompt("Укажите причину — она нужна для контроля изменений:")?.trim();
+    const reason = window.prompt("Коротко объясните причину:")?.trim();
     if (!reason || reason.length < 3) {
-      setError("Укажите причину изменения");
+      setError("Напишите причину изменения");
       return null;
     }
     return reason;
@@ -364,7 +519,7 @@ export default function AdminOfflineLessonDetailPage() {
             {lesson.teacherComment || "Причина не указана."}
           </p>
           <p className="mt-2 text-xs font-semibold text-red-700">
-            При подтверждении списаний не будет. Если отметка ошибочна — верните урок преподавателю.
+            С ученика не будет списано занятие. Если отметка ошибочна, верните урок преподавателю.
           </p>
         </div>
       ) : null}
@@ -375,13 +530,28 @@ export default function AdminOfflineLessonDetailPage() {
         </p>
       ) : null}
 
+      <div className="mb-7">
+        <StudentRoster
+          students={students}
+          canManageAttendance={canManageAttendance}
+          canEdit={canEditReport}
+          showHomeworkReview={isIndividualLesson}
+          drafts={studentCheckDrafts}
+          studentsError={studentsResource.error}
+          onRetryStudents={studentsResource.reload}
+          onDraftChange={(studentId, draft) => {
+            setStudentCheckDrafts((current) => ({ ...current, [studentId]: draft }));
+          }}
+        />
+      </div>
+
       <div className="grid gap-7 xl:grid-cols-[1fr_420px]">
         <section className="order-last xl:order-none space-y-7">
           <form onSubmit={handleSubmit} className="rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
             <h2 className="font-display text-3xl">Отчёт по уроку</h2>
             <p className="mt-2 text-sm text-stone-500">
               {isTrialLesson
-                ? "Заполните диагностическую анкету пробного. CRM сохранит данные для будущего AI-анализа и плана обучения."
+                ? "Заполните диагностическую анкету пробного. Ответы помогут подготовить анализ и план обучения."
                 : isAdmin
                 ? "Проверьте отчёт преподавателя, при необходимости отредактируйте и подтвердите урок."
                 : "Заполните тему, итог и домашнее задание. Ученик увидит материалы после подтверждения администратором."}
@@ -476,28 +646,19 @@ export default function AdminOfflineLessonDetailPage() {
             </label>
 
             {!isAdmin ? (
-              <div className="mt-6 flex flex-wrap gap-3">
+              <div className="mt-6">
                 <button
                   type="submit"
-                  disabled={!canEditTeacherReport || busy != null || (isTrialLesson ? !isTrialReportReady : (!topic.trim() || !lessonSummary.trim()))}
-                  className="inline-flex items-center gap-2 rounded-2xl bg-ink px-5 py-3 text-sm font-bold text-white disabled:opacity-50"
+                  disabled={!canEditTeacherReport || busy != null}
+                  className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-ink px-5 py-3 text-sm font-bold text-white disabled:opacity-50 sm:w-auto"
                 >
                   {busy === "submit" ? <LoaderCircle className="animate-spin" size={16} /> : <Send size={16} />}
-                  Отправить на подтверждение
+                  Отправить на проверку
                 </button>
               </div>
             ) : null}
           </form>
 
-          <StudentRoster
-            students={students}
-            canManageAttendance={canManageAttendance}
-            canEdit={canEditReport}
-            busy={busy}
-            studentsError={studentsResource.error}
-            onRetryStudents={studentsResource.reload}
-            onUpdateAttendance={updateAttendance}
-          />
         </section>
 
         <aside className="order-first xl:order-none space-y-4">
@@ -512,25 +673,16 @@ export default function AdminOfflineLessonDetailPage() {
             </button>
           ) : null}
 
-          {!isAdmin && canEditTeacherReport ? (
-            <button
-              disabled={busy != null}
-              onClick={() => {
-                const reason = askReason(
-                  `Отметить, что именно этот урок не состоялся?\n\n${lesson.title} · ${new Intl.DateTimeFormat("ru-RU").format(new Date(lesson.date))} · ${lesson.startTime}`,
-                );
-                if (reason) void runAction("not-held", () => teacherOfflineApi.notHeld(crmClassId, reason));
-              }}
-              className="flex w-full items-center justify-center gap-2 rounded-[24px] border border-red-200 bg-red-50 px-5 py-4 text-sm font-bold text-red-800 disabled:opacity-50"
-            >
-              {busy === "not-held" ? <LoaderCircle className="animate-spin" size={16} /> : <XCircle size={16} />}
-              Урок не состоялся
-            </button>
-          ) : null}
-
           {canApprove ? (
             <button
-              disabled={busy != null || (!isNotHeld && (isTrialLesson ? !isTrialReportReady : (!topic.trim() || !lessonSummary.trim())))}
+              disabled={
+                busy != null
+                  || (!isNotHeld && (
+                    unmarkedCount > 0
+                      || homeworkReviewPendingCount > 0
+                      || (isTrialLesson ? !isTrialReportReady : (!topic.trim() || !lessonSummary.trim()))
+                  ))
+              }
               onClick={() => void handleApprove()}
               className="flex w-full items-center justify-center gap-2 rounded-[24px] bg-emerald-700 px-5 py-4 text-sm font-bold text-white disabled:opacity-50"
             >
@@ -599,8 +751,8 @@ export default function AdminOfflineLessonDetailPage() {
               </p>
               <p className="mt-2 text-sm text-amber-800/80">
                 {isAdmin
-                  ? "Отметьте посещаемость и нажмите «Подтвердить урок», чтобы опубликовать ДЗ ученику."
-                  : "Администратор отметит посещаемость в CRM, подтвердит урок и опубликует ДЗ ученику."}
+                  ? "Проверьте посещаемость и результат прошлого ДЗ, затем подтвердите урок."
+                  : "Посещаемость и проверка прошлого ДЗ сохранены. Администратор подтвердит урок и опубликует новое задание."}
               </p>
             </div>
           ) : null}
@@ -616,6 +768,48 @@ export default function AdminOfflineLessonDetailPage() {
           ) : null}
         </aside>
       </div>
+
+      {!isAdmin && canEditTeacherReport ? (
+        <section className="mt-8 flex flex-col gap-4 border-t border-stone-200 pt-7 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-bold text-stone-700">Урок не проводился?</p>
+            <p className="mt-1 text-sm text-stone-500">
+              Используйте это действие только если занятие действительно не состоялось.
+            </p>
+          </div>
+          <button
+            type="button"
+            disabled={busy != null}
+            onClick={() => setNotHeldOpen(true)}
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-red-200 px-4 py-2.5 text-sm font-bold text-red-700 disabled:opacity-50"
+          >
+            {busy === "not-held" ? <LoaderCircle className="animate-spin" size={16} /> : <XCircle size={16} />}
+            Урок не состоялся
+          </button>
+        </section>
+      ) : null}
+
+      <SubmitLessonConfirmation
+        open={submitConfirmationOpen}
+        lesson={lesson}
+        studentsCount={students.length}
+        busy={busy === "submit"}
+        onClose={() => setSubmitConfirmationOpen(false)}
+        onConfirm={() => void confirmSubmit()}
+      />
+
+      <NotHeldConfirmation
+        open={notHeldOpen}
+        lesson={lesson}
+        reason={notHeldReason}
+        busy={busy === "not-held"}
+        onReasonChange={setNotHeldReason}
+        onClose={() => {
+          setNotHeldOpen(false);
+          setNotHeldReason("");
+        }}
+        onConfirm={() => void confirmNotHeld()}
+      />
 
       {canShowStartPrompt && lesson && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/80 p-4 backdrop-blur-md">
@@ -680,11 +874,152 @@ export default function AdminOfflineLessonDetailPage() {
 
       <SuccessModal
         open={Boolean(success)}
-        title={success ?? ""}
-        description="Данные сохранены в CRM."
+        title={success?.title ?? ""}
+        description={success?.description ?? ""}
         onClose={() => setSuccess(null)}
       />
     </>
+  );
+}
+
+function SubmitLessonConfirmation({
+  open,
+  lesson,
+  studentsCount,
+  busy,
+  onClose,
+  onConfirm,
+}: {
+  open: boolean;
+  lesson: { title: string; date: string; startTime: string; endTime: string };
+  studentsCount: number;
+  busy: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[70] grid place-items-center bg-stone-950/55 p-4 backdrop-blur-sm">
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="submit-lesson-title"
+        className="w-full max-w-md rounded-[28px] border border-stone-200 bg-paper p-6 shadow-2xl"
+      >
+        <span className="grid h-12 w-12 place-items-center rounded-2xl bg-amber-50 text-amber-800">
+          <AlertTriangle size={22} />
+        </span>
+        <h2 id="submit-lesson-title" className="font-display mt-5 text-3xl">Отправить урок на проверку?</h2>
+        <p className="mt-3 text-sm leading-6 text-stone-600">
+          Проверьте отметки перед отправкой. Администратор увидит отчёт и после проверки опубликует итог ученику.
+        </p>
+        <div className="mt-5 border-y border-stone-200 py-4 text-sm">
+          <p className="font-bold text-ink">{lesson.title}</p>
+          <p className="mt-1 text-stone-500">
+            {new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" }).format(new Date(lesson.date))}
+            {" · "}{lesson.startTime}–{lesson.endTime}
+          </p>
+          <p className="mt-3 inline-flex items-center gap-2 text-emerald-800">
+            <CheckCircle2 size={16} />
+            Отмечено учеников: {studentsCount}
+          </p>
+        </div>
+        <div className="mt-6 grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onClose}
+            className="min-h-12 rounded-xl border border-stone-200 px-4 text-sm font-bold text-stone-600 disabled:opacity-50"
+          >
+            Ещё проверить
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onConfirm}
+            className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-ink px-4 text-sm font-bold text-white disabled:opacity-50"
+          >
+            {busy ? <LoaderCircle size={16} className="animate-spin" /> : <Send size={16} />}
+            Отправить
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function NotHeldConfirmation({
+  open,
+  lesson,
+  reason,
+  busy,
+  onReasonChange,
+  onClose,
+  onConfirm,
+}: {
+  open: boolean;
+  lesson: { title: string; date: string; startTime: string };
+  reason: string;
+  busy: boolean;
+  onReasonChange: (value: string) => void;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[70] grid place-items-center bg-stone-950/55 p-4 backdrop-blur-sm">
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="not-held-title"
+        className="w-full max-w-md rounded-[28px] border border-red-100 bg-paper p-6 shadow-2xl"
+      >
+        <span className="grid h-12 w-12 place-items-center rounded-2xl bg-red-50 text-red-700">
+          <XCircle size={22} />
+        </span>
+        <h2 id="not-held-title" className="font-display mt-5 text-3xl">Урок не состоялся?</h2>
+        <p className="mt-3 text-sm leading-6 text-stone-600">
+          Отметка останется в истории. Занятие не будет отправлено как проведённое.
+        </p>
+        <p className="mt-4 text-sm font-bold text-ink">{lesson.title}</p>
+        <p className="mt-1 text-sm text-stone-500">
+          {new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" }).format(new Date(lesson.date))}
+          {" · "}{lesson.startTime}
+        </p>
+        <label className="mt-5 block text-xs font-bold uppercase tracking-wider text-stone-500">
+          Что произошло?
+          <textarea
+            autoFocus
+            value={reason}
+            disabled={busy}
+            onChange={(event) => onReasonChange(event.target.value)}
+            className="mt-2 min-h-24 w-full rounded-xl border border-stone-200 px-3 py-3 text-sm normal-case tracking-normal"
+            placeholder="Например: ученик предупредил об отсутствии"
+          />
+        </label>
+        <div className="mt-6 grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onClose}
+            className="min-h-12 rounded-xl border border-stone-200 px-4 text-sm font-bold text-stone-600 disabled:opacity-50"
+          >
+            Отмена
+          </button>
+          <button
+            type="button"
+            disabled={busy || reason.trim().length < 3}
+            onClick={onConfirm}
+            className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-red-700 px-3 text-sm font-bold text-white disabled:opacity-45"
+          >
+            {busy ? <LoaderCircle size={16} className="animate-spin" /> : <XCircle size={16} />}
+            Подтвердить
+          </button>
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -712,7 +1047,7 @@ function TrialReportEditor({
       <div className="rounded-[24px] border border-amber-200 bg-amber-50 p-5">
         <p className="text-sm font-bold text-amber-950">Пробный урок: диагностическая анкета</p>
         <p className="mt-2 text-sm leading-6 text-amber-900/80">
-          Эти данные сохраняются в CRM как структура для будущего AI-анализа: портрет ученика, навыки, риски продажи и примерный маршрут обучения.
+          Эти ответы используются для анализа пробного урока, рекомендаций по обучению и следующего шага для администратора.
         </p>
       </div>
 
@@ -938,26 +1273,36 @@ function StudentRoster({
   students,
   canManageAttendance,
   canEdit,
-  busy,
+  showHomeworkReview,
+  drafts,
   studentsError,
   onRetryStudents,
-  onUpdateAttendance,
+  onDraftChange,
 }: {
   students: TeacherOfflineStudent[];
   canManageAttendance: boolean;
   canEdit: boolean;
-  busy: string | null;
+  showHomeworkReview: boolean;
+  drafts: Record<string, StudentLessonCheckDraft>;
   studentsError: string | null;
   onRetryStudents: () => void;
-  onUpdateAttendance: (studentId: string, attendanceStatus: string, teacherNote?: string) => Promise<void>;
+  onDraftChange: (studentId: string, draft: StudentLessonCheckDraft) => void;
 }) {
   return (
     <div className="rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft">
-      <h2 className="font-display text-3xl">Ученики на уроке</h2>
+      <div className="flex items-start gap-3">
+        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-emerald-50 text-emerald-700">
+          <CheckCircle2 size={20} />
+        </span>
+        <div className="min-w-0">
+          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-700">В начале урока</p>
+          <h2 className="font-display mt-1 text-3xl">Посещаемость и прошлое ДЗ</h2>
+        </div>
+      </div>
       <p className="mt-2 text-sm text-stone-500">
         {canManageAttendance
-          ? "Отметьте посещаемость. Списание с абонемента выполняет администратор в CRM."
-          : "Список учеников на занятии. Посещаемость отмечает администратор после урока."}
+          ? "Сначала зафиксируйте присутствие. Для индивидуального урока также отметьте выполнение домашнего задания."
+          : "Отметки доступны во время урока и сохраняются в его истории."}
       </p>
 
       {studentsError ? (
@@ -974,55 +1319,227 @@ function StudentRoster({
       ) : (
         <div className="mt-6 space-y-3">
           {students.map((student) => (
-            <div
+            <StudentLessonCheckCard
               key={student.crmStudentId}
-              className="rounded-2xl border border-stone-200 bg-white px-4 py-4"
-            >
-              {canManageAttendance ? (
-                <>
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <p className="font-semibold">{student.name}</p>
-                    <select
-                      value={student.attendanceStatus ?? "unmarked"}
-                      disabled={!canEdit || busy != null}
-                      onChange={(event) => void onUpdateAttendance(student.crmStudentId, event.target.value, student.teacherNote ?? undefined)}
-                      className="rounded-xl border border-stone-200 px-3 py-2 text-sm"
-                    >
-                      <option value="unmarked">Не отмечен</option>
-                      <option value="present">Присутствовал</option>
-                      <option value="late">Опоздал</option>
-                      <option value="excused_absence">Отсутствовал по уважительной причине</option>
-                      <option value="unexcused_absence">Отсутствовал без причины</option>
-                    </select>
-                  </div>
-                  <textarea
-                    defaultValue={student.teacherNote ?? ""}
-                    disabled={!canEdit || busy != null}
-                    onBlur={(event) => void onUpdateAttendance(
-                      student.crmStudentId,
-                      student.attendanceStatus ?? "unmarked",
-                      event.target.value.trim() || undefined,
-                    )}
-                    className="mt-3 min-h-16 w-full rounded-xl border border-stone-200 px-3 py-2 text-sm"
-                    placeholder="Заметка по ученику"
-                  />
-                </>
-              ) : (
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="font-semibold">{student.name}</p>
-                  <span
-                    className={`inline-flex w-fit rounded-full px-3 py-1 text-xs font-bold ${
-                      attendanceClasses[student.attendanceStatus ?? "unmarked"] ?? attendanceClasses.unmarked
-                    }`}
-                  >
-                    {attendanceLabels[student.attendanceStatus ?? "unmarked"] ?? attendanceLabels.unmarked}
-                  </span>
-                </div>
-              )}
-            </div>
+              student={student}
+              canEdit={canEdit && canManageAttendance}
+              showHomeworkReview={showHomeworkReview}
+              draft={drafts[student.crmStudentId] ?? studentLessonCheckDraft(student)}
+              onChange={(draft) => onDraftChange(student.crmStudentId, draft)}
+            />
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+const attendanceOptions = [
+  { value: "present", label: "Присутствовал", icon: Check, active: "border-emerald-500 bg-emerald-50 text-emerald-800" },
+  { value: "late", label: "Опоздал", icon: Clock3, active: "border-amber-500 bg-amber-50 text-amber-900" },
+  { value: "excused_absence", label: "Нет, причина есть", icon: UserX, active: "border-sky-500 bg-sky-50 text-sky-900" },
+  { value: "unexcused_absence", label: "Нет без причины", icon: CircleSlash2, active: "border-red-500 bg-red-50 text-red-800" },
+] as const;
+
+const homeworkOptions = [
+  { value: "completed", label: "Выполнено" },
+  { value: "partial", label: "Частично" },
+  { value: "not_completed", label: "Не выполнено" },
+  { value: "not_assigned", label: "Не задавалось" },
+] as const;
+
+function normalizeHomeworkReview(review?: OfflineHomeworkReview | null): OfflineHomeworkReview {
+  return {
+    status: review?.status ?? "not_checked",
+    completionPercent: review?.completionPercent ?? null,
+    difficulties: review?.difficulties ?? "",
+    notCompletedReason: review?.notCompletedReason ?? "",
+  };
+}
+
+function StudentLessonCheckCard({
+  student,
+  canEdit,
+  showHomeworkReview,
+  draft,
+  onChange,
+}: {
+  student: TeacherOfflineStudent;
+  canEdit: boolean;
+  showHomeworkReview: boolean;
+  draft: StudentLessonCheckDraft;
+  onChange: (draft: StudentLessonCheckDraft) => void;
+}) {
+  const { attendanceStatus, teacherNote, homeworkReview } = draft;
+  const attended = ["present", "late"].includes(attendanceStatus);
+  const homeworkNeedsReason = homeworkReview.status === "not_completed";
+  const homeworkNeedsDifficulties = homeworkReview.status === "partial";
+  const disabled = !canEdit;
+
+  function chooseHomeworkStatus(status: OfflineHomeworkReview["status"]) {
+    onChange({
+      ...draft,
+      homeworkReview: {
+        ...homeworkReview,
+        status,
+        completionPercent:
+          status === "completed"
+            ? 100
+            : status === "partial"
+              ? homeworkReview.completionPercent && homeworkReview.completionPercent < 100
+                ? homeworkReview.completionPercent
+                : 50
+              : status === "not_completed"
+                ? 0
+                : null,
+        difficulties: status === "partial" || status === "completed" ? homeworkReview.difficulties : "",
+        notCompletedReason: status === "not_completed" ? homeworkReview.notCompletedReason : "",
+      },
+    });
+  }
+
+  return (
+    <div className="rounded-2xl border border-stone-200 bg-white p-4 sm:p-5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="font-semibold text-ink">{student.name}</p>
+        <span
+          className={`inline-flex w-fit rounded-full px-3 py-1 text-xs font-bold ${
+            attendanceClasses[attendanceStatus] ?? attendanceClasses.unmarked
+          }`}
+        >
+          {attendanceLabels[attendanceStatus] ?? attendanceLabels.unmarked}
+        </span>
+      </div>
+
+      <fieldset className="mt-4">
+        <legend className="text-[11px] font-bold uppercase tracking-[0.14em] text-stone-500">
+          Посещаемость
+        </legend>
+        <div className="mt-2 grid grid-cols-2 gap-2 lg:grid-cols-4">
+          {attendanceOptions.map(({ value, label, icon: Icon, active }) => {
+            const selected = attendanceStatus === value;
+            return (
+              <button
+                key={value}
+                type="button"
+                disabled={disabled}
+                onClick={() => onChange({ ...draft, attendanceStatus: value })}
+                className={`flex min-h-12 items-center justify-center gap-2 rounded-xl border px-2 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-65 ${
+                  selected ? active : "border-stone-200 bg-white text-stone-500"
+                }`}
+              >
+                <Icon size={15} />
+                <span>{label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </fieldset>
+
+      {showHomeworkReview && attended ? (
+        <fieldset className="mt-5 border-t border-stone-100 pt-5">
+          <legend className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.14em] text-stone-500">
+            <BookCheck size={15} className="text-gold" />
+            Выполнение прошлого ДЗ
+          </legend>
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {homeworkOptions.map(({ value, label }) => {
+              const selected = homeworkReview.status === value;
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => chooseHomeworkStatus(value)}
+                  className={`min-h-11 rounded-xl border px-2 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-65 ${
+                    selected
+                      ? "border-gold bg-amber-50 text-amber-950"
+                      : "border-stone-200 bg-white text-stone-500"
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+
+          {["completed", "partial"].includes(homeworkReview.status) ? (
+            <div className="mt-4 rounded-xl bg-stone-50 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <label htmlFor={`homework-percent-${student.crmStudentId}`} className="text-sm font-bold text-stone-700">
+                  Выполнено примерно
+                </label>
+                <strong className="text-lg text-emerald-700">{homeworkReview.completionPercent ?? 0}%</strong>
+              </div>
+              <input
+                id={`homework-percent-${student.crmStudentId}`}
+                type="range"
+                min={10}
+                max={100}
+                step={10}
+                value={homeworkReview.completionPercent ?? 50}
+                disabled={disabled}
+                onChange={(event) => {
+                  const completionPercent = Number(event.target.value);
+                  onChange({
+                    ...draft,
+                    homeworkReview: {
+                      ...homeworkReview,
+                      status: completionPercent === 100 ? "completed" : "partial",
+                      completionPercent,
+                    },
+                  });
+                }}
+                className="mt-3 w-full accent-emerald-700"
+              />
+              <label className="mt-4 block text-xs font-bold uppercase tracking-wider text-stone-500">
+                Трудности или что осталось доделать
+                <textarea
+                  value={homeworkReview.difficulties ?? ""}
+                  disabled={disabled}
+                  onChange={(event) => onChange({
+                    ...draft,
+                    homeworkReview: { ...homeworkReview, difficulties: event.target.value },
+                  })}
+                  className="mt-2 min-h-20 w-full rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm normal-case tracking-normal"
+                  placeholder="Например: не получается переход между аккордами"
+                />
+              </label>
+              {homeworkNeedsDifficulties && !homeworkReview.difficulties?.trim() ? (
+                <p className="mt-2 text-xs font-semibold text-amber-800">Укажите, что осталось доделать.</p>
+              ) : null}
+            </div>
+          ) : null}
+
+          {homeworkNeedsReason ? (
+            <label className="mt-4 block text-xs font-bold uppercase tracking-wider text-red-700">
+              Почему домашнее задание не выполнено
+              <textarea
+                value={homeworkReview.notCompletedReason ?? ""}
+                disabled={disabled}
+                onChange={(event) => onChange({
+                  ...draft,
+                  homeworkReview: { ...homeworkReview, notCompletedReason: event.target.value },
+                })}
+                className="mt-2 min-h-20 w-full rounded-xl border border-red-200 bg-red-50/40 px-3 py-2 text-sm normal-case tracking-normal text-stone-800"
+                placeholder="Причина обязательна"
+              />
+            </label>
+          ) : null}
+        </fieldset>
+      ) : null}
+
+      <label className="mt-4 block text-xs font-bold uppercase tracking-wider text-stone-500">
+        {attended ? "Комментарий по ученику" : "Комментарий или причина отсутствия"}
+        <textarea
+          value={teacherNote}
+          disabled={disabled}
+          onChange={(event) => onChange({ ...draft, teacherNote: event.target.value })}
+          className="mt-2 min-h-16 w-full rounded-xl border border-stone-200 px-3 py-2 text-sm normal-case tracking-normal"
+          placeholder={attended ? "Необязательная заметка" : "Что произошло?"}
+        />
+      </label>
+
     </div>
   );
 }

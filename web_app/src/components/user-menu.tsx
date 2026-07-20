@@ -55,7 +55,7 @@ export function UserMenu() {
       {open && (
         <div
           role="menu"
-          className="absolute right-0 top-[calc(100%+10px)] z-50 w-72 overflow-hidden rounded-[22px] border border-stone-200 bg-paper shadow-soft"
+          className="absolute right-0 top-[calc(100%+10px)] z-50 w-[min(18rem,calc(100vw-2rem))] overflow-hidden rounded-[22px] border border-stone-200 bg-paper shadow-soft"
         >
           <div className="border-b border-stone-100 bg-stone-50/90 px-4 py-3.5">
             <p className="truncate text-sm font-bold">{fullName}</p>

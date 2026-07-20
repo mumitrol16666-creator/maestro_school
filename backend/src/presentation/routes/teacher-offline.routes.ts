@@ -9,10 +9,12 @@ import {
   teacherOfflineWithdraw,
   teacherOfflineStart,
   teacherOfflineSubmit,
+  teacherOfflineSetAttendance,
   getTeacherSalarySummary,
 } from "../../application/services/teacher-offline.service.js";
 import { listTeacherStudents } from "../../application/services/teacher-students.service.js";
 import { authenticate, requirePermission, requireTeacher } from "../guards/auth.guards.js";
+import { offlineLessonStudentCheckSchema } from "./offline-lesson.schemas.js";
 
 const readGuards = [authenticate, requirePermission("offline_school.read")];
 const writeGuards = [authenticate, requirePermission("offline_school.write")];
@@ -72,6 +74,25 @@ export async function teacherOfflineRoutes(app: FastifyInstance) {
     async (request) => {
       const { crmClassId } = z.object({ crmClassId: z.string().min(1) }).parse(request.params);
       return { data: await teacherOfflineStart(request.user!.id, crmClassId) };
+    },
+  );
+
+  app.post(
+    "/teachers/me/offline-lessons/:crmClassId/attendance",
+    { preHandler: writeGuards },
+    async (request) => {
+      const { crmClassId } = z.object({ crmClassId: z.string().min(1) }).parse(request.params);
+      const body = offlineLessonStudentCheckSchema.parse(request.body ?? {});
+      return {
+        data: await teacherOfflineSetAttendance(
+          request.user!.id,
+          crmClassId,
+          body.studentId,
+          body.attendanceStatus,
+          body.teacherNote,
+          body.homeworkReview,
+        ),
+      };
     },
   );
 

@@ -3,6 +3,7 @@ import type {
   TeacherOfflineAgenda,
   TeacherOfflineClass,
   TeacherOfflineClassStudents,
+  OfflineHomeworkReview,
   TrialLessonReport,
 } from "@/types/teacher-offline";
 
@@ -65,9 +66,15 @@ export const teacherOfflineApi = {
       `/teachers/me/offline-lessons/${encodeURIComponent(crmClassId)}/withdraw`,
       { method: "POST", body: JSON.stringify({ reason }) },
     ),
-  attendance: (crmClassId: string, studentId: string, attendanceStatus: string, teacherNote?: string) =>
+  attendance: (
+    crmClassId: string,
+    studentId: string,
+    attendanceStatus: string,
+    teacherNote?: string,
+    homeworkReview?: OfflineHomeworkReview,
+  ) =>
     apiRequest<Record<string, unknown>>(
       `/teachers/me/offline-lessons/${encodeURIComponent(crmClassId)}/attendance`,
-      { method: "POST", body: JSON.stringify({ studentId, attendanceStatus, teacherNote }) },
+      { method: "POST", body: JSON.stringify({ studentId, attendanceStatus, teacherNote, homeworkReview }) },
     ),
 };

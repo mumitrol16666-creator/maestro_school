@@ -22,6 +22,13 @@ const navigation = [
   { href: "/settings", label: "Профиль", icon: CircleUserRound },
 ];
 
+const studentMobileNavigation = [
+  { href: "/dashboard", label: "Главная", icon: House },
+  { href: "/courses", label: "Курсы", icon: BookMarked },
+  { href: "/school-lessons", label: "Школа", icon: School },
+  { href: "/online-lessons", label: "Онлайн", icon: MonitorPlay },
+];
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -102,14 +109,78 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {open && <div className="fixed inset-y-0 left-0 z-50 w-[min(86vw,320px)] shadow-2xl lg:hidden">{sidebar}</div>}
       {open && <button className="fixed inset-0 z-40 bg-black/45 backdrop-blur-[2px] lg:hidden" onClick={() => setOpen(false)} aria-label="Закрыть меню по фону" />}
       <div className="lg:pl-[272px]">
-        <header className="sticky top-0 z-30 flex h-[calc(72px+env(safe-area-inset-top,0px))] pt-[env(safe-area-inset-top,0px)] items-center gap-4 border-b border-stone-200/70 bg-cream/85 px-5 backdrop-blur-xl sm:px-8">
-          <button onClick={() => setOpen(true)} className="grid h-10 w-10 place-items-center rounded-xl border border-stone-200/80 bg-white shadow-sm transition hover:border-gold/30 lg:hidden" aria-label="Открыть меню"><Menu size={20} /></button>
+        <header className="sticky top-0 z-30 flex h-[calc(68px+env(safe-area-inset-top,0px))] items-center gap-3 border-b border-stone-200/70 bg-cream/90 px-4 pt-[env(safe-area-inset-top,0px)] backdrop-blur-xl sm:px-8">
+          {student ? (
+            <span className="lg:hidden">
+              <Brand compact />
+            </span>
+          ) : (
+            <button onClick={() => setOpen(true)} className="grid h-10 w-10 place-items-center rounded-xl border border-stone-200/80 bg-white shadow-sm transition hover:border-gold/30 lg:hidden" aria-label="Открыть меню"><Menu size={20} /></button>
+          )}
           <div className="ml-auto">
             <UserMenu />
           </div>
         </header>
-        <main className="mx-auto max-w-[1500px] p-5 sm:p-8 lg:p-10">{children}</main>
+        <main className={`mobile-safe mx-auto max-w-[1500px] p-4 sm:p-8 lg:p-10 ${
+          student ? "pb-[calc(6.75rem+env(safe-area-inset-bottom,0px))] sm:pb-[calc(6.75rem+env(safe-area-inset-bottom,0px))] lg:pb-10" : ""
+        }`}>{children}</main>
       </div>
+      {student ? (
+        <nav
+          className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-stone-200/90 bg-paper/95 px-2 pb-[env(safe-area-inset-bottom,0px)] shadow-[0_-12px_35px_rgba(37,33,25,0.08)] backdrop-blur-xl lg:hidden"
+          aria-label="Основная навигация"
+        >
+          {studentMobileNavigation.map(({ href, label, icon: Icon }) => {
+            const active = pathname.startsWith(href);
+            const badge = href === "/online-lessons"
+              ? unreadNotifications
+              : href === "/school-lessons"
+                ? schoolAlerts.totalUnread
+                : 0;
+            return (
+              <Link
+                key={href}
+                href={href}
+                aria-current={active ? "page" : undefined}
+                className={`relative flex min-w-0 flex-col items-center justify-center gap-1 px-1 py-2 text-[10px] font-bold transition ${
+                  active ? "text-ink" : "text-stone-400"
+                }`}
+              >
+                <span className={`relative grid h-9 w-11 place-items-center rounded-xl ${
+                  active ? "bg-amber-50 text-gold" : ""
+                }`}>
+                  <Icon size={19} strokeWidth={2.15} />
+                  {badge != null && badge > 0 ? (
+                    <span className="absolute -right-0.5 -top-0.5 grid min-h-4 min-w-4 place-items-center rounded-full bg-gold px-1 text-[9px] font-black leading-none text-ink">
+                      {badge > 9 ? "9+" : badge}
+                    </span>
+                  ) : null}
+                </span>
+                <span className="w-full truncate text-center">{label}</span>
+              </Link>
+            );
+          })}
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className={`flex min-w-0 flex-col items-center justify-center gap-1 px-1 py-2 text-[10px] font-bold transition ${
+              open || pathname.startsWith("/board") || pathname.startsWith("/settings")
+                ? "text-ink"
+                : "text-stone-400"
+            }`}
+            aria-label="Открыть остальные разделы"
+          >
+            <span className={`grid h-9 w-11 place-items-center rounded-xl ${
+              open || pathname.startsWith("/board") || pathname.startsWith("/settings")
+                ? "bg-amber-50 text-gold"
+                : ""
+            }`}>
+              <Menu size={19} strokeWidth={2.15} />
+            </span>
+            <span>Ещё</span>
+          </button>
+        </nav>
+      ) : null}
       {student && user ? (
         <StudentEntryAlerts
           userId={user.id}

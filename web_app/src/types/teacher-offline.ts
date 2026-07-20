@@ -88,6 +88,13 @@ export type TeacherOfflineAgenda = {
   classes: TeacherOfflineClass[];
 };
 
+export type OfflineHomeworkReview = {
+  status: "not_checked" | "completed" | "partial" | "not_completed" | "not_assigned";
+  completionPercent?: number | null;
+  difficulties?: string | null;
+  notCompletedReason?: string | null;
+};
+
 export type TeacherOfflineStudent = {
   crmStudentId: string;
   appUserId?: string | null;
@@ -96,7 +103,9 @@ export type TeacherOfflineStudent = {
   attended: boolean | null;
   attendanceStatus: "unmarked" | "present" | "late" | "excused_absence" | "unexcused_absence";
   teacherNote?: string | null;
+  homeworkReview?: OfflineHomeworkReview | null;
   markedAt?: string | null;
+  appMarkedAt?: string | null;
   groupStatus?: string;
 };
 

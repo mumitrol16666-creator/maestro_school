@@ -277,6 +277,7 @@ model User {
   maestroCoinTransactions  MaestroCoinTransaction[] @relation("CoinStudent")
   maestroCoinsAwarded      MaestroCoinTransaction[] @relation("CoinAwarder")
   notifications            UserNotification[]
+  offlineLessonStudentChecks OfflineLessonStudentCheck[]
 
   @@index([roleId])
   @@index([email])
@@ -287,6 +288,29 @@ model User {
   @@index([crmStudentId])
   @@index([crmTeacherId])
   @@map("users")
+}
+
+model OfflineLessonStudentCheck {
+  id                         String   @id @default(uuid()) @db.Uuid
+  crmClassId                 String   @map("crm_class_id") @db.VarChar(128)
+  crmStudentId               String   @map("crm_student_id") @db.VarChar(128)
+  teacherUserId              String?  @map("teacher_user_id") @db.Uuid
+  attendanceStatus           String   @default("unmarked") @map("attendance_status") @db.VarChar(32)
+  homeworkStatus             String   @default("not_checked") @map("homework_status") @db.VarChar(32)
+  homeworkCompletionPercent  Int?     @map("homework_completion_percent")
+  homeworkDifficulties       String?  @map("homework_difficulties") @db.Text
+  homeworkNotCompletedReason String?  @map("homework_not_completed_reason") @db.Text
+  teacherNote                String?  @map("teacher_note") @db.Text
+  markedAt                   DateTime @default(now()) @map("marked_at") @db.Timestamptz(6)
+  createdAt                  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  teacherUser User? @relation(fields: [teacherUserId], references: [id], onDelete: SetNull)
+
+  @@unique([crmClassId, crmStudentId])
+  @@index([teacherUserId])
+  @@index([crmClassId])
+  @@map("offline_lesson_student_checks")
 }
 
 // ─── Learning catalog ────────────────────────────────────────────────────────

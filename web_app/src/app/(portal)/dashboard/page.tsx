@@ -63,8 +63,8 @@ export default function DashboardPage() {
   return (
     <>
       {schoolAlerts && schoolAlerts.homework > 0 && (
-        <div className="mb-6 rounded-[24px] border border-amber-200 bg-amber-50 p-5 flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-4 duration-300">
-          <div className="flex items-center gap-3">
+        <div className="mb-6 flex flex-col gap-4 rounded-[24px] border border-amber-200 bg-amber-50 p-5 shadow-sm animate-in fade-in slide-in-from-top-4 duration-300 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-3">
             <span className="grid h-10 w-10 place-items-center rounded-2xl bg-amber-100 text-gold flex-shrink-0">
               <Trophy size={20} />
             </span>
@@ -77,7 +77,7 @@ export default function DashboardPage() {
           </div>
           <Link
             href="/school-lessons"
-            className="rounded-xl bg-gold px-4 py-2.5 text-xs font-bold text-white transition hover:bg-gold/80 flex-shrink-0"
+            className="w-full rounded-xl bg-gold px-4 py-2.5 text-center text-xs font-bold text-white transition hover:bg-gold/80 sm:w-auto sm:flex-shrink-0"
           >
             Посмотреть ДЗ
           </Link>

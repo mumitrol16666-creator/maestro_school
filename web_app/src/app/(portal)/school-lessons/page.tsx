@@ -75,11 +75,11 @@ function formatShortDate(dateStr: string) {
 
 type Tab = "overview" | "homework" | "schedule" | "history";
 
-const tabs: { key: Tab; label: string; icon: typeof GraduationCap }[] = [
-  { key: "overview", label: "Обзор", icon: Sparkles },
-  { key: "homework", label: "Домашние задания", icon: BookOpen },
-  { key: "schedule", label: "Расписание", icon: CalendarDays },
-  { key: "history", label: "История", icon: History },
+const tabs: { key: Tab; label: string; mobileLabel: string; icon: typeof GraduationCap }[] = [
+  { key: "overview", label: "Обзор", mobileLabel: "Главное", icon: Sparkles },
+  { key: "homework", label: "Домашние задания", mobileLabel: "Домашние", icon: BookOpen },
+  { key: "schedule", label: "Расписание", mobileLabel: "Уроки", icon: CalendarDays },
+  { key: "history", label: "История", mobileLabel: "История", icon: History },
 ];
 
 /* ─── interactive lesson card ───────────────────────────────────────── */
@@ -447,31 +447,34 @@ function TabNav({
   alerts: SchoolAlertCounts;
 }) {
   return (
-    <nav className="mb-8 flex gap-1 overflow-x-auto rounded-2xl border border-stone-200 bg-white p-1.5 shadow-soft">
-      {tabs.map(({ key, label, icon: Icon }) => (
+    <nav className="mb-8 grid grid-cols-4 gap-1 rounded-2xl border border-stone-200 bg-white p-1.5 shadow-soft">
+      {tabs.map(({ key, label, mobileLabel, icon: Icon }) => (
         <button
           key={key}
           onClick={() => onChange(key)}
-          className={`flex items-center gap-2 whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-semibold transition-all ${
+          type="button"
+          title={label}
+          className={`relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-[10px] font-semibold leading-tight transition-all sm:flex-row sm:gap-2 sm:px-4 sm:py-2.5 sm:text-sm ${
             active === key
               ? "bg-ink text-white shadow-sm"
               : "text-stone-500 hover:bg-stone-50 hover:text-ink"
           }`}
         >
-          <Icon size={16} className={active === key ? "text-gold" : undefined} />
+          <Icon size={17} className={active === key ? "text-gold" : undefined} />
+          <span className="w-full truncate text-center sm:hidden">{mobileLabel}</span>
           <span className="hidden sm:inline">{label}</span>
           {key === "homework" && alerts.homework > 0 ? (
-            <span className="grid min-w-5 place-items-center rounded-full bg-gold px-1.5 py-0.5 text-[10px] font-black text-ink">
+            <span className="absolute right-1 top-1 grid min-w-4 place-items-center rounded-full bg-gold px-1 py-0.5 text-[9px] font-black text-ink sm:static sm:min-w-5 sm:px-1.5 sm:text-[10px]">
               {alerts.homework}
             </span>
           ) : null}
           {key === "history" && alerts.reports > 0 ? (
-            <span className="grid min-w-5 place-items-center rounded-full bg-gold px-1.5 py-0.5 text-[10px] font-black text-ink">
+            <span className="absolute right-1 top-1 grid min-w-4 place-items-center rounded-full bg-gold px-1 py-0.5 text-[9px] font-black text-ink sm:static sm:min-w-5 sm:px-1.5 sm:text-[10px]">
               {alerts.reports}
             </span>
           ) : null}
           {key === "schedule" && alerts.todayLessons + alerts.tomorrowLessons > 0 ? (
-            <span className="grid min-w-5 place-items-center rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-black text-blue-800">
+            <span className="absolute right-1 top-1 grid min-w-4 place-items-center rounded-full bg-blue-100 px-1 py-0.5 text-[9px] font-black text-blue-800 sm:static sm:min-w-5 sm:px-1.5 sm:text-[10px]">
               {alerts.todayLessons + alerts.tomorrowLessons}
             </span>
           ) : null}
@@ -943,17 +946,17 @@ export default function SchoolLessonsPage() {
                 </p>
                 <h2 className="font-display mt-2 text-3xl">История и отчёты по урокам</h2>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:flex-wrap">
                 <input
                   type="month"
                   value={reportMonth}
                   onChange={(event) => setReportMonth(event.target.value)}
-                  className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm"
+                  className="w-full rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm sm:w-auto"
                 />
                 <button
                   type="button"
                   onClick={downloadMonthlyReport}
-                  className="inline-flex items-center gap-2 rounded-xl bg-ink px-4 py-2 text-sm font-bold text-white"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-ink px-4 py-2 text-sm font-bold text-white sm:w-auto"
                 >
                   <Download size={15} /> Скачать отчёт за месяц
                 </button>
