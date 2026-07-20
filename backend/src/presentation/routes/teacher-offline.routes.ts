@@ -135,7 +135,7 @@ export async function teacherOfflineRoutes(app: FastifyInstance) {
     { preHandler: writeGuards },
     async (request) => {
       const { crmClassId } = z.object({ crmClassId: z.string().min(1) }).parse(request.params);
-      const body = z.object({ comment: z.string().max(5000).optional() }).parse(request.body ?? {});
+      const body = z.object({ comment: z.string().trim().min(3).max(5000) }).parse(request.body ?? {});
       return { data: await teacherOfflineMarkNotHeld(request.user!.id, crmClassId, body.comment) };
     },
   );

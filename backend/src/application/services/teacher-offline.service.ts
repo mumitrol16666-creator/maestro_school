@@ -18,6 +18,7 @@ import {
   saveOfflineLessonStudentCheck,
   type OfflineHomeworkReviewInput,
 } from "./offline-lesson-student-check.service.js";
+import { validateOfflineLessonSubmission } from "./offline-lesson-submission-policy.js";
 
 async function requireCrmTeacherId(appUserId: string) {
   const user = await prisma.user.findFirst({
@@ -102,6 +103,8 @@ export async function getTeacherOfflineClass(appUserId: string, crmClassId: stri
   const crmTeacherId = await requireCrmTeacherId(appUserId);
   const lesson = await fetchClassCard(crmClassId) as {
     teacher?: { crmTeacherId?: string } | null;
+    classType?: string | null;
+    group?: unknown;
   };
   if (lesson.teacher?.crmTeacherId !== crmTeacherId) {
     throw new BadRequestError("Этот урок назначен другому преподавателю", "LESSON_NOT_ASSIGNED");
@@ -135,13 +138,28 @@ export async function teacherOfflineSubmit(
   payload: Omit<TeacherSubmitPayload, "crmTeacherId">,
 ) {
   const crmTeacherId = await requireCrmTeacherId(appUserId);
-  return postTeacherSubmit(crmClassId, { ...payload, crmTeacherId });
+  const lesson = await getTeacherOfflineClass(appUserId, crmClassId);
+  const roster = await mergeOfflineLessonStudentChecks(crmClassId, await fetchClassStudents(crmClassId));
+  const validation = validateOfflineLessonSubmission({
+    lesson,
+    students: roster.students,
+    payload,
+  });
+  if (!validation.valid) {
+    throw new BadRequestError(validation.message, validation.code);
+  }
+
+  return postTeacherSubmit(crmClassId, {
+    ...payload,
+    teacherOutcomeHint: validation.outcome,
+    crmTeacherId,
+  });
 }
 
 export async function teacherOfflineMarkNotHeld(
   appUserId: string,
   crmClassId: string,
-  comment?: string,
+  comment: string,
 ) {
   const crmTeacherId = await requireCrmTeacherId(appUserId);
   return postTeacherMarkNotHeld(crmClassId, { crmTeacherId, comment });

@@ -215,6 +215,7 @@ export default function AdminOfflineLessonDetailPage() {
   const canManageAttendance = canEditReport;
   const canApprove = isAdmin && lesson?.status === "pending_admin_review";
   const isNotHeld = lesson?.teacherOutcomeHint === "not_held";
+  const isSubmittedAbsence = lesson?.teacherOutcomeHint === "no_submission";
   const isIndividualLesson = Boolean(
     !isTrialLesson
       && (lesson?.classType === "individual" || (!lesson?.group && students.length === 1)),
@@ -228,6 +229,11 @@ export default function AdminOfflineLessonDetailPage() {
           && draftFor(student).homeworkReview.status === "not_checked",
       ).length
     : 0;
+  const allStudentsAbsent = students.length > 0 && students.every((student) => (
+    ["excused_absence", "unexcused_absence"].includes(draftFor(student).attendanceStatus)
+  ));
+  const isAbsenceOnly = Boolean(isSubmittedAbsence || (canEditTeacherReport && allStudentsAbsent));
+  const requiresLessonReport = !isNotHeld && !isAbsenceOnly;
   const canShowStartPrompt = Boolean(
     !isAdmin
       && lesson?.status === "scheduled"
@@ -304,6 +310,11 @@ export default function AdminOfflineLessonDetailPage() {
           title: "Урок отправлен на проверку",
           description: "Посещаемость, результат домашнего задания и отчёт сохранены. Администратор проверит урок и опубликует новое задание ученику.",
         });
+      } else if (action === "submit-absence") {
+        setSuccess({
+          title: "Отсутствие передано администратору",
+          description: "Отметка посещаемости сохранена. Отчёт по уроку и домашнее задание заполнять не нужно.",
+        });
       } else if (action === "not-held") {
         setSuccess({
           title: "Урок отмечен как несостоявшийся",
@@ -343,9 +354,16 @@ export default function AdminOfflineLessonDetailPage() {
   }
 
   function submissionValidationError() {
+    if (studentsResource.error) {
+      return "Не удалось загрузить учеников. Обновите список перед отправкой.";
+    }
+    if (!students.length) {
+      return "В уроке не найден ученик. Обновите страницу или обратитесь к администратору.";
+    }
     if (unmarkedCount > 0) {
       return `Отметьте посещаемость у всех учеников. Осталось: ${unmarkedCount}.`;
     }
+    if (allStudentsAbsent) return null;
     if (homeworkReviewPendingCount > 0) {
       return "Укажите, как выполнено прошлое домашнее задание.";
     }
@@ -410,24 +428,25 @@ export default function AdminOfflineLessonDetailPage() {
 
   async function confirmSubmit() {
     setSubmitConfirmationOpen(false);
-    await runAction("submit", async () => {
+    const absenceOnly = allStudentsAbsent;
+    await runAction(absenceOnly ? "submit-absence" : "submit", async () => {
       await saveStudentChecks();
       return teacherOfflineApi.submit(crmClassId, {
-        topic: isTrialLesson ? undefined : topic.trim(),
-        lessonGoals: lessonGoals.trim() || undefined,
-        lessonSummary: isTrialLesson ? undefined : lessonSummary.trim(),
-        homeworkDraft: isTrialLesson ? undefined : homework.trim(),
-        nextLessonFocus: isTrialLesson ? undefined : nextLessonFocus.trim() || undefined,
-        materials: materialsText
+        topic: isTrialLesson || absenceOnly ? undefined : topic.trim(),
+        lessonGoals: absenceOnly ? undefined : lessonGoals.trim() || undefined,
+        lessonSummary: isTrialLesson || absenceOnly ? undefined : lessonSummary.trim(),
+        homeworkDraft: isTrialLesson || absenceOnly ? undefined : homework.trim(),
+        nextLessonFocus: isTrialLesson || absenceOnly ? undefined : nextLessonFocus.trim() || undefined,
+        materials: absenceOnly ? undefined : materialsText
           .split("\n")
           .map((url) => url.trim())
           .filter(Boolean)
           .map((url) => ({ type: "link", url, title: url })),
-        comment: comment.trim() || undefined,
-        trialReport: isTrialLesson
+        comment: absenceOnly ? undefined : comment.trim() || undefined,
+        trialReport: isTrialLesson && !absenceOnly
           ? { ...trialReport, capturedAt: new Date().toISOString() }
           : undefined,
-        teacherOutcomeHint: "held",
+        teacherOutcomeHint: absenceOnly ? "no_submission" : "held",
       });
     });
   }
@@ -441,11 +460,11 @@ export default function AdminOfflineLessonDetailPage() {
   }
 
   async function handleApprove() {
-    if (!isNotHeld && unmarkedCount > 0) {
+    if (requiresLessonReport && unmarkedCount > 0) {
       setError(`Отметьте посещаемость у всех учеников (осталось: ${unmarkedCount})`);
       return;
     }
-    if (!isNotHeld && homeworkReviewPendingCount > 0) {
+    if (requiresLessonReport && homeworkReviewPendingCount > 0) {
       setError("Зафиксируйте выполнение прошлого домашнего задания");
       return;
     }
@@ -507,6 +526,7 @@ export default function AdminOfflineLessonDetailPage() {
   if (lessonResource.error || !lesson) {
     return <ErrorState message={lessonResource.error ?? "Урок не найден"} retry={lessonResource.reload} />;
   }
+  const teacherSubmissionIssue = canEditTeacherReport ? submissionValidationError() : null;
 
   return (
     <>
@@ -523,7 +543,7 @@ export default function AdminOfflineLessonDetailPage() {
 
       <div className="mb-6 flex flex-wrap gap-3">
         <span className="rounded-full bg-stone-100 px-4 py-2 text-xs font-bold text-stone-700">
-          {statusLabels[lesson.status] ?? lesson.status}
+          {isSubmittedAbsence ? "Отсутствие отмечено" : (statusLabels[lesson.status] ?? lesson.status)}
         </span>
         {lesson.group?.name ? (
           <span className="rounded-full bg-amber-50 px-4 py-2 text-xs font-bold text-amber-900">
@@ -545,6 +565,15 @@ export default function AdminOfflineLessonDetailPage() {
           </p>
           <p className="mt-2 text-xs font-semibold text-red-700">
             С ученика не будет списано занятие. Если отметка ошибочна, верните урок преподавателю.
+          </p>
+        </div>
+      ) : null}
+
+      {isSubmittedAbsence ? (
+        <div className="mb-6 rounded-[24px] border border-amber-200 bg-amber-50 p-5">
+          <p className="text-sm font-bold text-amber-950">Преподаватель отметил отсутствие ученика</p>
+          <p className="mt-2 text-sm leading-6 text-amber-900/75">
+            Обычный отчёт по уроку не требуется. Проверьте посещаемость и подтвердите отметку.
           </p>
         </div>
       ) : null}
@@ -573,15 +602,26 @@ export default function AdminOfflineLessonDetailPage() {
       <div className="grid gap-7 xl:grid-cols-[1fr_420px]">
         <section className="order-last xl:order-none space-y-7">
           <form onSubmit={handleSubmit} className="rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
-            <h2 className="font-display text-3xl">Отчёт по уроку</h2>
+            <h2 className="font-display text-3xl">
+              {isAbsenceOnly ? "Отметка отсутствия" : "Отчёт по уроку"}
+            </h2>
             <p className="mt-2 text-sm text-stone-500">
-              {isTrialLesson
+              {isAbsenceOnly
+                ? "Все ученики отмечены отсутствующими. Тему, итог и домашнее задание заполнять не нужно."
+                : isTrialLesson
                 ? "Заполните диагностическую анкету пробного. Ответы помогут подготовить анализ и план обучения."
                 : isAdmin
                 ? "Проверьте отчёт преподавателя, при необходимости отредактируйте и подтвердите урок."
                 : "Заполните тему, итог и домашнее задание. Ученик увидит материалы после подтверждения администратором."}
             </p>
 
+            {isAbsenceOnly ? (
+              <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
+                Администратор получит только отметку о том, что ученик не пришёл. Обычный отчёт по уроку не создаётся.
+              </div>
+            ) : null}
+
+            <div className={isAbsenceOnly ? "hidden" : ""}>
             {isTrialLesson ? (
               <TrialReportEditor
                 report={trialReport}
@@ -669,17 +709,21 @@ export default function AdminOfflineLessonDetailPage() {
                 placeholder="Замечания по ученикам, сложности, рекомендации — всё, что важно для администратора"
               />
             </label>
+            </div>
 
             {!isAdmin ? (
               <div className="mt-6">
                 <button
                   type="submit"
-                  disabled={!canEditTeacherReport || busy != null}
+                  disabled={!canEditTeacherReport || busy != null || Boolean(teacherSubmissionIssue)}
                   className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-ink px-5 py-3 text-sm font-bold text-white disabled:opacity-50 sm:w-auto"
                 >
-                  {busy === "submit" ? <LoaderCircle className="animate-spin" size={16} /> : <Send size={16} />}
-                  Отправить на проверку
+                  {["submit", "submit-absence"].includes(busy ?? "") ? <LoaderCircle className="animate-spin" size={16} /> : <Send size={16} />}
+                  {allStudentsAbsent ? "Передать отметку об отсутствии" : "Отправить на проверку"}
                 </button>
+                {teacherSubmissionIssue ? (
+                  <p className="mt-3 max-w-xl text-sm font-semibold text-amber-800">{teacherSubmissionIssue}</p>
+                ) : null}
               </div>
             ) : null}
           </form>
@@ -702,7 +746,7 @@ export default function AdminOfflineLessonDetailPage() {
             <button
               disabled={
                 busy != null
-                  || (!isNotHeld && (
+                  || (requiresLessonReport && (
                     unmarkedCount > 0
                       || homeworkReviewPendingCount > 0
                       || (isTrialLesson ? !isTrialReportReady : (!topic.trim() || !lessonSummary.trim()))
@@ -712,7 +756,7 @@ export default function AdminOfflineLessonDetailPage() {
               className="flex w-full items-center justify-center gap-2 rounded-[24px] bg-emerald-700 px-5 py-4 text-sm font-bold text-white disabled:opacity-50"
             >
               {busy === "approve" ? <LoaderCircle className="animate-spin" size={16} /> : <ShieldCheck size={16} />}
-              Подтвердить урок
+              {isSubmittedAbsence ? "Подтвердить отсутствие" : "Подтвердить урок"}
             </button>
           ) : null}
 
@@ -772,10 +816,14 @@ export default function AdminOfflineLessonDetailPage() {
             <div className="rounded-[24px] border border-amber-200 bg-amber-50 p-5">
               <p className="inline-flex items-center gap-2 text-sm font-bold text-amber-900">
                 <CheckCircle2 size={16} />
-                Отправлено на проверку
+                {isSubmittedAbsence ? "Отсутствие отмечено" : isNotHeld ? "Урок не состоялся" : "Отправлено на проверку"}
               </p>
               <p className="mt-2 text-sm text-amber-800/80">
-                {isAdmin
+                {isSubmittedAbsence
+                  ? isAdmin
+                    ? "Проверьте отметку посещаемости. Тема, итог и домашнее задание не требуются."
+                    : "Администратор получил отметку об отсутствии. Отчёт по уроку заполнять не нужно."
+                  : isAdmin
                   ? "Проверьте посещаемость и результат прошлого ДЗ, затем подтвердите урок."
                   : "Посещаемость и проверка прошлого ДЗ сохранены. Администратор подтвердит урок и опубликует новое задание."}
               </p>
@@ -794,7 +842,7 @@ export default function AdminOfflineLessonDetailPage() {
         </aside>
       </div>
 
-      {isAdmin && lesson.status === "completed" && !isTrialLesson ? (
+      {isAdmin && lesson.status === "completed" && !isTrialLesson && !isSubmittedAbsence && !isNotHeld ? (
         <WhatsappHomeworkDrafts
           drafts={whatsappDrafts}
           busy={busy}
@@ -831,7 +879,8 @@ export default function AdminOfflineLessonDetailPage() {
         open={submitConfirmationOpen}
         lesson={lesson}
         studentsCount={students.length}
-        busy={busy === "submit"}
+        absenceOnly={allStudentsAbsent}
+        busy={["submit", "submit-absence"].includes(busy ?? "")}
         onClose={() => setSubmitConfirmationOpen(false)}
         onConfirm={() => void confirmSubmit()}
       />
@@ -1065,6 +1114,7 @@ function SubmitLessonConfirmation({
   open,
   lesson,
   studentsCount,
+  absenceOnly,
   busy,
   onClose,
   onConfirm,
@@ -1072,6 +1122,7 @@ function SubmitLessonConfirmation({
   open: boolean;
   lesson: { title: string; date: string; startTime: string; endTime: string };
   studentsCount: number;
+  absenceOnly: boolean;
   busy: boolean;
   onClose: () => void;
   onConfirm: () => void;
@@ -1089,9 +1140,13 @@ function SubmitLessonConfirmation({
         <span className="grid h-12 w-12 place-items-center rounded-2xl bg-amber-50 text-amber-800">
           <AlertTriangle size={22} />
         </span>
-        <h2 id="submit-lesson-title" className="font-display mt-5 text-3xl">Отправить урок на проверку?</h2>
+        <h2 id="submit-lesson-title" className="font-display mt-5 text-3xl">
+          {absenceOnly ? "Передать отметку об отсутствии?" : "Отправить урок на проверку?"}
+        </h2>
         <p className="mt-3 text-sm leading-6 text-stone-600">
-          Проверьте отметки перед отправкой. Администратор увидит отчёт и после проверки опубликует итог ученику.
+          {absenceOnly
+            ? "Администратор увидит посещаемость без обычного отчёта по уроку. Тема, итог и домашнее задание не нужны."
+            : "Проверьте отметки перед отправкой. Администратор увидит отчёт и после проверки опубликует итог ученику."}
         </p>
         <div className="mt-5 border-y border-stone-200 py-4 text-sm">
           <p className="font-bold text-ink">{lesson.title}</p>
@@ -1120,7 +1175,7 @@ function SubmitLessonConfirmation({
             className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-ink px-4 text-sm font-bold text-white disabled:opacity-50"
           >
             {busy ? <LoaderCircle size={16} className="animate-spin" /> : <Send size={16} />}
-            Отправить
+            {absenceOnly ? "Передать" : "Отправить"}
           </button>
         </div>
       </section>

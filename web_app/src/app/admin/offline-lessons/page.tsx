@@ -10,6 +10,7 @@ import {
   Clock3,
   FileCheck2,
   Send,
+  UserX,
 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
@@ -428,7 +429,7 @@ export default function AdminOfflineLessonsPage() {
         <SummaryCard
           icon={Send}
           label={isAdmin ? "Требуют подтверждения" : "Ждут подтверждения"}
-          hint={isAdmin ? "Отчёты преподавателей" : "Отправлены администратору"}
+          hint={isAdmin ? "Отчёты и отметки отсутствия" : "Переданы администратору"}
           value={counts.processing}
           tone="cream"
           active={activeTab === "processing"}
@@ -579,13 +580,22 @@ function LessonRow({
   stage: LessonStage;
   now: Date;
 }) {
-  const meta = stageMeta[stage];
+  const isAbsenceNote = stage === "processing"
+    && ["no_submission", "not_held"].includes(lesson.teacherOutcomeHint ?? "");
+  const meta = isAbsenceNote
+    ? {
+        ...stageMeta.processing,
+        label: lesson.teacherOutcomeHint === "not_held" ? "Урок не состоялся" : "Отсутствие отмечено",
+        action: "Проверить отметку",
+        badge: "bg-amber-100 text-amber-950",
+      }
+    : stageMeta[stage];
   const submittedAt = formatTimeStamp(lesson.submittedAt);
   const reviewedAt = formatTimeStamp(lesson.reviewedAt);
   const detail = stage === "report"
     ? elapsedLabel(lesson, now)
     : stage === "processing" && submittedAt
-      ? `Отправлено: ${submittedAt}`
+      ? `${isAbsenceNote ? "Отмечено" : "Отправлено"}: ${submittedAt}`
       : stage === "accepted" && reviewedAt
         ? `Принято администратором: ${reviewedAt}`
         : null;
@@ -614,7 +624,13 @@ function LessonRow({
               : "border border-stone-300 bg-white text-ink"
           }`}
         >
-          {stage === "accepted" ? <FileCheck2 size={15} /> : stage === "processing" ? <Clock3 size={15} /> : null}
+          {stage === "accepted"
+            ? <FileCheck2 size={15} />
+            : isAbsenceNote
+              ? <UserX size={15} />
+              : stage === "processing"
+                ? <Clock3 size={15} />
+                : null}
           {meta.action}
           <ArrowRight size={15} />
         </Link>
