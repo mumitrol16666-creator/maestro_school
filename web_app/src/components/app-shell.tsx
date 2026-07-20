@@ -1,11 +1,12 @@
 "use client";
 
-import { BookMarked, CircleUserRound, House, Megaphone, Menu, MonitorPlay, School, X } from "lucide-react";
+import { BookMarked, CircleUserRound, House, Megaphone, Menu, MessagesSquare, MonitorPlay, School, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { useStudentSchoolAlerts } from "@/hooks/use-student-school-alerts";
 import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
+import { useMessageMailboxStatus } from "@/hooks/use-message-mailbox-status";
 import { isStaffRole, isStudentRole, roleLabel, settingsPathForRole } from "@/lib/role-labels";
 import { useAuth } from "./auth-provider";
 import { AdminPendingHomeworkBadge } from "./admin-pending-homework-badge";
@@ -17,6 +18,7 @@ const navigation = [
   { href: "/dashboard", label: "Главная", icon: House },
   { href: "/courses", label: "Курсы", icon: BookMarked },
   { href: "/school-lessons", label: "Уроки в школе", icon: School, studentOnly: true },
+  { href: "/messages", label: "Обращения", icon: MessagesSquare, studentOnly: true, messagesOnly: true },
   { href: "/online-lessons", label: "Онлайн-уроки", icon: MonitorPlay },
   { href: "/board", label: "Доска Maestro", icon: Megaphone },
   { href: "/settings", label: "Профиль", icon: CircleUserRound },
@@ -26,7 +28,6 @@ const studentMobileNavigation = [
   { href: "/dashboard", label: "Главная", icon: House },
   { href: "/courses", label: "Курсы", icon: BookMarked },
   { href: "/school-lessons", label: "Школа", icon: School },
-  { href: "/online-lessons", label: "Онлайн", icon: MonitorPlay },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -37,8 +38,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const staff = isStaffRole(user?.role);
   const points = user?.points ?? 0;
   const coins = user?.coins ?? 0;
-  const { count: unreadNotifications } = useUnreadNotifications();
+  const { count: unreadNotifications } = useUnreadNotifications(60_000, "online_lesson_scheduled");
+  const { count: unreadMessages, hasAccess: hasMessageAccess } = useMessageMailboxStatus(student);
   const { counts: schoolAlerts } = useStudentSchoolAlerts(student ? user?.id : undefined);
+  const mobileNavigation = [
+    ...studentMobileNavigation,
+    hasMessageAccess
+      ? { href: "/messages", label: "Сообщения", icon: MessagesSquare }
+      : { href: "/online-lessons", label: "Онлайн", icon: MonitorPlay },
+  ];
 
   const sidebar = (
     <aside className="flex h-full flex-col overflow-y-auto border-r border-white/10 bg-[#151613] px-4 py-5 text-white sm:px-5 sm:py-6">
@@ -54,7 +62,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </button>
       </div>
       <nav className="mt-7 space-y-1.5">
-        {navigation.filter((item) => !item.studentOnly || (!staff && student)).map(({ href, label, icon: Icon }) => {
+        {navigation.filter((item) => (
+          (!item.studentOnly || (!staff && student))
+          && (!item.messagesOnly || hasMessageAccess)
+        )).map(({ href, label, icon: Icon }) => {
           const active = pathname.startsWith(href);
           return (
             <Link
@@ -77,6 +88,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <span className="min-w-0 flex-1 truncate">{label}</span>
               {href === "/online-lessons" && unreadNotifications != null && unreadNotifications > 0 ? (
                 <AdminPendingHomeworkBadge count={unreadNotifications} />
+              ) : null}
+              {href === "/messages" && unreadMessages != null && unreadMessages > 0 ? (
+                <AdminPendingHomeworkBadge count={unreadMessages} />
               ) : null}
               {href === "/school-lessons" && schoolAlerts.totalUnread > 0 ? (
                 <AdminPendingHomeworkBadge count={schoolAlerts.totalUnread} />
@@ -130,10 +144,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-stone-200/90 bg-paper/95 px-2 pb-[env(safe-area-inset-bottom,0px)] shadow-[0_-12px_35px_rgba(37,33,25,0.08)] backdrop-blur-xl lg:hidden"
           aria-label="Основная навигация"
         >
-          {studentMobileNavigation.map(({ href, label, icon: Icon }) => {
+          {mobileNavigation.map(({ href, label, icon: Icon }) => {
             const active = pathname.startsWith(href);
             const badge = href === "/online-lessons"
               ? unreadNotifications
+              : href === "/messages"
+                ? unreadMessages
               : href === "/school-lessons"
                 ? schoolAlerts.totalUnread
                 : 0;
@@ -186,6 +202,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           userId={user.id}
           counts={schoolAlerts}
           onlineUnread={unreadNotifications ?? 0}
+          messagesUnread={unreadMessages ?? 0}
         />
       ) : null}
     </div>

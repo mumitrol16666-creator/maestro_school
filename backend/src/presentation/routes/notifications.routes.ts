@@ -9,9 +9,18 @@ import {
 import { authenticate } from "../guards/auth.guards.js";
 
 export async function notificationsRoutes(app: FastifyInstance) {
-  app.get("/students/me/notifications/unread-count", { preHandler: [authenticate] }, async (request) => ({
-    data: { count: await countUnreadNotifications(request.user!.id) },
-  }));
+  const typeSchema = z.enum([
+    "online_lesson_scheduled",
+    "offline_lesson_approved",
+    "direct_message_received",
+  ]);
+
+  app.get("/students/me/notifications/unread-count", { preHandler: [authenticate] }, async (request) => {
+    const query = z.object({
+      type: typeSchema.optional(),
+    }).parse(request.query);
+    return { data: { count: await countUnreadNotifications(request.user!.id, query.type) } };
+  });
 
   app.get("/students/me/notifications", { preHandler: [authenticate] }, async (request) => {
     const query = z.object({ limit: z.coerce.number().int().min(1).max(50).default(20) }).parse(request.query);
@@ -24,7 +33,8 @@ export async function notificationsRoutes(app: FastifyInstance) {
   });
 
   app.post("/students/me/notifications/read-all", { preHandler: [authenticate] }, async (request) => {
-    await markAllNotificationsRead(request.user!.id);
+    const query = z.object({ type: typeSchema.optional() }).parse(request.query);
+    await markAllNotificationsRead(request.user!.id, query.type);
     return { data: { ok: true } };
   });
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, CalendarDays, ChevronRight, Sparkles, X } from "lucide-react";
+import { BookOpen, CalendarDays, ChevronRight, MessagesSquare, Sparkles, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import type { SchoolAlertCounts } from "@/lib/student-school-alerts";
@@ -19,14 +19,16 @@ export function StudentEntryAlerts({
   userId,
   counts,
   onlineUnread,
+  messagesUnread,
 }: {
   userId: string;
   counts: SchoolAlertCounts;
   onlineUnread: number;
+  messagesUnread: number;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const total = counts.totalUnread + counts.todayLessons + counts.tomorrowLessons + onlineUnread;
+  const total = counts.totalUnread + counts.todayLessons + counts.tomorrowLessons + onlineUnread + messagesUnread;
 
   useEffect(() => {
     if (total <= 0 || window.sessionStorage.getItem(sessionKey(userId))) return;
@@ -75,7 +77,15 @@ export function StudentEntryAlerts({
           href: "/online-lessons",
         }
       : null,
-  ].filter(Boolean), [counts, onlineUnread]);
+    messagesUnread > 0
+      ? {
+          icon: MessagesSquare,
+          title: messagesUnread === 1 ? "Новое сообщение" : `Новых сообщений: ${messagesUnread}`,
+          text: "Преподаватель ответил на ваше обращение.",
+          href: "/messages",
+        }
+      : null,
+  ].filter(Boolean), [counts, messagesUnread, onlineUnread]);
 
   if (!open || items.length === 0) return null;
 

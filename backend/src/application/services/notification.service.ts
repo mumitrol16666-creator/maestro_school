@@ -22,9 +22,9 @@ export async function createUserNotification(params: {
   });
 }
 
-export async function countUnreadNotifications(userId: string) {
+export async function countUnreadNotifications(userId: string, type?: UserNotificationType) {
   return prisma.userNotification.count({
-    where: { userId, readAt: null },
+    where: { userId, readAt: null, ...(type ? { type } : {}) },
   });
 }
 
@@ -58,9 +58,9 @@ export async function markNotificationRead(userId: string, notificationId: strin
   });
 }
 
-export async function markAllNotificationsRead(userId: string) {
+export async function markAllNotificationsRead(userId: string, type?: UserNotificationType) {
   await prisma.userNotification.updateMany({
-    where: { userId, readAt: null },
+    where: { userId, readAt: null, ...(type ? { type } : {}) },
     data: { readAt: new Date() },
   });
 }

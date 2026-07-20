@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, CheckCircle2, ChevronRight, X } from "lucide-react";
+import { Bell, CheckCircle2, ChevronRight, MessagesSquare, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { notificationsApi, type UserNotification } from "@/lib/notifications-api";
@@ -105,9 +105,7 @@ export function TeacherNotificationCenter({
               <h2 id="teacher-notifications-title" className="font-display mt-2 pr-10 text-3xl">
                 Новое в вашем кабинете
               </h2>
-              <p className="mt-2 text-sm text-white/60">
-                Здесь появляются принятые отчёты и изменения по урокам.
-              </p>
+              <p className="mt-2 text-sm text-white/60">Здесь появляются сообщения, принятые отчёты и изменения по урокам.</p>
             </div>
 
             <div className="max-h-[60vh] space-y-3 overflow-y-auto p-5 sm:p-6">
@@ -119,7 +117,9 @@ export function TeacherNotificationCenter({
                   <p className="mt-3 font-bold text-ink">Новых событий нет</p>
                   <p className="mt-1 text-sm text-stone-500">Все изменения уже просмотрены.</p>
                 </div>
-              ) : items.map((item) => (
+              ) : items.map((item) => {
+                const ItemIcon = item.type === "direct_message_received" ? MessagesSquare : CheckCircle2;
+                return (
                 <button
                   key={item.id}
                   type="button"
@@ -129,7 +129,7 @@ export function TeacherNotificationCenter({
                   }`}
                 >
                   <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-emerald-50 text-emerald-700">
-                    <CheckCircle2 size={20} />
+                    <ItemIcon size={20} />
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block font-bold text-ink">{item.title}</span>
@@ -137,7 +137,8 @@ export function TeacherNotificationCenter({
                   </span>
                   <ChevronRight size={18} className="shrink-0 text-stone-300" />
                 </button>
-              ))}
+                );
+              })}
             </div>
 
             {items.some((item) => !item.readAt) ? (

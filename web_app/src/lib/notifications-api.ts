@@ -11,9 +11,16 @@ export interface UserNotification {
 }
 
 export const notificationsApi = {
-  unreadCount: () => apiRequest<{ count: number }>("/students/me/notifications/unread-count"),
+  unreadCount: (type?: "online_lesson_scheduled" | "offline_lesson_approved" | "direct_message_received") =>
+    apiRequest<{ count: number }>(
+      `/students/me/notifications/unread-count${type ? `?type=${encodeURIComponent(type)}` : ""}`,
+    ),
   list: (limit = 20) => apiRequest<UserNotification[]>(`/students/me/notifications?limit=${limit}`),
   markRead: (id: string) =>
     apiRequest(`/students/me/notifications/${id}/read`, { method: "PATCH" }),
-  markAllRead: () => apiRequest("/students/me/notifications/read-all", { method: "POST" }),
+  markAllRead: (type?: "online_lesson_scheduled" | "offline_lesson_approved" | "direct_message_received") =>
+    apiRequest(
+      `/students/me/notifications/read-all${type ? `?type=${encodeURIComponent(type)}` : ""}`,
+      { method: "POST" },
+    ),
 };

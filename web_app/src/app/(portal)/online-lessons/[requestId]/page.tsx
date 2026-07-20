@@ -23,7 +23,7 @@ export default function OnlineLessonDetailPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    void notificationsApi.markAllRead().catch(() => undefined);
+    void notificationsApi.markAllRead("online_lesson_scheduled").catch(() => undefined);
   }, [requestId]);
 
   if (resource.loading) return <LoadingState label="Открываем заявку" />;

@@ -7,6 +7,7 @@ import {
   CircleAlert,
   CircleX,
   GraduationCap,
+  MessageCircle,
   Search,
   UserRound,
   Users,
@@ -16,7 +17,6 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
 import { PageHeader } from "@/components/page-header";
-import { WhatsAppLink } from "@/components/whatsapp-link";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { formatAge, formatFio } from "@/lib/name";
 import { formatPhoneDisplay } from "@/lib/phone";
@@ -325,7 +325,15 @@ function StudentCard({ student }: { student: TeacherStudent }) {
       ) : null}
 
       <div className="mt-5 flex flex-wrap gap-2 border-t border-stone-200 pt-5">
-        <WhatsAppLink phone={student.phone} label="Написать в WhatsApp" />
+        {student.appUserId ? (
+          <Link
+            href={`/admin/messages?contact=${student.appUserId}`}
+            className="inline-flex items-center gap-2 rounded-full bg-ink px-4 py-2 text-xs font-bold text-white transition hover:bg-stone-700"
+          >
+            <MessageCircle size={14} />
+            Написать ученику
+          </Link>
+        ) : null}
         {upcomingOnline ? (
           <Link
             href={`/admin/online-lessons/${upcomingOnline.id}`}

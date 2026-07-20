@@ -120,6 +120,19 @@ export async function fetchTeacherStudents(crmTeacherId: string) {
   }>(`/api/integration/v1/teachers/${encodeURIComponent(crmTeacherId)}/students`);
 }
 
+export async function fetchStudentTeachers(crmStudentId: string) {
+  return crmGet<{
+    crmStudentId: string;
+    teachers: Array<{
+      crmTeacherId: string;
+      appUserId?: string | null;
+      name: string;
+      directions: string[];
+      sources: Array<"assigned" | "group" | "schedule" | "membership">;
+    }>;
+  }>(`/api/integration/v1/students/${encodeURIComponent(crmStudentId)}/teachers`);
+}
+
 export async function fetchClassCard(crmClassId: string) {
   return crmGet<Record<string, unknown>>(`/api/integration/v1/classes/${encodeURIComponent(crmClassId)}`);
 }

@@ -10,6 +10,7 @@ import { usePendingHomeworkCount } from "@/hooks/use-pending-homework-count";
 import { usePendingLessonQuestionsCount } from "@/hooks/use-pending-lesson-questions-count";
 import { usePendingOnlineLessonsCount } from "@/hooks/use-pending-online-lessons-count";
 import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
+import { useMessageMailboxStatus } from "@/hooks/use-message-mailbox-status";
 import { teacherStudentsApi } from "@/lib/teacher-students-api";
 import { AdminPendingHomeworkBadge } from "./admin-pending-homework-badge";
 import { useAuth } from "./auth-provider";
@@ -36,6 +37,7 @@ const lessonNavigation = [
 const teacherNavigation = [
   { href: "/admin", label: "Главная", icon: LayoutDashboard },
   { href: "/admin/my-students", label: "Мои ученики", icon: UsersRound },
+  { href: "/admin/messages", label: "Сообщения", icon: MessagesSquare },
   ...lessonNavigation,
 ];
 
@@ -55,6 +57,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const { count: pendingQuestionsCount, reload: reloadPendingQuestionsCount } = usePendingLessonQuestionsCount(60_000, isContentAdmin);
   const { count: pendingOnlineLessonsCount, reload: reloadPendingOnlineLessonsCount } = usePendingOnlineLessonsCount();
   const { count: unreadNotifications, reload: reloadUnreadNotifications } = useUnreadNotifications();
+  const { count: unreadMessages } = useMessageMailboxStatus(user?.role === "teacher");
   const [teacherDirections, setTeacherDirections] = useState<string[]>([]);
   const navigation = isContentAdmin
     ? [...cmsNavigation, ...accessNavigation, ...teachingNavigation]
@@ -142,6 +145,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             ? pendingQuestionsCount
             : href === "/admin/online-lessons"
               ? pendingOnlineLessonsCount
+              : href === "/admin/messages"
+                ? unreadMessages
               : null;
         return (
           <Link
@@ -264,12 +269,16 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     </div>
     {teacherMobileNavigation.length ? (
       <nav
-        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-stone-200/90 bg-paper/95 px-2 pb-[env(safe-area-inset-bottom,0px)] shadow-[0_-12px_35px_rgba(37,33,25,0.08)] backdrop-blur-xl lg:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-stone-200/90 bg-paper/95 px-2 pb-[env(safe-area-inset-bottom,0px)] shadow-[0_-12px_35px_rgba(37,33,25,0.08)] backdrop-blur-xl lg:hidden"
         aria-label="Навигация преподавателя"
       >
         {teacherMobileNavigation.map(({ href, label, icon: Icon }) => {
           const active = href === "/admin" ? pathname === href : pathname.startsWith(href);
-          const pending = href === "/admin/online-lessons" ? pendingOnlineLessonsCount : null;
+          const pending = href === "/admin/online-lessons"
+            ? pendingOnlineLessonsCount
+            : href === "/admin/messages"
+              ? unreadMessages
+              : null;
           return (
             <Link
               key={href}
