@@ -1045,7 +1045,7 @@ function WhatsappHomeworkDrafts({
                         ? "bg-emerald-50 text-emerald-800"
                         : "bg-amber-50 text-amber-900"
                     }`}>
-                      {draft.source === "ai" ? "AI-черновик" : "Стандартный черновик"}
+                      {draft.source === "ai" ? "Новая формулировка" : "Готовый черновик"}
                     </span>
                   ) : null}
                 </div>

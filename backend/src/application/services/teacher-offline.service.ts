@@ -28,7 +28,7 @@ async function requireCrmTeacherId(appUserId: string) {
 
   if (!user?.crmTeacherId) {
     throw new BadRequestError(
-      "Аккаунт не связан с преподавателем в CRM. Обратитесь к администратору Maestro.",
+      "Профиль преподавателя не подключён. Обратитесь к администратору Maestro.",
       "CRM_NOT_LINKED",
     );
   }

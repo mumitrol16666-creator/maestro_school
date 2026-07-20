@@ -11,7 +11,7 @@ import { AndroidAppDownloadCard } from "@/components/android-app-download";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { api, storeSession, getAccessToken } from "@/lib/api-client";
 import { formatFio, initialsFromName } from "@/lib/name";
-import { isContentAdminRole, permissionLabel, roleLabel } from "@/lib/role-labels";
+import { permissionLabel, roleDescription, roleLabel } from "@/lib/role-labels";
 
 export default function AdminSettingsPage() {
   const { user, logout, refreshUser } = useAuth();
@@ -33,7 +33,6 @@ export default function AdminSettingsPage() {
   const fullName = formatFio(profile) || profile.email || "Администратор";
   const initials = initialsFromName(profile);
   const permissions = profile.permissions ?? [];
-  const contentAdmin = isContentAdminRole(profile.role);
 
   async function savePhone(event: React.FormEvent) {
     event.preventDefault();
@@ -60,9 +59,9 @@ export default function AdminSettingsPage() {
   return (
     <>
       <PageHeader
-        eyebrow="Maestro Admin"
+        eyebrow="Личный кабинет"
         title="Настройки аккаунта"
-        description="Данные администратора, смена пароля и права доступа. Баллы и Coins здесь не показываются — они только у учеников."
+        description="Контакты, пароль, уведомления и доступные вам разделы."
       />
 
       <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
@@ -92,7 +91,7 @@ export default function AdminSettingsPage() {
             className="mt-8 flex w-full items-center justify-center gap-2 rounded-2xl border border-white/15 bg-white/5 px-4 py-3 text-sm font-semibold text-white/75 transition hover:border-red-400/30 hover:bg-red-500/10 hover:text-red-100"
           >
             <LogOut size={16} />
-            Выйти из админки
+            Выйти из кабинета
           </button>
         </section>
 
@@ -102,7 +101,7 @@ export default function AdminSettingsPage() {
               <KeyRound size={18} className="text-gold" />
               <div>
                 <h2 className="font-display text-2xl">Смена пароля</h2>
-                <p className="mt-1 text-sm text-stone-500">Обновите пароль администратора для входа в CMS.</p>
+                <p className="mt-1 text-sm text-stone-500">Используйте новый пароль при следующем входе.</p>
               </div>
             </div>
             <div className="mt-6">
@@ -142,20 +141,12 @@ export default function AdminSettingsPage() {
             <div className="flex items-center gap-3">
               <Shield size={18} className="text-gold" />
               <div>
-                <h2 className="font-display text-2xl">Роль и доступ</h2>
-                <p className="mt-1 text-sm text-stone-500">
-                  {contentAdmin
-                    ? "Полный доступ к CMS: курсы, доска, медиатека, ученики и онлайн-уроки."
-                    : "Ограниченный доступ: преподавательские разделы без редактирования каталога."}
-                </p>
+                <h2 className="font-display text-2xl">Что вам доступно</h2>
+                <p className="mt-1 text-sm text-stone-500">{roleDescription(profile.role)}</p>
               </div>
             </div>
             <div className="mt-5 rounded-2xl bg-stone-50 p-4 text-sm text-stone-600">
-              <p><span className="font-bold text-ink">Ваша роль:</span> {roleLabel(profile.role)}</p>
-              <p className="mt-2 text-xs leading-6 text-stone-500">
-                В системе также есть роли ученика, преподавателя, куратора и владельца — они назначаются отдельно.
-                Супер-админ пока не используется в интерфейсе.
-              </p>
+              <p><span className="font-bold text-ink">Ваш уровень доступа:</span> {roleLabel(profile.role)}</p>
             </div>
             {permissions.length ? (
               <ul className="mt-4 grid gap-2 sm:grid-cols-2">

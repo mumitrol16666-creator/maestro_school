@@ -10,7 +10,7 @@ import { ErrorState, LoadingState } from "@/components/data-states";
 import { RoleBadge } from "@/components/role-badge";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { formatFio } from "@/lib/name";
-import { isContentAdminRole, permissionLabel, roleLabel } from "@/lib/role-labels";
+import { isContentAdminRole, permissionLabel, roleDescription, roleLabel } from "@/lib/role-labels";
 import { formatPhoneDisplay } from "@/lib/phone";
 import { usersApi } from "@/lib/users-api";
 import { CrmLinkPanel } from "@/components/crm-link-panel";
@@ -48,7 +48,7 @@ export default function AdminUserDetailPage() {
     setError(null);
     try {
       await usersApi.updateRole(userId, roleValue);
-      setMessage("Роль обновлена. Пользователю нужно перелогиниться.");
+      setMessage("Роль обновлена. Пользователю нужно выйти из кабинета и войти снова.");
       await resource.reload();
       setSelectedRole("");
     } catch (err) {
@@ -99,7 +99,7 @@ export default function AdminUserDetailPage() {
           <div className="flex items-center gap-3">
             <Shield size={18} className="text-gold" />
             <div>
-              <h2 className="font-display text-2xl">Роль доступа</h2>
+              <h2 className="font-display text-2xl">Доступ сотрудника</h2>
               <p className="mt-1 text-sm text-stone-500">
                 {canAssignRoles
                   ? "Выберите роль и сохраните. Изменение вступит в силу после следующего входа."
@@ -127,6 +127,9 @@ export default function AdminUserDetailPage() {
                 </option>
               ))}
             </select>
+            <p className="rounded-2xl bg-stone-50 px-4 py-3 text-sm leading-6 text-stone-600">
+              {roleDescription(roleValue)}
+            </p>
 
             {canAssignRoles && !isSelf ? (
               <button
@@ -145,7 +148,7 @@ export default function AdminUserDetailPage() {
           </div>
 
           <div className="mt-6 rounded-2xl bg-stone-50 p-4">
-            <p className="text-xs font-bold uppercase tracking-wider text-stone-400">Права роли</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-stone-400">Доступно в этой роли</p>
             <ul className="mt-3 space-y-2">
               {user.permissions.map((code) => (
                 <li key={code} className="text-sm text-stone-600">{permissionLabel(code)}</li>

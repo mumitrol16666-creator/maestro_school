@@ -41,7 +41,7 @@ export function PushNotificationsCard() {
     try {
       await subscribeToPushNotifications();
       setPermission(getNotificationPermission());
-      setMessage("Готово — будем сообщать, когда задание проверят.");
+      setMessage("Готово — будем сообщать о важных изменениях.");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Не удалось включить уведомления");
     } finally {
@@ -105,7 +105,7 @@ export function PushNotificationsCard() {
             <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold">Уведомления</p>
             <h3 className="font-display mt-2 text-3xl">На этом устройстве</h3>
             <p className="mt-3 text-sm leading-6 text-stone-500">
-              Чтобы получать сообщения о проверке домашних заданий, откройте Maestro в браузере <strong>Chrome на телефоне Android</strong>.
+              Чтобы получать сообщения об уроках и заданиях, откройте Maestro в браузере <strong>Chrome на телефоне Android</strong>.
             </p>
           </div>
         </div>
@@ -142,11 +142,12 @@ export function PushNotificationsCard() {
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold">Уведомления</p>
-          <h3 className="font-display mt-2 text-3xl">О проверке заданий</h3>
+          <h3 className="font-display mt-2 text-3xl">О важных событиях</h3>
           <p className="mt-3 text-sm leading-6 text-stone-500">
-            Сообщим, когда преподаватель принял домашнее задание или попросил доработать.
+            Сообщим об изменениях по урокам, отчётам и домашним заданиям.
           </p>
           <ul className="mt-4 space-y-2 text-sm leading-6 text-stone-500">
+            <li>✓ Отчёт по уроку принят</li>
             <li>✓ Домашнее задание принято</li>
             <li>✓ Нужна доработка задания</li>
           </ul>

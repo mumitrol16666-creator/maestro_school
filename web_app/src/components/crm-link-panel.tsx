@@ -61,10 +61,10 @@ export function CrmLinkPanel({
       const result = await usersApi.crmLookup(phone);
       setLookup(result);
       if (!result.found) {
-        setError("В CRM нет ученика/преподавателя с этим телефоном. Сначала создайте карточку в CRM.");
+        setError("Карточка с этим телефоном не найдена. Сначала создайте ученика или преподавателя в школе.");
       }
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Поиск в CRM не удался");
+      setError(reason instanceof Error ? reason.message : "Не удалось выполнить поиск");
     } finally {
       setLoading(false);
     }
@@ -72,11 +72,11 @@ export function CrmLinkPanel({
 
   async function linkAccount() {
     if (role === "teacher" && lookup?.role === "student") {
-      setError("В CRM по этому телефону найден ученик, а не преподаватель. Проверьте телефон или карточку в CRM.");
+      setError("По этому телефону найден ученик, а не преподаватель. Проверьте номер или карточку.");
       return;
     }
     if (role === "student" && lookup?.role === "teacher") {
-      setError("В CRM по этому телефону найден преподаватель, а не ученик. Проверьте телефон или карточку в CRM.");
+      setError("По этому телефону найден преподаватель, а не ученик. Проверьте номер или карточку.");
       return;
     }
 
@@ -85,7 +85,7 @@ export function CrmLinkPanel({
     setMessage(null);
     try {
       await usersApi.linkToCrm(userId, lookup?.crmUserId);
-      setMessage("Аккаунт связан с CRM. Офлайн-уроки и абонементы теперь доступны.");
+      setMessage("Аккаунт подключён. Расписание и данные обучения теперь доступны.");
       await onLinked();
       await loadStatus();
     } catch (reason) {
@@ -103,9 +103,9 @@ export function CrmLinkPanel({
       <div className="flex items-center gap-3">
         <Link2 size={18} className="text-gold" />
         <div>
-          <h2 className="font-display text-2xl">Связь с CRM</h2>
+          <h2 className="font-display text-2xl">Связь со школой</h2>
           <p className="mt-1 text-sm text-stone-500">
-            Нужна для разделов «Уроки в школе» и «Офлайн-уроки».
+            Нужна, чтобы показывать расписание, учеников и результаты уроков.
           </p>
         </div>
       </div>
@@ -125,12 +125,6 @@ export function CrmLinkPanel({
             <span className={`rounded-full px-3 py-1 text-xs font-bold ${linkStatusClasses[status] ?? linkStatusClasses.unlinked}`}>
               {linkStatusLabels[status] ?? status}
             </span>
-            {data?.crmStudentId ? (
-              <span className="text-xs text-stone-500">crmStudentId: <code>{data.crmStudentId}</code></span>
-            ) : null}
-            {data?.crmTeacherId ? (
-              <span className="text-xs text-stone-500">crmTeacherId: <code>{data.crmTeacherId}</code></span>
-            ) : null}
           </div>
 
           {data?.linkedAt ? (
@@ -141,10 +135,10 @@ export function CrmLinkPanel({
 
           {data?.crmLookup?.found ? (
             <div className="rounded-2xl bg-stone-50 p-4 text-sm text-stone-700">
-              <p className="font-bold text-ink">Найден в CRM</p>
+              <p className="font-bold text-ink">Карточка в школе найдена</p>
               <p className="mt-1">{data.crmLookup.name}</p>
               <p className="text-xs text-stone-500">
-                Роль: {data.crmLookup.role} · ID: {data.crmLookup.crmUserId}
+                {data.crmLookup.role === "teacher" ? "Преподаватель" : "Ученик"}
               </p>
             </div>
           ) : null}
@@ -155,7 +149,7 @@ export function CrmLinkPanel({
         <div className="mt-5 space-y-3">
           <p className="text-sm text-stone-600">
             Телефон в приложении: <span className="font-bold">{formatPhoneDisplay(phone)}</span>
-            {role === "teacher" ? " · привязка к преподавателю CRM" : " · привязка к ученику CRM"}
+            {role === "teacher" ? " · найдём карточку преподавателя" : " · найдём карточку ученика"}
           </p>
 
           <button
@@ -165,7 +159,7 @@ export function CrmLinkPanel({
             className="inline-flex items-center gap-2 rounded-2xl border border-stone-200 bg-white px-4 py-3 text-sm font-bold text-ink"
           >
             {loading ? <LoaderCircle size={16} className="animate-spin" /> : <Search size={16} />}
-            Найти в CRM по телефону
+            Найти по телефону
           </button>
 
           {lookup?.found ? (

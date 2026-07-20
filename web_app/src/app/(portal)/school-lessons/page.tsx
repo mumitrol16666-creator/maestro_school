@@ -531,7 +531,7 @@ export default function SchoolLessonsPage() {
           />
           <EmptyState
             title="Профиль школы не подключён"
-            description="Ваш аккаунт в приложении пока не связан с CRM школы. Обратитесь к администратору — после привязки здесь появятся уроки и остаток абонемента."
+            description="Обратитесь к администратору школы. После подключения здесь появятся уроки и остаток абонемента."
           />
         </>
       );
@@ -555,7 +555,7 @@ export default function SchoolLessonsPage() {
       resource.setData(await api.studentOfflineSummary());
       setLastRefreshedAt(new Date());
     } catch {
-      setRefreshError("Не удалось обновить данные из CRM");
+      setRefreshError("Не удалось обновить данные школы");
     } finally {
       setRefreshing(false);
     }
@@ -616,7 +616,7 @@ export default function SchoolLessonsPage() {
               className="inline-flex items-center gap-2 rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-sm font-bold text-ink shadow-soft transition hover:border-gold/50 hover:text-gold disabled:cursor-wait disabled:opacity-70"
             >
               <RefreshCw size={16} className={refreshing ? "animate-spin" : undefined} />
-              {refreshing ? "Обновляем" : "Обновить из CRM"}
+              {refreshing ? "Обновляем" : "Обновить данные"}
             </button>
             {lastRefreshedAt ? (
               <p className="text-xs font-semibold text-stone-400">

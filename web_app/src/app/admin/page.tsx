@@ -106,9 +106,9 @@ function ContentAdminDashboard() {
   return (
     <>
       <PageHeader
-        eyebrow="Content CMS"
+        eyebrow="Управление школой"
         title="Управление обучением"
-        description="Создавайте и публикуйте образовательный контент Maestro без участия разработчика."
+        description="Курсы, материалы, ученики и учебные процессы в одном месте."
       />
       <AdminPendingHomeworkBanner />
       <div className="grid gap-5 md:grid-cols-2">

@@ -15,6 +15,7 @@ import { exchangeSsoBridgeToken } from "../../application/services/sso-bridge.se
 import { provisionTeacherFromCrm } from "../../application/services/teacher-provision.service.js";
 import { provisionStudentFromCrm } from "../../application/services/student-provision.service.js";
 import { syncOnlineLessonFromCrm } from "../../application/services/online-lessons.service.js";
+import { notifyOfflineLessonApproved } from "../../application/services/notification.service.js";
 
 const linkSchema = z.object({
   phone: z.string().optional(),
@@ -67,6 +68,14 @@ const onlineLessonSyncSchema = z.discriminatedUnion("action", [
   }),
   z.object({ action: z.literal("cancel") }),
 ]);
+
+const offlineLessonApprovedSchema = z.object({
+  crmClassId: z.string().min(1).max(128),
+  crmTeacherId: z.string().min(1).max(64),
+  lessonTitle: z.string().trim().max(500).optional().nullable(),
+  date: z.string().trim().max(64).optional().nullable(),
+  startTime: z.string().trim().max(32).optional().nullable(),
+});
 
 function integrationProfile(
   user: NonNullable<Awaited<ReturnType<typeof findUserWithRoleById>>>,
@@ -153,6 +162,14 @@ export async function integrationRoutes(app: FastifyInstance) {
     return {
       success: true,
       data: await syncOnlineLessonFromCrm(requestId, body),
+    };
+  });
+
+  app.post("/notifications/offline-lesson-approved", async (request) => {
+    const body = offlineLessonApprovedSchema.parse(request.body);
+    return {
+      success: true,
+      data: await notifyOfflineLessonApproved(body),
     };
   });
 

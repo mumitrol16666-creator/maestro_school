@@ -70,7 +70,7 @@ export async function linkAdminUserToCrm(userId: string, crmUserId?: string) {
   const lookup = await fetchCrmProfileByPhone(user.phone);
   if (!targetCrmId) {
     if (!lookup.found || !lookup.crmUserId) {
-      throw new BadRequestError("В CRM не найден ученик/преподаватель с этим телефоном");
+      throw new BadRequestError("Карточка с этим телефоном не найдена");
     }
     targetCrmId = lookup.crmUserId;
     crmRole = lookup.role;
@@ -79,10 +79,10 @@ export async function linkAdminUserToCrm(userId: string, crmUserId?: string) {
   }
 
   if (user.role.slug === "teacher" && crmRole === "student") {
-    throw new BadRequestError("Нельзя привязать преподавателя платформы к карточке ученика в CRM");
+    throw new BadRequestError("Нельзя связать аккаунт преподавателя с карточкой ученика");
   }
   if (user.role.slug === "student" && crmRole === "teacher") {
-    throw new BadRequestError("Нельзя привязать ученика платформы к карточке преподавателя в CRM");
+    throw new BadRequestError("Нельзя связать аккаунт ученика с карточкой преподавателя");
   }
 
   const isTeacherLink = crmRole === "teacher" || (!crmRole && user.role.slug === "teacher");

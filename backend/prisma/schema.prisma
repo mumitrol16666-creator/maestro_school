@@ -224,6 +224,7 @@ model Teacher {
 
 enum UserNotificationType {
   online_lesson_scheduled
+  offline_lesson_approved
 }
 
 model User {

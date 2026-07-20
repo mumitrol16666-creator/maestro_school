@@ -240,11 +240,11 @@ function ProfileEditCard({
       await onSaved();
       setSuccess(true);
       if (updated.avatarSyncStatus === "failed") {
-        setAvatarSyncNotice("Фото сохранено в приложении. CRM временно не ответила, синхронизацию можно повторить позже.");
+        setAvatarSyncNotice("Фото сохранено в приложении. Карточка школы временно недоступна, повторите чуть позже.");
       } else if (updated.avatarSyncStatus === "not_linked") {
-        setAvatarSyncNotice("Фото сохранено в приложении. Аккаунт пока не связан с CRM.");
+        setAvatarSyncNotice("Фото сохранено в приложении. Профиль школы пока не подключён.");
       } else {
-        setAvatarSyncNotice("Фото сохранено и отправлено в CRM.");
+        setAvatarSyncNotice("Фото сохранено во всех разделах.");
       }
     } catch (reason) {
       setError(reason instanceof ApiError ? reason.message : "Не удалось загрузить фото");
@@ -310,7 +310,7 @@ function ProfileEditCard({
         <TextField label="Отчество" value={middleName} onChange={setMiddleName} maxLength={128} />
         <TextField label="Телефон" value={phone} onChange={setPhone} maxLength={32} required />
         <p className="-mt-2 text-xs leading-5 text-stone-400">
-          Эти данные используются в приложении. В CRM из этой карточки отправляется только фото.
+          Эти данные используются в приложении. Фото также обновится в основной карточке ученика.
         </p>
         <TextField label="Инструмент" value={profileInstrument} onChange={setProfileInstrument} maxLength={128} />
         <label className="block">

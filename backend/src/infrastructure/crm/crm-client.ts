@@ -66,7 +66,7 @@ export async function fetchTeacherOfflineClasses(
 export async function fetchTeacherStudents(crmTeacherId: string) {
   return crmGet<{
     crmTeacherId: string;
-    teacher: { crmTeacherId: string; name: string } | null;
+    teacher: { crmTeacherId: string; name: string; directions: string[] } | null;
     students: Array<{
       crmStudentId: string;
       appUserId?: string | null;

@@ -62,7 +62,7 @@ export default function LoginPage() {
         router.replace(target);
       } catch (reason) {
         if (!cancelled) {
-          setError(reason instanceof ApiError ? reason.message : "Не удалось войти по ссылке из CRM");
+          setError(reason instanceof ApiError ? reason.message : "Не удалось войти по ссылке из личного кабинета");
         }
       } finally {
         if (!cancelled) setSsoPending(false);
@@ -108,7 +108,7 @@ export default function LoginPage() {
           <h2 className="font-display mt-3 text-5xl">Вход в личный кабинет</h2>
           <p className="mt-4 text-sm leading-6 text-stone-500">
             {ssoPending
-              ? "Входим в кабинет по ссылке из CRM..."
+              ? "Открываем ваш кабинет..."
               : "Продолжайте обучение, смотрите задания, материалы и прогресс."}
           </p>
 

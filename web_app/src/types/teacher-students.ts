@@ -63,6 +63,6 @@ export type TeacherStudent = {
 };
 
 export type TeacherStudentsResponse = {
-  teacher: { crmTeacherId: string; name: string } | null;
+  teacher: { crmTeacherId: string; name: string; directions: string[] } | null;
   students: TeacherStudent[];
 };

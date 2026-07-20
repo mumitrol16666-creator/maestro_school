@@ -27,7 +27,7 @@ export async function pushRoutes(app: FastifyInstance) {
 
   app.post("/push/subscribe", { preHandler: [authenticate] }, async (request) => {
     const publicKey = getVapidPublicKey();
-    if (!publicKey) throw new BadRequestError("Push notifications are not configured on the server");
+    if (!publicKey) throw new BadRequestError("Уведомления пока не настроены");
 
     const body = subscriptionSchema.parse(request.body);
     const subscription = await upsertPushSubscription({
@@ -50,7 +50,7 @@ export async function pushRoutes(app: FastifyInstance) {
   app.post("/push/test", { preHandler: [authenticate] }, async (request) => {
     const result = await sendPushToUser(request.user!.id, {
       title: "Maestro",
-      body: "Уведомления работают — вы будете получать новости о проверке ДЗ.",
+      body: "Уведомления работают — важные изменения появятся на экране телефона.",
       url: "/settings",
       tag: "maestro-test",
     });

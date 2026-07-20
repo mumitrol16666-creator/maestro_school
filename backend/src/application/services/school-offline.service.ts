@@ -10,7 +10,7 @@ export async function getStudentSchoolOfflineSummary(appUserId: string) {
 
   if (!user?.crmStudentId) {
     throw new BadRequestError(
-      "Аккаунт не связан с офлайн-школой. Обратитесь к администратору Maestro.",
+      "Профиль школы не подключён. Обратитесь к администратору Maestro.",
       "CRM_NOT_LINKED",
     );
   }

@@ -51,7 +51,7 @@ export function LessonVideoPlayer({
         <AlertCircle size={28} className="text-red-500" />
         <p className="mt-4 text-sm font-bold text-red-700">Не удалось распознать ссылку на видео</p>
         <p className="mt-2 max-w-md text-xs text-red-600">
-          Поддерживаются YouTube, Vimeo и Cloudflare Stream. Проверьте ссылку в CMS.
+          Поддерживаются YouTube, Vimeo и Cloudflare Stream. Проверьте ссылку на видео.
         </p>
       </div>
     );

@@ -131,8 +131,8 @@ export default function TeacherStudentsPage() {
           description="Ваши офлайн- и онлайн-ученики в одном месте."
         />
         <EmptyState
-          title="CRM-профиль не подключён"
-          description="Попросите администратора связать ваш аккаунт приложения с профилем преподавателя в CRM."
+          title="Профиль преподавателя не подключён"
+          description="Попросите администратора проверить ваш номер телефона и подключить расписание школы."
         />
       </>
     );
@@ -149,7 +149,7 @@ export default function TeacherStudentsPage() {
       <PageHeader
         eyebrow="Кабинет преподавателя"
         title="Мои ученики"
-        description="Только ученики, назначенные вам в CRM или в онлайн-уроках."
+        description="Здесь собраны назначенные вам ученики из школы и онлайн-уроков."
       />
 
       <section className="mb-7 grid gap-3 sm:grid-cols-3">

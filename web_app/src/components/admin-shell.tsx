@@ -9,9 +9,12 @@ import { isContentAdminRole, roleLabel } from "@/lib/role-labels";
 import { usePendingHomeworkCount } from "@/hooks/use-pending-homework-count";
 import { usePendingLessonQuestionsCount } from "@/hooks/use-pending-lesson-questions-count";
 import { usePendingOnlineLessonsCount } from "@/hooks/use-pending-online-lessons-count";
+import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
+import { teacherStudentsApi } from "@/lib/teacher-students-api";
 import { AdminPendingHomeworkBadge } from "./admin-pending-homework-badge";
 import { useAuth } from "./auth-provider";
 import { Brand } from "./brand";
+import { TeacherNotificationCenter } from "./teacher-notification-center";
 
 const cmsNavigation = [
   { href: "/admin", label: "Обзор", icon: LayoutDashboard },
@@ -51,19 +54,52 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const { count: pendingHomeworkCount, reload: reloadPendingHomeworkCount } = usePendingHomeworkCount(60_000, isContentAdmin);
   const { count: pendingQuestionsCount, reload: reloadPendingQuestionsCount } = usePendingLessonQuestionsCount(60_000, isContentAdmin);
   const { count: pendingOnlineLessonsCount, reload: reloadPendingOnlineLessonsCount } = usePendingOnlineLessonsCount();
+  const { count: unreadNotifications, reload: reloadUnreadNotifications } = useUnreadNotifications();
+  const [teacherDirections, setTeacherDirections] = useState<string[]>([]);
   const navigation = isContentAdmin
     ? [...cmsNavigation, ...accessNavigation, ...teachingNavigation]
     : user?.role === "teacher"
       ? teacherNavigation
       : lessonNavigation;
-  const sidebarTitle = isContentAdmin ? "Content CMS" : "Кабинет преподавателя";
-  const headerTitle = isContentAdmin ? "Maestro Admin" : roleLabel(user?.role);
+  const sidebarTitle = isContentAdmin ? "Управление школой" : "Кабинет преподавателя";
   const displayName = (user ? formatFio(user) : "")
     || user?.login
     || user?.email?.split("@")[0]
     || roleLabel(user?.role);
   const initials = user ? initialsFromName(user) : "M";
   const teacherMobileNavigation = user?.role === "teacher" ? teacherNavigation : [];
+  const headerTitle = user?.role === "teacher"
+    ? user.firstName || displayName
+    : isContentAdmin
+      ? "Управление школой"
+      : roleLabel(user?.role);
+  const headerSubtitle = user?.role === "teacher"
+    ? teacherDirections.join(" · ") || "Преподаватель"
+    : displayName;
+
+  useEffect(() => {
+    if (user?.role !== "teacher") {
+      setTeacherDirections([]);
+      return;
+    }
+    let active = true;
+    void teacherStudentsApi.list()
+      .then((result) => {
+        if (!active) return;
+        setTeacherDirections([...new Set(
+          [
+            ...(result.teacher?.directions ?? []),
+            ...result.students.flatMap((student) => student.directions),
+          ].filter(Boolean),
+        )]);
+      })
+      .catch(() => {
+        if (active) setTeacherDirections([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [user?.id, user?.role]);
 
   useEffect(() => {
     if (pathname.startsWith("/admin/homework-review")) {
@@ -164,7 +200,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         <span className="min-w-0 flex-1">
           <span className="block text-[9px] font-black uppercase tracking-[0.16em] text-gold">{roleLabel(user?.role)}</span>
           <span className="mt-1 block truncate text-sm font-bold text-white">{displayName}</span>
-          <span className="mt-0.5 block truncate text-[11px] text-white/40">{user?.email}</span>
+          <span className="mt-0.5 block truncate text-[11px] text-white/40">
+            {user?.role === "teacher" ? teacherDirections.join(" · ") || "Преподаватель" : roleLabel(user?.role)}
+          </span>
         </span>
         <Settings size={16} className="shrink-0 text-white/30 transition group-hover:rotate-12 group-hover:text-gold" />
       </Link>
@@ -185,7 +223,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         )}
         <div className="min-w-0">
           <p className="truncate text-[10px] font-bold uppercase tracking-[0.16em] text-gold sm:text-xs sm:tracking-[0.18em]">{headerTitle}</p>
-          <p className="hidden truncate text-sm font-semibold sm:block">{user?.email}</p>
+          <p className="truncate text-xs font-semibold text-stone-500 sm:text-sm">{headerSubtitle}</p>
           {pendingHomeworkCount != null && pendingHomeworkCount > 0 && (
             <Link href="/admin/homework-review?status=submitted" className="mt-1 hidden items-center gap-2 text-xs font-bold text-amber-700 hover:underline sm:inline-flex">
               На проверке: <AdminPendingHomeworkBadge count={pendingHomeworkCount} />
@@ -193,6 +231,13 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           )}
         </div>
         <div className="ml-auto flex shrink-0 items-center gap-2">
+          {user?.role === "teacher" && user ? (
+            <TeacherNotificationCenter
+              userId={user.id}
+              unreadCount={unreadNotifications}
+              reloadUnread={reloadUnreadNotifications}
+            />
+          ) : null}
           <Link
             href="/admin/settings"
             aria-label="Настройки"
