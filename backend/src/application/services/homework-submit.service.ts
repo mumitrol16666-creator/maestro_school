@@ -11,6 +11,22 @@ import { getLessonProgressRecord, getLessonWithCourse } from "../repositories/le
 import { completeLesson, markLessonSubmitted } from "./lesson-progress.service.js";
 import { syncLessonAvailability } from "./lesson-unlock.service.js";
 import { requireCourseEnrollment } from "./enrollment.service.js";
+import { deliverNotificationsToUsers, deliverUserNotification, listUsersWithPermission } from "./notification.service.js";
+
+async function notifyHomeworkReviewQueue(params: { lessonId: string; lessonTitle: string }) {
+  const recipients = await listUsersWithPermission("homework.review").catch(() => []);
+  await deliverNotificationsToUsers(
+    recipients.map((recipient) => recipient.id),
+    {
+      type: "homework_submitted",
+      title: "Новое домашнее задание на проверку",
+      body: `Поступила работа по уроку «${params.lessonTitle}».`,
+      url: "/admin/homework-review?status=submitted",
+      tag: `homework-review-${params.lessonId}`,
+      dedupeWindowMs: 2 * 60 * 1000,
+    },
+  ).catch(() => undefined);
+}
 
 export async function submitHomework(params: {
   homeworkId: string;
@@ -67,6 +83,7 @@ export async function submitHomework(params: {
   });
 
   await markLessonSubmitted(params.studentId, lessonId);
+  await notifyHomeworkReviewQueue({ lessonId, lessonTitle: lesson.title });
 
   return {
     submission,
@@ -123,6 +140,16 @@ async function submitHomeworkTest(params: {
       lessonTitle: params.lesson.title,
     });
 
+    await deliverUserNotification({
+      userId: params.studentId,
+      type: "homework_reviewed",
+      title: "Тест пройден",
+      body: `Урок «${params.lesson.title}» завершён — результат ${testResult.score}%.`,
+      url: `/lessons/${params.lessonId}`,
+      tag: `homework-${params.lessonId}`,
+      dedupeWindowMs: 2 * 60 * 1000,
+    }).catch(() => undefined);
+
     return {
       submission: approved,
       lessonId: params.lessonId,
@@ -143,6 +170,16 @@ async function submitHomeworkTest(params: {
     reviewComment,
     reviewedAt: new Date(),
   });
+
+  await deliverUserNotification({
+    userId: params.studentId,
+    type: "homework_reviewed",
+    title: "Тест нужно повторить",
+    body: `По уроку «${params.lesson.title}» набрано ${testResult.score}%. Для прохождения нужно не менее ${params.homework.passingScore}%.`,
+    url: `/lessons/${params.lessonId}`,
+    tag: `homework-${params.lessonId}`,
+    dedupeWindowMs: 2 * 60 * 1000,
+  }).catch(() => undefined);
 
   return {
     submission,

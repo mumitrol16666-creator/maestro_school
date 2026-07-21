@@ -48,7 +48,7 @@ export async function subscribeToPushNotifications() {
 
   const permission = await Notification.requestPermission();
   if (permission !== "granted") {
-    throw new Error("Нужно разрешить уведомления — иначе мы не сможем сообщать о проверке заданий.");
+    throw new Error("Нужно разрешить уведомления — иначе мы не сможем сообщать о важных изменениях.");
   }
 
   const registration = await getServiceWorkerRegistration();

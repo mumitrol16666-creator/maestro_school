@@ -6,16 +6,12 @@ import {
   Check,
   CheckCircle2,
   CircleSlash2,
-  ClipboardCopy,
   Clock3,
   LoaderCircle,
-  MessageCircle,
   Play,
-  RefreshCw,
   RotateCcw,
   Send,
   ShieldCheck,
-  Sparkles,
   UserX,
   XCircle,
 } from "lucide-react";
@@ -37,7 +33,6 @@ import type {
   OfflineHomeworkReview,
   TeacherOfflineStudent,
   TrialLessonReport,
-  WhatsappHomeworkMessageDraft,
 } from "@/types/teacher-offline";
 
 const statusLabels: Record<string, string> = {
@@ -47,6 +42,8 @@ const statusLabels: Record<string, string> = {
   completed: "Проведён",
   cancelled: "Отменён",
 };
+
+const REPORT_SUBMISSION_LEAD_MINUTES = 20;
 
 const attendanceLabels: Record<string, string> = {
   unmarked: "Не отмечен",
@@ -156,6 +153,20 @@ function lessonStartDateTime(date: string | Date, startTime: string) {
   return base;
 }
 
+function lessonEndDateTime(date: string | Date, endTime: string) {
+  const base = new Date(date);
+  const [hours = 0, minutes = 0] = endTime.split(":").map(Number);
+  base.setHours(hours, minutes, 0, 0);
+  return base;
+}
+
+function formatClockTime(timestamp: number) {
+  return new Intl.DateTimeFormat("ru-RU", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(timestamp));
+}
+
 type StudentLessonCheckDraft = {
   attendanceStatus: TeacherOfflineStudent["attendanceStatus"];
   teacherNote: string;
@@ -210,7 +221,7 @@ export default function AdminOfflineLessonDetailPage() {
   const [submitConfirmationOpen, setSubmitConfirmationOpen] = useState(false);
   const [notHeldOpen, setNotHeldOpen] = useState(false);
   const [notHeldReason, setNotHeldReason] = useState("");
-  const [whatsappDrafts, setWhatsappDrafts] = useState<WhatsappHomeworkMessageDraft[]>([]);
+  const [clockNow, setClockNow] = useState(() => Date.now());
 
   const lesson = lessonResource.data;
   const students = studentsResource.data?.students ?? [];
@@ -245,6 +256,19 @@ export default function AdminOfflineLessonDetailPage() {
   ));
   const isAbsenceOnly = Boolean(isSubmittedAbsence || (canEditTeacherReport && allStudentsAbsent));
   const requiresLessonReport = !isNotHeld && !isAbsenceOnly;
+  const lessonEndsAt = lesson
+    ? lessonEndDateTime(lesson.date, lesson.endTime).getTime()
+    : null;
+  const reportAvailableAt = lessonEndsAt == null
+    ? null
+    : lessonEndsAt - REPORT_SUBMISSION_LEAD_MINUTES * 60 * 1000;
+  const submissionTimingIssue = canEditTeacherReport && lessonEndsAt != null && reportAvailableAt != null
+    ? requiresLessonReport && clockNow < reportAvailableAt
+      ? `Полный отчёт можно отправить с ${formatClockTime(reportAvailableAt)} — за ${REPORT_SUBMISSION_LEAD_MINUTES} минут до окончания урока.`
+      : !requiresLessonReport && clockNow < lessonEndsAt
+        ? `Отметку об отсутствии можно передать после окончания урока в ${formatClockTime(lessonEndsAt)}.`
+        : null
+    : null;
   const canShowStartPrompt = Boolean(
     !isAdmin
       && lesson?.status === "scheduled"
@@ -271,6 +295,11 @@ export default function AdminOfflineLessonDetailPage() {
       setTrialReport(mergeTrialReport(lesson.trialReport));
     }
   }, [lesson]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setClockNow(Date.now()), 30_000);
+    return () => window.clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     const loadedStudents = studentsResource.data?.students;
@@ -347,7 +376,7 @@ export default function AdminOfflineLessonDetailPage() {
       } else if (action === "approve") {
         setSuccess({
           title: "Урок подтверждён",
-          description: "Итоги урока и новое домашнее задание опубликованы для ученика.",
+          description: "Итоги опубликованы для ученика. Черновик сообщения готовится в разделе WhatsApp-напоминаний CRM.",
         });
       } else if (action === "return") {
         setSuccess({
@@ -537,25 +566,6 @@ export default function AdminOfflineLessonDetailPage() {
     });
   }
 
-  async function generateWhatsappDrafts(studentId?: string) {
-    const action = `whatsapp:${studentId || "all"}`;
-    setBusy(action);
-    setError(null);
-    try {
-      const result = await adminOfflineApi.whatsappHomeworkDrafts(crmClassId, studentId);
-      setWhatsappDrafts((current) => {
-        if (!studentId) return result.drafts;
-        const updated = new Map(current.map((draft) => [draft.crmStudentId, draft]));
-        for (const draft of result.drafts) updated.set(draft.crmStudentId, draft);
-        return Array.from(updated.values());
-      });
-    } catch (reason) {
-      setError(reason instanceof ApiError ? reason.message : "Не удалось подготовить сообщение");
-    } finally {
-      setBusy(null);
-    }
-  }
-
   function askReason(message: string) {
     if (!window.confirm(message)) return null;
     const reason = window.prompt("Коротко объясните причину:")?.trim();
@@ -573,7 +583,9 @@ export default function AdminOfflineLessonDetailPage() {
   if (lessonResource.error || !lesson) {
     return <ErrorState message={lessonResource.error ?? "Урок не найден"} retry={lessonResource.reload} />;
   }
-  const teacherSubmissionIssue = canEditTeacherReport ? submissionValidationError() : null;
+  const teacherSubmissionIssue = canEditTeacherReport
+    ? submissionTimingIssue ?? submissionValidationError()
+    : null;
 
   return (
     <>
@@ -930,19 +942,6 @@ export default function AdminOfflineLessonDetailPage() {
         </aside>
       </div>
 
-      {isAdmin && lesson.status === "completed" && !isTrialLesson && !isSubmittedAbsence && !isNotHeld ? (
-        <WhatsappHomeworkDrafts
-          drafts={whatsappDrafts}
-          busy={busy}
-          onGenerate={(studentId) => void generateWhatsappDrafts(studentId)}
-          onMessageChange={(studentId, message) => {
-            setWhatsappDrafts((current) => current.map((draft) =>
-              draft.crmStudentId === studentId ? { ...draft, message } : draft
-            ));
-          }}
-        />
-      ) : null}
-
       {canEditTeacherReport ? (
         <section className="mt-8 flex flex-col gap-4 border-t border-stone-200 pt-7 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -1071,147 +1070,6 @@ export default function AdminOfflineLessonDetailPage() {
         onClose={() => setSuccess(null)}
       />
     </>
-  );
-}
-
-function WhatsappHomeworkDrafts({
-  drafts,
-  busy,
-  onGenerate,
-  onMessageChange,
-}: {
-  drafts: WhatsappHomeworkMessageDraft[];
-  busy: string | null;
-  onGenerate: (studentId?: string) => void;
-  onMessageChange: (studentId: string, message: string) => void;
-}) {
-  const preparingAll = busy === "whatsapp:all";
-  const [copiedStudentId, setCopiedStudentId] = useState<string | null>(null);
-
-  function whatsappUrl(phone: string, message: string) {
-    let digits = phone.replace(/\D/g, "");
-    if (digits.length === 11 && digits.startsWith("8")) digits = `7${digits.slice(1)}`;
-    if (digits.length === 10) digits = `7${digits}`;
-    return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
-  }
-
-  async function copyMessage(studentId: string, message: string) {
-    await navigator.clipboard.writeText(message);
-    setCopiedStudentId(studentId);
-    window.setTimeout(() => {
-      setCopiedStudentId((current) => current === studentId ? null : current);
-    }, 1800);
-  }
-
-  return (
-    <section className="mt-8 border-t border-stone-200 pt-8">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-emerald-700">
-            <Sparkles size={15} />
-            Сообщения после урока
-          </p>
-          <h2 className="font-display mt-2 text-3xl">Черновики для WhatsApp</h2>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-500">
-            Подготовим мягкий текст из отчёта и проверки ДЗ. Сообщение можно исправить перед отправкой.
-            Все вопросы направляются куратору.
-          </p>
-        </div>
-        <button
-          type="button"
-          disabled={busy != null}
-          onClick={() => onGenerate()}
-          className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-ink px-5 text-sm font-bold text-white disabled:opacity-50"
-        >
-          {preparingAll ? <LoaderCircle size={17} className="animate-spin" /> : <Sparkles size={17} />}
-          {drafts.length ? "Обновить все" : "Подготовить сообщения"}
-        </button>
-      </div>
-
-      {drafts.length ? (
-        <div className="mt-6 grid gap-4 lg:grid-cols-2">
-          {drafts.map((draft) => {
-            const message = draft.message ?? "";
-            const regenerating = busy === `whatsapp:${draft.crmStudentId}`;
-            return (
-              <article key={draft.crmStudentId} className="rounded-2xl border border-stone-200 bg-paper p-5 shadow-soft">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <h3 className="font-bold text-ink">{draft.studentName}</h3>
-                    <p className="mt-1 text-sm text-stone-500">
-                      {draft.recipient
-                        ? `${draft.recipient.label} · ${draft.recipient.phone}`
-                        : "Получатель не выбран"}
-                    </p>
-                  </div>
-                  {draft.source !== "unavailable" ? (
-                    <span className={`rounded-full px-3 py-1 text-xs font-bold ${
-                      draft.source === "ai"
-                        ? "bg-emerald-50 text-emerald-800"
-                        : "bg-amber-50 text-amber-900"
-                    }`}>
-                      {draft.source === "ai" ? "Новая формулировка" : "Готовый черновик"}
-                    </span>
-                  ) : null}
-                </div>
-
-                {draft.note ? (
-                  <p className="mt-4 rounded-xl bg-amber-50 px-3 py-2 text-xs font-semibold leading-5 text-amber-900">
-                    {draft.note}
-                  </p>
-                ) : null}
-
-                {draft.recipient && draft.message ? (
-                  <>
-                    <label className="mt-4 block text-xs font-bold uppercase tracking-wider text-stone-500">
-                      Текст сообщения
-                      <textarea
-                        value={message}
-                        onChange={(event) => onMessageChange(draft.crmStudentId, event.target.value)}
-                        className="mt-2 min-h-52 w-full rounded-xl border border-stone-200 bg-white px-3 py-3 text-sm font-medium normal-case leading-6 tracking-normal text-stone-800"
-                      />
-                    </label>
-                    <div className="mt-4 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-                      <button
-                        type="button"
-                        disabled={!message.trim()}
-                        onClick={() => void copyMessage(draft.crmStudentId, message)}
-                        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-stone-200 px-3 text-xs font-bold text-stone-700 disabled:opacity-50"
-                      >
-                        <ClipboardCopy size={15} />
-                        {copiedStudentId === draft.crmStudentId ? "Скопировано" : "Скопировать"}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={busy != null}
-                        onClick={() => onGenerate(draft.crmStudentId)}
-                        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-stone-200 px-3 text-xs font-bold text-stone-700 disabled:opacity-50"
-                      >
-                        {regenerating ? <LoaderCircle size={15} className="animate-spin" /> : <RefreshCw size={15} />}
-                        Заново
-                      </button>
-                      <a
-                        href={whatsappUrl(draft.recipient.phone, message)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="col-span-2 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 text-xs font-bold text-white sm:ml-auto"
-                      >
-                        <MessageCircle size={16} />
-                        Открыть WhatsApp
-                      </a>
-                    </div>
-                  </>
-                ) : null}
-              </article>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="mt-6 rounded-2xl border border-dashed border-stone-300 px-5 py-7 text-sm text-stone-500">
-          Нажмите «Подготовить сообщения». Ничего не отправится автоматически.
-        </div>
-      )}
-    </section>
   );
 }
 

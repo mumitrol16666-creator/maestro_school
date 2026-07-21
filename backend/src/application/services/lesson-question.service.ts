@@ -3,6 +3,7 @@ import { BadRequestError, NotFoundError } from "../../domain/errors.js";
 import { getLessonById } from "../repositories/catalog.repository.js";
 import { requireCourseEnrollment } from "./enrollment.service.js";
 import { syncLessonAvailability } from "./lesson-unlock.service.js";
+import { deliverNotificationsToUsers, deliverUserNotification, listUsersWithPermission } from "./notification.service.js";
 
 export async function submitLessonQuestion(params: {
   lessonId: string;
@@ -30,7 +31,7 @@ export async function submitLessonQuestion(params: {
   const message = params.message.trim();
   if (!message) throw new BadRequestError("Введите текст вопроса");
 
-  return prisma.lessonQuestion.create({
+  const question = await prisma.lessonQuestion.create({
     data: {
       lessonId: params.lessonId,
       studentId: params.studentId,
@@ -44,6 +45,21 @@ export async function submitLessonQuestion(params: {
       createdAt: true,
     },
   });
+
+  const recipients = await listUsersWithPermission("catalog.manage");
+  await deliverNotificationsToUsers(
+    recipients.map((recipient) => recipient.id),
+    {
+      type: "lesson_question_received",
+      title: "Новый вопрос по уроку",
+      body: `Ученик задал вопрос по уроку «${lesson.title}».`,
+      url: "/admin/lesson-questions?status=pending",
+      tag: `lesson-question-${question.id}`,
+      dedupeWindowMs: 2 * 60 * 1000,
+    },
+  ).catch(() => undefined);
+
+  return question;
 }
 
 export async function listAdminLessonQuestions(input: {
@@ -107,14 +123,39 @@ export async function listAdminLessonQuestions(input: {
 }
 
 export async function markLessonQuestionAnswered(id: string) {
-  const existing = await prisma.lessonQuestion.findUnique({ where: { id }, select: { id: true } });
+  const existing = await prisma.lessonQuestion.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      status: true,
+      updatedAt: true,
+      studentId: true,
+      lesson: { select: { id: true, title: true } },
+    },
+  });
   if (!existing) throw new NotFoundError("Lesson question");
 
-  return prisma.lessonQuestion.update({
+  if (existing.status === "answered") {
+    return { id: existing.id, status: existing.status, updatedAt: existing.updatedAt };
+  }
+
+  const updated = await prisma.lessonQuestion.update({
     where: { id },
     data: { status: "answered" },
     select: { id: true, status: true, updatedAt: true },
   });
+
+  await deliverUserNotification({
+    userId: existing.studentId,
+    type: "lesson_question_answered",
+    title: "Вопрос обработан",
+    body: `Вопрос по уроку «${existing.lesson.title}» отмечен как отвеченный.`,
+    url: `/lessons/${existing.lesson.id}`,
+    tag: `lesson-question-answered-${id}`,
+    dedupeWindowMs: 2 * 60 * 1000,
+  }).catch(() => undefined);
+
+  return updated;
 }
 
 export async function countPendingLessonQuestions() {

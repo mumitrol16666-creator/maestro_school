@@ -67,6 +67,23 @@ function formatLessonDate(value: string) {
   }).format(new Date(value));
 }
 
+function membershipLabel(membership: TeacherStudent["memberships"][number]) {
+  if (membership.planName) return membership.planName;
+  if (membership.group?.name) return membership.group.name;
+  if (membership.lessonFormat === "group") return "Групповой абонемент";
+  if (membership.lessonFormat === "mixed") return "Смешанный абонемент";
+  return "Индивидуальный абонемент";
+}
+
+function lessonCountLabel(value: number) {
+  const normalized = Math.abs(value) % 100;
+  const lastDigit = normalized % 10;
+  if (normalized > 10 && normalized < 20) return `${value} занятий`;
+  if (lastDigit === 1) return `${value} занятие`;
+  if (lastDigit >= 2 && lastDigit <= 4) return `${value} занятия`;
+  return `${value} занятий`;
+}
+
 function attendancePresentation(item: TeacherStudent["attendanceHistory"][number]) {
   if (item.attendanceStatus === "present") {
     return { label: "Присутствовал", className: "bg-emerald-50 text-emerald-800", icon: CheckCircle2 };
@@ -206,7 +223,6 @@ export default function TeacherStudentsPage() {
 
 function StudentCard({ student }: { student: TeacherStudent }) {
   const upcomingOnline = nextOnlineLesson(student);
-  const activeMembership = student.memberships[0];
   const latestAttendance = student.attendanceHistory[0];
   const latestAttendanceView = latestAttendance ? attendancePresentation(latestAttendance) : null;
   const LatestAttendanceIcon = latestAttendanceView?.icon;
@@ -279,9 +295,21 @@ function StudentCard({ student }: { student: TeacherStudent }) {
               : "Ближайший урок не назначен"}
         </InfoBlock>
         <InfoBlock icon={BookOpenCheck} label="Абонемент">
-          {activeMembership
-            ? `${activeMembership.classesRemaining} занятий осталось`
-            : "Нет активного абонемента у этого преподавателя"}
+          {student.memberships.length ? (
+            <div className="space-y-2">
+              {student.memberships.map((membership) => (
+                <div key={membership.crmMembershipId}>
+                  <p className="font-bold text-ink">{membershipLabel(membership)}</p>
+                  <p className="mt-0.5 text-xs font-semibold text-stone-500">
+                    {lessonCountLabel(membership.classesRemaining)} осталось
+                    {membership.lessonPrice
+                      ? ` · ${membership.lessonPrice.toLocaleString("ru-RU")} ₸ / урок`
+                      : ""}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : "Нет подходящего активного абонемента"}
         </InfoBlock>
         <InfoBlock icon={Video} label="Онлайн-уроки">
           {student.onlineLessons.length
@@ -390,7 +418,7 @@ function InfoBlock({
         <Icon size={14} />
         <p className="text-[10px] font-black uppercase tracking-wider">{label}</p>
       </div>
-      <p className="mt-2 text-sm font-semibold leading-relaxed text-ink">{children}</p>
+      <div className="mt-2 text-sm font-semibold leading-relaxed text-ink">{children}</div>
     </div>
   );
 }

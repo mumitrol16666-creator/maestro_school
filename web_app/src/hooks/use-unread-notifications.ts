@@ -1,11 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { notificationsApi } from "@/lib/notifications-api";
+import { notificationsApi, type UserNotificationType } from "@/lib/notifications-api";
 
 export function useUnreadNotifications(
   pollMs = 60_000,
-  type?: "online_lesson_scheduled" | "offline_lesson_approved" | "direct_message_received",
+  type?: UserNotificationType,
 ) {
   const [count, setCount] = useState<number | null>(null);
 

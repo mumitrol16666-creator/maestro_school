@@ -92,6 +92,9 @@ export async function listTeacherStudents(appTeacherId: string) {
     memberships: Array<{
       crmMembershipId: string;
       type: string;
+      planName: string | null;
+      lessonFormat: string;
+      lessonPrice: number | null;
       classesRemaining: number;
       endDate: string;
       group: { crmGroupId: string; name: string; direction: string } | null;

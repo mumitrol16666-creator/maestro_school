@@ -1,5 +1,18 @@
 import { prisma } from "../../infrastructure/database/prisma.js";
 import { ConflictError } from "../../domain/errors.js";
+import { deliverUserNotification } from "./notification.service.js";
+
+async function notifyPointsAwarded(params: { studentId: string; amount: number; reason: string; sourceId?: string }) {
+  await deliverUserNotification({
+    userId: params.studentId,
+    type: "points_awarded",
+    title: `Начислено баллов: +${params.amount}`,
+    body: params.reason,
+    url: "/dashboard",
+    tag: `points-${params.sourceId ?? "manual"}-${params.studentId}`,
+    dedupeWindowMs: 2 * 60 * 1000,
+  }).catch(() => undefined);
+}
 
 /** Balance is NEVER stored — always aggregated from ledger */
 export async function calculateStudentPoints(studentId: string): Promise<number> {
@@ -78,6 +91,13 @@ export async function awardLessonPoints(params: {
     },
   });
 
+  await notifyPointsAwarded({
+    studentId: params.studentId,
+    amount: params.amount,
+    reason: params.reason,
+    sourceId: params.lessonId,
+  });
+
   return { awarded: true, transactionId: tx.id };
 }
 
@@ -116,6 +136,13 @@ export async function awardManualPoints(params: {
       reason,
       awardedBy: params.awardedBy,
     },
+  });
+
+  await notifyPointsAwarded({
+    studentId: params.studentId,
+    amount: params.amount,
+    reason: params.reason,
+    sourceId: params.idempotencyKey,
   });
 
   return { awarded: true, transactionId: tx.id };

@@ -23,7 +23,15 @@ export default function OnlineLessonDetailPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    void notificationsApi.markAllRead("online_lesson_scheduled").catch(() => undefined);
+    void Promise.all([
+      "online_lesson_scheduled",
+      "online_lesson_rescheduled",
+      "online_lesson_cancelled",
+      "online_lesson_no_show",
+      "online_lesson_completed",
+      "online_assignment_reviewed",
+    ].map((type) => notificationsApi.markAllRead(type as Parameters<typeof notificationsApi.markAllRead>[0])))
+      .catch(() => undefined);
   }, [requestId]);
 
   if (resource.loading) return <LoadingState label="Открываем заявку" />;

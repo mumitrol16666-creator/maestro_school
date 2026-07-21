@@ -15,7 +15,11 @@ import { exchangeSsoBridgeToken } from "../../application/services/sso-bridge.se
 import { provisionTeacherFromCrm } from "../../application/services/teacher-provision.service.js";
 import { provisionStudentFromCrm } from "../../application/services/student-provision.service.js";
 import { syncOnlineLessonFromCrm } from "../../application/services/online-lessons.service.js";
-import { notifyOfflineLessonApproved } from "../../application/services/notification.service.js";
+import {
+  notifyOfflineLessonApproved,
+  notifyOfflineLessonEvent,
+} from "../../application/services/notification.service.js";
+import { generateWhatsappHomeworkDrafts } from "../../application/services/whatsapp-homework-message.service.js";
 
 const linkSchema = z.object({
   phone: z.string().optional(),
@@ -72,9 +76,20 @@ const onlineLessonSyncSchema = z.discriminatedUnion("action", [
 const offlineLessonApprovedSchema = z.object({
   crmClassId: z.string().min(1).max(128),
   crmTeacherId: z.string().min(1).max(64),
+  crmStudentIds: z.array(z.string().min(1).max(64)).max(100).optional(),
   lessonTitle: z.string().trim().max(500).optional().nullable(),
   date: z.string().trim().max(64).optional().nullable(),
   startTime: z.string().trim().max(32).optional().nullable(),
+});
+
+const offlineLessonEventSchema = offlineLessonApprovedSchema.extend({
+  crmTeacherId: z.string().min(1).max(64).optional(),
+  event: z.enum(["returned", "cancelled", "rescheduled"]),
+  message: z.string().trim().max(2000).optional().nullable(),
+});
+
+const whatsappHomeworkDraftSchema = z.object({
+  crmClassId: z.string().min(1).max(128),
 });
 
 function integrationProfile(
@@ -170,6 +185,24 @@ export async function integrationRoutes(app: FastifyInstance) {
     return {
       success: true,
       data: await notifyOfflineLessonApproved(body),
+    };
+  });
+
+  app.post("/notifications/offline-lesson-event", async (request) => {
+    const body = offlineLessonEventSchema.parse(request.body);
+    return {
+      success: true,
+      data: await notifyOfflineLessonEvent(body),
+    };
+  });
+
+  app.post("/whatsapp/homework-drafts", async (request) => {
+    const { crmClassId } = whatsappHomeworkDraftSchema.parse(request.body);
+    return {
+      success: true,
+      data: {
+        drafts: await generateWhatsappHomeworkDrafts(crmClassId),
+      },
     };
   });
 

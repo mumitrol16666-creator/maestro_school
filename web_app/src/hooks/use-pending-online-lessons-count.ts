@@ -22,7 +22,9 @@ export function usePendingOnlineLessonsCount(pollMs = 60_000, isTeacher = false)
   }, [pollMs, reload]);
 
   const count = counts
-    ? counts.newRequests + (isTeacher ? counts.myInWork : counts.assignedOrScheduled)
+    ? counts.newRequests
+      + (isTeacher ? counts.myInWork : counts.assignedOrScheduled)
+      + counts.submissions
     : null;
 
   return { count, counts, reload };

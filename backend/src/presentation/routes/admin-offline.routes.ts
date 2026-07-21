@@ -8,7 +8,6 @@ import {
   adminOfflineSetAttendance,
   adminOfflineStart,
   adminOfflineSubmit,
-  adminOfflineWhatsappDrafts,
   getAdminOfflineClass,
   getAdminOfflineAgenda,
   getAdminOfflineClassStudents,
@@ -172,16 +171,4 @@ export async function adminOfflineRoutes(app: FastifyInstance) {
     },
   );
 
-  app.post(
-    "/admin/offline-lessons/:crmClassId/whatsapp-homework-drafts",
-    {
-      preHandler: writeGuards,
-      config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
-    },
-    async (request) => {
-      const { crmClassId } = z.object({ crmClassId: z.string().min(1) }).parse(request.params);
-      const body = z.object({ studentId: z.string().min(1).optional() }).parse(request.body ?? {});
-      return { data: await adminOfflineWhatsappDrafts(crmClassId, body.studentId) };
-    },
-  );
 }

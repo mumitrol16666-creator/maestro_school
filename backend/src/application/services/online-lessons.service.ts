@@ -6,9 +6,8 @@ import type {
 import { prisma } from "../../infrastructure/database/prisma.js";
 import { BadRequestError, ForbiddenError, NotFoundError } from "../../domain/errors.js";
 import { addMaestroCoins } from "./coins.service.js";
-import { createUserNotification } from "./notification.service.js";
+import { deliverUserNotification } from "./notification.service.js";
 import { awardManualPoints } from "./points.service.js";
-import { sendPushToUser } from "./push-notification.service.js";
 import { postOnlineLessonBooking, postOnlineLessonStatus } from "../../infrastructure/crm/crm-client.js";
 
 const requestSelect = {
@@ -70,6 +69,12 @@ const requestSelect = {
     },
   },
 } as const;
+
+async function bestEffortNotification(params: Parameters<typeof deliverUserNotification>[0]) {
+  await deliverUserNotification(params).catch((error) => {
+    console.error("[notifications] Failed to deliver online lesson event:", error instanceof Error ? error.message : error);
+  });
+}
 
 function assertCoinsReason(coins: number, reason?: string | null) {
   if (coins > 0 && !reason?.trim()) {
@@ -310,6 +315,29 @@ export async function assignOnlineLessonRequest(
     select: requestSelect,
   });
   await syncCrmStatus(requestId, "assigned");
+
+  await bestEffortNotification({
+    userId: teacherId,
+    type: "online_lesson_assigned",
+    title: "Вам назначен онлайн-урок",
+    body: `${item.directionTitle}. Откройте раздел онлайн-уроков, чтобы посмотреть детали и время занятия.`,
+    url: `/admin/online-lessons/${requestId}`,
+    tag: `online-lesson-assigned-${requestId}`,
+    dedupeWindowMs: 2 * 60 * 1000,
+  });
+
+  if (item.teacherId && item.teacherId !== teacherId) {
+    await bestEffortNotification({
+      userId: item.teacherId,
+      type: "online_lesson_assigned",
+      title: "Онлайн-урок переназначен",
+      body: `${item.directionTitle} больше не закреплён за вами.`,
+      url: "/admin/online-lessons",
+      tag: `online-lesson-reassigned-${requestId}`,
+      dedupeWindowMs: 2 * 60 * 1000,
+    });
+  }
+
   return updated;
 }
 
@@ -343,33 +371,68 @@ export async function scheduleOnlineLessonRequest(requestId: string, params: {
     timeStyle: "short",
   }).format(params.scheduledAt);
 
-  await createUserNotification({
-    userId: item.studentId,
-    type: "online_lesson_scheduled",
-    title: "Онлайн-урок назначен",
-    body: `${item.directionTitle}: ${when}. Ссылка на Zoom уже в личном кабинете.`,
-    url: `/online-lessons/${requestId}`,
-  });
+  const rescheduled = item.status === "scheduled" && Boolean(item.scheduledAt);
+  const notificationType = rescheduled ? "online_lesson_rescheduled" : "online_lesson_scheduled";
+  const notificationTitle = rescheduled ? "Онлайн-урок перенесён" : "Онлайн-урок назначен";
+  const notificationBody = `${item.directionTitle}: ${when}. Ссылка на Zoom уже в личном кабинете.`;
 
-  await sendPushToUser(item.studentId, {
-    title: "Онлайн-урок назначен",
-    body: `${item.directionTitle} — ${when}`,
-    url: `/online-lessons/${requestId}`,
-    tag: `online-lesson-${requestId}`,
-  });
+  await Promise.all([
+    bestEffortNotification({
+      userId: item.studentId,
+      type: notificationType,
+      title: notificationTitle,
+      body: notificationBody,
+      url: `/online-lessons/${requestId}`,
+      tag: `online-lesson-${requestId}`,
+      dedupeWindowMs: 2 * 60 * 1000,
+    }),
+    item.teacherId
+      ? bestEffortNotification({
+          userId: item.teacherId,
+          type: notificationType,
+          title: rescheduled ? "Онлайн-урок перенесён" : "Онлайн-урок назначен",
+          body: `${item.directionTitle}: ${when}. Проверьте ссылку на Zoom и детали занятия.`,
+          url: `/admin/online-lessons/${requestId}`,
+          tag: `online-lesson-${requestId}`,
+          dedupeWindowMs: 2 * 60 * 1000,
+        })
+      : Promise.resolve(),
+  ]);
 
   await syncCrmStatus(requestId, "scheduled");
   return updated;
 }
 
 export async function cancelOnlineLessonRequest(requestId: string) {
-  await requireManageableRequest(requestId);
+  const item = await requireManageableRequest(requestId);
   const updated = await prisma.onlineLessonRequest.update({
     where: { id: requestId },
     data: { status: "cancelled" },
     select: requestSelect,
   });
   await syncCrmStatus(requestId, "cancelled");
+  await Promise.all([
+    bestEffortNotification({
+      userId: item.studentId,
+      type: "online_lesson_cancelled",
+      title: "Онлайн-урок отменён",
+      body: `${item.directionTitle}. Администратор отменил это занятие.`,
+      url: `/online-lessons/${requestId}`,
+      tag: `online-lesson-cancelled-${requestId}`,
+      dedupeWindowMs: 10 * 60 * 1000,
+    }),
+    item.teacherId
+      ? bestEffortNotification({
+          userId: item.teacherId,
+          type: "online_lesson_cancelled",
+          title: "Онлайн-урок отменён",
+          body: `${item.directionTitle}. Занятие больше не требует проведения.`,
+          url: `/admin/online-lessons/${requestId}`,
+          tag: `online-lesson-cancelled-${requestId}`,
+          dedupeWindowMs: 10 * 60 * 1000,
+        })
+      : Promise.resolve(),
+  ]);
   return updated;
 }
 
@@ -384,6 +447,28 @@ export async function markOnlineLessonNoShow(requestId: string) {
     select: requestSelect,
   });
   await syncCrmStatus(requestId, "no_show");
+  await Promise.all([
+    bestEffortNotification({
+      userId: item.studentId,
+      type: "online_lesson_no_show",
+      title: "Онлайн-урок отмечен как неявка",
+      body: `${item.directionTitle}. Если это ошибка, свяжитесь с администратором.`,
+      url: `/online-lessons/${requestId}`,
+      tag: `online-lesson-no-show-${requestId}`,
+      dedupeWindowMs: 10 * 60 * 1000,
+    }),
+    item.teacherId
+      ? bestEffortNotification({
+          userId: item.teacherId,
+          type: "online_lesson_no_show",
+          title: "Онлайн-урок отмечен как неявка",
+          body: `${item.directionTitle}. Статус занятия обновлён.`,
+          url: `/admin/online-lessons/${requestId}`,
+          tag: `online-lesson-no-show-${requestId}`,
+          dedupeWindowMs: 10 * 60 * 1000,
+        })
+      : Promise.resolve(),
+  ]);
   return updated;
 }
 
@@ -537,6 +622,17 @@ export async function completeOnlineLessonRequest(requestId: string, params: {
   }
 
   await syncCrmStatus(requestId, "completed");
+  await bestEffortNotification({
+    userId: item.studentId,
+    type: "online_lesson_completed",
+    title: "Онлайн-урок завершён",
+    body: params.createAssignment
+      ? `${item.directionTitle}. Итог урока и домашнее задание уже доступны в личном кабинете.`
+      : `${item.directionTitle}. Итог урока уже доступен в личном кабинете.`,
+    url: `/online-lessons/${requestId}`,
+    tag: `online-lesson-completed-${requestId}`,
+    dedupeWindowMs: 10 * 60 * 1000,
+  });
   return getAdminOnlineLessonRequest(requestId);
 }
 
@@ -571,7 +667,7 @@ export async function submitOnlineLessonAssignment(params: {
     throw new BadRequestError("Добавьте ссылку на материал");
   }
 
-  return prisma.onlineLessonAssignmentSubmission.create({
+  const submission = await prisma.onlineLessonAssignmentSubmission.create({
     data: {
       assignmentId: request.assignment.id,
       studentId: params.studentId,
@@ -581,6 +677,20 @@ export async function submitOnlineLessonAssignment(params: {
       status: "submitted",
     },
   });
+
+  if (request.teacher?.id) {
+    await bestEffortNotification({
+      userId: request.teacher.id,
+      type: "online_assignment_submitted",
+      title: "Ученик отправил домашнее задание",
+      body: `${request.student.firstName} ${request.student.lastName} отправил работу «${request.assignment.title}».`,
+      url: `/admin/online-lessons/${params.requestId}`,
+      tag: `online-assignment-${request.assignment.id}`,
+      dedupeWindowMs: 2 * 60 * 1000,
+    });
+  }
+
+  return submission;
 }
 
 export async function reviewOnlineLessonAssignment(submissionId: string, params: {
@@ -665,6 +775,24 @@ export async function reviewOnlineLessonAssignment(submissionId: string, params:
       createdBy: params.reviewerId,
     });
   }
+
+  const reviewTitle = params.action === "return"
+    ? "Нужна доработка задания"
+    : params.action === "approve_with_remarks"
+      ? "Задание принято с замечаниями"
+      : "Задание принято";
+  const reviewBody = params.action === "return"
+    ? `По заданию «${submission.assignment.title}» нужна доработка.${params.reviewComment?.trim() ? ` Комментарий: ${params.reviewComment.trim()}` : ""}`
+    : `По заданию «${submission.assignment.title}» преподаватель завершил проверку.${params.reviewComment?.trim() ? ` Комментарий: ${params.reviewComment.trim()}` : ""}`;
+  await bestEffortNotification({
+    userId: submission.studentId,
+    type: "online_assignment_reviewed",
+    title: reviewTitle,
+    body: reviewBody,
+    url: `/online-lessons/${submission.assignment.request.id}`,
+    tag: `online-assignment-review-${submissionId}`,
+    dedupeWindowMs: 2 * 60 * 1000,
+  });
 
   return updated;
 }

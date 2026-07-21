@@ -19,7 +19,6 @@ import {
   type OfflineHomeworkReviewInput,
 } from "./offline-lesson-student-check.service.js";
 import { validateOfflineLessonSubmission } from "./offline-lesson-submission-policy.js";
-import { generateWhatsappHomeworkDrafts } from "./whatsapp-homework-message.service.js";
 
 type AdminOfflineLesson = {
   teacher?: { crmTeacherId?: string; name?: string } | null;
@@ -136,10 +135,4 @@ export async function adminOfflineReturn(crmClassId: string, reason?: string) {
 
 export async function adminOfflineReopen(crmClassId: string, reason?: string) {
   return postAdminReopenClass(crmClassId, reason);
-}
-
-export async function adminOfflineWhatsappDrafts(crmClassId: string, studentId?: string) {
-  return {
-    drafts: await generateWhatsappHomeworkDrafts(crmClassId, studentId),
-  };
 }

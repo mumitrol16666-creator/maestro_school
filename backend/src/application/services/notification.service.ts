@@ -1,7 +1,7 @@
 import type { UserNotificationType } from "@prisma/client";
-import { prisma } from "../../infrastructure/database/prisma.js";
+import { prisma, notDeleted } from "../../infrastructure/database/prisma.js";
 import { NotFoundError } from "../../domain/errors.js";
-import { findUserByCrmTeacherId } from "../repositories/user-link.repository.js";
+import { findUserByCrmStudentId, findUserByCrmTeacherId } from "../repositories/user-link.repository.js";
 import { sendPushToUser } from "./push-notification.service.js";
 
 export async function createUserNotification(params: {
@@ -19,6 +19,65 @@ export async function createUserNotification(params: {
       body: params.body,
       url: params.url ?? null,
     },
+  });
+}
+
+/**
+ * Store an in-app notification and best-effort deliver the same event as a
+ * browser push. The in-app record is the source of truth, so a missing push
+ * subscription never prevents the business operation from completing.
+ */
+export async function deliverUserNotification(params: {
+  userId: string;
+  type: UserNotificationType;
+  title: string;
+  body: string;
+  url?: string | null;
+  tag?: string;
+  dedupeWindowMs?: number;
+}) {
+  if (params.dedupeWindowMs && params.url) {
+    const duplicate = await prisma.userNotification.findFirst({
+      where: {
+        userId: params.userId,
+        type: params.type,
+        url: params.url,
+        createdAt: { gte: new Date(Date.now() - params.dedupeWindowMs) },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    if (duplicate) {
+      return { notification: duplicate, duplicate: true as const };
+    }
+  }
+
+  const notification = await createUserNotification(params);
+  await sendPushToUser(params.userId, {
+    title: params.title,
+    body: params.body,
+    url: params.url ?? undefined,
+    tag: params.tag,
+  }).catch(() => undefined);
+
+  return { notification, duplicate: false as const };
+}
+
+export async function deliverNotificationsToUsers(
+  userIds: string[],
+  params: Omit<Parameters<typeof deliverUserNotification>[0], "userId">,
+) {
+  const uniqueIds = [...new Set(userIds.filter(Boolean))];
+  return Promise.all(uniqueIds.map((userId) => deliverUserNotification({ userId, ...params })));
+}
+
+export async function listUsersWithPermission(permissionCode: string) {
+  return prisma.user.findMany({
+    where: {
+      ...notDeleted,
+      isActive: true,
+      role: { rolePermissions: { some: { permission: { code: permissionCode } } } },
+    },
+    select: { id: true },
   });
 }
 
@@ -65,51 +124,101 @@ export async function markAllNotificationsRead(userId: string, type?: UserNotifi
   });
 }
 
-export async function notifyOfflineLessonApproved(params: {
+export type OfflineLessonNotificationEvent =
+  | "approved"
+  | "returned"
+  | "cancelled"
+  | "rescheduled";
+
+export async function notifyOfflineLessonEvent(params: {
   crmClassId: string;
-  crmTeacherId: string;
+  crmTeacherId?: string;
+  crmStudentIds?: string[];
+  event: OfflineLessonNotificationEvent;
   lessonTitle?: string | null;
   date?: string | null;
   startTime?: string | null;
+  message?: string | null;
 }) {
-  const teacher = await findUserByCrmTeacherId(params.crmTeacherId);
-  if (!teacher) {
-    return { delivered: false, reason: "teacher_not_linked" as const };
-  }
-
+  const teacher = params.crmTeacherId
+    ? await findUserByCrmTeacherId(params.crmTeacherId)
+    : null;
   const url = `/admin/offline-lessons/${encodeURIComponent(params.crmClassId)}`;
-  const duplicate = await prisma.userNotification.findFirst({
-    where: {
-      userId: teacher.id,
-      type: "offline_lesson_approved",
-      url,
-      createdAt: { gte: new Date(Date.now() - 10 * 60 * 1000) },
-    },
-    orderBy: { createdAt: "desc" },
-  });
-  if (duplicate) {
-    return { delivered: true, duplicate: true, notificationId: duplicate.id };
-  }
-
+  const studentUrl = `/school-lessons?tab=history&lesson=${encodeURIComponent(params.crmClassId)}`;
   const lessonTitle = params.lessonTitle?.trim() || "Урок";
   const when = [params.date, params.startTime].filter(Boolean).join(" · ");
-  const body = when
-    ? `${lessonTitle} (${when}). Отчёт принят, урок учтён в вашей работе.`
-    : `${lessonTitle}. Отчёт принят, урок учтён в вашей работе.`;
-  const notification = await createUserNotification({
-    userId: teacher.id,
-    type: "offline_lesson_approved",
-    title: "Отчёт по уроку принят",
-    body,
-    url,
-  });
+  const context = when ? ` (${when})` : "";
+  const teacherCopy = {
+    approved: {
+      type: "offline_lesson_approved" as const,
+      title: "Отчёт по уроку принят",
+      body: `${lessonTitle}${context}. Отчёт принят, урок учтён в вашей работе.`,
+      tag: "offline-lesson-approved",
+    },
+    returned: {
+      type: "offline_lesson_returned" as const,
+      title: "Отчёт по уроку возвращён",
+      body: `${lessonTitle}${context}. Администратор вернул отчёт на доработку.${params.message?.trim() ? ` ${params.message.trim()}` : ""}`,
+      tag: "offline-lesson-returned",
+    },
+    cancelled: {
+      type: "offline_lesson_cancelled" as const,
+      title: "Офлайн-урок отменён",
+      body: `${lessonTitle}${context}. Занятие отменено, проверьте расписание.`,
+      tag: "offline-lesson-cancelled",
+    },
+    rescheduled: {
+      type: "offline_lesson_rescheduled" as const,
+      title: "Офлайн-урок перенесён",
+      body: `${lessonTitle}${context}. Проверьте обновлённое расписание.`,
+      tag: "offline-lesson-rescheduled",
+    },
+  }[params.event];
+  const teacherResult = teacher
+    ? await deliverUserNotification({
+        userId: teacher.id,
+        type: teacherCopy.type,
+        title: teacherCopy.title,
+        body: teacherCopy.body,
+        url,
+        tag: `${teacherCopy.tag}-${params.crmClassId}`,
+        dedupeWindowMs: 10 * 60 * 1000,
+      })
+    : null;
 
-  await sendPushToUser(teacher.id, {
-    title: "Отчёт по уроку принят",
-    body: when ? `${lessonTitle} · ${when}` : lessonTitle,
-    url,
-    tag: `offline-lesson-approved-${params.crmClassId}`,
-  }).catch(() => undefined);
+  const studentIds = [...new Set(params.crmStudentIds ?? [])];
+  const students = (await Promise.all(studentIds.map((crmStudentId) => findUserByCrmStudentId(crmStudentId))))
+    .filter((student): student is NonNullable<typeof student> => Boolean(student));
+  const studentCopy = params.event === "approved"
+    ? {
+        type: "offline_lesson_report_ready" as const,
+        title: "Готов итог офлайн-урока",
+        body: `${lessonTitle}${context}. Посмотрите итог, материалы и домашнее задание в школе.`,
+      }
+    : {
+        type: teacherCopy.type,
+        title: teacherCopy.title,
+        body: teacherCopy.body,
+      };
+  await Promise.all(students.map((student) => deliverUserNotification({
+    userId: student.id,
+    type: studentCopy.type,
+    title: studentCopy.title,
+    body: studentCopy.body,
+    url: studentUrl,
+    tag: `${teacherCopy.tag}-${params.crmClassId}-${student.id}`,
+    dedupeWindowMs: 10 * 60 * 1000,
+  }).catch(() => undefined)));
 
-  return { delivered: true, duplicate: false, notificationId: notification.id };
+  return {
+    delivered: Boolean(teacherResult || students.length),
+    teacherLinked: Boolean(teacher),
+    studentsDelivered: students.length,
+    duplicate: teacherResult?.duplicate ?? false,
+    notificationId: teacherResult?.notification.id ?? null,
+  };
+}
+
+export async function notifyOfflineLessonApproved(params: Omit<Parameters<typeof notifyOfflineLessonEvent>[0], "event">) {
+  return notifyOfflineLessonEvent({ ...params, event: "approved" });
 }

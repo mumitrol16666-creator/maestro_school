@@ -1,23 +1,27 @@
 "use client";
 
-import { Bell, CheckCircle2, ChevronRight, MessagesSquare, X } from "lucide-react";
+import { Bell, BookOpenCheck, CalendarClock, CheckCircle2, ChevronRight, Coins, MessagesSquare, Sparkles, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ComponentProps } from "react";
 import { createPortal } from "react-dom";
 import { notificationsApi, type UserNotification } from "@/lib/notifications-api";
 
 function seenKey(userId: string, notificationId: string) {
-  return `maestro_teacher_alert:${userId}:${notificationId}`;
+  return `maestro_notification_alert:${userId}:${notificationId}`;
 }
 
-export function TeacherNotificationCenter({
+type NotificationAudience = "student" | "teacher" | "staff";
+
+export function NotificationCenter({
   userId,
   unreadCount,
   reloadUnread,
+  audience,
 }: {
   userId: string;
   unreadCount: number | null;
   reloadUnread: () => Promise<void>;
+  audience: NotificationAudience;
 }) {
   const router = useRouter();
   const [items, setItems] = useState<UserNotification[]>([]);
@@ -102,11 +106,17 @@ export function TeacherNotificationCenter({
               >
                 <X size={18} />
               </button>
-              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gold">Рабочие события</p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gold">
+                {audience === "student" ? "Важное для вас" : "Рабочие события"}
+              </p>
               <h2 id="teacher-notifications-title" className="font-display mt-2 pr-10 text-3xl">
-                Новое в вашем кабинете
+                {audience === "student" ? "Ваши уведомления" : "Новое в вашем кабинете"}
               </h2>
-              <p className="mt-2 text-sm text-white/60">Здесь появляются сообщения, принятые отчёты и изменения по урокам.</p>
+              <p className="mt-2 text-sm text-white/60">
+                {audience === "student"
+                  ? "Сообщения, уроки, задания и результаты проверки в одном месте."
+                  : "Сообщения, отчёты и изменения по назначенным урокам в одном месте."}
+              </p>
             </div>
 
             <div className="max-h-[60vh] space-y-3 overflow-y-auto p-5 sm:p-6">
@@ -119,7 +129,17 @@ export function TeacherNotificationCenter({
                   <p className="mt-1 text-sm text-stone-500">Все изменения уже просмотрены.</p>
                 </div>
               ) : items.map((item) => {
-                const ItemIcon = item.type === "direct_message_received" ? MessagesSquare : CheckCircle2;
+                const ItemIcon = item.type === "direct_message_received"
+                  ? MessagesSquare
+                  : item.type.includes("online_lesson")
+                    ? CalendarClock
+                    : item.type.includes("assignment") || item.type.includes("homework")
+                      ? BookOpenCheck
+                      : item.type.includes("points") || item.type.includes("coins")
+                        ? Coins
+                        : item.type.includes("achievement")
+                          ? Sparkles
+                          : CheckCircle2;
                 return (
                 <button
                   key={item.id}
@@ -158,4 +178,8 @@ export function TeacherNotificationCenter({
       ), document.body) : null}
     </>
   );
+}
+
+export function TeacherNotificationCenter(props: Omit<ComponentProps<typeof NotificationCenter>, "audience">) {
+  return <NotificationCenter {...props} audience="teacher" />;
 }

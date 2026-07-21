@@ -12,6 +12,7 @@ import { useAuth } from "./auth-provider";
 import { AdminPendingHomeworkBadge } from "./admin-pending-homework-badge";
 import { Brand } from "./brand";
 import { StudentEntryAlerts } from "./student-entry-alerts";
+import { NotificationCenter } from "./teacher-notification-center";
 import { UserMenu } from "./user-menu";
 
 const navigation = [
@@ -38,7 +39,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const staff = isStaffRole(user?.role);
   const points = user?.points ?? 0;
   const coins = user?.coins ?? 0;
-  const { count: unreadNotifications } = useUnreadNotifications(60_000, "online_lesson_scheduled");
+  const { count: unreadNotifications, reload: reloadUnreadNotifications } = useUnreadNotifications(60_000);
+  const { count: onlineUnread } = useUnreadNotifications(60_000, "online_lesson_scheduled");
   const { count: unreadMessages, hasAccess: hasMessageAccess } = useMessageMailboxStatus(student);
   const { counts: schoolAlerts } = useStudentSchoolAlerts(student ? user?.id : undefined);
   const mobileNavigation = [
@@ -86,8 +88,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <Icon size={18} strokeWidth={2.15} />
               </span>
               <span className="min-w-0 flex-1 truncate">{label}</span>
-              {href === "/online-lessons" && unreadNotifications != null && unreadNotifications > 0 ? (
-                <AdminPendingHomeworkBadge count={unreadNotifications} />
+              {href === "/online-lessons" && onlineUnread != null && onlineUnread > 0 ? (
+                <AdminPendingHomeworkBadge count={onlineUnread} />
               ) : null}
               {href === "/messages" && unreadMessages != null && unreadMessages > 0 ? (
                 <AdminPendingHomeworkBadge count={unreadMessages} />
@@ -131,7 +133,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           ) : (
             <button onClick={() => setOpen(true)} className="grid h-10 w-10 place-items-center rounded-xl border border-stone-200/80 bg-white shadow-sm transition hover:border-gold/30 lg:hidden" aria-label="Открыть меню"><Menu size={20} /></button>
           )}
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
+            {user ? (
+              <NotificationCenter
+                userId={user.id}
+                unreadCount={unreadNotifications}
+                reloadUnread={reloadUnreadNotifications}
+                audience={student ? "student" : "staff"}
+              />
+            ) : null}
             <UserMenu />
           </div>
         </header>
@@ -147,7 +157,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {mobileNavigation.map(({ href, label, icon: Icon }) => {
             const active = pathname.startsWith(href);
             const badge = href === "/online-lessons"
-              ? unreadNotifications
+              ? onlineUnread
               : href === "/messages"
                 ? unreadMessages
               : href === "/school-lessons"
@@ -201,7 +211,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <StudentEntryAlerts
           userId={user.id}
           counts={schoolAlerts}
-          onlineUnread={unreadNotifications ?? 0}
+          onlineUnread={onlineUnread ?? 0}
           messagesUnread={unreadMessages ?? 0}
         />
       ) : null}

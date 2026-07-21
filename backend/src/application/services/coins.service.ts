@@ -1,6 +1,7 @@
 import { Prisma, type MaestroCoinSourceType } from "@prisma/client";
 import { prisma } from "../../infrastructure/database/prisma.js";
 import { BadRequestError } from "../../domain/errors.js";
+import { deliverUserNotification } from "./notification.service.js";
 
 export async function getStudentCoins(studentId: string) {
   const balance = await prisma.studentCoinBalance.findUnique({
@@ -35,7 +36,7 @@ export async function addMaestroCoins(params: {
     throw new BadRequestError("Укажите причину начисления Maestro Coins");
   }
 
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const balanceRow = await tx.studentCoinBalance.upsert({
       where: { studentId: params.studentId },
       create: { studentId: params.studentId, balance: 0 },
@@ -66,6 +67,18 @@ export async function addMaestroCoins(params: {
 
     return { awarded: true as const, balance: balanceAfter };
   });
+
+  await deliverUserNotification({
+    userId: params.studentId,
+    type: "coins_awarded",
+    title: `Начислено Maestro Coins: +${params.amount}`,
+    body: `${reason}. Баланс: ${result.balance}.`,
+    url: "/dashboard",
+    tag: `coins-${params.sourceId ?? "manual"}-${params.studentId}`,
+    dedupeWindowMs: 2 * 60 * 1000,
+  }).catch(() => undefined);
+
+  return result;
 }
 
 export async function awardCourseCompletionCoins(params: {

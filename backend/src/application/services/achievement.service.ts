@@ -2,6 +2,7 @@ import { prisma } from "../../infrastructure/database/prisma.js";
 import { isModuleCompleted } from "./course-progress.service.js";
 import { calculateStudentPoints } from "./points.service.js";
 import { countCompletedLessons, getCourseModules } from "../repositories/learning.repository.js";
+import { deliverUserNotification } from "./notification.service.js";
 
 export async function evaluateAchievements(
   studentId: string,
@@ -54,6 +55,17 @@ export async function evaluateAchievements(
       await prisma.studentAchievement.create({
         data: { studentId, achievementId: achievement.id },
       });
+      await deliverUserNotification({
+        userId: studentId,
+        type: "achievement_earned",
+        title: "Новое достижение",
+        body: achievement.description
+          ? `${achievement.title}. ${achievement.description}`
+          : achievement.title,
+        url: "/dashboard",
+        tag: `achievement-${achievement.id}-${studentId}`,
+        dedupeWindowMs: 2 * 60 * 1000,
+      }).catch(() => undefined);
       newlyEarned.push(achievement.code);
       earnedIds.add(achievement.id);
     }

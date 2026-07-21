@@ -131,6 +131,9 @@ export async function fetchTeacherStudents(crmTeacherId: string) {
       memberships: Array<{
         crmMembershipId: string;
         type: string;
+        planName: string | null;
+        lessonFormat: string;
+        lessonPrice: number | null;
         classesRemaining: number;
         endDate: string;
         group: {

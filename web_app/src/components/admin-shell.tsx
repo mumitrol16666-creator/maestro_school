@@ -15,7 +15,7 @@ import { teacherStudentsApi } from "@/lib/teacher-students-api";
 import { AdminPendingHomeworkBadge } from "./admin-pending-homework-badge";
 import { useAuth } from "./auth-provider";
 import { Brand } from "./brand";
-import { TeacherNotificationCenter } from "./teacher-notification-center";
+import { NotificationCenter } from "./teacher-notification-center";
 
 const cmsNavigation = [
   { href: "/admin", label: "Обзор", icon: LayoutDashboard },
@@ -236,11 +236,12 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           )}
         </div>
         <div className="ml-auto flex shrink-0 items-center gap-2">
-          {user?.role === "teacher" && user ? (
-            <TeacherNotificationCenter
+          {user ? (
+            <NotificationCenter
               userId={user.id}
               unreadCount={unreadNotifications}
               reloadUnread={reloadUnreadNotifications}
+              audience={user.role === "teacher" ? "teacher" : "staff"}
             />
           ) : null}
           <Link

@@ -6,7 +6,7 @@ import {
   markLessonReviewed,
   reopenLessonForRevision,
 } from "./lesson-progress.service.js";
-import { notifyHomeworkReviewed } from "./push-notification.service.js";
+import { deliverUserNotification } from "./notification.service.js";
 
 export type HomeworkReviewAction = "approve" | "reject";
 
@@ -50,11 +50,13 @@ export async function reviewHomeworkSubmission(params: {
       lessonTitle: lesson.title,
     });
 
-    void notifyHomeworkReviewed({
-      studentId,
-      lessonId,
-      lessonTitle: lesson.title,
-      action: "approve",
+    void deliverUserNotification({
+      userId: studentId,
+      type: "homework_reviewed",
+      title: "Домашнее задание принято",
+      body: `Урок «${lesson.title}» — задание проверено, можно продолжать.`,
+      url: `/lessons/${lessonId}`,
+      tag: `homework-${lessonId}`,
     }).catch(() => undefined);
 
     return {
@@ -85,11 +87,13 @@ export async function reviewHomeworkSubmission(params: {
 
   await reopenLessonForRevision(studentId, lessonId);
 
-  void notifyHomeworkReviewed({
-    studentId,
-    lessonId,
-    lessonTitle: lesson.title,
-    action: "reject",
+  void deliverUserNotification({
+    userId: studentId,
+    type: "homework_reviewed",
+    title: "Нужна доработка ДЗ",
+    body: `Урок «${lesson.title}» — преподаватель оставил комментарий.`,
+    url: `/lessons/${lessonId}`,
+    tag: `homework-${lessonId}`,
   }).catch(() => undefined);
 
   return {
