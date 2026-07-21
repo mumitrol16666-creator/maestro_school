@@ -3,6 +3,7 @@
 import { Bell, CheckCircle2, ChevronRight, MessagesSquare, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { notificationsApi, type UserNotification } from "@/lib/notifications-api";
 
 function seenKey(userId: string, notificationId: string) {
@@ -84,8 +85,8 @@ export function TeacherNotificationCenter({
         ) : null}
       </button>
 
-      {open ? (
-        <div className="fixed inset-0 z-[90] grid place-items-center bg-stone-950/45 p-4 backdrop-blur-sm">
+      {open && typeof document !== "undefined" ? createPortal((
+        <div className="fixed inset-0 z-[90] grid min-h-[100dvh] place-items-center bg-stone-950/45 p-4 backdrop-blur-sm">
           <section
             role="dialog"
             aria-modal="true"
@@ -154,7 +155,7 @@ export function TeacherNotificationCenter({
             ) : null}
           </section>
         </div>
-      ) : null}
+      ), document.body) : null}
     </>
   );
 }
