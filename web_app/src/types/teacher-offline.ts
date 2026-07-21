@@ -4,6 +4,8 @@ export type TrialLessonReport = {
   attendance?: {
     outcome?: "attended" | "late" | "no_show" | "rescheduled";
     arrivedWith?: "unknown" | "parent" | "alone" | "other";
+    parentAccompanied?: boolean;
+    /** @deprecated Kept for CRM compatibility; does not mean parent attended. */
     parentPresent?: boolean;
     durationFactMinutes?: number;
   };

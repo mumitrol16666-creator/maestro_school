@@ -36,25 +36,17 @@ function object(value: unknown): Record<string, unknown> {
 
 function trialReportReady(report: Record<string, unknown> | undefined) {
   if (!report) return false;
-  const studentProfile = object(report.studentProfile);
   const teacherAssessment = object(report.teacherAssessment);
   const lessonFacts = object(report.lessonFacts);
-  const recommendation = object(report.recommendation);
-  const salesSignals = object(report.salesSignals);
 
+  // Only observations from the lesson are required from a teacher. Purchase
+  // probability, objections, schedule fit and manager follow-up are completed
+  // later in CRM and must not block the teacher's report.
   return Boolean(
-    text(studentProfile.priorExperience)
-      && studentProfile.priorExperience !== "unknown"
-      && text(studentProfile.motivation)
-      && studentProfile.motivation !== "unclear"
-      && teacherAssessment.interestLevel
+    teacherAssessment.interestLevel
       && teacherAssessment.contactLevel
       && text(lessonFacts.whatWasTested)
-      && text(lessonFacts.whatWorkedWell)
-      && text(recommendation.recommendedFormat)
-      && recommendation.recommendedFormat !== "undecided"
-      && salesSignals.buyProbability
-      && text(salesSignals.teacherSalesComment),
+      && text(lessonFacts.whatWorkedWell),
   );
 }
 

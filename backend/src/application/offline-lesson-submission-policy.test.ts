@@ -79,11 +79,8 @@ test("trial lead from a booking can submit without a student card", () => {
     }],
     payload: {
       trialReport: {
-        studentProfile: { priorExperience: "none", motivation: "both" },
         teacherAssessment: { interestLevel: 4, contactLevel: 4 },
         lessonFacts: { whatWasTested: "Ритм", whatWorkedWell: "Включился в задания" },
-        recommendation: { recommendedFormat: "individual" },
-        salesSignals: { buyProbability: 4, teacherSalesComment: "Рекомендую продолжить" },
       },
     },
   });

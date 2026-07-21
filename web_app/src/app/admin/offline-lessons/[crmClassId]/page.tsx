@@ -78,8 +78,8 @@ type TrialSectionUpdater = <K extends keyof TrialLessonReport>(
 ) => void;
 
 const defaultTrialReport: TrialLessonReport = {
-  version: 1,
-  attendance: { outcome: "attended", arrivedWith: "unknown", parentPresent: false },
+  version: 2,
+  attendance: { outcome: "attended", arrivedWith: "unknown", parentAccompanied: false, parentPresent: false },
   studentProfile: { priorExperience: "unknown", motivation: "unclear" },
   teacherAssessment: {
     interestLevel: null,
@@ -129,20 +129,15 @@ function scoreFromInput(value: string) {
 }
 
 function trialReportReady(report: TrialLessonReport) {
+  // The teacher confirms only what was observed during the lesson. Sales
+  // readiness, objections and follow-up belong to the manager and must not
+  // block lesson submission.
   return Boolean(
     report.attendance?.outcome
-      && report.studentProfile?.priorExperience
-      && report.studentProfile.priorExperience !== "unknown"
-      && report.studentProfile?.motivation
-      && report.studentProfile.motivation !== "unclear"
       && report.teacherAssessment?.interestLevel
       && report.teacherAssessment?.contactLevel
       && report.lessonFacts?.whatWasTested?.trim()
       && report.lessonFacts?.whatWorkedWell?.trim()
-      && report.recommendation?.recommendedFormat
-      && report.recommendation.recommendedFormat !== "undecided"
-      && report.salesSignals?.buyProbability
-      && report.salesSignals?.teacherSalesComment?.trim()
   );
 }
 
@@ -705,6 +700,7 @@ export default function AdminOfflineLessonDetailPage() {
               <TrialReportEditor
                 report={trialReport}
                 disabled={!canEditReport}
+                isAdmin={isAdmin}
                 updateSection={updateTrialSection}
                 toggleObjection={toggleTrialObjection}
               />
@@ -1230,11 +1226,13 @@ function NotHeldConfirmation({
 function TrialReportEditor({
   report,
   disabled,
+  isAdmin,
   updateSection,
   toggleObjection,
 }: {
   report: TrialLessonReport;
   disabled: boolean;
+  isAdmin: boolean;
   updateSection: TrialSectionUpdater;
   toggleObjection: (value: string) => void;
 }) {
@@ -1251,7 +1249,7 @@ function TrialReportEditor({
       <div className="rounded-[24px] border border-amber-200 bg-amber-50 p-5">
         <p className="text-sm font-bold text-amber-950">Пробный урок: диагностическая анкета</p>
         <p className="mt-2 text-sm leading-6 text-amber-900/80">
-          Эти ответы используются для анализа пробного урока, рекомендаций по обучению и следующего шага для администратора.
+          Здесь только педагогические наблюдения по занятию. Коммерческие решения и следующий контакт заполняет менеджер отдельно.
         </p>
       </div>
 
@@ -1271,15 +1269,15 @@ function TrialReportEditor({
           </select>
         </label>
         <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
-          С кем пришел
+          Сопровождение взрослого
           <select
             value={report.attendance?.arrivedWith ?? "unknown"}
-            onChange={(event) => updateSection("attendance", { arrivedWith: event.target.value as any, parentPresent: event.target.value === "parent" })}
+            onChange={(event) => updateSection("attendance", { arrivedWith: event.target.value as any, parentAccompanied: event.target.value === "parent", parentPresent: false })}
             disabled={disabled}
             className="mt-2 w-full rounded-2xl border border-stone-200 px-4 py-3 text-sm"
           >
             <option value="unknown">Не указано</option>
-            <option value="parent">С родителем</option>
+            <option value="parent">Родитель сопровождал</option>
             <option value="alone">Самостоятельно</option>
             <option value="other">Другое</option>
           </select>
@@ -1299,20 +1297,22 @@ function TrialReportEditor({
             <option value="strong">Сильный</option>
           </select>
         </label>
-        <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
-          Мотивация
-          <select
-            value={profile.motivation ?? "unclear"}
-            onChange={(event) => updateSection("studentProfile", { motivation: event.target.value as any })}
-            disabled={disabled}
-            className="mt-2 w-full rounded-2xl border border-stone-200 px-4 py-3 text-sm"
-          >
-            <option value="unclear">Не ясно</option>
-            <option value="student">Хочет ученик</option>
-            <option value="parent">Хочет родитель</option>
-            <option value="both">Оба заинтересованы</option>
-          </select>
-        </label>
+        {isAdmin ? (
+          <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
+            Мотивация (со слов семьи)
+            <select
+              value={profile.motivation ?? "unclear"}
+              onChange={(event) => updateSection("studentProfile", { motivation: event.target.value as any })}
+              disabled={disabled}
+              className="mt-2 w-full rounded-2xl border border-stone-200 px-4 py-3 text-sm"
+            >
+              <option value="unclear">Не ясно</option>
+              <option value="student">Хочет ученик</option>
+              <option value="parent">Хочет родитель</option>
+              <option value="both">Оба заинтересованы</option>
+            </select>
+          </label>
+        ) : null}
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">
@@ -1328,13 +1328,17 @@ function TrialReportEditor({
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <TrialTextarea label="Цель родителя" value={profile.goalFromParent} disabled={disabled} onChange={(value) => updateSection("studentProfile", { goalFromParent: value })} />
+        {isAdmin ? (
+          <TrialTextarea label="Цель родителя (со слов семьи)" value={profile.goalFromParent} disabled={disabled} onChange={(value) => updateSection("studentProfile", { goalFromParent: value })} />
+        ) : null}
         <TrialTextarea label="Цель ученика" value={profile.goalFromStudent} disabled={disabled} onChange={(value) => updateSection("studentProfile", { goalFromStudent: value })} />
         <TrialTextarea label="Что проверили" value={facts.whatWasTested} disabled={disabled} onChange={(value) => updateSection("lessonFacts", { whatWasTested: value })} />
         <TrialTextarea label="Что получилось" value={facts.whatWorkedWell} disabled={disabled} onChange={(value) => updateSection("lessonFacts", { whatWorkedWell: value })} />
         <TrialTextarea label="Трудности" value={facts.difficulties} disabled={disabled} onChange={(value) => updateSection("lessonFacts", { difficulties: value })} />
         <TrialTextarea label="Реакция на задания" value={facts.reactionToTasks} disabled={disabled} onChange={(value) => updateSection("lessonFacts", { reactionToTasks: value })} />
-        <TrialTextarea label="Реакция родителя" value={facts.parentReaction} disabled={disabled} onChange={(value) => updateSection("lessonFacts", { parentReaction: value })} />
+        {isAdmin ? (
+          <TrialTextarea label="Комментарий семьи (служебно)" value={facts.parentReaction} disabled={disabled} onChange={(value) => updateSection("lessonFacts", { parentReaction: value })} />
+        ) : null}
         <TrialTextarea label="Дали домой" value={facts.homeworkGiven} disabled={disabled} onChange={(value) => updateSection("lessonFacts", { homeworkGiven: value })} />
       </div>
 
@@ -1367,21 +1371,28 @@ function TrialReportEditor({
             <option value="advanced">Сильный</option>
           </select>
         </label>
-        <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
-          Следующий шаг
-          <select value={recommendation.nextStep ?? "manager_call"} onChange={(event) => updateSection("recommendation", { nextStep: event.target.value as any })} disabled={disabled} className="mt-2 w-full rounded-2xl border border-stone-200 px-4 py-3 text-sm">
-            <option value="manager_call">Созвон менеджера</option>
-            <option value="sell_membership">Продавать абонемент</option>
-            <option value="second_trial">Второй пробный</option>
-            <option value="wait">Подождать решение</option>
-            <option value="reject">Не подходит</option>
-          </select>
-        </label>
+        {isAdmin ? (
+          <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
+            Следующий шаг (для менеджера)
+            <select value={recommendation.nextStep ?? "manager_call"} onChange={(event) => updateSection("recommendation", { nextStep: event.target.value as any })} disabled={disabled} className="mt-2 w-full rounded-2xl border border-stone-200 px-4 py-3 text-sm">
+              <option value="manager_call">Созвон менеджера</option>
+              <option value="sell_membership">Предложить абонемент</option>
+              <option value="second_trial">Второй пробный</option>
+              <option value="wait">Подождать решение</option>
+              <option value="reject">Не продолжать</option>
+            </select>
+          </label>
+        ) : null}
         <TrialTextarea label="Фокус первого месяца" value={recommendation.firstMonthFocus} disabled={disabled} onChange={(value) => updateSection("recommendation", { firstMonthFocus: value })} />
-        <TrialTextarea label="Комментарий менеджеру" value={sales.teacherSalesComment} disabled={disabled} onChange={(value) => updateSection("salesSignals", { teacherSalesComment: value })} />
+        <TrialTextarea label="Наблюдение для менеджера (служебно)" value={sales.teacherSalesComment} disabled={disabled} onChange={(value) => updateSection("salesSignals", { teacherSalesComment: value })} />
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      {isAdmin ? <div className="rounded-[24px] border border-violet-200 bg-violet-50 p-5">
+        <p className="text-sm font-bold text-violet-950">Коммерческий блок — только менеджеру</p>
+        <p className="mt-2 text-sm leading-6 text-violet-900/80">
+          Эти данные не участвуют в педагогическом отчёте для семьи и не требуются преподавателю для отправки урока.
+        </p>
+      <div className="mt-4 grid gap-4 md:grid-cols-3">
         <TrialScore label="Вероятность покупки" value={sales.buyProbability} disabled={disabled} onChange={(value) => updateSection("salesSignals", { buyProbability: value })} />
         <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
           Чувствительность к цене
@@ -1414,6 +1425,7 @@ function TrialReportEditor({
           ))}
         </div>
       </fieldset>
+      </div> : null}
 
       <TrialTextarea label="Свободный комментарий преподавателя" value={raw.teacherFreeComment} disabled={disabled} onChange={(value) => updateSection("raw", { teacherFreeComment: value })} />
     </div>
