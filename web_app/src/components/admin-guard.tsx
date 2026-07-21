@@ -14,7 +14,7 @@ export function AdminGuard({ children }: { children: React.ReactNode }) {
   }, [loading, router, user]);
 
   if (loading || !user) return <div className="min-h-screen bg-cream p-8"><LoadingState label="Проверяем доступ к кабинету" /></div>;
-  const staffRoles = ["admin", "owner", "teacher", "curator", "branch_manager"];
+  const staffRoles = ["admin", "owner", "super_admin", "teacher", "curator", "branch_manager"];
   if (!staffRoles.includes(user.role)) {
     return <div className="min-h-screen bg-cream p-8"><ErrorState message="У вашей роли нет доступа к панели преподавателя." /></div>;
   }

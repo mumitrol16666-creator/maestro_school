@@ -8,6 +8,7 @@ export type MediaFolder = typeof mediaFolders[number];
 interface MediaMetadata {
   originalFilename: string;
   mimeType: string;
+  title?: string;
 }
 
 const uploadRoot = path.resolve(env.UPLOAD_DIR);
@@ -59,6 +60,12 @@ export async function writeMediaFile(folder: MediaFolder, filename: string, byte
   ]);
 }
 
+export async function updateMediaTitle(folder: MediaFolder, filename: string, title: string) {
+  const current = await readMediaMetadata(folder, filename);
+  if (!current) throw new Error("Media metadata not found");
+  await writeFile(metadataPath(folder, filename), JSON.stringify({ ...current, title }), "utf8");
+}
+
 export async function readMediaMetadata(folder: MediaFolder, filename: string): Promise<MediaMetadata | null> {
   try {
     return JSON.parse(await readFile(metadataPath(folder, filename), "utf8")) as MediaMetadata;
@@ -77,6 +84,7 @@ export async function getMediaInfo(folder: MediaFolder, filename: string, reques
     return {
       filename,
       originalFilename: metadata?.originalFilename ?? filename,
+      title: metadata?.title?.trim() || metadata?.originalFilename || filename,
       mimeType: metadata?.mimeType ?? null,
       folder,
       size: details.size,

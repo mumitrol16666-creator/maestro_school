@@ -238,20 +238,28 @@ export default function LessonPage() {
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 {lesson.materials.map((material) => (
                   <a
-                    href={material.url}
+                    href={material.downloadUrl ?? material.url}
                     target="_blank"
                     rel="noreferrer"
+                    download={material.downloadUrl ? material.title : undefined}
                     key={material.id}
-                    className="card-hover flex items-center gap-4 rounded-2xl border border-stone-200 bg-paper p-4 text-left shadow-soft"
+                    className="card-hover rounded-2xl border border-stone-200 bg-paper p-4 text-left shadow-soft"
                   >
-                    <span className="grid h-11 w-11 place-items-center rounded-xl bg-stone-100 text-gold">
-                      {materialIcon(material.type)}
+                    {material.previewUrl ? (
+                      <span className="mb-4 block overflow-hidden rounded-xl border border-stone-100 bg-stone-50">
+                        <img src={material.previewUrl} alt={material.title} className="max-h-64 w-full object-contain" loading="lazy" />
+                      </span>
+                    ) : null}
+                    <span className="flex items-center gap-4">
+                      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-stone-100 text-gold">
+                        {materialIcon(material.type)}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-bold">{material.title}</span>
+                        <span className="mt-1 block text-xs text-stone-400">{material.type.toUpperCase()} · Скачать</span>
+                      </span>
+                      <Download size={16} className="shrink-0 text-stone-400" />
                     </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-bold">{material.title}</span>
-                      <span className="mt-1 block text-xs text-stone-400">{material.type.toUpperCase()}</span>
-                    </span>
-                    <Download size={16} className="text-stone-400" />
                   </a>
                 ))}
               </div>

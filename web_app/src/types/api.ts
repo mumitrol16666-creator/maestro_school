@@ -103,6 +103,15 @@ export interface ApiMaterial {
   title: string;
   url: string;
   sortOrder: number;
+  media?: {
+    filename: string;
+    originalFilename: string;
+    title: string;
+    folder: "images" | "pdf" | "files";
+    mimeType: string | null;
+    size: number;
+    url: string;
+  } | null;
 }
 
 export interface ApiHomework {

@@ -18,6 +18,7 @@ import { getLessonProgressRecord } from "../../application/repositories/learning
 import { syncLessonAvailability } from "../../application/services/lesson-unlock.service.js";
 import { publicHomeworkTestQuestions } from "../../domain/homework-test.js";
 import { buildLessonEndActions } from "../../application/services/lesson-signup.service.js";
+import { getMediaInfoFromUrl } from "../../application/services/media-storage.service.js";
 import {
   authenticate,
   optionalAuthenticate,
@@ -140,7 +141,12 @@ export async function catalogRoutes(app: FastifyInstance) {
           videoUrl: contentOpen ? lesson.videoUrl : null,
           sortOrder: lesson.sortOrder,
           pointsReward: lesson.pointsReward,
-          materials: contentOpen ? lesson.materials : [],
+          materials: contentOpen
+            ? await Promise.all(lesson.materials.map(async (material) => ({
+              ...material,
+              media: await getMediaInfoFromUrl(material.url, request),
+            })))
+            : [],
           homework: contentOpen && lesson.homeworks[0]
             ? {
                 id: lesson.homeworks[0].id,

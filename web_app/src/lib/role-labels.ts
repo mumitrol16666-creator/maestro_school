@@ -50,7 +50,7 @@ export const ASSIGNABLE_ROLES = [
 ] as const;
 
 const STAFF_ROLES = ["admin", "owner", "teacher", "curator", "branch_manager", "super_admin"] as const;
-const CONTENT_ADMIN_ROLES = ["admin", "owner"] as const;
+const CONTENT_ADMIN_ROLES = ["admin", "owner", "super_admin"] as const;
 
 export function roleLabel(role?: string | null) {
   if (!role) return "Пользователь";

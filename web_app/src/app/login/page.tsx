@@ -12,7 +12,7 @@ import { isStaffRole } from "@/lib/role-labels";
 
 function homePathForRole(role?: string | null) {
   if (!role || role === "student") return "/dashboard";
-  if (role === "admin" || role === "owner") return "/admin";
+  if (role === "admin" || role === "owner" || role === "super_admin") return "/admin";
   if (isStaffRole(role)) return "/admin/offline-lessons";
   return "/dashboard";
 }

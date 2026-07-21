@@ -13,6 +13,9 @@ export interface Material {
   type: "pdf" | "image" | "file" | "link" | "audio" | "notes";
   meta: string;
   url?: string;
+  downloadUrl?: string;
+  mimeType?: string | null;
+  previewUrl?: string;
 }
 
 export interface Lesson {

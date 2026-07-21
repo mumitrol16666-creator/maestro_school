@@ -1,6 +1,6 @@
 "use client";
 
-import { Copy, ExternalLink, File, Image, Search, Trash2, Upload } from "lucide-react";
+import { Check, Copy, ExternalLink, File, Image, Pencil, Search, Trash2, Upload, X } from "lucide-react";
 import { ChangeEvent, useDeferredValue, useState } from "react";
 import { ConfirmDialog } from "@/components/admin-feedback";
 import { inputClass, primaryButton, secondaryButton } from "@/components/admin-ui";
@@ -30,6 +30,9 @@ export default function MediaAdminPage() {
   const [uploading, setUploading] = useState(false);
   const [query, setQuery] = useState("");
   const [folder, setFolder] = useState<FolderFilter>("");
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState("");
+  const [renaming, setRenaming] = useState(false);
   const deferredQuery = useDeferredValue(query);
   const confirm = useConfirmDialog();
   const resource = useApiResource(() => cmsApi.media(deferredQuery, folder), [deferredQuery, folder]);
@@ -57,6 +60,24 @@ export default function MediaAdminPage() {
         await resource.reload();
       },
     });
+  }
+
+  function startRename(item: CmsMedia) {
+    setEditingKey(`${item.folder}/${item.filename}`);
+    setEditingTitle(item.title || item.originalFilename);
+  }
+
+  async function saveRename(item: CmsMedia) {
+    const title = editingTitle.trim();
+    if (!title) return;
+    setRenaming(true);
+    try {
+      await cmsApi.renameMedia(item.folder, item.filename, title);
+      setEditingKey(null);
+      await resource.reload();
+    } finally {
+      setRenaming(false);
+    }
   }
 
   return (
@@ -87,7 +108,7 @@ export default function MediaAdminPage() {
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             className={`${inputClass} pl-11`}
-            placeholder="Поиск по имени файла..."
+            placeholder="Поиск по названию или имени файла..."
           />
         </label>
         <div className="flex flex-wrap gap-2">
@@ -120,7 +141,35 @@ export default function MediaAdminPage() {
               <span className="grid h-12 w-12 place-items-center rounded-2xl bg-stone-100 text-gold">
                 {item.folder === "images" ? <Image size={19} /> : <File size={19} />}
               </span>
-              <p className="mt-5 truncate text-sm font-bold">{item.originalFilename}</p>
+              {editingKey === `${item.folder}/${item.filename}` ? (
+                <div className="mt-4 flex items-center gap-2">
+                  <input
+                    autoFocus
+                    value={editingTitle}
+                    onChange={(event) => setEditingTitle(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") { event.preventDefault(); void saveRename(item); }
+                      if (event.key === "Escape") setEditingKey(null);
+                    }}
+                    className={`${inputClass} min-w-0 py-2 text-sm`}
+                    aria-label="Название медиа"
+                  />
+                  <button type="button" disabled={renaming} onClick={() => void saveRename(item)} className={secondaryButton} aria-label="Сохранить название">
+                    <Check size={14} />
+                  </button>
+                  <button type="button" disabled={renaming} onClick={() => setEditingKey(null)} className={secondaryButton} aria-label="Отменить переименование">
+                    <X size={14} />
+                  </button>
+                </div>
+              ) : (
+                <div className="mt-5 flex items-center gap-2">
+                  <p className="min-w-0 flex-1 truncate text-sm font-bold">{item.title}</p>
+                  <button type="button" onClick={() => startRename(item)} className={secondaryButton} aria-label="Переименовать медиа">
+                    <Pencil size={14} />
+                  </button>
+                </div>
+              )}
+              <p className="mt-1 truncate text-xs text-stone-500">Файл: {item.originalFilename}</p>
               <p className="mt-1 truncate text-xs text-stone-400">
                 {item.folder} · {formatMediaSize(item.size)} · {new Intl.DateTimeFormat("ru-RU").format(new Date(item.createdAt))}
               </p>

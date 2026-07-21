@@ -13,7 +13,9 @@ import {
   mediaFilePath,
   mediaFolderFor,
   mediaFolders,
+  readMediaMetadata,
   type MediaFolder,
+  updateMediaTitle,
   writeMediaFile,
 } from "../../application/services/media-storage.service.js";
 import { authenticate, requireContentAdmin, requirePermission } from "../guards/auth.guards.js";
@@ -35,7 +37,9 @@ export async function mediaRoutes(app: FastifyInstance) {
       return Promise.all(filenames.map((filename) => getMediaInfo(folder, filename, request)));
     }))).flat().filter((item) => item !== null);
     const filtered = search
-      ? items.filter((item) => item.originalFilename.toLowerCase().includes(search) || item.filename.toLowerCase().includes(search))
+      ? items.filter((item) => item.title.toLowerCase().includes(search)
+        || item.originalFilename.toLowerCase().includes(search)
+        || item.filename.toLowerCase().includes(search))
       : items;
     filtered.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
     return { data: filtered };
@@ -45,6 +49,7 @@ export async function mediaRoutes(app: FastifyInstance) {
     const body = z.object({
       filename: z.string().min(1).max(255),
       mimeType: z.string().min(1).max(255),
+      title: z.string().trim().min(1).max(255).optional(),
       base64: z.string().min(1),
     }).parse(request.body);
     const bytes = Buffer.from(body.base64, "base64");
@@ -53,12 +58,17 @@ export async function mediaRoutes(app: FastifyInstance) {
     const folder = mediaFolderFor(mimeType);
     const extension = path.extname(body.filename).toLowerCase().replace(/[^a-z0-9.]/g, "");
     const filename = `${randomUUID()}${extension}`;
-    await writeMediaFile(folder, filename, bytes, { originalFilename: body.filename, mimeType });
+    await writeMediaFile(folder, filename, bytes, {
+      originalFilename: body.filename,
+      mimeType,
+      title: body.title || body.filename,
+    });
 
     return reply.status(201).send({
       data: {
         filename,
         originalFilename: body.filename,
+        title: body.title || body.filename,
         folder,
         mimeType,
         size: bytes.length,
@@ -73,6 +83,7 @@ export async function mediaRoutes(app: FastifyInstance) {
       folder: z.enum(mediaFolders),
       filename: z.string().regex(/^[a-zA-Z0-9._-]+$/),
     }).parse(request.params);
+    const query = z.object({ download: z.enum(["1", "true"]).optional() }).parse(request.query);
     if (filename.endsWith(".meta.json")) throw new NotFoundError("Media file");
     const filePath = mediaFilePath(folder, filename);
     let bytes: Buffer;
@@ -87,7 +98,30 @@ export async function mediaRoutes(app: FastifyInstance) {
       : extension === ".jpg" || extension === ".jpeg" ? "image/jpeg"
       : extension === ".webp" ? "image/webp"
       : "application/octet-stream";
+    if (query.download) {
+      const metadata = await readMediaMetadata(folder, filename);
+      const requestedName = metadata?.title?.trim() || metadata?.originalFilename || filename;
+      const originalExtension = path.extname(metadata?.originalFilename || filename);
+      const downloadName = path.extname(requestedName) ? requestedName : `${requestedName}${originalExtension}`;
+      reply.header("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(downloadName)}`);
+    }
     return reply.type(mime).send(bytes);
+  });
+
+  app.patch("/admin/media/:folder/:filename", { preHandler: mediaGuards() }, async (request) => {
+    const { folder, filename } = z.object({
+      folder: z.enum(mediaFolders),
+      filename: z.string().regex(/^[a-zA-Z0-9._-]+$/),
+    }).parse(request.params);
+    const { title } = z.object({ title: z.string().trim().min(1).max(255) }).parse(request.body);
+    try {
+      await updateMediaTitle(folder, filename, title);
+      const media = await getMediaInfo(folder, filename, request);
+      if (!media) throw new NotFoundError("Media file");
+      return { data: media };
+    } catch {
+      throw new NotFoundError("Media file");
+    }
   });
 
   app.delete("/admin/media/:folder/:filename", { preHandler: mediaGuards() }, async (request) => {

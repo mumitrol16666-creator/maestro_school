@@ -104,6 +104,7 @@ export interface CmsNews {
 export interface CmsMedia {
   filename: string;
   originalFilename: string;
+  title: string;
   folder: "images" | "pdf" | "files";
   mimeType: string | null;
   size: number;

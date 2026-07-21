@@ -61,6 +61,7 @@ export const cmsApi = {
     return apiRequest<CmsMedia[]>(`/admin/media${query ? `?${query}` : ""}`);
   },
   uploadMedia: (body: unknown) => apiRequest<CmsMedia>("/admin/media", json("POST", body)),
+  renameMedia: (folder: string, filename: string, title: string) => apiRequest<CmsMedia>(`/admin/media/${folder}/${filename}`, json("PATCH", { title })),
   deleteMedia: (folder: string, filename: string) => apiRequest(`/admin/media/${folder}/${filename}`, json("DELETE")),
   mediaUsages: (folder: string, filename: string) => apiRequest<CmsMaterialUsage[]>(`/admin/media/${folder}/${filename}/usages`),
 };

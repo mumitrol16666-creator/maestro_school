@@ -3,21 +3,22 @@ import { describe, it } from "node:test";
 import { isContentAdminRole, isOfflineCoordinatorRole } from "./cms-access.js";
 
 describe("CMS role access", () => {
-  it("allows admin and owner", () => {
+  it("allows admin, owner and super admin", () => {
     assert.equal(isContentAdminRole("admin"), true);
     assert.equal(isContentAdminRole("owner"), true);
+    assert.equal(isContentAdminRole("super_admin"), true);
   });
 
-  it("rejects student and unrelated roles", () => {
+  it("rejects student and teacher roles", () => {
     assert.equal(isContentAdminRole("student"), false);
     assert.equal(isContentAdminRole("teacher"), false);
-    assert.equal(isContentAdminRole("super_admin"), false);
+    assert.equal(isContentAdminRole("super_admin"), true);
   });
 });
 
 describe("offline school coordinator access", () => {
-  it("allows administrators, owner, curator and branch manager", () => {
-    for (const role of ["admin", "owner", "curator", "branch_manager"]) {
+  it("allows administrators, owner, super admin, curator and branch manager", () => {
+    for (const role of ["admin", "owner", "super_admin", "curator", "branch_manager"]) {
       assert.equal(isOfflineCoordinatorRole(role), true);
     }
   });

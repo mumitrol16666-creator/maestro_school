@@ -77,7 +77,7 @@ export function MediaPicker({ open, onClose, onSelect, title = "Медиатек
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 className={`${inputClass} pl-11`}
-                placeholder="Поиск по имени файла..."
+                placeholder="Поиск по названию или имени файла..."
               />
             </label>
             <label className={`${primaryButton} shrink-0 cursor-pointer`}>
@@ -130,7 +130,8 @@ export function MediaPicker({ open, onClose, onSelect, title = "Медиатек
                       {item.folder === "images" ? <Image size={17} /> : <File size={17} />}
                     </span>
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-bold">{item.originalFilename}</p>
+                      <p className="truncate text-sm font-bold">{item.title}</p>
+                      <p className="mt-1 truncate text-[11px] text-stone-400">Файл: {item.originalFilename}</p>
                       <p className="mt-1 text-xs text-stone-400">
                         {item.folder} · {formatMediaSize(item.size)}
                       </p>

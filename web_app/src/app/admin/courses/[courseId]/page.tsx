@@ -218,17 +218,13 @@ export default function CourseBuilderPage() {
     });
   }
 
-  async function quickAttachMedia(media: CmsMedia) {
+  function selectMediaForMaterial(media: CmsMedia) {
     if (!selectedLesson) return;
-    await runOperation(async () => {
-      await cmsApi.createMaterial({
-        title: titleFromFilename(media.originalFilename),
-        type: materialTypeFromMedia(media),
-        url: media.url,
-        sortOrder: materials.data?.length ?? 0,
-        lessonId: selectedLesson.id,
-      });
-      await Promise.all([materials.reload(), tree.reload()]);
+    setMaterialForm({
+      title: media.title || titleFromFilename(media.originalFilename),
+      type: materialTypeFromMedia(media),
+      url: media.url,
+      sortOrder: materials.data?.length ?? 0,
     });
   }
 
@@ -416,7 +412,7 @@ export default function CourseBuilderPage() {
     <MediaPicker
       open={mediaPickerOpen}
       onClose={() => setMediaPickerOpen(false)}
-      onSelect={(media) => void quickAttachMedia(media)}
+      onSelect={selectMediaForMaterial}
       title="Прикрепить из медиатеки"
     />
     <ConfirmDialog request={confirmRequest} busy={confirmBusy} onClose={() => { if (!confirmBusy) setConfirmRequest(null); }} />
