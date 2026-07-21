@@ -109,8 +109,10 @@ export type TeacherOfflineStudent = {
   name: string;
   firstName?: string;
   phone?: string;
+  direction?: string | null;
+  isLead?: boolean;
   attended: boolean | null;
-  attendanceStatus: "unmarked" | "present" | "late" | "excused_absence" | "unexcused_absence";
+  attendanceStatus: "unmarked" | "present" | "late" | "excused_absence" | "unexcused_absence" | "emergency_freeze";
   teacherNote?: string | null;
   homeworkReview?: OfflineHomeworkReview | null;
   homeworkRecipient?: HomeworkNotificationRecipient | null;

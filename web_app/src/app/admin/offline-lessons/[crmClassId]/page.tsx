@@ -1605,7 +1605,15 @@ function StudentLessonCheckCard({
   return (
     <div className="rounded-2xl border border-stone-200 bg-white p-4 sm:p-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="font-semibold text-ink">{student.name}</p>
+        <div>
+          <p className="font-semibold text-ink">{student.name}</p>
+          {student.isLead ? (
+            <p className="mt-1 text-xs font-bold uppercase tracking-[0.12em] text-gold">
+              Клиент из заявки · карточка ученика не создана
+            </p>
+          ) : null}
+          {student.phone ? <p className="mt-1 text-xs text-stone-500">{student.phone}</p> : null}
+        </div>
         <span
           className={`inline-flex w-fit rounded-full px-3 py-1 text-xs font-bold ${
             attendanceClasses[attendanceStatus] ?? attendanceClasses.unmarked

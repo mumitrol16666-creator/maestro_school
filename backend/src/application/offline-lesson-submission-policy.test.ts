@@ -69,3 +69,25 @@ test("individual held lesson requires previous homework review", () => {
   assert.equal(result.valid, false);
   if (!result.valid) assert.equal(result.code, "LESSON_HOMEWORK_REVIEW_REQUIRED");
 });
+
+test("trial lead from a booking can submit without a student card", () => {
+  const result = validateOfflineLessonSubmission({
+    lesson: { classType: "trial", group: null },
+    students: [{
+      name: "Клиент из заявки",
+      attendanceStatus: "present",
+    }],
+    payload: {
+      trialReport: {
+        studentProfile: { priorExperience: "none", motivation: "both" },
+        teacherAssessment: { interestLevel: 4, contactLevel: 4 },
+        lessonFacts: { whatWasTested: "Ритм", whatWorkedWell: "Включился в задания" },
+        recommendation: { recommendedFormat: "individual" },
+        salesSignals: { buyProbability: 4, teacherSalesComment: "Рекомендую продолжить" },
+      },
+    },
+  });
+
+  assert.equal(result.valid, true);
+  if (result.valid) assert.equal(result.outcome, "held");
+});
