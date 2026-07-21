@@ -70,7 +70,7 @@ export type TeacherOfflineClass = {
   lessonSummary?: string | null;
   homeworkDraft?: string | null;
   nextLessonFocus?: string | null;
-  materials?: Array<{ type?: string; url?: string; title?: string }> | null;
+  materials?: Array<{ type?: string; url?: string; title?: string; description?: string | null; mimeType?: string | null }> | null;
   teacherComment?: string | null;
   teacherOutcomeHint?: string | null;
   trialReport?: TrialLessonReport | null;

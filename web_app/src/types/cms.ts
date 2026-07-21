@@ -105,6 +105,7 @@ export interface CmsMedia {
   filename: string;
   originalFilename: string;
   title: string;
+  description?: string | null;
   folder: "images" | "pdf" | "files";
   mimeType: string | null;
   size: number;

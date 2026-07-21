@@ -28,6 +28,7 @@ const usageText = (usages: CmsMaterialUsage[]) => usages.length
 
 export default function MediaAdminPage() {
   const [uploading, setUploading] = useState(false);
+  const [uploadDescription, setUploadDescription] = useState("");
   const [query, setQuery] = useState("");
   const [folder, setFolder] = useState<FolderFilter>("");
   const [editingKey, setEditingKey] = useState<string | null>(null);
@@ -42,8 +43,9 @@ export default function MediaAdminPage() {
     if (!file) return;
     setUploading(true);
     try {
-      await uploadMediaFile(file);
+      await uploadMediaFile(file, { description: uploadDescription.trim() || undefined });
       event.target.value = "";
+      setUploadDescription("");
       await resource.reload();
     } finally {
       setUploading(false);
@@ -85,19 +87,28 @@ export default function MediaAdminPage() {
       <PageHeader
         eyebrow="Media Library"
         title="Медиатека"
-        description="Единое локальное хранилище изображений, PDF и файлов до 20 МБ."
+        description="Единое локальное хранилище изображений, видео, PDF и файлов до 20 МБ."
         action={(
-          <label className={primaryButton}>
-            <Upload size={16} />
-            {uploading ? "Загрузка..." : "Загрузить файл"}
+          <div className="flex flex-wrap items-center gap-2">
             <input
-              disabled={uploading}
-              type="file"
-              accept="application/pdf,image/*"
-              onChange={(event) => void upload(event)}
-              className="hidden"
+              value={uploadDescription}
+              onChange={(event) => setUploadDescription(event.target.value)}
+              className={`${inputClass} w-56 py-2 text-sm`}
+              placeholder="Описание (необязательно)"
+              aria-label="Описание медиа"
             />
-          </label>
+            <label className={primaryButton}>
+              <Upload size={16} />
+              {uploading ? "Загрузка..." : "Загрузить файл"}
+              <input
+                disabled={uploading}
+                type="file"
+                accept="application/pdf,image/*,video/*"
+                onChange={(event) => void upload(event)}
+                className="hidden"
+              />
+            </label>
+          </div>
         )}
       />
 
@@ -169,6 +180,7 @@ export default function MediaAdminPage() {
                   </button>
                 </div>
               )}
+              {item.description ? <p className="mt-2 line-clamp-2 text-xs leading-5 text-stone-500">{item.description}</p> : null}
               <p className="mt-1 truncate text-xs text-stone-500">Файл: {item.originalFilename}</p>
               <p className="mt-1 truncate text-xs text-stone-400">
                 {item.folder} · {formatMediaSize(item.size)} · {new Intl.DateTimeFormat("ru-RU").format(new Date(item.createdAt))}

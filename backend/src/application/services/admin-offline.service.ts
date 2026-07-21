@@ -122,7 +122,7 @@ export async function adminOfflineApprove(
     lessonSummary?: string;
     homeworkDraft?: string;
     nextLessonFocus?: string;
-    materials?: Array<{ type?: string; url?: string; title?: string }>;
+    materials?: Array<{ type?: string; url?: string; title?: string; description?: string | null; mimeType?: string | null }>;
     teacherComment?: string;
     trialReport?: Record<string, unknown>;
   },

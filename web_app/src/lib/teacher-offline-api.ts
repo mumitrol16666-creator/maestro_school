@@ -46,7 +46,7 @@ export const teacherOfflineApi = {
       lessonSummary?: string;
       homeworkDraft?: string;
       nextLessonFocus?: string;
-      materials?: Array<{ type?: string; url?: string; title?: string }>;
+      materials?: Array<{ type?: string; url?: string; title?: string; description?: string | null; mimeType?: string | null }>;
       teacherOutcomeHint?: "held" | "not_held" | "no_submission";
       trialReport?: TrialLessonReport;
       comment?: string;

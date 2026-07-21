@@ -9,6 +9,7 @@ interface MediaMetadata {
   originalFilename: string;
   mimeType: string;
   title?: string;
+  description?: string;
 }
 
 const uploadRoot = path.resolve(env.UPLOAD_DIR);
@@ -21,6 +22,9 @@ export function inferMimeType(filename: string, mimeType: string): string {
   if (extension === ".jpg" || extension === ".jpeg") return "image/jpeg";
   if (extension === ".webp") return "image/webp";
   if (extension === ".gif") return "image/gif";
+  if ([".mp4", ".webm", ".mov", ".m4v", ".ogv"].includes(extension)) {
+    return extension === ".webm" ? "video/webm" : extension === ".ogv" ? "video/ogg" : "video/mp4";
+  }
   return mimeType || "application/octet-stream";
 }
 
@@ -66,6 +70,20 @@ export async function updateMediaTitle(folder: MediaFolder, filename: string, ti
   await writeFile(metadataPath(folder, filename), JSON.stringify({ ...current, title }), "utf8");
 }
 
+export async function updateMediaMetadata(
+  folder: MediaFolder,
+  filename: string,
+  patch: { title?: string; description?: string | null },
+) {
+  const current = await readMediaMetadata(folder, filename);
+  if (!current) throw new Error("Media metadata not found");
+  await writeFile(metadataPath(folder, filename), JSON.stringify({
+    ...current,
+    ...(patch.title !== undefined ? { title: patch.title } : {}),
+    ...(patch.description !== undefined ? { description: patch.description || undefined } : {}),
+  }), "utf8");
+}
+
 export async function readMediaMetadata(folder: MediaFolder, filename: string): Promise<MediaMetadata | null> {
   try {
     return JSON.parse(await readFile(metadataPath(folder, filename), "utf8")) as MediaMetadata;
@@ -85,6 +103,7 @@ export async function getMediaInfo(folder: MediaFolder, filename: string, reques
       filename,
       originalFilename: metadata?.originalFilename ?? filename,
       title: metadata?.title?.trim() || metadata?.originalFilename || filename,
+      description: metadata?.description?.trim() || null,
       mimeType: metadata?.mimeType ?? null,
       folder,
       size: details.size,

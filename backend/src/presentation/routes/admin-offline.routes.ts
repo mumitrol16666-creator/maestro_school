@@ -43,6 +43,8 @@ const teacherReportSchema = z.object({
     type: z.string().optional(),
     url: z.string().optional(),
     title: z.string().optional(),
+    description: z.string().max(2000).nullable().optional(),
+    mimeType: z.string().max(255).nullable().optional(),
   })).optional(),
 });
 
@@ -142,6 +144,8 @@ export async function adminOfflineRoutes(app: FastifyInstance) {
           type: z.string().optional(),
           url: z.string().optional(),
           title: z.string().optional(),
+          description: z.string().max(2000).nullable().optional(),
+          mimeType: z.string().max(255).nullable().optional(),
         })).optional(),
       }).parse(request.body ?? {});
       return { data: await adminOfflineApprove(crmClassId, body) };

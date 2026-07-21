@@ -41,7 +41,7 @@ export const adminOfflineApi = {
       lessonSummary?: string;
       homeworkDraft?: string;
       nextLessonFocus?: string;
-      materials?: Array<{ type?: string; url?: string; title?: string }>;
+      materials?: Array<{ type?: string; url?: string; title?: string; description?: string | null; mimeType?: string | null }>;
       teacherOutcomeHint?: "held" | "not_held" | "no_submission";
       trialReport?: TrialLessonReport;
       comment?: string;
@@ -77,7 +77,7 @@ export const adminOfflineApi = {
       homeworkDraft?: string;
       nextLessonFocus?: string;
       teacherComment?: string;
-      materials?: Array<{ type?: string; url?: string; title?: string }>;
+      materials?: Array<{ type?: string; url?: string; title?: string; description?: string | null; mimeType?: string | null }>;
       trialReport?: TrialLessonReport;
     },
   ) =>

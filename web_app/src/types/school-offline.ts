@@ -14,7 +14,7 @@ export type SchoolOfflineLesson = {
   lessonSummary: string | null;
   homework: string | null;
   nextLessonFocus: string | null;
-  materials: Array<{ type?: string; url?: string; title?: string }>;
+  materials: Array<{ type?: string; url?: string; title?: string; description?: string | null; mimeType?: string | null }>;
   attended: boolean | null;
   isPast?: boolean;
 };

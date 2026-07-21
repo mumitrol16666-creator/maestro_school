@@ -10,13 +10,14 @@ export function fileToBase64(file: globalThis.File): Promise<string> {
   });
 }
 
-export async function uploadMediaFile(file: globalThis.File) {
+export async function uploadMediaFile(file: globalThis.File, metadata?: { title?: string; description?: string }) {
   if (file.size > 20 * 1024 * 1024) {
     throw new Error("Файл больше 20 МБ");
   }
   return cmsApi.uploadMedia({
     filename: file.name,
     mimeType: inferFileMimeType(file),
+    ...metadata,
     base64: await fileToBase64(file),
   });
 }

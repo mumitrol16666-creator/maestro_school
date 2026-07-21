@@ -18,15 +18,17 @@ interface MediaPickerProps {
   onSelect: (media: CmsMedia) => void;
   title?: string;
   defaultFolder?: FolderFilter;
+  readOnly?: boolean;
 }
 
 const folderTabs: Array<{ value: FolderFilter; label: string }> = [
   { value: "", label: "Все" },
   { value: "pdf", label: "PDF" },
   { value: "images", label: "Изображения" },
+  { value: "files", label: "Видео и файлы" },
 ];
 
-export function MediaPicker({ open, onClose, onSelect, title = "Медиатека", defaultFolder = "" }: MediaPickerProps) {
+export function MediaPicker({ open, onClose, onSelect, title = "Медиатека", defaultFolder = "", readOnly = false }: MediaPickerProps) {
   const [query, setQuery] = useState("");
   const [folder, setFolder] = useState<FolderFilter>(defaultFolder);
   const [uploading, setUploading] = useState(false);
@@ -80,17 +82,17 @@ export function MediaPicker({ open, onClose, onSelect, title = "Медиатек
                 placeholder="Поиск по названию или имени файла..."
               />
             </label>
-            <label className={`${primaryButton} shrink-0 cursor-pointer`}>
+            {!readOnly && <label className={`${primaryButton} shrink-0 cursor-pointer`}>
               <Upload size={16} />
               {uploading ? "Загрузка..." : "Загрузить"}
               <input
                 disabled={uploading}
                 type="file"
-                accept="application/pdf,image/*"
+                accept="application/pdf,image/*,video/*"
                 onChange={(event) => void upload(event)}
                 className="hidden"
               />
-            </label>
+            </label>}
           </div>
           <div className="flex flex-wrap gap-2">
             {folderTabs.map((tab) => (
@@ -131,6 +133,7 @@ export function MediaPicker({ open, onClose, onSelect, title = "Медиатек
                     </span>
                     <div className="min-w-0">
                       <p className="truncate text-sm font-bold">{item.title}</p>
+                      {item.description ? <p className="mt-1 line-clamp-2 text-xs text-stone-500">{item.description}</p> : null}
                       <p className="mt-1 truncate text-[11px] text-stone-400">Файл: {item.originalFilename}</p>
                       <p className="mt-1 text-xs text-stone-400">
                         {item.folder} · {formatMediaSize(item.size)}

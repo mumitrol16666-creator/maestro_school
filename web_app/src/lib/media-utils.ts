@@ -27,6 +27,9 @@ export function inferFileMimeType(file: globalThis.File): string {
   if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
   if (lower.endsWith(".webp")) return "image/webp";
   if (lower.endsWith(".gif")) return "image/gif";
+  if (lower.endsWith(".webm")) return "video/webm";
+  if (lower.endsWith(".ogv")) return "video/ogg";
+  if (/\.(mp4|m4v|mov)$/i.test(lower)) return "video/mp4";
   return file.type || "application/octet-stream";
 }
 

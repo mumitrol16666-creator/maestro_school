@@ -23,6 +23,7 @@ import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
 import { PageHeader } from "@/components/page-header";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { api } from "@/lib/api-client";
+import { parseVideoUrl } from "@/lib/parse-video-url";
 import {
   getSchoolAlertCounts,
   markSchoolAlertsSeen,
@@ -69,6 +70,24 @@ function formatShortDate(dateStr: string) {
     day: "numeric",
     month: "short",
   }).format(new Date(dateStr));
+}
+
+function MaterialPreview({ material }: { material: SchoolOfflineLesson["materials"][number] }) {
+  if (!material.url) return null;
+  const parsed = parseVideoUrl(material.url);
+  const directVideo = material.type === "video" || material.mimeType?.startsWith("video/") || /\.(mp4|webm|mov|m4v|ogv)(\?|$)/i.test(material.url);
+  if (directVideo) {
+    return <video controls preload="metadata" className="mb-3 max-h-72 w-full rounded-xl bg-black" onClick={(event) => event.stopPropagation()} src={material.url} />;
+  }
+  if (parsed) {
+    return <div className="relative mb-3 aspect-video overflow-hidden rounded-xl bg-black">
+      <iframe title={material.title || "Видео к уроку"} src={parsed.embedUrl} className="h-full w-full border-0" allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen onClick={(event) => event.stopPropagation()} />
+    </div>;
+  }
+  if (material.type === "image" || material.mimeType?.startsWith("image/")) {
+    return <img src={material.url} alt={material.title || "Материал урока"} className="mb-3 max-h-72 w-full rounded-xl object-contain" loading="lazy" onClick={(event) => event.stopPropagation()} />;
+  }
+  return null;
 }
 
 /* ─── tab types ─────────────────────────────────────────────────────── */
@@ -220,8 +239,10 @@ function LessonCard({
                       target="_blank"
                       rel="noreferrer"
                       onClick={(e) => e.stopPropagation()}
-                      className="rounded-full bg-stone-100 px-3 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-200 transition"
+                      className="block rounded-2xl bg-stone-100 p-3 text-xs font-semibold text-stone-700 hover:bg-stone-200 transition"
                     >
+                      <MaterialPreview material={material} />
+                      {material.description ? <span className="mb-2 block max-w-xl text-left text-xs leading-5 text-stone-500">{material.description}</span> : null}
                       {material.title || `Материал ${index + 1}`}
                     </a>
                   ) : null,
@@ -420,8 +441,10 @@ function HomeworkCard({ lesson }: { lesson: SchoolOfflineLesson }) {
                       target="_blank"
                       rel="noreferrer"
                       onClick={(e) => e.stopPropagation()}
-                      className="rounded-full bg-stone-100 px-3 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-200 transition"
+                      className="block rounded-2xl bg-stone-100 p-3 text-xs font-semibold text-stone-700 hover:bg-stone-200 transition"
                     >
+                      <MaterialPreview material={material} />
+                      {material.description ? <span className="mb-2 block max-w-xl text-left text-xs leading-5 text-stone-500">{material.description}</span> : null}
                       {material.title || `Материал ${index + 1}`}
                     </a>
                   ) : null,

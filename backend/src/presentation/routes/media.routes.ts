@@ -15,15 +15,16 @@ import {
   mediaFolders,
   readMediaMetadata,
   type MediaFolder,
-  updateMediaTitle,
+  updateMediaMetadata,
   writeMediaFile,
 } from "../../application/services/media-storage.service.js";
 import { authenticate, requireContentAdmin, requirePermission } from "../guards/auth.guards.js";
 
 const mediaGuards = () => [authenticate, requireContentAdmin, requirePermission("catalog.manage")];
+const mediaReadGuards = [authenticate, requirePermission("offline_school.read")];
 
 export async function mediaRoutes(app: FastifyInstance) {
-  app.get("/admin/media", { preHandler: mediaGuards() }, async (request) => {
+  app.get("/admin/media", { preHandler: mediaReadGuards }, async (request) => {
     const query = z.object({
       search: z.string().optional(),
       folder: z.enum(mediaFolders).optional(),
@@ -50,6 +51,7 @@ export async function mediaRoutes(app: FastifyInstance) {
       filename: z.string().min(1).max(255),
       mimeType: z.string().min(1).max(255),
       title: z.string().trim().min(1).max(255).optional(),
+      description: z.string().trim().max(2000).optional(),
       base64: z.string().min(1),
     }).parse(request.body);
     const bytes = Buffer.from(body.base64, "base64");
@@ -62,6 +64,7 @@ export async function mediaRoutes(app: FastifyInstance) {
       originalFilename: body.filename,
       mimeType,
       title: body.title || body.filename,
+      description: body.description,
     });
 
     return reply.status(201).send({
@@ -69,6 +72,7 @@ export async function mediaRoutes(app: FastifyInstance) {
         filename,
         originalFilename: body.filename,
         title: body.title || body.filename,
+        description: body.description || null,
         folder,
         mimeType,
         size: bytes.length,
@@ -93,13 +97,16 @@ export async function mediaRoutes(app: FastifyInstance) {
       throw new NotFoundError("Media file");
     }
     const extension = path.extname(filename).toLowerCase();
-    const mime = extension === ".pdf" ? "application/pdf"
+    const metadata = await readMediaMetadata(folder, filename);
+    const mime = metadata?.mimeType || (extension === ".pdf" ? "application/pdf"
       : extension === ".png" ? "image/png"
       : extension === ".jpg" || extension === ".jpeg" ? "image/jpeg"
       : extension === ".webp" ? "image/webp"
-      : "application/octet-stream";
+      : extension === ".mp4" || extension === ".m4v" || extension === ".mov" ? "video/mp4"
+      : extension === ".webm" ? "video/webm"
+      : extension === ".ogv" ? "video/ogg"
+      : "application/octet-stream");
     if (query.download) {
-      const metadata = await readMediaMetadata(folder, filename);
       const requestedName = metadata?.title?.trim() || metadata?.originalFilename || filename;
       const originalExtension = path.extname(metadata?.originalFilename || filename);
       const downloadName = path.extname(requestedName) ? requestedName : `${requestedName}${originalExtension}`;
@@ -113,9 +120,12 @@ export async function mediaRoutes(app: FastifyInstance) {
       folder: z.enum(mediaFolders),
       filename: z.string().regex(/^[a-zA-Z0-9._-]+$/),
     }).parse(request.params);
-    const { title } = z.object({ title: z.string().trim().min(1).max(255) }).parse(request.body);
+    const { title, description } = z.object({
+      title: z.string().trim().min(1).max(255).optional(),
+      description: z.string().trim().max(2000).nullable().optional(),
+    }).refine((body) => body.title !== undefined || body.description !== undefined, "Metadata is required").parse(request.body);
     try {
-      await updateMediaTitle(folder, filename, title);
+      await updateMediaMetadata(folder, filename, { title, description });
       const media = await getMediaInfo(folder, filename, request);
       if (!media) throw new NotFoundError("Media file");
       return { data: media };
