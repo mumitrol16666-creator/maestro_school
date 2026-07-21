@@ -91,6 +91,13 @@ export interface CmsHomework {
   updatedAt?: string;
 }
 
+export interface CmsHomeworkTestTemplate {
+  id: string;
+  title: string;
+  description: string;
+  questions: CmsHomeworkTestQuestion[];
+}
+
 export interface CmsNews {
   id: string;
   title: string;

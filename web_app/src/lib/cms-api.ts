@@ -1,5 +1,5 @@
 import { apiRequest, apiRequestEnvelope } from "@/lib/api-client";
-import type { CmsCourse, CmsCourseTree, CmsDirection, CmsHomework, CmsLesson, CmsMaterial, CmsMaterialUsage, CmsMedia, CmsMeta, CmsModule, CmsNews } from "@/types/cms";
+import type { CmsCourse, CmsCourseTree, CmsDirection, CmsHomework, CmsHomeworkTestTemplate, CmsLesson, CmsMaterial, CmsMaterialUsage, CmsMedia, CmsMeta, CmsModule, CmsNews } from "@/types/cms";
 
 const json = (method: string, body?: unknown): RequestInit => ({
   method,
@@ -43,6 +43,7 @@ export const cmsApi = {
   deleteMaterial: (id: string) => apiRequest<CmsMaterial>(`/admin/materials/${id}`, json("DELETE")),
   materialUsages: (id: string) => apiRequest<CmsMaterialUsage[]>(`/admin/materials/${id}/usages`),
   homeworks: (lessonId: string) => apiRequest<CmsHomework[]>(`/admin/homeworks?lessonId=${lessonId}`),
+  homeworkTestTemplates: () => apiRequest<CmsHomeworkTestTemplate[]>("/admin/homework-test-templates"),
   createHomework: (body: unknown) => apiRequest<CmsHomework>("/admin/homeworks", json("POST", body)),
   updateHomework: (id: string, body: unknown) => apiRequest<CmsHomework>(`/admin/homeworks/${id}`, json("PATCH", body)),
   deleteHomework: (id: string) => apiRequest<CmsHomework>(`/admin/homeworks/${id}`, json("DELETE")),

@@ -1,8 +1,12 @@
 "use client";
 
 import { Plus, Trash2 } from "lucide-react";
+import { useState } from "react";
 import { inputClass, secondaryButton } from "./admin-ui";
 import type { CmsHomeworkTestQuestion } from "@/types/homework";
+import { useApiResource } from "@/hooks/use-api-resource";
+import { cmsApi } from "@/lib/cms-api";
+import type { CmsHomeworkTestTemplate } from "@/types/cms";
 
 interface AdminTestBuilderProps {
   questions: CmsHomeworkTestQuestion[];
@@ -55,6 +59,20 @@ export function isTestBuilderValid(questions: CmsHomeworkTestQuestion[]) {
 }
 
 export function AdminTestBuilder({ questions, onChange }: AdminTestBuilderProps) {
+  const [templateId, setTemplateId] = useState("");
+  const templates = useApiResource<CmsHomeworkTestTemplate[]>(cmsApi.homeworkTestTemplates, []);
+
+  function applyTemplate() {
+    const template = templates.data?.find((item) => item.id === templateId);
+    if (!template) return;
+    if (questions.length && !window.confirm("Заменить текущие вопросы готовым тестом? Их можно будет отредактировать перед сохранением.")) return;
+    onChange(template.questions.map((question) => ({
+      ...question,
+      options: question.options.map((option) => ({ ...option })),
+    })));
+    setTemplateId("");
+  }
+
   function updateQuestion(index: number, value: CmsHomeworkTestQuestion) {
     onChange(questions.map((question, questionIndex) => questionIndex === index ? value : question));
   }
@@ -68,10 +86,30 @@ export function AdminTestBuilder({ questions, onChange }: AdminTestBuilderProps)
             Отметьте правильный ответ для каждого вопроса. Ученик увидит результат сразу после сдачи.
           </p>
         </div>
-        <button type="button" onClick={() => onChange([...questions, newQuestion()])} className={secondaryButton}>
-          <Plus size={14} /> Добавить вопрос
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {templates.data?.length ? (
+            <>
+              <select
+                value={templateId}
+                onChange={(event) => setTemplateId(event.target.value)}
+                className={`${inputClass} min-w-56 py-2 text-sm`}
+                aria-label="Готовый тест"
+              >
+                <option value="">Подставить готовый тест…</option>
+                {templates.data.map((template) => <option key={template.id} value={template.id}>{template.title}</option>)}
+              </select>
+              <button type="button" onClick={applyTemplate} disabled={!templateId} className={`${secondaryButton} disabled:opacity-50`}>
+                Подставить
+              </button>
+            </>
+          ) : null}
+          <button type="button" onClick={() => onChange([...questions, newQuestion()])} className={secondaryButton}>
+            <Plus size={14} /> Добавить вопрос
+          </button>
+        </div>
       </div>
+
+      {templates.error && <p className="mt-3 text-xs text-stone-500">Готовые тесты пока недоступны — создайте вопросы вручную.</p>}
 
       <div className="mt-5 space-y-4">
         {questions.map((question, questionIndex) => (

@@ -10,6 +10,7 @@ import { writeAuditLog } from "../../application/services/audit.service.js";
 import { getMediaInfoFromUrl } from "../../application/services/media-storage.service.js";
 import { authenticate, requireContentAdmin, requirePermission } from "../guards/auth.guards.js";
 import { BadRequestError } from "../../domain/errors.js";
+import { listPreparedTestTemplates } from "../../domain/prepared-tests.js";
 
 const idParams = z.object({ id: z.string().uuid() });
 const pageQuery = z.object({
@@ -224,6 +225,7 @@ export async function cmsRoutes(app: FastifyInstance) {
   app.get("/admin/homeworks", { preHandler: catalogGuards() }, async (request) => {
     const { lessonId } = z.object({ lessonId: z.string().uuid() }).parse(request.query); return { data: await listHomeworks(lessonId) };
   });
+  app.get("/admin/homework-test-templates", { preHandler: catalogGuards() }, async () => ({ data: listPreparedTestTemplates() }));
   app.post("/admin/homeworks", { preHandler: catalogGuards() }, async (request, reply) => {
     const body = homeworkBody.extend({
       lessonId: z.string().uuid(),
