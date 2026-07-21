@@ -87,6 +87,9 @@ function MaterialPreview({ material }: { material: SchoolOfflineLesson["material
   if (material.type === "image" || material.mimeType?.startsWith("image/")) {
     return <img src={material.url} alt={material.title || "Материал урока"} className="mb-3 max-h-72 w-full rounded-xl object-contain" loading="lazy" onClick={(event) => event.stopPropagation()} />;
   }
+  if (material.type === "pdf" || material.mimeType === "application/pdf" || /\.pdf(\?|$)/i.test(material.url)) {
+    return <iframe title={material.title || "PDF к уроку"} src={material.url} className="mb-3 h-80 w-full rounded-xl border border-stone-200 bg-white" onClick={(event) => event.stopPropagation()} />;
+  }
   return null;
 }
 
