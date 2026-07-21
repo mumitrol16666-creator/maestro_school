@@ -25,7 +25,9 @@ export async function listTeacherStudents(appTeacherId: string) {
   const [crmRoster, onlineRequests] = await Promise.all([
     fetchTeacherStudents(crmTeacherId),
     prisma.onlineLessonRequest.findMany({
-      where: { teacherId: appTeacherId, status: { not: "cancelled" } },
+      // Keep cancelled requests in the teacher's student history. They are not
+      // active work, but removing them makes the admin/app histories disagree.
+      where: { teacherId: appTeacherId },
       orderBy: { createdAt: "desc" },
       select: {
         id: true,

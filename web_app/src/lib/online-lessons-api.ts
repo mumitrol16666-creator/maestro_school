@@ -57,7 +57,7 @@ export const onlineLessonsApi = {
   adminGet: (id: string) => apiRequest<OnlineLessonRequest>(`/admin/online-lesson-requests/${id}`),
   teachers: () => apiRequest<OnlineLessonTeacherOption[]>("/admin/online-lesson-teachers"),
   pendingCount: () =>
-    apiRequest<{ newRequests: number; myInWork: number; submissions: number }>(
+    apiRequest<{ newRequests: number; myInWork: number; assignedOrScheduled: number; submissions: number }>(
       "/admin/online-lesson-requests/pending-count",
     ),
   assign: (id: string, teacherId?: string) =>

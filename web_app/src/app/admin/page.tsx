@@ -146,7 +146,7 @@ function ContentAdminDashboard() {
   const appActions = (count ?? 0)
     + (questionsCount ?? 0)
     + (onlineCounts?.newRequests ?? 0)
-    + (onlineCounts?.myInWork ?? 0)
+    + (onlineCounts?.assignedOrScheduled ?? 0)
     + (onlineCounts?.submissions ?? 0);
   const totalAttention = data.attention.total + appActions;
   const paymentStudents = showAllPayments
@@ -176,7 +176,7 @@ function ContentAdminDashboard() {
     {
       label: "Онлайн-уроки требуют действия",
       detail: "Назначение, проведение или завершение",
-      count: (onlineCounts?.newRequests ?? 0) + (onlineCounts?.myInWork ?? 0),
+      count: (onlineCounts?.newRequests ?? 0) + (onlineCounts?.assignedOrScheduled ?? 0),
       href: "/admin/online-lessons",
       icon: Video,
     },

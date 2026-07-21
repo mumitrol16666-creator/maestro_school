@@ -19,9 +19,11 @@ import type { OnlineLessonRequest } from "@/types/online-lessons";
 const filters = [
   { value: "", label: "Все" },
   { value: "new", label: "Новые" },
-  { value: "assigned", label: "Уроки в работе" },
+  { value: "assigned", label: "Назначены / в работе" },
   { value: "scheduled", label: "Назначены" },
   { value: "completed", label: "Завершены" },
+  { value: "cancelled", label: "Отменены" },
+  { value: "no_show", label: "Неявка" },
 ] as const;
 
 export default function AdminOnlineLessonsPage() {
@@ -89,8 +91,8 @@ export default function AdminOnlineLessonsPage() {
             {item.value === "new" && counts && counts.newRequests > 0 && (
               <AdminPendingHomeworkBadge count={counts.newRequests} />
             )}
-            {item.value === "assigned" && counts && counts.myInWork > 0 && (
-              <AdminPendingHomeworkBadge count={counts.myInWork} />
+            {item.value === "assigned" && counts && (isTeacher ? counts.myInWork : counts.assignedOrScheduled) > 0 && (
+              <AdminPendingHomeworkBadge count={isTeacher ? counts.myInWork : counts.assignedOrScheduled} />
             )}
           </button>
         ))}

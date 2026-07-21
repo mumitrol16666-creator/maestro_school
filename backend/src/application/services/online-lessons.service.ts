@@ -254,7 +254,7 @@ export async function listOnlineLessonTeachers() {
 export async function countPendingOnlineLessonRequests(params?: { teacherId?: string; includeNewRequests?: boolean }) {
   const teacherId = params?.teacherId;
   const includeNewRequests = params?.includeNewRequests ?? true;
-  const [newRequests, myInWork, submissions] = await Promise.all([
+  const [newRequests, myInWork, assignedOrScheduled, submissions] = await Promise.all([
     includeNewRequests
       ? prisma.onlineLessonRequest.count({ where: { status: "new" } })
       : Promise.resolve(0),
@@ -263,10 +263,11 @@ export async function countPendingOnlineLessonRequests(params?: { teacherId?: st
           where: { teacherId, status: { in: ["assigned", "scheduled"] } },
         })
       : prisma.onlineLessonRequest.count({ where: { status: { in: ["assigned", "scheduled"] } } }),
+    prisma.onlineLessonRequest.count({ where: { status: { in: ["assigned", "scheduled"] } } }),
     countPendingOnlineAssignmentSubmissions(),
   ]);
 
-  return { newRequests, myInWork, submissions };
+  return { newRequests, myInWork, assignedOrScheduled, submissions };
 }
 
 async function requireManageableRequest(requestId: string) {

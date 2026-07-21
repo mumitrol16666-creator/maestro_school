@@ -55,7 +55,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const isContentAdmin = isContentAdminRole(user?.role);
   const { count: pendingHomeworkCount, reload: reloadPendingHomeworkCount } = usePendingHomeworkCount(60_000, isContentAdmin);
   const { count: pendingQuestionsCount, reload: reloadPendingQuestionsCount } = usePendingLessonQuestionsCount(60_000, isContentAdmin);
-  const { count: pendingOnlineLessonsCount, reload: reloadPendingOnlineLessonsCount } = usePendingOnlineLessonsCount();
+  const { count: pendingOnlineLessonsCount, reload: reloadPendingOnlineLessonsCount } = usePendingOnlineLessonsCount(60_000, user?.role === "teacher");
   const { count: unreadNotifications, reload: reloadUnreadNotifications } = useUnreadNotifications();
   const { count: unreadMessages } = useMessageMailboxStatus(user?.role === "teacher");
   const [teacherDirections, setTeacherDirections] = useState<string[]>([]);

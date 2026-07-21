@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { onlineLessonsApi } from "@/lib/online-lessons-api";
 
-export function usePendingOnlineLessonsCount(pollMs = 60_000) {
-  const [counts, setCounts] = useState<{ newRequests: number; myInWork: number; submissions: number } | null>(null);
+export function usePendingOnlineLessonsCount(pollMs = 60_000, isTeacher = false) {
+  const [counts, setCounts] = useState<{ newRequests: number; myInWork: number; assignedOrScheduled: number; submissions: number } | null>(null);
 
   const reload = useCallback(async () => {
     try {
@@ -22,7 +22,7 @@ export function usePendingOnlineLessonsCount(pollMs = 60_000) {
   }, [pollMs, reload]);
 
   const count = counts
-    ? counts.newRequests + counts.myInWork
+    ? counts.newRequests + (isTeacher ? counts.myInWork : counts.assignedOrScheduled)
     : null;
 
   return { count, counts, reload };
