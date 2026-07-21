@@ -71,6 +71,8 @@ export function MessageMailbox({ role }: { role: "student" | "teacher" }) {
   const [sending, setSending] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
   const [composeContactId, setComposeContactId] = useState("");
+  const [contactPickerOpen, setContactPickerOpen] = useState(false);
+  const [contactQuery, setContactQuery] = useState("");
   const [composeMessage, setComposeMessage] = useState("");
   const [composeError, setComposeError] = useState("");
   const [queryHandled, setQueryHandled] = useState(false);
@@ -156,6 +158,12 @@ export function MessageMailbox({ role }: { role: "student" | "teacher" }) {
     () => contacts.find((contact) => contact.id === composeContactId) ?? null,
     [composeContactId, contacts],
   );
+  const filteredContacts = useMemo(() => {
+    const normalized = contactQuery.trim().toLocaleLowerCase("ru");
+    return normalized
+      ? contacts.filter((contact) => contact.name.toLocaleLowerCase("ru").includes(normalized))
+      : contacts;
+  }, [contactQuery, contacts]);
 
   function closeThread() {
     setActive(null);
@@ -188,6 +196,8 @@ export function MessageMailbox({ role }: { role: "student" | "teacher" }) {
     try {
       const result = await messagesApi.start(composeContactId, message);
       setComposeOpen(false);
+      setContactPickerOpen(false);
+      setContactQuery("");
       setComposeMessage("");
       setComposeContactId("");
       await loadMailbox(true);
@@ -406,16 +416,50 @@ export function MessageMailbox({ role }: { role: "student" | "teacher" }) {
               <span className="text-xs font-bold text-stone-600">
                 {role === "student" ? "Преподаватель" : "Ученик"}
               </span>
-              <select
-                value={composeContactId}
-                onChange={(event) => setComposeContactId(event.target.value)}
-                className="mt-2 h-12 w-full rounded-xl border border-stone-200 bg-stone-50 px-3 text-sm font-semibold outline-none focus:border-gold/60"
-              >
-                <option value="">Выберите получателя</option>
-                {contacts.map((contact) => (
-                  <option key={contact.id} value={contact.id}>{contact.name}</option>
-                ))}
-              </select>
+              <div className="relative mt-2">
+                <button
+                  type="button"
+                  onClick={() => setContactPickerOpen((value) => !value)}
+                  className="flex h-12 w-full items-center justify-between rounded-xl border border-stone-200 bg-stone-50 px-3 text-left text-sm font-semibold outline-none transition focus:border-gold/60"
+                  aria-haspopup="listbox"
+                  aria-expanded={contactPickerOpen}
+                >
+                  <span className={selectedContact ? "text-ink" : "text-stone-400"}>
+                    {selectedContact?.name ?? "Выберите получателя"}
+                  </span>
+                  <ChevronRight size={16} className={`text-stone-400 transition ${contactPickerOpen ? "rotate-90" : ""}`} />
+                </button>
+                {contactPickerOpen ? (
+                  <div className="absolute inset-x-0 top-full z-20 mt-2 overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-2xl">
+                    <input
+                      autoFocus
+                      value={contactQuery}
+                      onChange={(event) => setContactQuery(event.target.value)}
+                      placeholder="Поиск ученика..."
+                      className="h-11 w-full border-b border-stone-100 px-3 text-sm outline-none focus:border-gold/60"
+                      aria-label="Поиск ученика"
+                    />
+                    <div className="max-h-64 overflow-y-auto p-1.5" role="listbox">
+                      {filteredContacts.length ? filteredContacts.map((contact) => (
+                        <button
+                          key={contact.id}
+                          type="button"
+                          role="option"
+                          aria-selected={contact.id === composeContactId}
+                          onClick={() => {
+                            setComposeContactId(contact.id);
+                            setContactPickerOpen(false);
+                            setContactQuery("");
+                          }}
+                          className={`w-full rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${contact.id === composeContactId ? "bg-blue-500 text-white" : "text-ink hover:bg-stone-100"}`}
+                        >
+                          {contact.name}
+                        </button>
+                      )) : <p className="px-3 py-4 text-center text-sm text-stone-400">Ученики не найдены</p>}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
             </label>
 
             {selectedContact?.directions.length ? (
