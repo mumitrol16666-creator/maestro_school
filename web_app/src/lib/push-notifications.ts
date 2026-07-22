@@ -1,4 +1,5 @@
 import { apiRequest } from "@/lib/api-client";
+import { SERVICE_WORKER_URL } from "@/lib/pwa-version";
 
 function urlBase64ToUint8Array(value: string) {
   const padding = "=".repeat((4 - (value.length % 4)) % 4);
@@ -11,9 +12,10 @@ function urlBase64ToUint8Array(value: string) {
 
 async function getServiceWorkerRegistration() {
   if (!("serviceWorker" in navigator)) return null;
-  const existing = await navigator.serviceWorker.getRegistration("/");
-  if (existing) return existing;
-  return navigator.serviceWorker.register("/sw.js", { scope: "/" });
+  return navigator.serviceWorker.register(SERVICE_WORKER_URL, {
+    scope: "/",
+    updateViaCache: "none",
+  });
 }
 
 export function getNotificationPermission(): NotificationPermission | "unsupported" {

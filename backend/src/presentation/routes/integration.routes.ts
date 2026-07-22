@@ -18,6 +18,7 @@ import { syncOnlineLessonFromCrm } from "../../application/services/online-lesso
 import {
   notifyOfflineLessonApproved,
   notifyOfflineLessonEvent,
+  notifyStaffTaskAssigned,
 } from "../../application/services/notification.service.js";
 import { generateWhatsappHomeworkDrafts } from "../../application/services/whatsapp-homework-message.service.js";
 
@@ -90,6 +91,16 @@ const offlineLessonEventSchema = offlineLessonApprovedSchema.extend({
 
 const whatsappHomeworkDraftSchema = z.object({
   crmClassId: z.string().min(1).max(128),
+});
+
+const staffTaskAssignedSchema = z.object({
+  crmTaskId: z.string().min(1).max(128),
+  crmAssigneeId: z.string().min(1).max(64),
+  title: z.string().trim().min(1).max(160),
+  description: z.string().trim().max(2000).optional().nullable(),
+  priority: z.enum(["low", "normal", "high", "urgent"]).optional(),
+  dueAt: z.coerce.date().optional().nullable(),
+  createdByName: z.string().trim().max(384).optional().nullable(),
 });
 
 function integrationProfile(
@@ -193,6 +204,14 @@ export async function integrationRoutes(app: FastifyInstance) {
     return {
       success: true,
       data: await notifyOfflineLessonEvent(body),
+    };
+  });
+
+  app.post("/notifications/staff-task-assigned", async (request) => {
+    const body = staffTaskAssignedSchema.parse(request.body);
+    return {
+      success: true,
+      data: await notifyStaffTaskAssigned(body),
     };
   });
 

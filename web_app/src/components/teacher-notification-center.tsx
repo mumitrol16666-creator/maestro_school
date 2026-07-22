@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, BookOpenCheck, CalendarClock, CheckCircle2, ChevronRight, Coins, MessagesSquare, Sparkles, X } from "lucide-react";
+import { Bell, BookOpenCheck, CalendarClock, CheckCircle2, ChevronRight, ClipboardCheck, Coins, MessagesSquare, Sparkles, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState, type ComponentProps } from "react";
 import { createPortal } from "react-dom";
@@ -131,6 +131,8 @@ export function NotificationCenter({
               ) : items.map((item) => {
                 const ItemIcon = item.type === "direct_message_received"
                   ? MessagesSquare
+                  : item.type === "staff_task_assigned"
+                    ? ClipboardCheck
                   : item.type.includes("online_lesson")
                     ? CalendarClock
                     : item.type.includes("assignment") || item.type.includes("homework")

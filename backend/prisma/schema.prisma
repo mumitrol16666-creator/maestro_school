@@ -244,6 +244,7 @@ enum UserNotificationType {
   achievement_earned
   points_awarded
   coins_awarded
+  staff_task_assigned
 }
 
 model User {

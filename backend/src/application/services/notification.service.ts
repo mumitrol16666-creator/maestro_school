@@ -222,3 +222,56 @@ export async function notifyOfflineLessonEvent(params: {
 export async function notifyOfflineLessonApproved(params: Omit<Parameters<typeof notifyOfflineLessonEvent>[0], "event">) {
   return notifyOfflineLessonEvent({ ...params, event: "approved" });
 }
+
+export async function notifyStaffTaskAssigned(params: {
+  crmTaskId: string;
+  crmAssigneeId: string;
+  title: string;
+  description?: string | null;
+  priority?: "low" | "normal" | "high" | "urgent";
+  dueAt?: Date | null;
+  createdByName?: string | null;
+}) {
+  const teacher = await findUserByCrmTeacherId(params.crmAssigneeId);
+  if (!teacher) {
+    return { delivered: false, teacherLinked: false, notificationId: null };
+  }
+
+  const dueText = params.dueAt
+    ? new Intl.DateTimeFormat("ru-RU", {
+        day: "2-digit",
+        month: "long",
+        hour: "2-digit",
+        minute: "2-digit",
+        timeZone: "Asia/Aqtobe",
+      }).format(params.dueAt)
+    : null;
+  const priorityText = params.priority === "urgent"
+    ? "Срочная задача."
+    : params.priority === "high"
+      ? "Высокий приоритет."
+      : null;
+  const body = [
+    priorityText,
+    dueText ? `Срок: ${dueText}.` : "Без установленного срока.",
+    params.createdByName ? `Поставил: ${params.createdByName}.` : null,
+    params.description?.trim() || null,
+  ].filter(Boolean).join(" ");
+
+  const result = await deliverUserNotification({
+    userId: teacher.id,
+    type: "staff_task_assigned",
+    title: `Новая задача: ${params.title}`,
+    body,
+    url: `/admin?task=${encodeURIComponent(params.crmTaskId)}`,
+    tag: `staff-task-${params.crmTaskId}`,
+    dedupeWindowMs: 10 * 60 * 1000,
+  });
+
+  return {
+    delivered: true,
+    teacherLinked: true,
+    notificationId: result.notification.id,
+    duplicate: result.duplicate,
+  };
+}

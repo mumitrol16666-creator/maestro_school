@@ -21,7 +21,8 @@ export type UserNotificationType =
   | "lesson_question_answered"
   | "achievement_earned"
   | "points_awarded"
-  | "coins_awarded";
+  | "coins_awarded"
+  | "staff_task_assigned";
 
 export interface UserNotification {
   id: string;

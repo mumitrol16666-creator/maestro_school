@@ -2,6 +2,7 @@
 
 import { Download, Smartphone, X } from "lucide-react";
 import { useEffect, useState } from "react";
+import { APP_CACHE_VERSION, SERVICE_WORKER_URL } from "@/lib/pwa-version";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -17,13 +18,25 @@ export function PwaProvider() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (window.matchMedia("(display-mode: standalone)").matches) {
+    const standalone = window.matchMedia("(display-mode: standalone)").matches;
+    if (standalone) {
       setInstalled(true);
-      return;
     }
 
+    let onControllerChange: (() => void) | null = null;
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => undefined);
+      const hadController = Boolean(navigator.serviceWorker.controller);
+      const reloadKey = `maestro_sw_reloaded_${APP_CACHE_VERSION}`;
+      onControllerChange = () => {
+        if (!hadController || sessionStorage.getItem(reloadKey)) return;
+        sessionStorage.setItem(reloadKey, "1");
+        window.location.reload();
+      };
+      navigator.serviceWorker.addEventListener("controllerchange", onControllerChange);
+      navigator.serviceWorker
+        .register(SERVICE_WORKER_URL, { scope: "/", updateViaCache: "none" })
+        .then((registration) => registration.update())
+        .catch(() => undefined);
     }
 
     function onBeforeInstall(event: Event) {
@@ -39,11 +52,16 @@ export function PwaProvider() {
       setInstallEvent(null);
     }
 
-    window.addEventListener("beforeinstallprompt", onBeforeInstall);
-    window.addEventListener("appinstalled", onInstalled);
+    if (!standalone) {
+      window.addEventListener("beforeinstallprompt", onBeforeInstall);
+      window.addEventListener("appinstalled", onInstalled);
+    }
     return () => {
       window.removeEventListener("beforeinstallprompt", onBeforeInstall);
       window.removeEventListener("appinstalled", onInstalled);
+      if (onControllerChange) {
+        navigator.serviceWorker.removeEventListener("controllerchange", onControllerChange);
+      }
     };
   }, []);
 
