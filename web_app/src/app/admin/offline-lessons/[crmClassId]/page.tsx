@@ -16,7 +16,7 @@ import {
   XCircle,
 } from "lucide-react";
 import Link from "next/link";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
@@ -219,8 +219,32 @@ export default function AdminOfflineLessonDetailPage() {
   const [clockNow, setClockNow] = useState(() => Date.now());
 
   const lesson = lessonResource.data;
-  const students = studentsResource.data?.students ?? [];
-  const isTrialLesson = lesson?.classType === "trial";
+  const loadedStudents = studentsResource.data?.students ?? [];
+  const isTrialLesson = lesson?.classType === "trial" || Boolean(lesson?.trialParticipant || lesson?.trialBooking);
+  const hasLinkedStudent = Boolean(lesson?.crmIndividualStudentId);
+  const trialLeadFallback = useMemo(() => {
+    if (!lesson || !isTrialLesson || hasLinkedStudent) return null;
+    return {
+        crmStudentId: lesson.trialParticipant?.crmStudentId || `trial:${crmClassId}`,
+        appUserId: lesson.trialParticipant?.appUserId ?? null,
+        name: lesson.trialParticipant?.name
+          || [lesson.trialBooking?.lastName, lesson.trialBooking?.name, lesson.trialBooking?.middleName]
+            .filter(Boolean)
+            .join(" ")
+          || lesson.title?.replace(/^Пробный урок\s*[—-]\s*/i, "").trim()
+          || "Клиент из заявки",
+        firstName: lesson.trialParticipant?.firstName || lesson.trialBooking?.name || "",
+        lastName: lesson.trialParticipant?.lastName || lesson.trialBooking?.lastName || "",
+        middleName: lesson.trialParticipant?.middleName || lesson.trialBooking?.middleName || "",
+        phone: lesson.trialParticipant?.phone || lesson.trialBooking?.phone || "",
+        direction: lesson.trialParticipant?.direction || lesson.trialBooking?.direction || null,
+        isLead: true,
+        attended: null,
+        attendanceStatus: "unmarked" as const,
+    };
+  }, [crmClassId, hasLinkedStudent, isTrialLesson, lesson]);
+  const students = loadedStudents.length ? loadedStudents : trialLeadFallback ? [trialLeadFallback] : loadedStudents;
+  const hasTrialRosterFallback = Boolean(trialLeadFallback);
   const isTrialReportReady = isTrialLesson ? trialReportReady(trialReport) : true;
   const canEditTeacherReport = Boolean(
     lesson
@@ -286,10 +310,10 @@ export default function AdminOfflineLessonDetailPage() {
       })));
     }
     if (lesson.teacherComment) setComment(lesson.teacherComment);
-    if (lesson.classType === "trial") {
+    if (isTrialLesson) {
       setTrialReport(mergeTrialReport(lesson.trialReport));
     }
-  }, [lesson]);
+  }, [isTrialLesson, lesson]);
 
   useEffect(() => {
     const interval = window.setInterval(() => setClockNow(Date.now()), 30_000);
@@ -298,15 +322,16 @@ export default function AdminOfflineLessonDetailPage() {
 
   useEffect(() => {
     const loadedStudents = studentsResource.data?.students;
-    if (!loadedStudents) return;
+    if (!loadedStudents?.length && !trialLeadFallback) return;
+    const roster = loadedStudents?.length ? loadedStudents : trialLeadFallback ? [trialLeadFallback] : [];
     setStudentCheckDrafts((current) => {
       const next: Record<string, StudentLessonCheckDraft> = {};
-      for (const student of loadedStudents) {
+      for (const student of roster) {
         next[student.crmStudentId] = current[student.crmStudentId] ?? studentLessonCheckDraft(student);
       }
       return next;
     });
-  }, [studentsResource.data]);
+  }, [studentsResource.data, trialLeadFallback]);
 
   const updateTrialSection: TrialSectionUpdater = function updateTrialSection<K extends keyof TrialLessonReport>(
     section: K,
@@ -414,7 +439,7 @@ export default function AdminOfflineLessonDetailPage() {
   }
 
   function submissionValidationError() {
-    if (studentsResource.error) {
+    if (studentsResource.error && !hasTrialRosterFallback) {
       return "Не удалось загрузить учеников. Обновите список перед отправкой.";
     }
     if (!students.length) {

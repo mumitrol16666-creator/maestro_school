@@ -64,6 +64,7 @@ export type TeacherOfflineClass = {
   duration?: number;
   status: string;
   classType?: string;
+  crmIndividualStudentId?: string | null;
   group?: { crmGroupId: string; name: string } | null;
   teacher?: { crmTeacherId: string; name: string } | null;
   room?: { crmRoomId: string; name: string } | null;
@@ -75,6 +76,25 @@ export type TeacherOfflineClass = {
   materials?: Array<{ type?: string; url?: string; title?: string; description?: string | null; mimeType?: string | null }> | null;
   teacherComment?: string | null;
   teacherOutcomeHint?: string | null;
+  trialBooking?: {
+    id?: string;
+    name?: string | null;
+    lastName?: string | null;
+    middleName?: string | null;
+    phone?: string | null;
+    direction?: string | null;
+  } | null;
+  trialParticipant?: {
+    crmStudentId: string;
+    appUserId?: string | null;
+    name: string;
+    firstName?: string;
+    lastName?: string;
+    middleName?: string;
+    phone?: string;
+    direction?: string | null;
+    isLead?: boolean;
+  } | null;
   trialReport?: TrialLessonReport | null;
   trialAiAnalysis?: Record<string, unknown> | null;
   startedAt?: string | null;
