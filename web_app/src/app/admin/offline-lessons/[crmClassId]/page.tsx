@@ -1409,7 +1409,9 @@ function TrialReportEditor({
           </label>
         ) : null}
         <TrialTextarea label="Фокус первого месяца" value={recommendation.firstMonthFocus} disabled={disabled} onChange={(value) => updateSection("recommendation", { firstMonthFocus: value })} />
-        <TrialTextarea label="Наблюдение для менеджера (служебно)" value={sales.teacherSalesComment} disabled={disabled} onChange={(value) => updateSection("salesSignals", { teacherSalesComment: value })} />
+        {isAdmin ? (
+          <TrialTextarea label="Наблюдение для менеджера (служебно)" value={sales.teacherSalesComment} disabled={disabled} onChange={(value) => updateSection("salesSignals", { teacherSalesComment: value })} />
+        ) : null}
       </div>
 
       {isAdmin ? <div className="rounded-[24px] border border-violet-200 bg-violet-50 p-5">
