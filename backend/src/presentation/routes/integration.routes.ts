@@ -30,6 +30,7 @@ const linkSchema = z.object({
   appUserId: z.string().uuid().optional(),
   initiatedBy: z.enum(["crm", "learning-platform"]).optional(),
   crmRole: z.string().optional(),
+  force: z.boolean().optional(),
 });
 
 const ssoExchangeSchema = z.object({

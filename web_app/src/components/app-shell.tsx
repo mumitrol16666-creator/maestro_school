@@ -1,6 +1,6 @@
 "use client";
 
-import { BookMarked, CircleUserRound, House, Megaphone, Menu, MessagesSquare, MonitorPlay, School, X } from "lucide-react";
+import { BookMarked, CircleUserRound, ClipboardCheck, House, Megaphone, Menu, MessagesSquare, MonitorPlay, School, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
@@ -20,6 +20,7 @@ const navigation = [
   { href: "/dashboard", label: "Главная", icon: House },
   { href: "/courses", label: "Курсы", icon: BookMarked },
   { href: "/school-lessons", label: "Уроки в школе", icon: School, studentOnly: true },
+  { href: "/tests", label: "Тесты", icon: ClipboardCheck, studentOnly: true },
   { href: "/messages", label: "Обращения", icon: MessagesSquare, studentOnly: true, messagesOnly: true },
   { href: "/online-lessons", label: "Онлайн-уроки", icon: MonitorPlay },
   { href: "/board", label: "Доска Maestro", icon: Megaphone },
@@ -30,6 +31,7 @@ const studentMobileNavigation = [
   { href: "/dashboard", label: "Главная", icon: House },
   { href: "/courses", label: "Курсы", icon: BookMarked },
   { href: "/school-lessons", label: "Школа", icon: School },
+  { href: "/tests", label: "Тесты", icon: ClipboardCheck },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -152,7 +154,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
       {student ? (
         <nav
-          className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-stone-200/90 bg-paper/95 px-2 pb-[env(safe-area-inset-bottom,0px)] shadow-[0_-12px_35px_rgba(37,33,25,0.08)] backdrop-blur-xl lg:hidden"
+          className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-6 border-t border-stone-200/90 bg-paper/95 px-2 pb-[env(safe-area-inset-bottom,0px)] shadow-[0_-12px_35px_rgba(37,33,25,0.08)] backdrop-blur-xl lg:hidden"
           aria-label="Основная навигация"
         >
           {mobileNavigation.map(({ href, label, icon: Icon }) => {

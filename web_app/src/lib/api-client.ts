@@ -18,6 +18,11 @@ import type {
   TrialBookingResponse,
 } from "@/types/api";
 import type { StudentOfflineSummary } from "@/types/school-offline";
+import type {
+  PreparedTestAttemptResponse,
+  PreparedTestDetail,
+  PreparedTestsResponse,
+} from "@/types/prepared-tests";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "/api/v1";
 const TOKEN_KEY = "maestro_access_token";
@@ -202,4 +207,11 @@ export const api = {
     }),
   news: () => apiRequest<ApiNewsPost[]>("/news"),
   studentOfflineSummary: () => apiRequest<StudentOfflineSummary>("/students/me/offline-summary"),
+  preparedTests: () => apiRequest<PreparedTestsResponse>("/tests"),
+  preparedTest: (testId: string) => apiRequest<PreparedTestDetail>(`/tests/${encodeURIComponent(testId)}`),
+  submitPreparedTest: (testId: string, answers: Record<string, string>) =>
+    apiRequest<PreparedTestAttemptResponse>(`/tests/${encodeURIComponent(testId)}/attempts`, {
+      method: "POST",
+      body: JSON.stringify({ answers }),
+    }),
 };

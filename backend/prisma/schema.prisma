@@ -306,6 +306,7 @@ model User {
   messageConversationsAsStudent TeacherConversation[] @relation("TeacherConversationStudent")
   messageConversationsAsTeacher TeacherConversation[] @relation("TeacherConversationTeacher")
   directMessages              TeacherMessage[] @relation("TeacherMessageSender")
+  preparedTestAttempts        PreparedTestAttempt[] @relation("PreparedTestStudent")
 
   @@index([roleId])
   @@index([email])
@@ -316,6 +317,25 @@ model User {
   @@index([crmStudentId])
   @@index([crmTeacherId])
   @@map("users")
+}
+
+model PreparedTestAttempt {
+  id            String   @id @default(uuid()) @db.Uuid
+  testId        String   @map("test_id") @db.VarChar(128)
+  studentId     String   @map("student_id") @db.Uuid
+  attemptNumber Int      @map("attempt_number")
+  score         Int
+  correctAnswers Int     @map("correct_answers")
+  totalQuestions Int     @map("total_questions")
+  passed        Boolean
+  answers       Json     @db.JsonB
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  student User @relation("PreparedTestStudent", fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, testId, attemptNumber])
+  @@index([studentId, testId, createdAt])
+  @@map("prepared_test_attempts")
 }
 
 model OfflineLessonStudentCheck {

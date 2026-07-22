@@ -44,6 +44,7 @@ export async function applyUserLink(params: {
   crmStudentId?: string;
   crmTeacherId?: string;
   crmRole?: string;
+  force?: boolean;
 }) {
   const digits = normalizePhoneDigits(params.phoneNormalized || params.phone || "");
   let user = null;
@@ -62,31 +63,57 @@ export async function applyUserLink(params: {
   if (params.crmStudentId) {
     const existing = await findUserByCrmStudentId(params.crmStudentId);
     if (existing && existing.id !== user.id) {
+      if (params.force) {
+        await prisma.user.update({
+          where: { id: existing.id },
+          data: { crmStudentId: null, externalLinkStatus: "unlinked", linkedAt: null },
+        });
+      } else {
       await prisma.user.update({
         where: { id: user.id },
         data: { externalLinkStatus: "conflict" },
       });
       return { success: false as const, error: "crmStudentId already linked to another App user", status: "conflict" as const };
+      }
     }
   }
 
   if (params.crmTeacherId) {
     const existing = await findUserByCrmTeacherId(params.crmTeacherId);
     if (existing && existing.id !== user.id) {
+      if (params.force) {
+        await prisma.user.update({
+          where: { id: existing.id },
+          data: { crmTeacherId: null, externalLinkStatus: "unlinked", linkedAt: null },
+        });
+      } else {
       await prisma.user.update({
         where: { id: user.id },
         data: { externalLinkStatus: "conflict" },
       });
       return { success: false as const, error: "crmTeacherId already linked to another App user", status: "conflict" as const };
+      }
     }
   }
 
   if (user.crmStudentId && params.crmStudentId && user.crmStudentId !== params.crmStudentId) {
-    return { success: false as const, error: "App user already linked to a different CRM student", status: "conflict" as const };
+    if (!params.force) {
+      return { success: false as const, error: "App user already linked to a different CRM student", status: "conflict" as const };
+    }
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { crmStudentId: null, externalLinkStatus: "unlinked", linkedAt: null },
+    });
   }
 
   if (user.crmTeacherId && params.crmTeacherId && user.crmTeacherId !== params.crmTeacherId) {
-    return { success: false as const, error: "App user already linked to a different CRM teacher", status: "conflict" as const };
+    if (!params.force) {
+      return { success: false as const, error: "App user already linked to a different CRM teacher", status: "conflict" as const };
+    }
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { crmTeacherId: null, externalLinkStatus: "unlinked", linkedAt: null },
+    });
   }
 
   const now = new Date();
