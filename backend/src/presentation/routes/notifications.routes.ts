@@ -31,6 +31,7 @@ export async function notificationsRoutes(app: FastifyInstance) {
     "achievement_earned",
     "points_awarded",
     "coins_awarded",
+    "staff_task_assigned",
   ]);
 
   app.get("/students/me/notifications/unread-count", { preHandler: [authenticate] }, async (request) => {

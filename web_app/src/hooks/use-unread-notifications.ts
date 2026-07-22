@@ -21,7 +21,12 @@ export function useUnreadNotifications(
   useEffect(() => {
     void reload();
     const timer = window.setInterval(() => void reload(), pollMs);
-    return () => window.clearInterval(timer);
+    const handleNotificationsChanged = () => void reload();
+    window.addEventListener("maestro:notifications-changed", handleNotificationsChanged);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("maestro:notifications-changed", handleNotificationsChanged);
+    };
   }, [pollMs, reload]);
 
   return { count, reload };

@@ -514,3 +514,29 @@ export async function fetchTeacherSalarySummary(
     `/api/integration/v1/teachers/${encodeURIComponent(crmTeacherId)}/salary-summary${qs ? `?${qs}` : ""}`
   );
 }
+
+export type TeacherStaffTask = {
+  id: string;
+  title: string;
+  description: string | null;
+  status: "open" | "in_progress" | "completed" | "cancelled";
+  priority: "low" | "normal" | "high" | "urgent";
+  dueAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: { id: string; name: string; role: string } | null;
+};
+
+export async function fetchTeacherStaffTasks(crmTeacherId: string) {
+  return crmGet<{ tasks: TeacherStaffTask[] }>(
+    `/api/integration/v1/teachers/${encodeURIComponent(crmTeacherId)}/staff-tasks`,
+  );
+}
+
+export async function completeTeacherStaffTask(crmTeacherId: string, crmTaskId: string) {
+  return crmPost<{ task: TeacherStaffTask }>(
+    `/api/integration/v1/staff-tasks/${encodeURIComponent(crmTaskId)}/complete`,
+    { crmAssigneeId: crmTeacherId },
+  );
+}

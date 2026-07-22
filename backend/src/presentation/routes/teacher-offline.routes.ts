@@ -13,6 +13,10 @@ import {
   getTeacherSalarySummary,
 } from "../../application/services/teacher-offline.service.js";
 import { listTeacherStudents } from "../../application/services/teacher-students.service.js";
+import {
+  completeTeacherStaffTaskFromApp,
+  listTeacherStaffTasks,
+} from "../../application/services/teacher-staff-tasks.service.js";
 import { authenticate, requirePermission, requireTeacher } from "../guards/auth.guards.js";
 import { offlineLessonStudentCheckSchema } from "./offline-lesson.schemas.js";
 
@@ -20,6 +24,21 @@ const readGuards = [authenticate, requirePermission("offline_school.read")];
 const writeGuards = [authenticate, requirePermission("offline_school.write")];
 
 export async function teacherOfflineRoutes(app: FastifyInstance) {
+  app.get(
+    "/teachers/me/staff-tasks",
+    { preHandler: [authenticate, requireTeacher] },
+    async (request) => ({ data: await listTeacherStaffTasks(request.user!.id) }),
+  );
+
+  app.post(
+    "/teachers/me/staff-tasks/:crmTaskId/complete",
+    { preHandler: [authenticate, requireTeacher] },
+    async (request) => {
+      const { crmTaskId } = z.object({ crmTaskId: z.string().min(1).max(128) }).parse(request.params);
+      return { data: await completeTeacherStaffTaskFromApp(request.user!.id, crmTaskId) };
+    },
+  );
+
   app.get(
     "/teachers/me/students",
     { preHandler: [authenticate, requireTeacher, requirePermission("offline_school.read")] },

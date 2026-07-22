@@ -35,6 +35,7 @@ import { adminOverviewApi } from "@/lib/admin-overview-api";
 import { useAuth } from "@/components/auth-provider";
 import { isContentAdminRole } from "@/lib/role-labels";
 import type { ManagementDayLesson } from "@/types/admin-overview";
+import { TeacherStaffTasks } from "@/components/teacher-staff-tasks";
 
 const sections = [
   { href: "/admin/directions", title: "Направления", text: "Создание и публикация направлений школы", icon: FolderOpen },
@@ -90,6 +91,7 @@ export default function AdminPage() {
           title="Главная"
           description="Всё необходимое для рабочего дня преподавателя — без лишних административных разделов."
         />
+        <TeacherStaffTasks />
         <div className="mb-6 rounded-[28px] border border-amber-200 bg-gradient-to-br from-amber-50 to-white p-6 shadow-soft">
           <div className="flex items-start gap-4">
             <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-ink text-gold">

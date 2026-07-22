@@ -1646,11 +1646,6 @@ function StudentLessonCheckCard({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <p className="font-semibold text-ink">{student.name}</p>
-          {student.isLead ? (
-            <p className="mt-1 text-xs font-bold uppercase tracking-[0.12em] text-gold">
-              Клиент из заявки · карточка ученика не создана
-            </p>
-          ) : null}
           {student.phone ? <p className="mt-1 text-xs text-stone-500">{student.phone}</p> : null}
         </div>
         <span
