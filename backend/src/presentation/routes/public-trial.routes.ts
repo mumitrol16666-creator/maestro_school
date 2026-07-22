@@ -13,6 +13,11 @@ const trialBookingSchema = z.object({
   level: z.string().trim().min(1).max(128),
   preferredTime: z.string().trim().min(1).max(512),
   comment: z.string().trim().max(4000).optional(),
+  marketingClientId: z.string().trim().max(120).optional(),
+  marketingSessionId: z.string().trim().max(120).optional(),
+  attribution: z.record(z.string(), z.unknown()).optional(),
+  landingUrl: z.string().url().max(1200).optional(),
+  referrerUrl: z.string().url().max(1200).optional(),
 });
 
 export async function publicTrialRoutes(app: FastifyInstance) {
@@ -42,6 +47,11 @@ export async function publicTrialRoutes(app: FastifyInstance) {
           level: body.level,
           preferredTime: body.preferredTime,
           comment: body.comment,
+          marketingClientId: body.marketingClientId,
+          marketingSessionId: body.marketingSessionId,
+          attribution: body.attribution,
+          landingUrl: body.landingUrl,
+          referrerUrl: body.referrerUrl,
         });
 
         return reply.status(201).send({

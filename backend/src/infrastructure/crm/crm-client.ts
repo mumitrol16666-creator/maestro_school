@@ -218,6 +218,11 @@ export async function postOnlineLessonBooking(payload: {
   level: string;
   preferredTime: string;
   comment?: string;
+  marketingClientId?: string;
+  marketingSessionId?: string;
+  attribution?: Record<string, unknown>;
+  landingUrl?: string;
+  referrerUrl?: string;
 }) {
   return crmPost<{
     crmBookingId: string;

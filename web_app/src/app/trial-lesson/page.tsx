@@ -6,6 +6,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { AuthHeroPanel } from "@/components/auth-hero-panel";
 import { Brand } from "@/components/brand";
 import { ApiError, api } from "@/lib/api-client";
+import { getMarketingContext, trackMarketingEvent } from "@/lib/marketing-tracking";
 import type { ApiDirection } from "@/types/api";
 
 const LEVELS = ["Никогда не занимался", "Начинающий", "Продолжающий", "Не уверен"];
@@ -25,6 +26,8 @@ export default function TrialLessonPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    trackMarketingEvent("page_view", { page: "trial-lesson" });
+    trackMarketingEvent("booking_form_view", { form: "trial-lesson" });
     api.directions()
       .then((items) => {
         setDirections(items);
@@ -43,8 +46,10 @@ export default function TrialLessonPage() {
     event.preventDefault();
     setSubmitting(true);
     setError(null);
+    const marketing = getMarketingContext();
+    trackMarketingEvent("booking_submit_attempt", { form: "trial-lesson" });
     try {
-      await api.createTrialBooking({
+      const booking = await api.createTrialBooking({
         firstName,
         lastName,
         middleName: middleName.trim() || undefined,
@@ -53,9 +58,20 @@ export default function TrialLessonPage() {
         level,
         preferredTime,
         ...(comment.trim() ? { comment: comment.trim() } : {}),
+        ...(marketing
+          ? {
+              marketingClientId: marketing.clientId,
+              marketingSessionId: marketing.sessionId,
+              attribution: marketing.attribution,
+              landingUrl: marketing.landingUrl,
+              referrerUrl: marketing.referrerUrl ?? undefined,
+            }
+          : {}),
       });
+      trackMarketingEvent("lead_submit", { form: "trial-lesson", bookingId: booking.bookingId });
       setSent(true);
     } catch (reason) {
+      trackMarketingEvent("lead_submit_error", { form: "trial-lesson" });
       setError(reason instanceof ApiError ? reason.message : "Не удалось отправить заявку");
     } finally {
       setSubmitting(false);

@@ -52,6 +52,11 @@ export interface TrialBookingInput {
   level: string;
   preferredTime: string;
   comment?: string;
+  marketingClientId?: string;
+  marketingSessionId?: string;
+  attribution?: Record<string, unknown>;
+  landingUrl?: string;
+  referrerUrl?: string;
 }
 
 export interface TrialBookingResponse {
