@@ -1009,7 +1009,7 @@ export default function AdminOfflineLessonDetailPage() {
 
       {canShowStartPrompt && lesson && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/80 p-4 backdrop-blur-md">
-          <div className="w-full max-w-md overflow-hidden rounded-[32px] border border-stone-200 bg-paper p-6 shadow-2xl sm:p-8">
+          <div className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-[32px] border border-stone-200 bg-paper p-6 shadow-2xl sm:p-8">
             <div className="flex flex-col items-center text-center animate-in fade-in zoom-in-95 duration-200">
               <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
                 <Play className="fill-emerald-600 text-emerald-600" size={32} />
@@ -1031,6 +1031,12 @@ export default function AdminOfflineLessonDetailPage() {
                   <span className="font-medium text-stone-400">Время начала:</span>
                   <span className="font-bold text-stone-700">{lesson.startTime}</span>
                 </div>
+              </div>
+
+              <div className="mt-5 w-full space-y-3 text-left">
+                {students.map((student) => (
+                  <StudentPreviousContext key={student.crmStudentId} student={student} compact />
+                ))}
               </div>
 
               {error ? (
@@ -1657,6 +1663,8 @@ function StudentLessonCheckCard({
         </span>
       </div>
 
+      <StudentPreviousContext student={student} />
+
       <fieldset className="mt-4">
         <legend className="text-[11px] font-bold uppercase tracking-[0.14em] text-stone-500">
           Посещаемость
@@ -1786,6 +1794,72 @@ function StudentLessonCheckCard({
         />
       </label>
 
+    </div>
+  );
+}
+
+const homeworkReviewLabels: Record<string, string> = {
+  not_checked: "Не проверено",
+  completed: "Выполнено",
+  partial: "Частично",
+  not_completed: "Не выполнено",
+  not_assigned: "Не задавалось",
+};
+
+function StudentPreviousContext({
+  student,
+  compact = false,
+}: {
+  student: TeacherOfflineStudent;
+  compact?: boolean;
+}) {
+  const lessons = student.recentLessons ?? [];
+  const latest = lessons[0];
+  if (!latest) {
+    return (
+      <div className={`${compact ? "mt-0" : "mt-4"} rounded-2xl border border-stone-200 bg-stone-50 p-4`}>
+        <p className="text-xs font-bold uppercase tracking-[0.14em] text-stone-400">Перед уроком</p>
+        <p className="mt-2 text-sm text-stone-500">Предыдущих уроков и домашнего задания пока нет.</p>
+      </div>
+    );
+  }
+
+  const review = latest.homeworkReview;
+  return (
+    <div className={`${compact ? "mt-0" : "mt-4"} rounded-2xl border border-gold/25 bg-amber-50/60 p-4`}>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">
+            {compact ? student.name : "Контекст перед уроком"}
+          </p>
+          <p className="mt-1 text-sm font-bold text-ink">
+            {latest.topic || latest.title}
+          </p>
+        </div>
+        <span className="text-xs text-stone-500">
+          {new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short" }).format(new Date(latest.date))}
+        </span>
+      </div>
+      <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+        <div className="rounded-xl bg-white/75 p-3">
+          <span className="block text-[10px] font-bold uppercase tracking-wider text-stone-400">Прошлое ДЗ</span>
+          <strong className="mt-1 block text-stone-800">{latest.homework || "Не задавалось"}</strong>
+        </div>
+        <div className="rounded-xl bg-white/75 p-3">
+          <span className="block text-[10px] font-bold uppercase tracking-wider text-stone-400">Как выполнено</span>
+          <strong className="mt-1 block text-stone-800">
+            {homeworkReviewLabels[review?.status || "not_checked"]}
+            {review?.completionPercent != null ? ` · ${review.completionPercent}%` : ""}
+          </strong>
+          {review?.difficulties ? <p className="mt-1 text-xs text-stone-600">Сложности: {review.difficulties}</p> : null}
+          {review?.notCompletedReason ? <p className="mt-1 text-xs text-stone-600">Причина: {review.notCompletedReason}</p> : null}
+        </div>
+      </div>
+      {latest.nextLessonFocus || latest.teacherNote ? (
+        <p className="mt-3 text-xs leading-5 text-stone-600">
+          <strong>Обратить внимание:</strong> {latest.nextLessonFocus || latest.teacherNote}
+        </p>
+      ) : null}
     </div>
   );
 }

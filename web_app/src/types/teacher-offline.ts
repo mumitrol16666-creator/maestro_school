@@ -141,6 +141,18 @@ export type TeacherOfflineStudent = {
   markedAt?: string | null;
   appMarkedAt?: string | null;
   groupStatus?: string;
+  recentLessons?: Array<{
+    crmClassId: string;
+    date: string;
+    title: string;
+    topic?: string | null;
+    lessonSummary?: string | null;
+    homework?: string | null;
+    nextLessonFocus?: string | null;
+    attendanceStatus: string;
+    teacherNote?: string | null;
+    homeworkReview?: OfflineHomeworkReview | null;
+  }>;
 };
 
 export type TeacherOfflineClassStudents = {

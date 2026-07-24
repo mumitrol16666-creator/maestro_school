@@ -185,6 +185,7 @@ export async function teacherOfflineSetAttendance(
     studentId,
     attendanceStatus,
     teacherNote,
+    homeworkReview,
     attended: ["present", "late"].includes(attendanceStatus),
   });
   const lessonCheck = await saveOfflineLessonStudentCheck({

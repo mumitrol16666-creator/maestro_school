@@ -175,6 +175,23 @@ export async function fetchClassStudents(crmClassId: string) {
       attended?: boolean | null;
       attendanceStatus?: string;
       teacherNote?: string | null;
+      recentLessons?: Array<{
+        crmClassId: string;
+        date: string;
+        title: string;
+        topic?: string | null;
+        lessonSummary?: string | null;
+        homework?: string | null;
+        nextLessonFocus?: string | null;
+        attendanceStatus: string;
+        teacherNote?: string | null;
+        homeworkReview?: {
+          status: "not_checked" | "completed" | "partial" | "not_completed" | "not_assigned";
+          completionPercent?: number | null;
+          difficulties?: string | null;
+          notCompletedReason?: string | null;
+        } | null;
+      }>;
       homeworkReview?: {
         status: "not_checked" | "completed" | "partial" | "not_completed" | "not_assigned";
         completionPercent?: number | null;
@@ -306,6 +323,12 @@ export async function postTeacherAttendance(
     attended?: boolean;
     attendanceStatus: string;
     teacherNote?: string;
+    homeworkReview?: {
+      status: "not_checked" | "completed" | "partial" | "not_completed" | "not_assigned";
+      completionPercent?: number | null;
+      difficulties?: string | null;
+      notCompletedReason?: string | null;
+    };
   },
 ) {
   return crmPost<Record<string, unknown>>(
