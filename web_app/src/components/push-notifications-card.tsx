@@ -147,6 +147,7 @@ export function PushNotificationsCard() {
             Сообщим об изменениях по урокам, отчётам и домашним заданиям.
           </p>
           <ul className="mt-4 space-y-2 text-sm leading-6 text-stone-500">
+            <li>✓ Напоминания перед началом урока</li>
             <li>✓ Отчёт по уроку принят</li>
             <li>✓ Домашнее задание принято</li>
             <li>✓ Нужна доработка задания</li>

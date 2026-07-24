@@ -16,6 +16,7 @@ import { AdminPendingHomeworkBadge } from "./admin-pending-homework-badge";
 import { useAuth } from "./auth-provider";
 import { Brand } from "./brand";
 import { NotificationCenter } from "./teacher-notification-center";
+import { PushNotificationPrompt } from "./push-notification-prompt";
 import { RefreshAppButton } from "./refresh-app-button";
 
 const cmsNavigation = [
@@ -306,6 +307,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           );
         })}
       </nav>
+    ) : null}
+    {user?.role === "teacher" ? (
+      <PushNotificationPrompt userId={user.id} audience="teacher" />
     ) : null}
   </div>;
 }

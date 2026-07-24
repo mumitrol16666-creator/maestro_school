@@ -13,6 +13,7 @@ import { AdminPendingHomeworkBadge } from "./admin-pending-homework-badge";
 import { Brand } from "./brand";
 import { StudentEntryAlerts } from "./student-entry-alerts";
 import { NotificationCenter } from "./teacher-notification-center";
+import { PushNotificationPrompt } from "./push-notification-prompt";
 import { UserMenu } from "./user-menu";
 
 const navigation = [
@@ -208,12 +209,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </nav>
       ) : null}
       {student && user ? (
-        <StudentEntryAlerts
-          userId={user.id}
-          counts={schoolAlerts}
-          onlineUnread={onlineUnread ?? 0}
-          messagesUnread={unreadMessages ?? 0}
-        />
+        <>
+          <PushNotificationPrompt userId={user.id} audience="student" />
+          <StudentEntryAlerts
+            userId={user.id}
+            counts={schoolAlerts}
+            onlineUnread={onlineUnread ?? 0}
+            messagesUnread={unreadMessages ?? 0}
+          />
+        </>
       ) : null}
     </div>
   );
