@@ -23,7 +23,7 @@ export async function sendOfflineReportReminders() {
       ...notDeleted,
       isActive: true,
       crmTeacherId: { not: null },
-      role: { code: "teacher" },
+      role: { slug: "teacher" },
     },
     select: { id: true, crmTeacherId: true },
   });
