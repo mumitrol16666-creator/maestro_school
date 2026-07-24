@@ -73,7 +73,6 @@ export async function listTeacherStudents(appTeacherId: string) {
     login: string | null;
     avatarUrl: string | null;
     learningLevel: string | null;
-    accountBalance: number | null;
     externalLinkStatus: string | null;
     directions: string[];
     groups: Array<{ crmGroupId: string; name: string; direction: string; level: string }>;
@@ -86,18 +85,6 @@ export async function listTeacherStudents(appTeacherId: string) {
       classStatus: string;
       attended: boolean;
       attendanceStatus: string;
-      chargeAmount: number;
-      chargeSource: string | null;
-    }>;
-    memberships: Array<{
-      crmMembershipId: string;
-      type: string;
-      planName: string | null;
-      lessonFormat: string;
-      lessonPrice: number | null;
-      classesRemaining: number;
-      endDate: string;
-      group: { crmGroupId: string; name: string; direction: string } | null;
     }>;
     sources: Array<"offline" | "online">;
     onlineLessons: Array<{
@@ -127,7 +114,6 @@ export async function listTeacherStudents(appTeacherId: string) {
       login: linkedOnline[0]?.student.login ?? null,
       avatarUrl: linkedOnline[0]?.student.avatar ?? student.avatarUrl ?? null,
       learningLevel: student.learningLevel ?? null,
-      accountBalance: student.accountBalance,
       externalLinkStatus: student.externalLinkStatus ?? null,
       directions: [...new Set([
         ...student.directions,
@@ -135,8 +121,15 @@ export async function listTeacherStudents(appTeacherId: string) {
       ])],
       groups: student.groups,
       schedules: student.schedules,
-      attendanceHistory: student.attendanceHistory,
-      memberships: student.memberships,
+      attendanceHistory: student.attendanceHistory.map((item) => ({
+        crmClassId: item.crmClassId,
+        title: item.title,
+        date: item.date,
+        startTime: item.startTime,
+        classStatus: item.classStatus,
+        attended: item.attended,
+        attendanceStatus: item.attendanceStatus,
+      })),
       sources: linkedOnline.length ? ["offline", "online"] : ["offline"],
       onlineLessons: linkedOnline.map(({ student: _student, ...request }) => request),
     });
@@ -174,20 +167,100 @@ export async function listTeacherStudents(appTeacherId: string) {
       login: student.login,
       avatarUrl: student.avatar,
       learningLevel: null,
-      accountBalance: null,
       externalLinkStatus: null,
       directions: [...new Set(requests.map((request) => request.directionTitle))],
       groups: [],
       schedules: [],
       attendanceHistory: [],
-      memberships: [],
       sources: ["online"],
       onlineLessons: requests.map(({ student: _student, ...request }) => request),
     });
   }
 
+  const students = [...merged.values()].sort((left, right) => left.name.localeCompare(right.name, "ru"));
+  const crmStudentIds = students
+    .map((student) => student.crmStudentId)
+    .filter((studentId): studentId is string => Boolean(studentId));
+  const month = new Date().toISOString().slice(0, 7);
+  const [checks, plans] = crmStudentIds.length
+    ? await Promise.all([
+        prisma.offlineLessonStudentCheck.findMany({
+          where: { teacherUserId: appTeacherId, crmStudentId: { in: crmStudentIds } },
+          orderBy: { markedAt: "desc" },
+        }),
+        prisma.studentMonthlyPlan.findMany({
+          where: { teacherUserId: appTeacherId, crmStudentId: { in: crmStudentIds }, month },
+        }),
+      ])
+    : [[], []];
+  const checksByStudent = new Map<string, typeof checks>();
+  for (const check of checks) {
+    const list = checksByStudent.get(check.crmStudentId) ?? [];
+    list.push(check);
+    checksByStudent.set(check.crmStudentId, list);
+  }
+  const plansByStudent = new Map(plans.map((plan) => [plan.crmStudentId, plan]));
+
   return {
     teacher: crmRoster.teacher,
-    students: [...merged.values()].sort((left, right) => left.name.localeCompare(right.name, "ru")),
+    students: students.map((student) => {
+      const studentChecks = student.crmStudentId ? checksByStudent.get(student.crmStudentId) ?? [] : [];
+      const plan = student.crmStudentId ? plansByStudent.get(student.crmStudentId) : null;
+      const recentAttendance = student.attendanceHistory.slice(0, 8);
+      const attendedCount = recentAttendance.filter((item) => ["present", "late"].includes(item.attendanceStatus)).length;
+      const reviewedHomework = studentChecks.filter((item) => item.homeworkStatus !== "not_checked").slice(0, 8);
+      const completedHomework = reviewedHomework.filter((item) => item.homeworkStatus === "completed").length;
+      const planItems = Array.isArray(plan?.items)
+        ? plan.items as Array<{ status?: string }>
+        : [];
+      const completedPlanItems = planItems.filter((item) => item.status === "completed").length;
+      const signals: Array<{ code: string; title: string; action: string; tone: "warning" | "danger" }> = [];
+      const recentAbsences = recentAttendance.slice(0, 3)
+        .filter((item) => !["present", "late"].includes(item.attendanceStatus)).length;
+      const recentMissedHomework = reviewedHomework.slice(0, 3)
+        .filter((item) => item.homeworkStatus === "not_completed").length;
+
+      if (student.crmStudentId && !plan) {
+        signals.push({
+          code: "monthly_plan_missing",
+          title: "Нет учебного плана на текущий месяц",
+          action: "Составьте месячный план",
+          tone: "warning",
+        });
+      }
+      if (recentAbsences >= 2) {
+        signals.push({
+          code: "attendance_decline",
+          title: "Частые пропуски: два или больше из трёх последних уроков",
+          action: "Скорректируйте темп и план повторения",
+          tone: "danger",
+        });
+      }
+      if (recentMissedHomework >= 2) {
+        signals.push({
+          code: "homework_decline",
+          title: "Домашнее задание не выполнено несколько раз",
+          action: "Упростите ДЗ и разберите причину на уроке",
+          tone: "warning",
+        });
+      }
+
+      return {
+        ...student,
+        learningSummary: {
+          attendanceRate: recentAttendance.length
+            ? Math.round((attendedCount / recentAttendance.length) * 100)
+            : null,
+          homeworkCompletionRate: reviewedHomework.length
+            ? Math.round((completedHomework / reviewedHomework.length) * 100)
+            : null,
+          planCompletionRate: planItems.length
+            ? Math.round((completedPlanItems / planItems.length) * 100)
+            : null,
+          currentMonth: month,
+        },
+        attentionSignals: signals,
+      };
+    }),
   };
 }

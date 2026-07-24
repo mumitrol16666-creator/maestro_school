@@ -10,7 +10,7 @@ import {
   teacherOfflineStart,
   teacherOfflineSubmit,
   teacherOfflineSetAttendance,
-  getTeacherSalarySummary,
+  teacherOfflineSetAttendanceBatch,
 } from "../../application/services/teacher-offline.service.js";
 import { listTeacherStudents } from "../../application/services/teacher-students.service.js";
 import {
@@ -19,6 +19,10 @@ import {
 } from "../../application/services/teacher-staff-tasks.service.js";
 import { authenticate, requirePermission, requireTeacher } from "../guards/auth.guards.js";
 import { offlineLessonStudentCheckSchema } from "./offline-lesson.schemas.js";
+import {
+  getStudentMonthlyPlan,
+  saveStudentMonthlyPlan,
+} from "../../application/services/student-monthly-plan.service.js";
 
 const readGuards = [authenticate, requirePermission("offline_school.read")];
 const writeGuards = [authenticate, requirePermission("offline_school.write")];
@@ -45,15 +49,45 @@ export async function teacherOfflineRoutes(app: FastifyInstance) {
     async (request) => ({ data: await listTeacherStudents(request.user!.id) }),
   );
 
+  const monthSchema = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/);
+  const monthlyPlanItemSchema = z.object({
+    id: z.string().min(1).max(100),
+    title: z.string().trim().min(1).max(1000),
+    status: z.enum(["planned", "in_progress", "completed", "moved"]),
+  });
+
   app.get(
-    "/teachers/me/salary-summary",
-    { preHandler: [authenticate, requireTeacher] },
+    "/teachers/me/students/:crmStudentId/monthly-plan",
+    { preHandler: [authenticate, requireTeacher, requirePermission("offline_school.read")] },
     async (request) => {
-      const query = z.object({
-        from: z.string().optional(),
-        to: z.string().optional(),
-      }).parse(request.query);
-      return { data: await getTeacherSalarySummary(request.user!.id, query) };
+      const { crmStudentId } = z.object({ crmStudentId: z.string().min(1).max(128) }).parse(request.params);
+      const { month } = z.object({ month: monthSchema }).parse(request.query);
+      return { data: await getStudentMonthlyPlan(request.user!.id, crmStudentId, month) };
+    },
+  );
+
+  app.put(
+    "/teachers/me/students/:crmStudentId/monthly-plan",
+    { preHandler: [authenticate, requireTeacher, requirePermission("offline_school.write")] },
+    async (request) => {
+      const { crmStudentId } = z.object({ crmStudentId: z.string().min(1).max(128) }).parse(request.params);
+      const body = z.object({
+        month: monthSchema,
+        goal: z.string().max(5000).default(""),
+        expectedResult: z.string().max(5000).default(""),
+        skills: z.string().max(5000).default(""),
+        checkpoint: z.string().max(5000).default(""),
+        note: z.string().max(5000).default(""),
+        items: z.array(monthlyPlanItemSchema).max(50).default([]),
+      }).parse(request.body ?? {});
+      return {
+        data: await saveStudentMonthlyPlan(
+          request.user!.id,
+          crmStudentId,
+          body.month,
+          body,
+        ),
+      };
     },
   );
 
@@ -110,6 +144,24 @@ export async function teacherOfflineRoutes(app: FastifyInstance) {
           body.attendanceStatus,
           body.teacherNote,
           body.homeworkReview,
+        ),
+      };
+    },
+  );
+
+  app.post(
+    "/teachers/me/offline-lessons/:crmClassId/attendance-batch",
+    { preHandler: writeGuards },
+    async (request) => {
+      const { crmClassId } = z.object({ crmClassId: z.string().min(1) }).parse(request.params);
+      const body = z.object({
+        checks: z.array(offlineLessonStudentCheckSchema).min(1).max(50),
+      }).parse(request.body ?? {});
+      return {
+        data: await teacherOfflineSetAttendanceBatch(
+          request.user!.id,
+          crmClassId,
+          body.checks,
         ),
       };
     },

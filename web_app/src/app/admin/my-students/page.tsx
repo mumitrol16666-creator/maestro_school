@@ -1,14 +1,15 @@
 "use client";
 
 import {
-  BookOpenCheck,
   CalendarDays,
   CheckCircle2,
   CircleAlert,
   CircleX,
+  AlertTriangle,
   GraduationCap,
   MessageCircle,
   Search,
+  TrendingUp,
   UserRound,
   Users,
   Video,
@@ -22,6 +23,7 @@ import { formatAge, formatFio } from "@/lib/name";
 import { formatPhoneDisplay } from "@/lib/phone";
 import { teacherStudentsApi } from "@/lib/teacher-students-api";
 import type { TeacherStudent, TeacherStudentSource } from "@/types/teacher-students";
+import { StudentMonthlyPlanEditor } from "@/components/student-monthly-plan-editor";
 
 type SourceFilter = "all" | TeacherStudentSource;
 
@@ -67,23 +69,6 @@ function formatLessonDate(value: string) {
   }).format(new Date(value));
 }
 
-function membershipLabel(membership: TeacherStudent["memberships"][number]) {
-  if (membership.planName) return membership.planName;
-  if (membership.group?.name) return membership.group.name;
-  if (membership.lessonFormat === "group") return "Групповой абонемент";
-  if (membership.lessonFormat === "mixed") return "Смешанный абонемент";
-  return "Индивидуальный абонемент";
-}
-
-function lessonCountLabel(value: number) {
-  const normalized = Math.abs(value) % 100;
-  const lastDigit = normalized % 10;
-  if (normalized > 10 && normalized < 20) return `${value} занятий`;
-  if (lastDigit === 1) return `${value} занятие`;
-  if (lastDigit >= 2 && lastDigit <= 4) return `${value} занятия`;
-  return `${value} занятий`;
-}
-
 function attendancePresentation(item: TeacherStudent["attendanceHistory"][number]) {
   if (item.attendanceStatus === "present") {
     return { label: "Присутствовал", className: "bg-emerald-50 text-emerald-800", icon: CheckCircle2 };
@@ -96,19 +81,9 @@ function attendancePresentation(item: TeacherStudent["attendanceHistory"][number
   }
   if (item.attendanceStatus === "unexcused_absence") {
     if (item.classStatus === "pending_admin_review") {
-      return { label: "Не был · прогул ожидает подтверждения", className: "bg-rose-50 text-rose-800", icon: CircleX };
+      return { label: "Не был · отметка на проверке", className: "bg-rose-50 text-rose-800", icon: CircleX };
     }
-    if (item.chargeSource === "membership") {
-      return { label: "Не был · занятие списано", className: "bg-rose-50 text-rose-800", icon: CircleX };
-    }
-    if (item.chargeAmount > 0) {
-      return {
-        label: `Не был · списано ${item.chargeAmount.toLocaleString("ru-RU")} ₸`,
-        className: "bg-rose-50 text-rose-800",
-        icon: CircleX,
-      };
-    }
-    return { label: "Не был · прогул подтверждён", className: "bg-rose-50 text-rose-800", icon: CircleX };
+    return { label: "Не был без причины", className: "bg-rose-50 text-rose-800", icon: CircleX };
   }
   return item.attended
     ? { label: "Присутствовал", className: "bg-emerald-50 text-emerald-800", icon: CheckCircle2 }
@@ -160,6 +135,7 @@ export default function TeacherStudentsPage() {
   const allStudents = resource.data?.students ?? [];
   const offlineCount = allStudents.filter((student) => student.sources.includes("offline")).length;
   const onlineCount = allStudents.filter((student) => student.sources.includes("online")).length;
+  const studentsRequiringAttention = allStudents.filter((student) => student.attentionSignals.length > 0);
 
   return (
     <>
@@ -174,6 +150,35 @@ export default function TeacherStudentsPage() {
         <Summary icon={GraduationCap} label="Офлайн" value={offlineCount} />
         <Summary icon={Video} label="Онлайн" value={onlineCount} />
       </section>
+
+      {studentsRequiringAttention.length ? (
+        <section className="mb-7 rounded-[26px] border border-amber-200 bg-amber-50/70 p-5 shadow-sm sm:p-6">
+          <div className="flex items-center gap-3">
+            <span className="grid h-11 w-11 place-items-center rounded-2xl bg-amber-100 text-amber-900">
+              <AlertTriangle size={20} />
+            </span>
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-800">Учебные сигналы</p>
+              <h2 className="font-display text-2xl">Требуют внимания: {studentsRequiringAttention.length}</h2>
+            </div>
+          </div>
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            {studentsRequiringAttention.slice(0, 6).map((student) => (
+              <div key={student.key} className="rounded-2xl border border-amber-200/80 bg-white p-4">
+                <p className="font-bold text-ink">{formatFio(student) || student.name}</p>
+                <div className="mt-2 space-y-2">
+                  {student.attentionSignals.map((signal) => (
+                    <p key={signal.code} className="text-sm text-stone-700">
+                      <strong>{signal.title}.</strong>{" "}
+                      <span className="text-stone-500">{signal.action}.</span>
+                    </p>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <section className="mb-6 rounded-[24px] border border-stone-200 bg-white p-4 shadow-soft">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
@@ -222,6 +227,7 @@ export default function TeacherStudentsPage() {
 }
 
 function StudentCard({ student }: { student: TeacherStudent }) {
+  const [planOpen, setPlanOpen] = useState(false);
   const upcomingOnline = nextOnlineLesson(student);
   const latestAttendance = student.attendanceHistory[0];
   const latestAttendanceView = latestAttendance ? attendancePresentation(latestAttendance) : null;
@@ -294,29 +300,42 @@ function StudentCard({ student }: { student: TeacherStudent }) {
               ? formatDateTime(upcomingOnline.scheduledAt)
               : "Ближайший урок не назначен"}
         </InfoBlock>
-        <InfoBlock icon={BookOpenCheck} label="Абонемент">
-          {student.memberships.length ? (
-            <div className="space-y-2">
-              {student.memberships.map((membership) => (
-                <div key={membership.crmMembershipId}>
-                  <p className="font-bold text-ink">{membershipLabel(membership)}</p>
-                  <p className="mt-0.5 text-xs font-semibold text-stone-500">
-                    {lessonCountLabel(membership.classesRemaining)} осталось
-                    {membership.lessonPrice
-                      ? ` · ${membership.lessonPrice.toLocaleString("ru-RU")} ₸ / урок`
-                      : ""}
-                  </p>
-                </div>
-              ))}
-            </div>
-          ) : "Нет подходящего активного абонемента"}
-        </InfoBlock>
         <InfoBlock icon={Video} label="Онлайн-уроки">
           {student.onlineLessons.length
             ? `${student.onlineLessons.length} в истории`
             : "Нет назначенных онлайн-уроков"}
         </InfoBlock>
       </div>
+
+      <section className="mt-5 rounded-2xl border border-stone-200 bg-white p-4">
+        <div className="flex items-center gap-2">
+          <TrendingUp size={16} className="text-gold" />
+          <p className="text-[10px] font-black uppercase tracking-wider text-stone-500">Динамика обучения</p>
+        </div>
+        <div className="mt-3 grid grid-cols-3 gap-2">
+          <LearningMetric label="Посещаемость" value={student.learningSummary.attendanceRate} />
+          <LearningMetric label="Выполнение ДЗ" value={student.learningSummary.homeworkCompletionRate} />
+          <LearningMetric label="План месяца" value={student.learningSummary.planCompletionRate} />
+        </div>
+      </section>
+
+      {student.attentionSignals.length ? (
+        <div className="mt-4 space-y-2">
+          {student.attentionSignals.map((signal) => (
+            <div
+              key={signal.code}
+              className={`rounded-2xl border p-3 text-sm ${
+                signal.tone === "danger"
+                  ? "border-red-200 bg-red-50 text-red-800"
+                  : "border-amber-200 bg-amber-50 text-amber-900"
+              }`}
+            >
+              <p className="font-bold">{signal.title}</p>
+              <p className="mt-1 text-xs opacity-80">{signal.action}</p>
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       {student.attendanceHistory.length ? (
         <section className="mt-5 overflow-hidden rounded-2xl border border-stone-200 bg-white">
@@ -353,6 +372,16 @@ function StudentCard({ student }: { student: TeacherStudent }) {
       ) : null}
 
       <div className="mt-5 flex flex-wrap gap-2 border-t border-stone-200 pt-5">
+        {student.crmStudentId ? (
+          <button
+            type="button"
+            onClick={() => setPlanOpen((value) => !value)}
+            className="inline-flex items-center gap-2 rounded-full bg-amber-50 px-4 py-2 text-xs font-bold text-amber-900 transition hover:bg-amber-100"
+          >
+            <GraduationCap size={14} />
+            {planOpen ? "Скрыть план" : "Месячный план"}
+          </button>
+        ) : null}
         {student.appUserId ? (
           <Link
             href={`/admin/messages?contact=${student.appUserId}`}
@@ -381,7 +410,19 @@ function StudentCard({ student }: { student: TeacherStudent }) {
           </span>
         )}
       </div>
+      {planOpen && student.crmStudentId ? (
+        <StudentMonthlyPlanEditor crmStudentId={student.crmStudentId} />
+      ) : null}
     </article>
+  );
+}
+
+function LearningMetric({ label, value }: { label: string; value: number | null }) {
+  return (
+    <div className="rounded-xl bg-stone-50 px-2 py-3 text-center">
+      <p className="text-lg font-black text-ink">{value == null ? "—" : `${value}%`}</p>
+      <p className="mt-1 text-[10px] font-bold text-stone-500">{label}</p>
+    </div>
   );
 }
 

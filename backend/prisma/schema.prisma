@@ -236,6 +236,7 @@ enum UserNotificationType {
   offline_lesson_returned
   offline_lesson_cancelled
   offline_lesson_rescheduled
+  offline_lesson_report_due
   direct_message_received
   homework_submitted
   homework_reviewed
@@ -299,6 +300,7 @@ model User {
   maestroCoinsAwarded      MaestroCoinTransaction[] @relation("CoinAwarder")
   notifications            UserNotification[]
   offlineLessonStudentChecks OfflineLessonStudentCheck[]
+  studentMonthlyPlans        StudentMonthlyPlan[]
   messageConversationsAsStudent TeacherConversation[] @relation("TeacherConversationStudent")
   messageConversationsAsTeacher TeacherConversation[] @relation("TeacherConversationTeacher")
   directMessages              TeacherMessage[] @relation("TeacherMessageSender")
@@ -335,6 +337,28 @@ model OfflineLessonStudentCheck {
   @@index([teacherUserId])
   @@index([crmClassId])
   @@map("offline_lesson_student_checks")
+}
+
+model StudentMonthlyPlan {
+  id             String   @id @default(uuid()) @db.Uuid
+  crmStudentId   String   @map("crm_student_id") @db.VarChar(128)
+  teacherUserId  String   @map("teacher_user_id") @db.Uuid
+  month          String   @db.VarChar(7)
+  goal           String   @default("") @db.Text
+  expectedResult String   @default("") @map("expected_result") @db.Text
+  skills         String   @default("") @db.Text
+  checkpoint     String   @default("") @db.Text
+  note           String   @default("") @db.Text
+  items          Json     @default("[]") @db.JsonB
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  teacherUser User @relation(fields: [teacherUserId], references: [id], onDelete: Cascade)
+
+  @@unique([crmStudentId, teacherUserId, month])
+  @@index([teacherUserId, month])
+  @@index([crmStudentId, month])
+  @@map("student_monthly_plans")
 }
 
 // ─── Learning catalog ────────────────────────────────────────────────────────

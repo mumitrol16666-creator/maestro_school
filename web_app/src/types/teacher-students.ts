@@ -14,7 +14,6 @@ export type TeacherStudent = {
   login: string | null;
   avatarUrl: string | null;
   learningLevel: string | null;
-  accountBalance: number | null;
   externalLinkStatus: string | null;
   directions: string[];
   groups: Array<{
@@ -37,22 +36,6 @@ export type TeacherStudent = {
     classStatus: string;
     attended: boolean;
     attendanceStatus: string;
-    chargeAmount: number;
-    chargeSource: string | null;
-  }>;
-  memberships: Array<{
-    crmMembershipId: string;
-    type: string;
-    planName: string | null;
-    lessonFormat: string;
-    lessonPrice: number | null;
-    classesRemaining: number;
-    endDate: string;
-    group: {
-      crmGroupId: string;
-      name: string;
-      direction: string;
-    } | null;
   }>;
   sources: TeacherStudentSource[];
   onlineLessons: Array<{
@@ -63,9 +46,47 @@ export type TeacherStudent = {
     completedAt: string | null;
     createdAt: string;
   }>;
+  learningSummary: {
+    attendanceRate: number | null;
+    homeworkCompletionRate: number | null;
+    planCompletionRate: number | null;
+    currentMonth: string;
+  };
+  attentionSignals: Array<{
+    code: string;
+    title: string;
+    action: string;
+    tone: "warning" | "danger";
+  }>;
 };
 
 export type TeacherStudentsResponse = {
   teacher: { crmTeacherId: string; name: string; directions: string[] } | null;
   students: TeacherStudent[];
+};
+
+export type MonthlyPlanItemStatus = "planned" | "in_progress" | "completed" | "moved";
+
+export type MonthlyPlanItem = {
+  id: string;
+  title: string;
+  status: MonthlyPlanItemStatus;
+};
+
+export type StudentMonthlyPlan = {
+  id?: string;
+  month: string;
+  goal: string;
+  expectedResult: string;
+  skills: string;
+  checkpoint: string;
+  note: string;
+  items: MonthlyPlanItem[];
+  updatedAt?: string;
+};
+
+export type StudentMonthlyPlanResponse = {
+  student: { crmStudentId: string; name: string };
+  month: string;
+  plan: StudentMonthlyPlan | null;
 };

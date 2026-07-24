@@ -12,11 +12,12 @@ import {
   RotateCcw,
   Send,
   ShieldCheck,
+  Snowflake,
   UserX,
   XCircle,
 } from "lucide-react";
 import Link from "next/link";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
@@ -51,6 +52,7 @@ const attendanceLabels: Record<string, string> = {
   late: "Опоздал",
   excused_absence: "Уважительная причина",
   unexcused_absence: "Пропуск",
+  emergency_freeze: "Экстренная заморозка",
 };
 
 const attendanceClasses: Record<string, string> = {
@@ -59,6 +61,7 @@ const attendanceClasses: Record<string, string> = {
   late: "bg-amber-50 text-amber-900",
   excused_absence: "bg-sky-50 text-sky-900",
   unexcused_absence: "bg-red-50 text-red-800",
+  emergency_freeze: "bg-violet-50 text-violet-900",
 };
 
 const trialObjectionOptions = [
@@ -217,6 +220,8 @@ export default function AdminOfflineLessonDetailPage() {
   const [notHeldOpen, setNotHeldOpen] = useState(false);
   const [notHeldReason, setNotHeldReason] = useState("");
   const [clockNow, setClockNow] = useState(() => Date.now());
+  const [submissionProgress, setSubmissionProgress] = useState<string | null>(null);
+  const submissionLock = useRef(false);
 
   const lesson = lessonResource.data;
   const loadedStudents = studentsResource.data?.students ?? [];
@@ -271,7 +276,7 @@ export default function AdminOfflineLessonDetailPage() {
       ).length
     : 0;
   const allStudentsAbsent = students.length > 0 && students.every((student) => (
-    ["excused_absence", "unexcused_absence"].includes(draftFor(student).attendanceStatus)
+    ["excused_absence", "unexcused_absence", "emergency_freeze"].includes(draftFor(student).attendanceStatus)
   ));
   const isAbsenceOnly = Boolean(isSubmittedAbsence || (canEditTeacherReport && allStudentsAbsent));
   const requiresLessonReport = !isNotHeld && !isAbsenceOnly;
@@ -477,29 +482,74 @@ export default function AdminOfflineLessonDetailPage() {
     return null;
   }
 
-  async function saveStudentChecks() {
-    const batchSize = 3;
-    for (let index = 0; index < students.length; index += batchSize) {
-      await Promise.all(students.slice(index, index + batchSize).map((student) => {
+  async function saveStudentChecks({ showProgress = false }: { showProgress?: boolean } = {}) {
+    if (!isAdmin) {
+      const checks = students.map((student) => {
         const draft = draftFor(student);
         const attended = ["present", "late"].includes(draft.attendanceStatus);
-        const homeworkReview = isIndividualLesson && attended ? draft.homeworkReview : undefined;
-        return isAdmin
-          ? adminOfflineApi.attendance(
-              crmClassId,
-              student.crmStudentId,
-              draft.attendanceStatus,
-              draft.teacherNote.trim() || undefined,
-              homeworkReview,
-            )
-          : teacherOfflineApi.attendance(
-              crmClassId,
-              student.crmStudentId,
-              draft.attendanceStatus,
-              draft.teacherNote.trim() || undefined,
-              homeworkReview,
+        return {
+          studentId: student.crmStudentId,
+          attendanceStatus: draft.attendanceStatus,
+          teacherNote: draft.teacherNote.trim() || undefined,
+          homeworkReview: isIndividualLesson && attended ? draft.homeworkReview : undefined,
+        };
+      });
+      if (showProgress) {
+        setSubmissionProgress(`Последовательно сохраняем данные ${checks.length} ученик(ов)…`);
+      }
+      for (let attempt = 1; attempt <= 2; attempt += 1) {
+        try {
+          await teacherOfflineApi.attendanceBatch(crmClassId, checks);
+          return;
+        } catch (reason) {
+          const retryable = reason instanceof ApiError
+            && [0, 408, 429, 502, 503, 504].includes(reason.status);
+          if (!retryable || attempt === 2) throw reason;
+          if (showProgress) setSubmissionProgress("Связь нестабильна. Повторяем сохранение…");
+          await new Promise((resolve) => window.setTimeout(resolve, 1200));
+        }
+      }
+      return;
+    }
+
+    for (let index = 0; index < students.length; index += 1) {
+      const student = students[index];
+      const draft = draftFor(student);
+      const attended = ["present", "late"].includes(draft.attendanceStatus);
+      const homeworkReview = isIndividualLesson && attended ? draft.homeworkReview : undefined;
+      const saveAttendance = () => adminOfflineApi.attendance(
+            crmClassId,
+            student.crmStudentId,
+            draft.attendanceStatus,
+            draft.teacherNote.trim() || undefined,
+            homeworkReview,
+          );
+
+      if (showProgress) {
+        setSubmissionProgress(`Сохраняем ученика ${index + 1} из ${students.length}: ${student.name}`);
+      }
+
+      let saved = false;
+      for (let attempt = 1; attempt <= 2 && !saved; attempt += 1) {
+        try {
+          await saveAttendance();
+          saved = true;
+        } catch (reason) {
+          const retryable = reason instanceof ApiError
+            && [0, 408, 429, 502, 503, 504].includes(reason.status);
+          if (!retryable || attempt === 2) {
+            throw new ApiError(
+              `Не удалось сохранить данные ученика ${student.name}. Нажмите «Отправить» ещё раз — уже сохранённые отметки не потеряются.`,
+              reason instanceof ApiError ? reason.status : 0,
+              reason instanceof ApiError ? reason.code : "ATTENDANCE_SAVE_FAILED",
             );
-      }));
+          }
+          if (showProgress) {
+            setSubmissionProgress(`Связь нестабильна. Повторяем сохранение для ${student.name}…`);
+          }
+          await new Promise((resolve) => window.setTimeout(resolve, 900));
+        }
+      }
     }
   }
 
@@ -515,31 +565,40 @@ export default function AdminOfflineLessonDetailPage() {
   }
 
   async function confirmSubmit() {
+    if (submissionLock.current) return;
+    submissionLock.current = true;
+    setSubmissionProgress("Подготавливаем отправку…");
     const absenceOnly = allStudentsAbsent;
-    const submitted = await runAction(absenceOnly ? "submit-absence" : "submit", async () => {
-      await saveStudentChecks();
-      const payload = {
-        topic: isTrialLesson || absenceOnly ? undefined : topic.trim(),
-        lessonGoals: absenceOnly ? undefined : lessonGoals.trim() || undefined,
-        lessonSummary: isTrialLesson || absenceOnly ? undefined : lessonSummary.trim(),
-        homeworkDraft: isTrialLesson || absenceOnly ? undefined : homework.trim(),
-        nextLessonFocus: isTrialLesson || absenceOnly ? undefined : nextLessonFocus.trim() || undefined,
-        materials: absenceOnly ? undefined : materialsText
-          .split("\n")
-          .map((url) => url.trim())
-          .filter(Boolean)
-          .map((url) => materialEntries.find((item) => item.url === url) ?? ({ type: "link", url, title: url })),
-        comment: absenceOnly ? undefined : comment.trim() || undefined,
-        trialReport: isTrialLesson && !absenceOnly
-          ? { ...trialReport, capturedAt: new Date().toISOString() }
-          : undefined,
-        teacherOutcomeHint: absenceOnly ? "no_submission" as const : "held" as const,
-      };
-      return canActForTeacher
-        ? adminOfflineApi.submitForTeacher(crmClassId, payload)
-        : teacherOfflineApi.submit(crmClassId, payload);
-    });
-    if (submitted) setSubmitConfirmationOpen(false);
+    try {
+      const submitted = await runAction(absenceOnly ? "submit-absence" : "submit", async () => {
+        await saveStudentChecks({ showProgress: true });
+        setSubmissionProgress("Отметки сохранены. Отправляем отчёт администратору…");
+        const payload = {
+          topic: isTrialLesson || absenceOnly ? undefined : topic.trim(),
+          lessonGoals: absenceOnly ? undefined : lessonGoals.trim() || undefined,
+          lessonSummary: isTrialLesson || absenceOnly ? undefined : lessonSummary.trim(),
+          homeworkDraft: isTrialLesson || absenceOnly ? undefined : homework.trim(),
+          nextLessonFocus: isTrialLesson || absenceOnly ? undefined : nextLessonFocus.trim() || undefined,
+          materials: absenceOnly ? undefined : materialsText
+            .split("\n")
+            .map((url) => url.trim())
+            .filter(Boolean)
+            .map((url) => materialEntries.find((item) => item.url === url) ?? ({ type: "link", url, title: url })),
+          comment: absenceOnly ? undefined : comment.trim() || undefined,
+          trialReport: isTrialLesson && !absenceOnly
+            ? { ...trialReport, capturedAt: new Date().toISOString() }
+            : undefined,
+          teacherOutcomeHint: absenceOnly ? "no_submission" as const : "held" as const,
+        };
+        return canActForTeacher
+          ? adminOfflineApi.submitForTeacher(crmClassId, payload)
+          : teacherOfflineApi.submit(crmClassId, payload);
+      });
+      if (submitted) setSubmitConfirmationOpen(false);
+    } finally {
+      submissionLock.current = false;
+      setSubmissionProgress(null);
+    }
   }
 
   async function confirmNotHeld() {
@@ -989,6 +1048,7 @@ export default function AdminOfflineLessonDetailPage() {
         studentsCount={students.length}
         absenceOnly={allStudentsAbsent}
         busy={["submit", "submit-absence"].includes(busy ?? "")}
+        progress={submissionProgress}
         error={error}
         onClose={() => setSubmitConfirmationOpen(false)}
         onConfirm={() => void confirmSubmit()}
@@ -1106,6 +1166,7 @@ function SubmitLessonConfirmation({
   studentsCount,
   absenceOnly,
   busy,
+  progress,
   error,
   onClose,
   onConfirm,
@@ -1115,6 +1176,7 @@ function SubmitLessonConfirmation({
   studentsCount: number;
   absenceOnly: boolean;
   busy: boolean;
+  progress: string | null;
   error: string | null;
   onClose: () => void;
   onConfirm: () => void;
@@ -1154,6 +1216,14 @@ function SubmitLessonConfirmation({
         {error ? (
           <p className="mt-4 rounded-2xl border border-red-100 bg-red-50 p-4 text-sm font-semibold text-red-700">
             {error}
+          </p>
+        ) : null}
+        {busy && progress ? (
+          <p className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900">
+            {progress}
+            <span className="mt-1 block text-xs font-normal text-amber-800/80">
+              Не закрывайте приложение. На слабом интернете отправка может занять немного больше времени.
+            </span>
           </p>
         ) : null}
         <div className="mt-6 grid grid-cols-2 gap-3">
@@ -1588,6 +1658,7 @@ const attendanceOptions = [
   { value: "late", label: "Опоздал", icon: Clock3, active: "border-amber-500 bg-amber-50 text-amber-900" },
   { value: "excused_absence", label: "Нет, причина есть", icon: UserX, active: "border-sky-500 bg-sky-50 text-sky-900" },
   { value: "unexcused_absence", label: "Нет без причины", icon: CircleSlash2, active: "border-red-500 bg-red-50 text-red-800" },
+  { value: "emergency_freeze", label: "Экстренная заморозка", icon: Snowflake, active: "border-violet-500 bg-violet-50 text-violet-900" },
 ] as const;
 
 const homeworkOptions = [

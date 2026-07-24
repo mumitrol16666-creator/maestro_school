@@ -10,7 +10,6 @@ import {
   postTeacherStart,
   postTeacherSubmit,
   postTeacherAttendance,
-  fetchTeacherSalarySummary,
   type TeacherSubmitPayload,
 } from "../../infrastructure/crm/crm-client.js";
 import {
@@ -199,10 +198,44 @@ export async function teacherOfflineSetAttendance(
   return { crmResult, lessonCheck };
 }
 
-export async function getTeacherSalarySummary(
+export async function teacherOfflineSetAttendanceBatch(
   appUserId: string,
-  params?: { from?: string; to?: string },
+  crmClassId: string,
+  checks: Array<{
+    studentId: string;
+    attendanceStatus: string;
+    teacherNote?: string;
+    homeworkReview?: OfflineHomeworkReviewInput;
+  }>,
 ) {
+  const lesson = await getTeacherOfflineClass(appUserId, crmClassId);
   const crmTeacherId = await requireCrmTeacherId(appUserId);
-  return fetchTeacherSalarySummary(crmTeacherId, params);
+  const results = [];
+
+  for (const check of checks) {
+    const crmResult = await postTeacherAttendance(crmClassId, {
+      crmTeacherId,
+      studentId: check.studentId,
+      attendanceStatus: check.attendanceStatus,
+      teacherNote: check.teacherNote,
+      homeworkReview: check.homeworkReview,
+      attended: ["present", "late"].includes(check.attendanceStatus),
+    });
+    const lessonCheck = await saveOfflineLessonStudentCheck({
+      crmClassId,
+      crmStudentId: check.studentId,
+      teacherUserId: appUserId,
+      attendanceStatus: check.attendanceStatus,
+      teacherNote: check.teacherNote,
+      homeworkReview: check.homeworkReview,
+    });
+    results.push({ studentId: check.studentId, crmResult, lessonCheck });
+  }
+
+  return {
+    crmClassId,
+    classStatus: (lesson as { status?: string }).status ?? null,
+    savedCount: results.length,
+    results,
+  };
 }

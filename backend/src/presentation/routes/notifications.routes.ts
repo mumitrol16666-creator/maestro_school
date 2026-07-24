@@ -23,6 +23,7 @@ export async function notificationsRoutes(app: FastifyInstance) {
     "offline_lesson_returned",
     "offline_lesson_cancelled",
     "offline_lesson_rescheduled",
+    "offline_lesson_report_due",
     "direct_message_received",
     "homework_submitted",
     "homework_reviewed",

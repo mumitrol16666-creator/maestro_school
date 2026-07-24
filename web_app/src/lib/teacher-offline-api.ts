@@ -15,13 +15,6 @@ export const teacherOfflineApi = {
     const qs = query.toString();
     return apiRequest<TeacherOfflineAgenda>(`/teachers/me/offline-lessons${qs ? `?${qs}` : ""}`);
   },
-  salarySummary: (params?: { from?: string; to?: string }) => {
-    const query = new URLSearchParams();
-    if (params?.from) query.set("from", params.from);
-    if (params?.to) query.set("to", params.to);
-    const qs = query.toString();
-    return apiRequest<any>(`/teachers/me/salary-summary${qs ? `?${qs}` : ""}`);
-  },
   classCard: (crmClassId: string) =>
     apiRequest<TeacherOfflineClass>(`/teachers/me/offline-lessons/${encodeURIComponent(crmClassId)}`),
   students: (crmClassId: string) =>
@@ -76,5 +69,18 @@ export const teacherOfflineApi = {
     apiRequest<Record<string, unknown>>(
       `/teachers/me/offline-lessons/${encodeURIComponent(crmClassId)}/attendance`,
       { method: "POST", body: JSON.stringify({ studentId, attendanceStatus, teacherNote, homeworkReview }) },
+    ),
+  attendanceBatch: (
+    crmClassId: string,
+    checks: Array<{
+      studentId: string;
+      attendanceStatus: string;
+      teacherNote?: string;
+      homeworkReview?: OfflineHomeworkReview;
+    }>,
+  ) =>
+    apiRequest<{ savedCount: number }>(
+      `/teachers/me/offline-lessons/${encodeURIComponent(crmClassId)}/attendance-batch`,
+      { method: "POST", body: JSON.stringify({ checks }) },
     ),
 };

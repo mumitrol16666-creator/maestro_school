@@ -9,13 +9,14 @@ export const offlineLessonStudentCheckSchema = z.object({
     "late",
     "excused_absence",
     "unexcused_absence",
+    "emergency_freeze",
   ]),
   teacherNote: z.string().max(3000).optional(),
   homeworkReview: z.object({
     status: z.enum(["not_checked", "completed", "partial", "not_completed", "not_assigned"]),
-    completionPercent: z.number().int().min(0).max(100).optional(),
-    difficulties: z.string().max(3000).optional(),
-    notCompletedReason: z.string().max(3000).optional(),
+    completionPercent: z.number().int().min(0).max(100).nullable().optional(),
+    difficulties: z.string().max(3000).nullable().optional(),
+    notCompletedReason: z.string().max(3000).nullable().optional(),
   }).superRefine((review, context) => {
     if (review.status === "not_completed" && !review.notCompletedReason?.trim()) {
       context.addIssue({

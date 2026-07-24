@@ -9,9 +9,9 @@ export type OfflineHomeworkStatus =
 
 export type OfflineHomeworkReviewInput = {
   status: OfflineHomeworkStatus;
-  completionPercent?: number;
-  difficulties?: string;
-  notCompletedReason?: string;
+  completionPercent?: number | null;
+  difficulties?: string | null;
+  notCompletedReason?: string | null;
 };
 
 export async function saveOfflineLessonStudentCheck(params: {
