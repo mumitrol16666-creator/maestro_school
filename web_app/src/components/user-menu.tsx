@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { formatFio, initialsFromName } from "@/lib/name";
 import { isStudentRole, roleLabel, settingsPathForRole } from "@/lib/role-labels";
 import { useAuth } from "./auth-provider";
+import { RefreshAppButton } from "./refresh-app-button";
 
 export function UserMenu() {
   const { user, logout } = useAuth();
@@ -85,6 +86,7 @@ export function UserMenu() {
             ) : null}
           </div>
           <div className="border-t border-stone-100 p-2">
+            <RefreshAppButton compact onBeforeRefresh={() => setOpen(false)} />
             <button
               type="button"
               role="menuitem"

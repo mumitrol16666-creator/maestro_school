@@ -1,4 +1,4 @@
-const CACHE_VERSION = "maestro-2026-07-22-v4";
+const CACHE_VERSION = "maestro-2026-07-24-v5";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(self.skipWaiting());

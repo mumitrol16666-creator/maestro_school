@@ -16,6 +16,7 @@ import { AdminPendingHomeworkBadge } from "./admin-pending-homework-badge";
 import { useAuth } from "./auth-provider";
 import { Brand } from "./brand";
 import { NotificationCenter } from "./teacher-notification-center";
+import { RefreshAppButton } from "./refresh-app-button";
 
 const cmsNavigation = [
   { href: "/admin", label: "Обзор", icon: LayoutDashboard },
@@ -256,6 +257,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             <Settings size={14} />
             <span className="hidden sm:inline">Настройки</span>
           </Link>
+          <RefreshAppButton />
           <button onClick={logout} aria-label="Выйти" className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-stone-200 bg-white px-3 text-xs font-bold text-stone-600 transition hover:border-red-200 hover:bg-red-50 hover:text-red-700 sm:rounded-full sm:px-4">
             <LogOut size={14} />
             <span className="hidden sm:inline">Выйти</span>
