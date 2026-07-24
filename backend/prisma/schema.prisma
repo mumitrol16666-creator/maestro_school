@@ -237,6 +237,8 @@ enum UserNotificationType {
   offline_lesson_cancelled
   offline_lesson_rescheduled
   offline_lesson_report_due
+  lesson_teacher_reminder
+  lesson_student_reminder
   direct_message_received
   homework_submitted
   homework_reviewed

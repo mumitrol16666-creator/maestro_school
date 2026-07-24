@@ -9,6 +9,7 @@ import { authPlugin } from "./presentation/plugins/auth.plugin.js";
 import { registerRoutes } from "./presentation/routes/index.js";
 import { integrationRoutes } from "./presentation/routes/integration.routes.js";
 import { startOfflineReportReminderJob } from "./application/services/offline-report-reminder.service.js";
+import { startLessonReminderJob } from "./application/services/lesson-reminder.service.js";
 
 async function bootstrap() {
   const app = Fastify({
@@ -50,6 +51,7 @@ async function bootstrap() {
 
   await app.listen({ port: env.PORT, host: env.HOST });
   startOfflineReportReminderJob();
+  startLessonReminderJob();
 }
 
 bootstrap().catch((err) => {
