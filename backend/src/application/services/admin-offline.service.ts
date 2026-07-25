@@ -1,3 +1,5 @@
+import { Prisma } from "@prisma/client";
+import { prisma } from "../../infrastructure/database/prisma.js";
 import {
   fetchClassCard,
   fetchClassStudents,
@@ -19,6 +21,10 @@ import {
   type OfflineHomeworkReviewInput,
 } from "./offline-lesson-student-check.service.js";
 import { validateOfflineLessonSubmission } from "./offline-lesson-submission-policy.js";
+import { awardManualPoints } from "./points.service.js";
+import { addMaestroCoins } from "./coins.service.js";
+import { evaluateAchievements } from "./achievement.service.js";
+import { aqtobeMonthKey } from "../../lib/aqtobe-month.js";
 
 type AdminOfflineLesson = {
   teacher?: { crmTeacherId?: string; name?: string } | null;
@@ -26,6 +32,120 @@ type AdminOfflineLesson = {
   group?: unknown;
   [key: string]: unknown;
 };
+
+type StoredPlanTopicUpdate = {
+  itemId: string;
+  status: "in_progress" | "completed";
+};
+
+type StoredMonthlyPlanItem = {
+  id: string;
+  title: string;
+  status: "planned" | "in_progress" | "completed" | "moved";
+};
+
+function lessonMonth(lesson: Record<string, unknown>) {
+  const date = typeof lesson.date === "string" ? new Date(lesson.date) : null;
+  return date && !Number.isNaN(date.getTime()) ? aqtobeMonthKey(date) : aqtobeMonthKey();
+}
+
+async function applyOfflineLessonLearningResults(crmClassId: string, approvedBy: string) {
+  const checks = await prisma.offlineLessonStudentCheck.findMany({
+    where: { crmClassId, rewardsAppliedAt: null },
+  });
+  const results: Array<{
+    crmStudentId: string;
+    points: number;
+    coins: number;
+    planTopics: number;
+  }> = [];
+
+  for (const check of checks) {
+    const attended = ["present", "late"].includes(check.attendanceStatus);
+    if (!attended) {
+      await prisma.offlineLessonStudentCheck.update({
+        where: { id: check.id },
+        data: { rewardsAppliedAt: new Date() },
+      });
+      results.push({ crmStudentId: check.crmStudentId, points: 0, coins: 0, planTopics: 0 });
+      continue;
+    }
+
+    const updates = Array.isArray(check.planTopicUpdates)
+      ? check.planTopicUpdates as StoredPlanTopicUpdate[]
+      : [];
+    let appliedPlanTopics = 0;
+
+    if (check.monthlyPlanId && updates.length) {
+      const plan = await prisma.studentMonthlyPlan.findFirst({
+        where: {
+          id: check.monthlyPlanId,
+          crmStudentId: check.crmStudentId,
+        },
+      });
+      if (plan) {
+        const byId = new Map(updates.map((item) => [item.itemId, item.status]));
+        const items = (Array.isArray(plan.items) ? plan.items : []) as StoredMonthlyPlanItem[];
+        const nextItems = items.map((item) => {
+          const nextStatus = byId.get(item.id);
+          if (!nextStatus || item.status === "moved") return item;
+          appliedPlanTopics += 1;
+          return {
+            ...item,
+            status: item.status === "completed" ? "completed" : nextStatus,
+          };
+        });
+        await prisma.studentMonthlyPlan.update({
+          where: { id: plan.id },
+          data: { items: nextItems as Prisma.InputJsonValue },
+        });
+      }
+    }
+
+    const student = await prisma.user.findUnique({
+      where: { crmStudentId: check.crmStudentId },
+      select: { id: true },
+    });
+    let awardedPoints = 0;
+    let awardedCoins = 0;
+
+    if (student) {
+      const pointsResult = await awardManualPoints({
+        studentId: student.id,
+        amount: check.lessonPoints,
+        reason: "Офлайн-урок в школе",
+        awardedBy: check.teacherUserId ?? approvedBy,
+        idempotencyKey: `offline-lesson-points:${crmClassId}:${check.crmStudentId}`,
+      });
+      awardedPoints = pointsResult.awarded ? check.lessonPoints : 0;
+
+      const coinResult = await addMaestroCoins({
+        studentId: student.id,
+        amount: 1,
+        reason: "Посещение офлайн-урока",
+        sourceType: "offline_lesson",
+        sourceId: check.id,
+        sourceKey: `offline-lesson:${crmClassId}:${check.crmStudentId}`,
+        createdBy: approvedBy,
+      });
+      awardedCoins = coinResult.awarded ? 1 : 0;
+      await evaluateAchievements(student.id);
+    }
+
+    await prisma.offlineLessonStudentCheck.update({
+      where: { id: check.id },
+      data: { rewardsAppliedAt: new Date() },
+    });
+    results.push({
+      crmStudentId: check.crmStudentId,
+      points: awardedPoints,
+      coins: awardedCoins,
+      planTopics: appliedPlanTopics,
+    });
+  }
+
+  return results;
+}
 
 async function getLessonWithAssignedTeacher(crmClassId: string) {
   const lesson = await fetchClassCard(crmClassId) as AdminOfflineLesson;
@@ -53,8 +173,18 @@ export async function getAdminOfflineClass(crmClassId: string) {
 }
 
 export async function getAdminOfflineClassStudents(crmClassId: string) {
-  const roster = await fetchClassStudents(crmClassId);
-  return mergeOfflineLessonStudentChecks(crmClassId, roster);
+  const [lesson, roster] = await Promise.all([
+    fetchClassCard(crmClassId) as Promise<AdminOfflineLesson>,
+    fetchClassStudents(crmClassId),
+  ]);
+  const crmTeacherId = lesson.teacher?.crmTeacherId;
+  const teacher = crmTeacherId
+    ? await prisma.user.findUnique({ where: { crmTeacherId }, select: { id: true } })
+    : null;
+  return mergeOfflineLessonStudentChecks(crmClassId, roster, {
+    teacherUserId: teacher?.id,
+    month: lessonMonth(lesson),
+  });
 }
 
 export async function adminOfflineStart(crmClassId: string) {
@@ -95,6 +225,9 @@ export async function adminOfflineSetAttendance(
   attendanceStatus: string,
   teacherNote?: string,
   homeworkReview?: OfflineHomeworkReviewInput,
+  lessonPoints?: number,
+  monthlyPlanId?: string | null,
+  planTopicUpdates?: StoredPlanTopicUpdate[],
 ) {
   const crmResult = await postAdminAttendance(crmClassId, {
     studentId,
@@ -108,11 +241,15 @@ export async function adminOfflineSetAttendance(
     attendanceStatus,
     teacherNote,
     homeworkReview,
+    lessonPoints,
+    monthlyPlanId,
+    planTopicUpdates,
   });
   return { crmResult, lessonCheck };
 }
 
 export async function adminOfflineApprove(
+  approvedBy: string,
   crmClassId: string,
   payload: {
     deduct?: boolean;
@@ -126,7 +263,9 @@ export async function adminOfflineApprove(
     trialReport?: Record<string, unknown>;
   },
 ) {
-  return postAdminApproveClass(crmClassId, payload);
+  const crmResult = await postAdminApproveClass(crmClassId, payload);
+  const learningRewards = await applyOfflineLessonLearningResults(crmClassId, approvedBy);
+  return { ...crmResult, learningRewards };
 }
 
 export async function adminOfflineReturn(crmClassId: string, reason?: string) {

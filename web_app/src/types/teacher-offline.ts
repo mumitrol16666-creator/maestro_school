@@ -141,6 +141,23 @@ export type TeacherOfflineStudent = {
   markedAt?: string | null;
   appMarkedAt?: string | null;
   groupStatus?: string;
+  lessonPoints?: number;
+  monthlyPlanId?: string | null;
+  planTopicUpdates?: Array<{
+    itemId: string;
+    status: "in_progress" | "completed";
+  }>;
+  rewardsAppliedAt?: string | null;
+  monthlyPlan?: {
+    id: string;
+    month: string;
+    goal: string;
+    items: Array<{
+      id: string;
+      title: string;
+      status: "planned" | "in_progress" | "completed" | "moved";
+    }>;
+  } | null;
   recentLessons?: Array<{
     crmClassId: string;
     date: string;

@@ -11,6 +11,12 @@ export const offlineLessonStudentCheckSchema = z.object({
     "unexcused_absence",
   ]),
   teacherNote: z.string().max(3000).optional(),
+  lessonPoints: z.number().int().min(0).max(100).optional(),
+  monthlyPlanId: z.string().uuid().nullable().optional(),
+  planTopicUpdates: z.array(z.object({
+    itemId: z.string().min(1).max(100),
+    status: z.enum(["in_progress", "completed"]),
+  })).max(50).optional(),
   homeworkReview: z.object({
     status: z.enum(["not_checked", "completed", "partial", "not_completed", "not_assigned"]),
     completionPercent: z.number().int().min(0).max(100).nullable().optional(),
@@ -25,4 +31,13 @@ export const offlineLessonStudentCheckSchema = z.object({
       });
     }
   }).optional(),
+}).superRefine((check, context) => {
+  const ids = (check.planTopicUpdates ?? []).map((item) => item.itemId);
+  if (new Set(ids).size !== ids.length) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["planTopicUpdates"],
+      message: "Одна тема плана указана несколько раз",
+    });
+  }
 });

@@ -4,6 +4,75 @@ import { calculateStudentPoints } from "./points.service.js";
 import { countCompletedLessons, getCourseModules } from "../repositories/learning.repository.js";
 import { deliverUserNotification } from "./notification.service.js";
 
+type AchievementMetrics = {
+  points: number;
+  completedLessons: number;
+  offlineLessons: number;
+  completedHomework: number;
+  completedMonthlyPlans: number;
+  earnedCoins: number;
+};
+
+async function getAchievementMetrics(studentId: string): Promise<AchievementMetrics> {
+  const [points, completedLessons, user, coinTotal] = await Promise.all([
+    calculateStudentPoints(studentId),
+    countCompletedLessons(studentId),
+    prisma.user.findUnique({ where: { id: studentId }, select: { crmStudentId: true } }),
+    prisma.maestroCoinTransaction.aggregate({
+      where: { studentId, amount: { gt: 0 } },
+      _sum: { amount: true },
+    }),
+  ]);
+
+  if (!user?.crmStudentId) {
+    return {
+      points,
+      completedLessons,
+      offlineLessons: 0,
+      completedHomework: 0,
+      completedMonthlyPlans: 0,
+      earnedCoins: coinTotal._sum.amount ?? 0,
+    };
+  }
+
+  const [offlineLessons, completedHomework, plans] = await Promise.all([
+    prisma.offlineLessonStudentCheck.count({
+      where: {
+        crmStudentId: user.crmStudentId,
+        rewardsAppliedAt: { not: null },
+        attendanceStatus: { in: ["present", "late"] },
+      },
+    }),
+    prisma.offlineLessonStudentCheck.count({
+      where: {
+        crmStudentId: user.crmStudentId,
+        rewardsAppliedAt: { not: null },
+        homeworkStatus: "completed",
+      },
+    }),
+    prisma.studentMonthlyPlan.findMany({
+      where: { crmStudentId: user.crmStudentId },
+      select: { items: true },
+    }),
+  ]);
+  const completedMonthlyPlans = plans.filter((plan) => {
+    const items = Array.isArray(plan.items)
+      ? plan.items as Array<{ status?: string }>
+      : [];
+    const activeItems = items.filter((item) => item.status !== "moved");
+    return activeItems.length > 0 && activeItems.every((item) => item.status === "completed");
+  }).length;
+
+  return {
+    points,
+    completedLessons,
+    offlineLessons,
+    completedHomework,
+    completedMonthlyPlans,
+    earnedCoins: coinTotal._sum.amount ?? 0,
+  };
+}
+
 export async function evaluateAchievements(
   studentId: string,
   courseId?: string,
@@ -20,10 +89,7 @@ export async function evaluateAchievements(
 
   const newlyEarned: string[] = [];
 
-  const [points, completedLessons] = await Promise.all([
-    calculateStudentPoints(studentId),
-    countCompletedLessons(studentId),
-  ]);
+  const metrics = await getAchievementMetrics(studentId);
 
   for (const achievement of achievements) {
     if (earnedIds.has(achievement.id)) continue;
@@ -32,13 +98,25 @@ export async function evaluateAchievements(
 
     switch (achievement.criteriaType) {
       case "first_lesson_completed":
-        earned = completedLessons >= achievement.threshold;
+        earned = metrics.completedLessons >= achievement.threshold;
         break;
       case "points_threshold":
-        earned = points >= achievement.threshold;
+        earned = metrics.points >= achievement.threshold;
         break;
       case "lessons_completed_count":
-        earned = completedLessons >= achievement.threshold;
+        earned = metrics.completedLessons >= achievement.threshold;
+        break;
+      case "offline_lessons_completed_count":
+        earned = metrics.offlineLessons >= achievement.threshold;
+        break;
+      case "homework_completed_count":
+        earned = metrics.completedHomework >= achievement.threshold;
+        break;
+      case "monthly_plans_completed_count":
+        earned = metrics.completedMonthlyPlans >= achievement.threshold;
+        break;
+      case "coins_earned_threshold":
+        earned = metrics.earnedCoins >= achievement.threshold;
         break;
       case "first_module_completed": {
         if (!courseId) break;
@@ -99,7 +177,7 @@ export interface StudentAchievementOverviewItem {
 export async function getStudentAchievementsOverview(
   studentId: string,
 ): Promise<StudentAchievementOverviewItem[]> {
-  const [achievements, earnedRows, points, completedLessons] = await Promise.all([
+  const [achievements, earnedRows, metrics] = await Promise.all([
     prisma.achievement.findMany({
       where: { isActive: true },
       orderBy: { threshold: "asc" },
@@ -108,8 +186,7 @@ export async function getStudentAchievementsOverview(
       where: { studentId },
       select: { achievementId: true, earnedAt: true },
     }),
-    calculateStudentPoints(studentId),
-    countCompletedLessons(studentId),
+    getAchievementMetrics(studentId),
   ]);
 
   const earnedMap = new Map(
@@ -122,8 +199,7 @@ export async function getStudentAchievementsOverview(
     const { progressPercent, progressLabel } = buildAchievementProgress({
       criteriaType: achievement.criteriaType,
       threshold: achievement.threshold,
-      points,
-      completedLessons,
+      ...metrics,
       earned,
     });
 
@@ -144,6 +220,10 @@ function buildAchievementProgress(params: {
   threshold: number;
   points: number;
   completedLessons: number;
+  offlineLessons: number;
+  completedHomework: number;
+  completedMonthlyPlans: number;
+  earnedCoins: number;
   earned: boolean;
 }) {
   if (params.earned) {
@@ -164,6 +244,34 @@ function buildAchievementProgress(params: {
       return {
         progressPercent: Math.round((current / params.threshold) * 100),
         progressLabel: `${params.completedLessons} из ${params.threshold} уроков`,
+      };
+    }
+    case "offline_lessons_completed_count": {
+      const current = Math.min(params.offlineLessons, params.threshold);
+      return {
+        progressPercent: Math.round((current / params.threshold) * 100),
+        progressLabel: `${params.offlineLessons} из ${params.threshold} офлайн-уроков`,
+      };
+    }
+    case "homework_completed_count": {
+      const current = Math.min(params.completedHomework, params.threshold);
+      return {
+        progressPercent: Math.round((current / params.threshold) * 100),
+        progressLabel: `${params.completedHomework} из ${params.threshold} выполненных ДЗ`,
+      };
+    }
+    case "monthly_plans_completed_count": {
+      const current = Math.min(params.completedMonthlyPlans, params.threshold);
+      return {
+        progressPercent: Math.round((current / params.threshold) * 100),
+        progressLabel: `${params.completedMonthlyPlans} из ${params.threshold} завершённых планов`,
+      };
+    }
+    case "coins_earned_threshold": {
+      const current = Math.min(params.earnedCoins, params.threshold);
+      return {
+        progressPercent: Math.round((current / params.threshold) * 100),
+        progressLabel: `${params.earnedCoins} из ${params.threshold} Maestro Coins`,
       };
     }
     case "first_module_completed":

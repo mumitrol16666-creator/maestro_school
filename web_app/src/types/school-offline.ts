@@ -17,6 +17,12 @@ export type SchoolOfflineLesson = {
   materials: Array<{ type?: string; url?: string; title?: string; description?: string | null; mimeType?: string | null }>;
   attended: boolean | null;
   isPast?: boolean;
+  lessonPoints?: number;
+  planTopicResults?: Array<{
+    itemId: string;
+    title: string;
+    status: "in_progress" | "completed";
+  }>;
 };
 
 export type SchoolOfflineMembership = {
@@ -67,4 +73,22 @@ export type StudentOfflineSummary = {
   };
   upcomingLessons: SchoolOfflineLesson[];
   lessonHistory: SchoolOfflineLesson[];
+  monthlyPlan: {
+    id: string;
+    month: string;
+    goal: string;
+    expectedResult: string;
+    skills: string;
+    checkpoint: string;
+    teacherName: string;
+    items: Array<{
+      id: string;
+      title: string;
+      status: "planned" | "in_progress" | "completed" | "moved";
+    }>;
+    completedCount: number;
+    inProgressCount: number;
+    plannedCount: number;
+    progressPercent: number;
+  } | null;
 };

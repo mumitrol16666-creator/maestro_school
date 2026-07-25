@@ -204,6 +204,9 @@ export async function teacherOfflineRoutes(app: FastifyInstance) {
           body.attendanceStatus,
           body.teacherNote,
           body.homeworkReview,
+          body.lessonPoints,
+          body.monthlyPlanId,
+          body.planTopicUpdates,
         ),
       };
     },

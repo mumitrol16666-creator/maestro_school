@@ -101,6 +101,7 @@ enum MaestroCoinTransactionType {
 
 enum MaestroCoinSourceType {
   online_lesson
+  offline_lesson
   assignment
   course
   manual
@@ -369,6 +370,10 @@ model OfflineLessonStudentCheck {
   homeworkDifficulties       String?  @map("homework_difficulties") @db.Text
   homeworkNotCompletedReason String?  @map("homework_not_completed_reason") @db.Text
   teacherNote                String?  @map("teacher_note") @db.Text
+  lessonPoints               Int      @default(0) @map("lesson_points")
+  monthlyPlanId              String?  @map("monthly_plan_id") @db.Uuid
+  planTopicUpdates           Json     @default("[]") @map("plan_topic_updates") @db.JsonB
+  rewardsAppliedAt           DateTime? @map("rewards_applied_at") @db.Timestamptz(6)
   markedAt                   DateTime @default(now()) @map("marked_at") @db.Timestamptz(6)
   createdAt                  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -677,6 +682,10 @@ enum AchievementCriteriaType {
   points_threshold
   first_module_completed
   lessons_completed_count
+  offline_lessons_completed_count
+  homework_completed_count
+  monthly_plans_completed_count
+  coins_earned_threshold
 }
 
 model Achievement {
@@ -853,6 +862,7 @@ model MaestroCoinTransaction {
   reason          String                   @db.VarChar(512)
   sourceType      MaestroCoinSourceType    @map("source_type")
   sourceId        String?                  @map("source_id") @db.Uuid
+  sourceKey       String?                  @unique @map("source_key") @db.VarChar(191)
   createdById     String                   @map("created_by") @db.Uuid
   balanceBefore   Int                      @map("balance_before")
   balanceAfter    Int                      @map("balance_after")

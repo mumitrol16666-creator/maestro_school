@@ -1,6 +1,6 @@
 "use client";
 
-import { Award, Flame, Medal, Star, Trophy } from "lucide-react";
+import { Award, BookCheck, Coins, Flame, Medal, Star, Target, Trophy } from "lucide-react";
 import type { StudentAchievementItem } from "@/types/api";
 
 const icons: Record<string, typeof Trophy> = {
@@ -8,6 +8,16 @@ const icons: Record<string, typeof Trophy> = {
   points_100: Star,
   first_module: Award,
   lessons_10: Flame,
+  offline_lesson_1: Medal,
+  offline_lessons_10: Flame,
+  offline_lessons_25: Trophy,
+  points_300: Star,
+  points_500: Trophy,
+  homework_3: BookCheck,
+  homework_10: BookCheck,
+  monthly_plan_1: Target,
+  coins_25: Coins,
+  coins_100: Coins,
 };
 
 function AchievementIcon({ code, earned }: { code: string; earned: boolean }) {

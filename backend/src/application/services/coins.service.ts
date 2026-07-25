@@ -25,6 +25,7 @@ export async function addMaestroCoins(params: {
   reason: string;
   sourceType: MaestroCoinSourceType;
   sourceId?: string | null;
+  sourceKey?: string;
   createdBy: string;
 }) {
   if (params.amount <= 0) {
@@ -36,37 +37,63 @@ export async function addMaestroCoins(params: {
     throw new BadRequestError("Укажите причину начисления Maestro Coins");
   }
 
-  const result = await prisma.$transaction(async (tx) => {
-    const balanceRow = await tx.studentCoinBalance.upsert({
-      where: { studentId: params.studentId },
-      create: { studentId: params.studentId, balance: 0 },
-      update: {},
+  if (params.sourceKey) {
+    const existing = await prisma.maestroCoinTransaction.findUnique({
+      where: { sourceKey: params.sourceKey },
+      select: { balanceAfter: true },
     });
+    if (existing) {
+      return { awarded: false as const, balance: existing.balanceAfter };
+    }
+  }
 
-    const balanceBefore = balanceRow.balance;
-    const balanceAfter = balanceBefore + params.amount;
+  let result: { awarded: true; balance: number };
+  try {
+    result = await prisma.$transaction(async (tx) => {
+      const balanceRow = await tx.studentCoinBalance.upsert({
+        where: { studentId: params.studentId },
+        create: { studentId: params.studentId, balance: 0 },
+        update: {},
+      });
 
-    await tx.maestroCoinTransaction.create({
-      data: {
-        studentId: params.studentId,
-        amount: params.amount,
-        transactionType: "earn",
-        reason,
-        sourceType: params.sourceType,
-        sourceId: params.sourceId ?? null,
-        createdById: params.createdBy,
-        balanceBefore,
-        balanceAfter,
-      },
+      const balanceBefore = balanceRow.balance;
+      const balanceAfter = balanceBefore + params.amount;
+
+      await tx.maestroCoinTransaction.create({
+        data: {
+          studentId: params.studentId,
+          amount: params.amount,
+          transactionType: "earn",
+          reason,
+          sourceType: params.sourceType,
+          sourceId: params.sourceId ?? null,
+          sourceKey: params.sourceKey ?? null,
+          createdById: params.createdBy,
+          balanceBefore,
+          balanceAfter,
+        },
+      });
+
+      await tx.studentCoinBalance.update({
+        where: { studentId: params.studentId },
+        data: { balance: balanceAfter },
+      });
+
+      return { awarded: true as const, balance: balanceAfter };
     });
-
-    await tx.studentCoinBalance.update({
-      where: { studentId: params.studentId },
-      data: { balance: balanceAfter },
-    });
-
-    return { awarded: true as const, balance: balanceAfter };
-  });
+  } catch (error) {
+    if (params.sourceKey && error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      const existing = await prisma.maestroCoinTransaction.findUnique({
+        where: { sourceKey: params.sourceKey },
+        select: { balanceAfter: true },
+      });
+      return {
+        awarded: false as const,
+        balance: existing?.balanceAfter ?? await getStudentCoins(params.studentId),
+      };
+    }
+    throw error;
+  }
 
   await deliverUserNotification({
     userId: params.studentId,
@@ -74,7 +101,7 @@ export async function addMaestroCoins(params: {
     title: `Начислено Maestro Coins: +${params.amount}`,
     body: `${reason}. Баланс: ${result.balance}.`,
     url: "/dashboard",
-    tag: `coins-${params.sourceId ?? "manual"}-${params.studentId}`,
+    tag: `coins-${params.sourceKey ?? params.sourceId ?? "manual"}-${params.studentId}`,
     dedupeWindowMs: 2 * 60 * 1000,
   }).catch(() => undefined);
 

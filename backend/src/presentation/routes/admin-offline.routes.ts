@@ -91,6 +91,9 @@ export async function adminOfflineRoutes(app: FastifyInstance) {
           body.attendanceStatus,
           body.teacherNote,
           body.homeworkReview,
+          body.lessonPoints,
+          body.monthlyPlanId,
+          body.planTopicUpdates,
         ),
       };
     },
@@ -147,7 +150,7 @@ export async function adminOfflineRoutes(app: FastifyInstance) {
           mimeType: z.string().max(255).nullable().optional(),
         })).optional(),
       }).parse(request.body ?? {});
-      return { data: await adminOfflineApprove(crmClassId, body) };
+      return { data: await adminOfflineApprove(request.user!.id, crmClassId, body) };
     },
   );
 

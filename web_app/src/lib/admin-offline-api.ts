@@ -61,10 +61,24 @@ export const adminOfflineApi = {
     attendanceStatus: string,
     teacherNote?: string,
     homeworkReview?: OfflineHomeworkReview,
+    learning?: {
+      lessonPoints?: number;
+      monthlyPlanId?: string | null;
+      planTopicUpdates?: Array<{ itemId: string; status: "in_progress" | "completed" }>;
+    },
   ) =>
     apiRequest<Record<string, unknown>>(
       `/admin/offline-lessons/${encodeURIComponent(crmClassId)}/attendance`,
-      { method: "POST", body: JSON.stringify({ studentId, attendanceStatus, teacherNote, homeworkReview }) },
+      {
+        method: "POST",
+        body: JSON.stringify({
+          studentId,
+          attendanceStatus,
+          teacherNote,
+          homeworkReview,
+          ...learning,
+        }),
+      },
     ),
   approve: (
     crmClassId: string,

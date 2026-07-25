@@ -12,6 +12,8 @@ import {
   RotateCcw,
   Send,
   ShieldCheck,
+  Star,
+  Target,
   UserX,
   XCircle,
 } from "lucide-react";
@@ -168,6 +170,9 @@ type StudentLessonCheckDraft = {
   attendanceStatus: TeacherOfflineStudent["attendanceStatus"];
   teacherNote: string;
   homeworkReview: OfflineHomeworkReview;
+  lessonPoints: number;
+  monthlyPlanId: string | null;
+  planTopicUpdates: Array<{ itemId: string; status: "in_progress" | "completed" }>;
 };
 
 function studentLessonCheckDraft(student: TeacherOfflineStudent): StudentLessonCheckDraft {
@@ -175,6 +180,9 @@ function studentLessonCheckDraft(student: TeacherOfflineStudent): StudentLessonC
     attendanceStatus: student.attendanceStatus ?? "unmarked",
     teacherNote: student.teacherNote ?? "",
     homeworkReview: normalizeHomeworkReview(student.homeworkReview),
+    lessonPoints: student.lessonPoints ?? 0,
+    monthlyPlanId: student.monthlyPlan?.id ?? student.monthlyPlanId ?? null,
+    planTopicUpdates: student.planTopicUpdates ?? [],
   };
 }
 
@@ -495,6 +503,9 @@ export default function AdminOfflineLessonDetailPage() {
           attendanceStatus: draft.attendanceStatus,
           teacherNote: draft.teacherNote.trim() || undefined,
           homeworkReview: isIndividualLesson && attended ? draft.homeworkReview : undefined,
+          lessonPoints: attended ? draft.lessonPoints : 0,
+          monthlyPlanId: attended ? draft.monthlyPlanId : null,
+          planTopicUpdates: attended ? draft.planTopicUpdates : [],
         };
       });
       if (showProgress) {
@@ -526,6 +537,11 @@ export default function AdminOfflineLessonDetailPage() {
             draft.attendanceStatus,
             draft.teacherNote.trim() || undefined,
             homeworkReview,
+            {
+              lessonPoints: attended ? draft.lessonPoints : 0,
+              monthlyPlanId: attended ? draft.monthlyPlanId : null,
+              planTopicUpdates: attended ? draft.planTopicUpdates : [],
+            },
           );
 
       if (showProgress) {
@@ -751,6 +767,7 @@ export default function AdminOfflineLessonDetailPage() {
           canManageAttendance={canManageAttendance}
           canEdit={canEditReport}
           showHomeworkReview={isIndividualLesson}
+          showLearningResult={!isTrialLesson}
           drafts={studentCheckDrafts}
           studentsError={studentsResource.error}
           onRetryStudents={studentsResource.reload}
@@ -1596,6 +1613,7 @@ function StudentRoster({
   canManageAttendance,
   canEdit,
   showHomeworkReview,
+  showLearningResult,
   drafts,
   studentsError,
   onRetryStudents,
@@ -1605,6 +1623,7 @@ function StudentRoster({
   canManageAttendance: boolean;
   canEdit: boolean;
   showHomeworkReview: boolean;
+  showLearningResult: boolean;
   drafts: Record<string, StudentLessonCheckDraft>;
   studentsError: string | null;
   onRetryStudents: () => void;
@@ -1617,13 +1636,13 @@ function StudentRoster({
           <CheckCircle2 size={20} />
         </span>
         <div className="min-w-0">
-          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-700">В начале урока</p>
-          <h2 className="font-display mt-1 text-3xl">Посещаемость и прошлое ДЗ</h2>
+          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-700">По каждому ученику</p>
+          <h2 className="font-display mt-1 text-3xl">Посещаемость и результат</h2>
         </div>
       </div>
       <p className="mt-2 text-sm text-stone-500">
         {canManageAttendance
-          ? "Сначала зафиксируйте присутствие. Для индивидуального урока также отметьте выполнение домашнего задания."
+          ? "В начале отметьте присутствие и прошлое ДЗ. В конце — темы плана и учебные баллы."
           : "Отметки доступны во время урока и сохраняются в его истории."}
       </p>
 
@@ -1646,6 +1665,7 @@ function StudentRoster({
               student={student}
               canEdit={canEdit && canManageAttendance}
               showHomeworkReview={showHomeworkReview}
+              showLearningResult={showLearningResult}
               draft={drafts[student.crmStudentId] ?? studentLessonCheckDraft(student)}
               onChange={(draft) => onDraftChange(student.crmStudentId, draft)}
             />
@@ -1683,20 +1703,33 @@ function StudentLessonCheckCard({
   student,
   canEdit,
   showHomeworkReview,
+  showLearningResult,
   draft,
   onChange,
 }: {
   student: TeacherOfflineStudent;
   canEdit: boolean;
   showHomeworkReview: boolean;
+  showLearningResult: boolean;
   draft: StudentLessonCheckDraft;
   onChange: (draft: StudentLessonCheckDraft) => void;
 }) {
-  const { attendanceStatus, teacherNote, homeworkReview } = draft;
+  const { attendanceStatus, teacherNote, homeworkReview, lessonPoints, planTopicUpdates } = draft;
   const attended = ["present", "late"].includes(attendanceStatus);
   const homeworkNeedsReason = homeworkReview.status === "not_completed";
   const homeworkNeedsDifficulties = homeworkReview.status === "partial";
   const disabled = !canEdit;
+  const planItems = (student.monthlyPlan?.items ?? []).filter((item) => item.status !== "moved");
+
+  function choosePlanTopicStatus(itemId: string, status: "in_progress" | "completed") {
+    const selected = planTopicUpdates.find((item) => item.itemId === itemId);
+    const next = planTopicUpdates.filter((item) => item.itemId !== itemId);
+    onChange({
+      ...draft,
+      monthlyPlanId: student.monthlyPlan?.id ?? draft.monthlyPlanId,
+      planTopicUpdates: selected?.status === status ? next : [...next, { itemId, status }],
+    });
+  }
 
   function chooseHomeworkStatus(status: OfflineHomeworkReview["status"]) {
     onChange({
@@ -1858,6 +1891,108 @@ function StudentLessonCheckCard({
               />
             </label>
           ) : null}
+        </fieldset>
+      ) : null}
+
+      {showLearningResult && attended ? (
+        <fieldset className="mt-5 border-t border-stone-100 pt-5">
+          <legend className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.14em] text-violet-700">
+            <Target size={15} />
+            Результат урока
+          </legend>
+          <p className="mt-2 text-sm text-stone-500">
+            Отметьте темы, которые продвинулись сегодня, и сами определите учебные баллы ученику.
+          </p>
+
+          <label className="mt-4 block rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
+            <span className="flex items-center gap-2 text-sm font-bold text-amber-950">
+              <Star size={17} className="text-gold" />
+              Учебные баллы за урок
+            </span>
+            <span className="mt-1 block text-xs leading-5 text-amber-900/70">
+              От 0 до 100. Количество выбирает преподаватель по работе ученика на занятии.
+            </span>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step={1}
+              inputMode="numeric"
+              value={lessonPoints}
+              disabled={disabled}
+              onChange={(event) => onChange({
+                ...draft,
+                lessonPoints: Math.max(0, Math.min(100, Number(event.target.value) || 0)),
+              })}
+              className="mt-3 h-12 w-32 rounded-xl border border-amber-200 bg-white px-4 text-lg font-black text-ink"
+              aria-label={`Учебные баллы для ${student.name}`}
+            />
+          </label>
+
+          {student.monthlyPlan ? (
+            <div className="mt-4 rounded-2xl border border-violet-100 bg-violet-50/50 p-4">
+              <p className="text-xs font-bold uppercase tracking-wider text-violet-700">
+                Темы плана · {student.monthlyPlan.month}
+              </p>
+              {student.monthlyPlan.goal ? (
+                <p className="mt-2 text-sm font-semibold text-violet-950">{student.monthlyPlan.goal}</p>
+              ) : null}
+              {planItems.length ? (
+                <div className="mt-4 space-y-3">
+                  {planItems.map((item) => {
+                    const selectedStatus = planTopicUpdates.find((update) => update.itemId === item.id)?.status;
+                    if (item.status === "completed" && !selectedStatus) {
+                      return (
+                        <div key={item.id} className="flex items-center justify-between gap-3 rounded-xl border border-emerald-100 bg-white px-3 py-3">
+                          <span className="text-sm font-semibold text-stone-600">{item.title}</span>
+                          <span className="shrink-0 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold uppercase text-emerald-700">
+                            Уже освоено
+                          </span>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div key={item.id} className="rounded-xl border border-violet-100 bg-white p-3">
+                        <p className="text-sm font-semibold text-stone-700">{item.title}</p>
+                        <div className="mt-3 grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            disabled={disabled}
+                            onClick={() => choosePlanTopicStatus(item.id, "in_progress")}
+                            className={`min-h-10 rounded-xl border px-2 text-xs font-bold transition disabled:opacity-60 ${
+                              selectedStatus === "in_progress"
+                                ? "border-amber-400 bg-amber-50 text-amber-900"
+                                : "border-stone-200 text-stone-500"
+                            }`}
+                          >
+                            Ещё в работе
+                          </button>
+                          <button
+                            type="button"
+                            disabled={disabled}
+                            onClick={() => choosePlanTopicStatus(item.id, "completed")}
+                            className={`min-h-10 rounded-xl border px-2 text-xs font-bold transition disabled:opacity-60 ${
+                              selectedStatus === "completed"
+                                ? "border-emerald-500 bg-emerald-50 text-emerald-800"
+                                : "border-stone-200 text-stone-500"
+                            }`}
+                          >
+                            Освоено
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="mt-3 text-sm text-stone-500">В плане пока нет тем.</p>
+              )}
+            </div>
+          ) : (
+            <p className="mt-4 rounded-xl border border-stone-200 bg-stone-50 px-3 py-3 text-xs leading-5 text-stone-500">
+              Месячный план ещё не составлен. Темы можно добавить в карточке ученика.
+            </p>
+          )}
         </fieldset>
       ) : null}
 

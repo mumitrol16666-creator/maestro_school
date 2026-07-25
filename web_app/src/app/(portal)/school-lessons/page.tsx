@@ -12,6 +12,7 @@ import {
   MapPin,
   RefreshCw,
   Sparkles,
+  Target,
   UserRound,
   WalletCards,
   XCircle,
@@ -29,7 +30,7 @@ import {
   markSchoolAlertsSeen,
   type SchoolAlertCounts,
 } from "@/lib/student-school-alerts";
-import type { SchoolOfflineLesson } from "@/types/school-offline";
+import type { SchoolOfflineLesson, StudentOfflineSummary } from "@/types/school-offline";
 
 /* ─── label maps ────────────────────────────────────────────────────── */
 
@@ -223,6 +224,31 @@ function LessonCard({
             </div>
           )}
 
+          {lesson.status === "completed" && ((lesson.lessonPoints ?? 0) > 0 || (lesson.planTopicResults?.length ?? 0) > 0) ? (
+            <div className="rounded-2xl border border-violet-100 bg-violet-50/60 p-4">
+              <p className="text-xs font-bold uppercase tracking-wider text-violet-700">Учебный результат</p>
+              {(lesson.lessonPoints ?? 0) > 0 ? (
+                <p className="mt-2 text-sm font-bold text-violet-950">+{lesson.lessonPoints} учебных баллов</p>
+              ) : null}
+              {lesson.planTopicResults?.length ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {lesson.planTopicResults.map((item) => (
+                    <span
+                      key={item.itemId}
+                      className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
+                        item.status === "completed"
+                          ? "bg-emerald-100 text-emerald-800"
+                          : "bg-amber-100 text-amber-900"
+                      }`}
+                    >
+                      {item.title} · {item.status === "completed" ? "освоено" : "в работе"}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
           {lesson.homework ? (
             <div className="rounded-2xl border border-amber-100 bg-amber-50/60 p-4">
               <p className="text-xs font-bold uppercase tracking-wider text-amber-800">Домашнее задание</p>
@@ -358,6 +384,80 @@ function ProgressTimeline({ lessons }: { lessons: SchoolOfflineLesson[] }) {
           })}
         </div>
       </div>
+    </section>
+  );
+}
+
+function MonthlyPlanProgress({
+  plan,
+}: {
+  plan: NonNullable<StudentOfflineSummary["monthlyPlan"]>;
+}) {
+  const activeItems = plan.items.filter((item) => item.status !== "moved");
+  const total = Math.max(activeItems.length, 1);
+  const completedWidth = (plan.completedCount / total) * 100;
+  const inProgressWidth = (plan.inProgressCount / total) * 100;
+  const monthLabel = new Intl.DateTimeFormat("ru-RU", {
+    month: "long",
+    year: "numeric",
+  }).format(new Date(`${plan.month}-01T12:00:00`));
+  const statusLabel = {
+    planned: "Впереди",
+    in_progress: "В работе",
+    completed: "Освоено",
+    moved: "Перенесено",
+  } as const;
+
+  return (
+    <section className="mb-8 rounded-[28px] border border-violet-100 bg-gradient-to-br from-violet-50 via-white to-amber-50/40 p-6 shadow-soft sm:p-8">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-violet-700">
+            <Target size={17} />
+            Учебный план · {monthLabel}
+          </p>
+          <h2 className="font-display mt-3 text-3xl">{plan.goal || "Цель месяца"}</h2>
+          {plan.expectedResult ? (
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">{plan.expectedResult}</p>
+          ) : null}
+        </div>
+        <div className="rounded-2xl bg-white px-5 py-3 text-right shadow-sm ring-1 ring-violet-100">
+          <p className="font-display text-3xl text-violet-800">{plan.progressPercent}%</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-stone-400">освоено</p>
+        </div>
+      </div>
+
+      <div className="mt-6 h-3 overflow-hidden rounded-full bg-stone-200">
+        <div className="flex h-full w-full">
+          <div className="bg-emerald-500 transition-all" style={{ width: `${completedWidth}%` }} />
+          <div className="bg-amber-400 transition-all" style={{ width: `${inProgressWidth}%` }} />
+        </div>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs font-semibold text-stone-600">
+        <span><b className="text-emerald-700">{plan.completedCount}</b> освоено</span>
+        <span><b className="text-amber-700">{plan.inProgressCount}</b> в работе</span>
+        <span><b>{plan.plannedCount}</b> впереди</span>
+        {plan.teacherName ? <span className="text-stone-400">План: {plan.teacherName}</span> : null}
+      </div>
+
+      {activeItems.length ? (
+        <div className="mt-6 grid gap-2 sm:grid-cols-2">
+          {activeItems.map((item) => (
+            <div key={item.id} className="flex items-center justify-between gap-3 rounded-2xl border border-white bg-white/80 px-4 py-3">
+              <span className="text-sm font-semibold text-stone-700">{item.title}</span>
+              <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase ${
+                item.status === "completed"
+                  ? "bg-emerald-50 text-emerald-700"
+                  : item.status === "in_progress"
+                    ? "bg-amber-50 text-amber-800"
+                    : "bg-stone-100 text-stone-500"
+              }`}>
+                {statusLabel[item.status]}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -594,7 +694,7 @@ export default function SchoolLessonsPage() {
       lesson.status === "completed" && lesson.date.slice(0, 7) === reportMonth,
     );
     const rows = [
-      ["Дата", "Урок", "Преподаватель", "Тема", "Цели", "Что сделали", "Что доработать", "Домашнее задание"],
+      ["Дата", "Урок", "Преподаватель", "Тема", "Цели", "Что сделали", "Что доработать", "Домашнее задание", "Учебные баллы", "Темы плана"],
       ...lessons.map((lesson) => [
         formatLessonDate(lesson.date),
         lesson.title,
@@ -604,6 +704,10 @@ export default function SchoolLessonsPage() {
         lesson.lessonSummary || "",
         lesson.nextLessonFocus || "",
         lesson.homework || "",
+        lesson.lessonPoints ?? 0,
+        (lesson.planTopicResults ?? [])
+          .map((item) => `${item.title} — ${item.status === "completed" ? "освоено" : "в работе"}`)
+          .join(", "),
       ]),
     ];
     const csv = rows
@@ -684,6 +788,8 @@ export default function SchoolLessonsPage() {
               </div>
             )}
           </section>
+
+          {data.monthlyPlan ? <MonthlyPlanProgress plan={data.monthlyPlan} /> : null}
 
           {/* progress timeline */}
           <ProgressTimeline lessons={lessonHistory} />

@@ -18,6 +18,12 @@ import {
   type OfflineHomeworkReviewInput,
 } from "./offline-lesson-student-check.service.js";
 import { validateOfflineLessonSubmission } from "./offline-lesson-submission-policy.js";
+import { aqtobeMonthKey } from "../../lib/aqtobe-month.js";
+
+function lessonMonth(lesson: Record<string, unknown>) {
+  const date = typeof lesson.date === "string" ? new Date(lesson.date) : null;
+  return date && !Number.isNaN(date.getTime()) ? aqtobeMonthKey(date) : aqtobeMonthKey();
+}
 
 async function requireCrmTeacherId(appUserId: string) {
   const user = await prisma.user.findFirst({
@@ -112,9 +118,12 @@ export async function getTeacherOfflineClass(appUserId: string, crmClassId: stri
 }
 
 export async function getTeacherOfflineClassStudents(appUserId: string, crmClassId: string) {
-  await getTeacherOfflineClass(appUserId, crmClassId);
+  const lesson = await getTeacherOfflineClass(appUserId, crmClassId) as Record<string, unknown>;
   const roster = await fetchClassStudents(crmClassId);
-  return mergeOfflineLessonStudentChecks(crmClassId, roster);
+  return mergeOfflineLessonStudentChecks(crmClassId, roster, {
+    teacherUserId: appUserId,
+    month: lessonMonth(lesson),
+  });
 }
 
 export async function teacherOfflineStart(appUserId: string, crmClassId: string) {
@@ -176,6 +185,9 @@ export async function teacherOfflineSetAttendance(
   attendanceStatus: string,
   teacherNote?: string,
   homeworkReview?: OfflineHomeworkReviewInput,
+  lessonPoints?: number,
+  monthlyPlanId?: string | null,
+  planTopicUpdates?: Array<{ itemId: string; status: "in_progress" | "completed" }>,
 ) {
   await getTeacherOfflineClass(appUserId, crmClassId);
   const crmTeacherId = await requireCrmTeacherId(appUserId);
@@ -194,6 +206,9 @@ export async function teacherOfflineSetAttendance(
     attendanceStatus,
     teacherNote,
     homeworkReview,
+    lessonPoints,
+    monthlyPlanId,
+    planTopicUpdates,
   });
   return { crmResult, lessonCheck };
 }
@@ -206,6 +221,9 @@ export async function teacherOfflineSetAttendanceBatch(
     attendanceStatus: string;
     teacherNote?: string;
     homeworkReview?: OfflineHomeworkReviewInput;
+    lessonPoints?: number;
+    monthlyPlanId?: string | null;
+    planTopicUpdates?: Array<{ itemId: string; status: "in_progress" | "completed" }>;
   }>,
 ) {
   const lesson = await getTeacherOfflineClass(appUserId, crmClassId);
@@ -228,6 +246,9 @@ export async function teacherOfflineSetAttendanceBatch(
       attendanceStatus: check.attendanceStatus,
       teacherNote: check.teacherNote,
       homeworkReview: check.homeworkReview,
+      lessonPoints: check.lessonPoints,
+      monthlyPlanId: check.monthlyPlanId,
+      planTopicUpdates: check.planTopicUpdates,
     });
     results.push({ studentId: check.studentId, crmResult, lessonCheck });
   }
