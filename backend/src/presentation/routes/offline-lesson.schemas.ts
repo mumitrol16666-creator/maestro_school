@@ -9,7 +9,6 @@ export const offlineLessonStudentCheckSchema = z.object({
     "late",
     "excused_absence",
     "unexcused_absence",
-    "emergency_freeze",
   ]),
   teacherNote: z.string().max(3000).optional(),
   homeworkReview: z.object({

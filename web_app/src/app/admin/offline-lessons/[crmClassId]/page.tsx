@@ -12,7 +12,6 @@ import {
   RotateCcw,
   Send,
   ShieldCheck,
-  Snowflake,
   UserX,
   XCircle,
 } from "lucide-react";
@@ -1662,7 +1661,6 @@ const attendanceOptions = [
   { value: "late", label: "Опоздал", icon: Clock3, active: "border-amber-500 bg-amber-50 text-amber-900" },
   { value: "excused_absence", label: "Нет, причина есть", icon: UserX, active: "border-sky-500 bg-sky-50 text-sky-900" },
   { value: "unexcused_absence", label: "Нет без причины", icon: CircleSlash2, active: "border-red-500 bg-red-50 text-red-800" },
-  { value: "emergency_freeze", label: "Экстренная заморозка", icon: Snowflake, active: "border-violet-500 bg-violet-50 text-violet-900" },
 ] as const;
 
 const homeworkOptions = [
