@@ -7,6 +7,14 @@ export interface PreparedTestQuestion {
   id: string;
   prompt: string;
   options: PreparedTestOption[];
+  correctOptionId?: string;
+}
+
+export interface PreparedTestReviewItem {
+  questionId: string;
+  prompt: string;
+  selectedOptionText: string | null;
+  correctOptionText: string | null;
 }
 
 export interface PreparedTestProgressItem {
@@ -14,13 +22,18 @@ export interface PreparedTestProgressItem {
   title: string;
   description: string;
   order: number;
+  section: string;
   questionCount: number;
   passingScore: number;
+  maxAttempts: number;
   locked: boolean;
   available: boolean;
+  exhausted: boolean;
   passed: boolean;
-  score: number | null;
-  attempts: number;
+  bestScore: number | null;
+  latestScore: number | null;
+  attemptsUsed: number;
+  attemptsRemaining: number;
   lastAttemptAt: string | null;
 }
 
@@ -28,6 +41,7 @@ export interface PreparedTestsResponse {
   tests: PreparedTestProgressItem[];
   total: number;
   completedCount: number;
+  totalRewardPoints: number;
 }
 
 export interface PreparedTestDetail {
@@ -38,8 +52,21 @@ export interface PreparedTestDetail {
   totalTests: number;
   questionCount: number;
   passingScore: number;
+  maxAttempts: number;
+  rewardPoints: number;
   questions: PreparedTestQuestion[];
   passed: boolean;
+  exhausted: boolean;
+  bestScore: number | null;
+  attemptsUsed: number;
+  attemptsRemaining: number;
+  nextTest: { id: string; title: string } | null;
+  draft: {
+    answers: Record<string, string>;
+    currentQuestion: number;
+    startedAt: string;
+    updatedAt: string;
+  } | null;
   latestAttempt: {
     score: number;
     correctAnswers: number;
@@ -47,6 +74,7 @@ export interface PreparedTestDetail {
     passed: boolean;
     attemptNumber: number;
     createdAt: string;
+    review: PreparedTestReviewItem[];
   } | null;
 }
 
@@ -59,6 +87,52 @@ export interface PreparedTestAttemptResponse {
   totalQuestions: number;
   passed: boolean;
   passingScore: number;
+  attemptsRemaining: number;
+  rewardPointsAwarded: number;
+  review: PreparedTestReviewItem[];
+  topicsToRepeat: string[];
   nextTest: { id: string; title: string } | null;
   createdAt: string;
+}
+
+export interface PreparedTestsAnalytics {
+  summary: {
+    totalTests: number;
+    uniqueStudents: number;
+    startedStudentTests: number;
+    completedStudentTests: number;
+    attemptCount: number;
+    averageScore: number | null;
+  };
+  tests: Array<{
+    id: string;
+    order: number;
+    title: string;
+    description: string;
+    questionCount: number;
+    startedStudents: number;
+    passedStudents: number;
+    attemptCount: number;
+    averageScore: number | null;
+    passRate: number;
+    questionStats: Array<{
+      questionId: string;
+      prompt: string;
+      answeredCount: number;
+      incorrectCount: number;
+      incorrectRate: number;
+    }>;
+  }>;
+}
+
+export interface PreparedTestAdminPreview {
+  id: string;
+  title: string;
+  description: string;
+  order: number;
+  totalTests: number;
+  passingScore: number;
+  maxAttempts: number;
+  rewardPoints: number;
+  questions: Required<PreparedTestQuestion>[];
 }

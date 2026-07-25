@@ -30,8 +30,8 @@ const navigation = [
 const studentMobileNavigation = [
   { href: "/dashboard", label: "Главная", icon: House },
   { href: "/courses", label: "Курсы", icon: BookMarked },
-  { href: "/school-lessons", label: "Школа", icon: School },
   { href: "/tests", label: "Тесты", icon: ClipboardCheck },
+  { href: "/school-lessons", label: "Школа", icon: School },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -46,12 +46,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { count: onlineUnread } = useUnreadNotifications(60_000, "online_lesson_scheduled");
   const { count: unreadMessages, hasAccess: hasMessageAccess } = useMessageMailboxStatus(student);
   const { counts: schoolAlerts } = useStudentSchoolAlerts(student ? user?.id : undefined);
-  const mobileNavigation = [
-    ...studentMobileNavigation,
-    hasMessageAccess
-      ? { href: "/messages", label: "Сообщения", icon: MessagesSquare }
-      : { href: "/online-lessons", label: "Онлайн", icon: MonitorPlay },
-  ];
+  const mobileNavigation = studentMobileNavigation;
 
   const sidebar = (
     <aside className="flex h-full flex-col overflow-y-auto border-r border-white/10 bg-[#151613] px-4 py-5 text-white sm:px-5 sm:py-6">

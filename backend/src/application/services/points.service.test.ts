@@ -24,4 +24,9 @@ describe("points vs coins separation", () => {
     assert.equal(typeof coins.addMaestroCoins, "function");
     assert.notEqual(points.awardLessonPoints, coins.addMaestroCoins);
   });
+
+  it("exports a dedicated idempotent system award entry point", async () => {
+    const { awardSystemPoints } = await import("./points.service.js");
+    assert.equal(typeof awardSystemPoints, "function");
+  });
 });

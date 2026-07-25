@@ -19,8 +19,10 @@ import type {
 } from "@/types/api";
 import type { StudentOfflineSummary } from "@/types/school-offline";
 import type {
+  PreparedTestAdminPreview,
   PreparedTestAttemptResponse,
   PreparedTestDetail,
+  PreparedTestsAnalytics,
   PreparedTestsResponse,
 } from "@/types/prepared-tests";
 
@@ -208,10 +210,24 @@ export const api = {
   news: () => apiRequest<ApiNewsPost[]>("/news"),
   studentOfflineSummary: () => apiRequest<StudentOfflineSummary>("/students/me/offline-summary"),
   preparedTests: () => apiRequest<PreparedTestsResponse>("/tests"),
-  preparedTest: (testId: string) => apiRequest<PreparedTestDetail>(`/tests/${encodeURIComponent(testId)}`),
+  preparedTest: (testId: string) =>
+    apiRequest<PreparedTestDetail>(`/tests/${encodeURIComponent(testId)}`),
+  savePreparedTestDraft: (
+    testId: string,
+    answers: Record<string, string>,
+    currentQuestion: number,
+  ) =>
+    apiRequest<{ saved: boolean; updatedAt: string }>(`/tests/${encodeURIComponent(testId)}/draft`, {
+      method: "PUT",
+      body: JSON.stringify({ answers, currentQuestion }),
+    }),
   submitPreparedTest: (testId: string, answers: Record<string, string>) =>
     apiRequest<PreparedTestAttemptResponse>(`/tests/${encodeURIComponent(testId)}/attempts`, {
       method: "POST",
       body: JSON.stringify({ answers }),
     }),
+  preparedTestsAnalytics: () =>
+    apiRequest<PreparedTestsAnalytics>("/admin/tests/analytics"),
+  preparedTestAdminPreview: (testId: string) =>
+    apiRequest<PreparedTestAdminPreview>(`/admin/tests/${encodeURIComponent(testId)}/preview`),
 };

@@ -308,6 +308,7 @@ model User {
   messageConversationsAsTeacher TeacherConversation[] @relation("TeacherConversationTeacher")
   directMessages              TeacherMessage[] @relation("TeacherMessageSender")
   preparedTestAttempts        PreparedTestAttempt[] @relation("PreparedTestStudent")
+  preparedTestDrafts          PreparedTestDraft[] @relation("PreparedTestDraftStudent")
 
   @@index([roleId])
   @@index([email])
@@ -321,22 +322,40 @@ model User {
 }
 
 model PreparedTestAttempt {
-  id            String   @id @default(uuid()) @db.Uuid
-  testId        String   @map("test_id") @db.VarChar(128)
-  studentId     String   @map("student_id") @db.Uuid
-  attemptNumber Int      @map("attempt_number")
-  score         Int
-  correctAnswers Int     @map("correct_answers")
-  totalQuestions Int     @map("total_questions")
-  passed        Boolean
-  answers       Json     @db.JsonB
-  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  id               String   @id @default(uuid()) @db.Uuid
+  testId           String   @map("test_id") @db.VarChar(128)
+  studentId        String   @map("student_id") @db.Uuid
+  attemptNumber    Int      @map("attempt_number")
+  score            Int
+  correctAnswers   Int      @map("correct_answers")
+  totalQuestions   Int      @map("total_questions")
+  passed           Boolean
+  answers          Json     @db.JsonB
+  durationSeconds  Int?     @map("duration_seconds")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   student User @relation("PreparedTestStudent", fields: [studentId], references: [id], onDelete: Cascade)
 
   @@unique([studentId, testId, attemptNumber])
   @@index([studentId, testId, createdAt])
+  @@index([testId, createdAt])
   @@map("prepared_test_attempts")
+}
+
+model PreparedTestDraft {
+  id              String   @id @default(uuid()) @db.Uuid
+  testId          String   @map("test_id") @db.VarChar(128)
+  studentId       String   @map("student_id") @db.Uuid
+  answers         Json     @db.JsonB
+  currentQuestion Int      @default(0) @map("current_question")
+  startedAt       DateTime @default(now()) @map("started_at") @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  student User @relation("PreparedTestDraftStudent", fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, testId])
+  @@index([studentId, updatedAt])
+  @@map("prepared_test_drafts")
 }
 
 model OfflineLessonStudentCheck {
@@ -636,6 +655,7 @@ model PointsTransaction {
   studentId  String   @map("student_id") @db.Uuid
   amount     Int
   reason     String   @db.VarChar(512)
+  sourceKey  String?  @unique @map("source_key") @db.VarChar(191)
   lessonId   String?  @map("lesson_id") @db.Uuid
   awardedBy  String?  @map("awarded_by") @db.Uuid
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)

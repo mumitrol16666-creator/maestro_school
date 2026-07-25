@@ -148,6 +148,45 @@ export async function awardManualPoints(params: {
   return { awarded: true, transactionId: tx.id };
 }
 
+/** Awards points from an automated product action exactly once per source key. */
+export async function awardSystemPoints(params: {
+  studentId: string;
+  amount: number;
+  reason: string;
+  sourceKey: string;
+}): Promise<{ awarded: boolean; transactionId?: string }> {
+  if (params.amount <= 0) {
+    return { awarded: false };
+  }
+
+  const existing = await prisma.pointsTransaction.findUnique({
+    where: { sourceKey: params.sourceKey },
+  });
+  if (existing) {
+    return { awarded: false, transactionId: existing.id };
+  }
+
+  const tx = await prisma.pointsTransaction.create({
+    data: {
+      studentId: params.studentId,
+      amount: params.amount,
+      reason: params.reason,
+      sourceKey: params.sourceKey,
+      lessonId: null,
+      awardedBy: null,
+    },
+  });
+
+  await notifyPointsAwarded({
+    studentId: params.studentId,
+    amount: params.amount,
+    reason: params.reason,
+    sourceId: params.sourceKey,
+  });
+
+  return { awarded: true, transactionId: tx.id };
+}
+
 export async function assertLessonPointsNotAwarded(
   studentId: string,
   lessonId: string,
