@@ -146,6 +146,45 @@ export async function fetchTeacherStudents(crmTeacherId: string) {
   }>(`/api/integration/v1/teachers/${encodeURIComponent(crmTeacherId)}/students`);
 }
 
+export async function fetchTeacherGroups(crmTeacherId: string) {
+  return crmGet<{
+    crmTeacherId: string;
+    teacher: { crmTeacherId: string; name: string; directions: string[] } | null;
+    groups: Array<{
+      crmGroupId: string;
+      name: string;
+      direction: string;
+      level: string;
+      color: string | null;
+      description: string | null;
+      maxStudents: number;
+      schedules: Array<{
+        id: string;
+        dayOfWeek: number;
+        time: string;
+        duration: number;
+        room: {
+          crmRoomId: string;
+          name: string;
+        } | null;
+      }>;
+      students: Array<{
+        crmStudentId: string;
+        appUserId: string | null;
+        name: string;
+        firstName: string;
+        lastName: string;
+        middleName: string;
+        phone: string;
+        avatarUrl: string | null;
+        learningLevel: string | null;
+        directions: string[];
+        assignedDirectly: boolean;
+      }>;
+    }>;
+  }>(`/api/integration/v1/teachers/${encodeURIComponent(crmTeacherId)}/groups`);
+}
+
 export async function fetchStudentTeachers(crmStudentId: string) {
   return crmGet<{
     crmStudentId: string;

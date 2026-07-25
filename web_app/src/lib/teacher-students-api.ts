@@ -1,7 +1,10 @@
 import { apiRequest } from "@/lib/api-client";
 import type {
+  GroupMonthlyPlan,
+  GroupMonthlyPlanResponse,
   StudentMonthlyPlan,
   StudentMonthlyPlanResponse,
+  TeacherGroupsResponse,
   TeacherStudentsResponse,
 } from "@/types/teacher-students";
 
@@ -14,6 +17,16 @@ export const teacherStudentsApi = {
   saveMonthlyPlan: (crmStudentId: string, plan: StudentMonthlyPlan) =>
     apiRequest<StudentMonthlyPlan>(
       `/teachers/me/students/${encodeURIComponent(crmStudentId)}/monthly-plan`,
+      { method: "PUT", body: JSON.stringify(plan) },
+    ),
+  groups: () => apiRequest<TeacherGroupsResponse>("/teachers/me/groups"),
+  groupMonthlyPlan: (crmGroupId: string, month: string) =>
+    apiRequest<GroupMonthlyPlanResponse>(
+      `/teachers/me/groups/${encodeURIComponent(crmGroupId)}/monthly-plan?month=${encodeURIComponent(month)}`,
+    ),
+  saveGroupMonthlyPlan: (crmGroupId: string, plan: GroupMonthlyPlan) =>
+    apiRequest<GroupMonthlyPlan>(
+      `/teachers/me/groups/${encodeURIComponent(crmGroupId)}/monthly-plan`,
       { method: "PUT", body: JSON.stringify(plan) },
     ),
 };

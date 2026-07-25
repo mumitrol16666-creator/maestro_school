@@ -303,6 +303,7 @@ model User {
   notifications            UserNotification[]
   offlineLessonStudentChecks OfflineLessonStudentCheck[]
   studentMonthlyPlans        StudentMonthlyPlan[]
+  groupMonthlyPlans          GroupMonthlyPlan[]
   messageConversationsAsStudent TeacherConversation[] @relation("TeacherConversationStudent")
   messageConversationsAsTeacher TeacherConversation[] @relation("TeacherConversationTeacher")
   directMessages              TeacherMessage[] @relation("TeacherMessageSender")
@@ -381,6 +382,29 @@ model StudentMonthlyPlan {
   @@index([teacherUserId, month])
   @@index([crmStudentId, month])
   @@map("student_monthly_plans")
+}
+
+model GroupMonthlyPlan {
+  id             String   @id @default(uuid()) @db.Uuid
+  crmGroupId     String   @map("crm_group_id") @db.VarChar(128)
+  teacherUserId  String   @map("teacher_user_id") @db.Uuid
+  month          String   @db.VarChar(7)
+  goal           String   @default("") @db.Text
+  expectedResult String   @default("") @map("expected_result") @db.Text
+  skills         String   @default("") @db.Text
+  checkpoint     String   @default("") @db.Text
+  note           String   @default("") @db.Text
+  items          Json     @default("[]") @db.JsonB
+  materials      Json     @default("[]") @db.JsonB
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  teacherUser User @relation(fields: [teacherUserId], references: [id], onDelete: Cascade)
+
+  @@unique([crmGroupId, teacherUserId, month])
+  @@index([teacherUserId, month])
+  @@index([crmGroupId, month])
+  @@map("group_monthly_plans")
 }
 
 // ─── Learning catalog ────────────────────────────────────────────────────────

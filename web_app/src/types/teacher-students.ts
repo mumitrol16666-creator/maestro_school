@@ -65,6 +65,53 @@ export type TeacherStudentsResponse = {
   students: TeacherStudent[];
 };
 
+export type TeacherGroupStudent = {
+  crmStudentId: string;
+  appUserId: string | null;
+  name: string;
+  firstName: string;
+  lastName: string;
+  middleName: string;
+  phone: string;
+  avatarUrl: string | null;
+  learningLevel: string | null;
+  directions: string[];
+  assignedDirectly: boolean;
+};
+
+export type TeacherGroup = {
+  crmGroupId: string;
+  name: string;
+  direction: string;
+  level: string;
+  color: string | null;
+  description: string | null;
+  maxStudents: number;
+  schedules: Array<{
+    id: string;
+    dayOfWeek: number;
+    time: string;
+    duration: number;
+    room: {
+      crmRoomId: string;
+      name: string;
+    } | null;
+  }>;
+  students: TeacherGroupStudent[];
+  planSummary: {
+    month: string;
+    configured: boolean;
+    itemsTotal: number;
+    itemsCompleted: number;
+    completionRate: number | null;
+  };
+};
+
+export type TeacherGroupsResponse = {
+  teacher: { crmTeacherId: string; name: string; directions: string[] } | null;
+  groups: TeacherGroup[];
+};
+
 export type MonthlyPlanItemStatus = "planned" | "in_progress" | "completed" | "moved";
 
 export type MonthlyPlanItem = {
@@ -89,4 +136,21 @@ export type StudentMonthlyPlanResponse = {
   student: { crmStudentId: string; name: string };
   month: string;
   plan: StudentMonthlyPlan | null;
+};
+
+export type GroupPlanMaterial = {
+  id: string;
+  title: string;
+  url: string;
+  note: string;
+};
+
+export type GroupMonthlyPlan = StudentMonthlyPlan & {
+  materials: GroupPlanMaterial[];
+};
+
+export type GroupMonthlyPlanResponse = {
+  group: { crmGroupId: string; name: string };
+  month: string;
+  plan: GroupMonthlyPlan | null;
 };

@@ -13,6 +13,7 @@ import {
   teacherOfflineSetAttendanceBatch,
 } from "../../application/services/teacher-offline.service.js";
 import { listTeacherStudents } from "../../application/services/teacher-students.service.js";
+import { listTeacherGroups } from "../../application/services/teacher-groups.service.js";
 import {
   completeTeacherStaffTaskFromApp,
   listTeacherStaffTasks,
@@ -23,6 +24,10 @@ import {
   getStudentMonthlyPlan,
   saveStudentMonthlyPlan,
 } from "../../application/services/student-monthly-plan.service.js";
+import {
+  getGroupMonthlyPlan,
+  saveGroupMonthlyPlan,
+} from "../../application/services/group-monthly-plan.service.js";
 
 const readGuards = [authenticate, requirePermission("offline_school.read")];
 const writeGuards = [authenticate, requirePermission("offline_school.write")];
@@ -47,6 +52,12 @@ export async function teacherOfflineRoutes(app: FastifyInstance) {
     "/teachers/me/students",
     { preHandler: [authenticate, requireTeacher, requirePermission("offline_school.read")] },
     async (request) => ({ data: await listTeacherStudents(request.user!.id) }),
+  );
+
+  app.get(
+    "/teachers/me/groups",
+    { preHandler: [authenticate, requireTeacher, requirePermission("offline_school.read")] },
+    async (request) => ({ data: await listTeacherGroups(request.user!.id) }),
   );
 
   const monthSchema = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/);
@@ -84,6 +95,52 @@ export async function teacherOfflineRoutes(app: FastifyInstance) {
         data: await saveStudentMonthlyPlan(
           request.user!.id,
           crmStudentId,
+          body.month,
+          body,
+        ),
+      };
+    },
+  );
+
+  const groupPlanMaterialSchema = z.object({
+    id: z.string().min(1).max(100),
+    title: z.string().trim().max(500),
+    url: z.string().trim().max(2000),
+    note: z.string().trim().max(2000),
+  }).refine(
+    (material) => Boolean(material.title || material.url || material.note),
+    { message: "Материал не может быть пустым" },
+  );
+
+  app.get(
+    "/teachers/me/groups/:crmGroupId/monthly-plan",
+    { preHandler: [authenticate, requireTeacher, requirePermission("offline_school.read")] },
+    async (request) => {
+      const { crmGroupId } = z.object({ crmGroupId: z.string().min(1).max(128) }).parse(request.params);
+      const { month } = z.object({ month: monthSchema }).parse(request.query);
+      return { data: await getGroupMonthlyPlan(request.user!.id, crmGroupId, month) };
+    },
+  );
+
+  app.put(
+    "/teachers/me/groups/:crmGroupId/monthly-plan",
+    { preHandler: [authenticate, requireTeacher, requirePermission("offline_school.write")] },
+    async (request) => {
+      const { crmGroupId } = z.object({ crmGroupId: z.string().min(1).max(128) }).parse(request.params);
+      const body = z.object({
+        month: monthSchema,
+        goal: z.string().max(5000).default(""),
+        expectedResult: z.string().max(5000).default(""),
+        skills: z.string().max(5000).default(""),
+        checkpoint: z.string().max(5000).default(""),
+        note: z.string().max(5000).default(""),
+        items: z.array(monthlyPlanItemSchema).max(50).default([]),
+        materials: z.array(groupPlanMaterialSchema).max(50).default([]),
+      }).parse(request.body ?? {});
+      return {
+        data: await saveGroupMonthlyPlan(
+          request.user!.id,
+          crmGroupId,
           body.month,
           body,
         ),

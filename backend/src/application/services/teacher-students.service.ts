@@ -2,11 +2,7 @@ import { prisma } from "../../infrastructure/database/prisma.js";
 import { BadRequestError } from "../../domain/errors.js";
 import { fetchTeacherStudents } from "../../infrastructure/crm/crm-client.js";
 
-function phoneDigits(value?: string | null) {
-  return (value ?? "").replace(/\D/g, "");
-}
-
-async function requireCrmTeacherId(appUserId: string) {
+export async function requireCrmTeacherId(appUserId: string) {
   const user = await prisma.user.findFirst({
     where: { id: appUserId },
     select: { crmTeacherId: true },
@@ -132,48 +128,6 @@ export async function listTeacherStudents(appTeacherId: string) {
       })),
       sources: linkedOnline.length ? ["offline", "online"] : ["offline"],
       onlineLessons: linkedOnline.map(({ student: _student, ...request }) => request),
-    });
-  }
-
-  for (const [studentId, requests] of onlineByStudent) {
-    const student = requests[0].student;
-    const existing = merged.get(studentId)
-      ?? [...merged.values()].find((item) => phoneDigits(item.phone) === phoneDigits(student.phone));
-    if (existing) {
-      if (!existing.sources.includes("online")) existing.sources.push("online");
-      existing.appUserId = student.id;
-      existing.email = student.email;
-      existing.login = student.login;
-      existing.avatarUrl = student.avatar ?? existing.avatarUrl;
-      existing.directions = [...new Set([
-        ...existing.directions,
-        ...requests.map((request) => request.directionTitle),
-      ])];
-      existing.onlineLessons = requests.map(({ student: _student, ...request }) => request);
-      continue;
-    }
-
-    merged.set(studentId, {
-      key: studentId,
-      appUserId: student.id,
-      crmStudentId: null,
-      firstName: student.firstName,
-      lastName: student.lastName,
-      middleName: student.middleName ?? "",
-      name: `${student.lastName} ${student.firstName} ${student.middleName || ""}`.trim(),
-      dateOfBirth: null,
-      phone: student.phone,
-      email: student.email,
-      login: student.login,
-      avatarUrl: student.avatar,
-      learningLevel: null,
-      externalLinkStatus: null,
-      directions: [...new Set(requests.map((request) => request.directionTitle))],
-      groups: [],
-      schedules: [],
-      attendanceHistory: [],
-      sources: ["online"],
-      onlineLessons: requests.map(({ student: _student, ...request }) => request),
     });
   }
 
