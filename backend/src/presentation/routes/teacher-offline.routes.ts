@@ -28,6 +28,7 @@ import {
   getGroupMonthlyPlan,
   saveGroupMonthlyPlan,
 } from "../../application/services/group-monthly-plan.service.js";
+import { isSupportedMaterialUrl } from "../../domain/group-material.js";
 
 const readGuards = [authenticate, requirePermission("offline_school.read")];
 const writeGuards = [authenticate, requirePermission("offline_school.write")];
@@ -105,7 +106,9 @@ export async function teacherOfflineRoutes(app: FastifyInstance) {
   const groupPlanMaterialSchema = z.object({
     id: z.string().min(1).max(100),
     title: z.string().trim().max(500),
-    url: z.string().trim().max(2000),
+    url: z.string().trim().max(2000).refine(isSupportedMaterialUrl, {
+      message: "Ссылка должна начинаться с http:// или https://",
+    }),
     note: z.string().trim().max(2000),
   }).refine(
     (material) => Boolean(material.title || material.url || material.note),

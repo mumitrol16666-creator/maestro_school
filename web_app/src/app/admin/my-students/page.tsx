@@ -536,9 +536,7 @@ function GroupCard({ group }: { group: TeacherGroup }) {
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-bold text-ink">{student.name}</p>
-                    <p className="mt-0.5 truncate text-xs text-stone-500">
-                      {formatPhoneDisplay(student.phone)}
-                    </p>
+                    <p className="mt-0.5 text-xs text-stone-500">Участник группы</p>
                   </div>
                   {student.assignedDirectly ? (
                     <span className="shrink-0 rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-bold text-amber-900">

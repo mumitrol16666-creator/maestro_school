@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import type { FastifyRequest } from "fastify";
 import { UnauthorizedError, BadRequestError } from "../../domain/errors.js";
 
@@ -5,6 +6,13 @@ declare module "fastify" {
   interface FastifyRequest {
     integrationSystem?: "crm" | "learning-platform";
   }
+}
+
+export function integrationSecretMatches(token: string, secret: string) {
+  const tokenBuffer = Buffer.from(token);
+  const secretBuffer = Buffer.from(secret);
+  return tokenBuffer.length === secretBuffer.length
+    && timingSafeEqual(tokenBuffer, secretBuffer);
 }
 
 export async function requireIntegrationAuth(request: FastifyRequest): Promise<void> {
@@ -15,7 +23,7 @@ export async function requireIntegrationAuth(request: FastifyRequest): Promise<v
 
   const authHeader = request.headers.authorization || "";
   const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
-  if (!token || token !== secret) {
+  if (!token || !integrationSecretMatches(token, secret)) {
     throw new UnauthorizedError("Invalid integration credentials");
   }
 

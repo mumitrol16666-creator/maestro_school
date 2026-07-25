@@ -1,11 +1,12 @@
 import { prisma } from "../../infrastructure/database/prisma.js";
 import { fetchTeacherGroups } from "../../infrastructure/crm/crm-client.js";
 import { requireCrmTeacherId } from "./teacher-students.service.js";
+import { aqtobeMonthKey } from "../../lib/aqtobe-month.js";
 
 export async function listTeacherGroups(appTeacherId: string) {
   const crmTeacherId = await requireCrmTeacherId(appTeacherId);
   const roster = await fetchTeacherGroups(crmTeacherId);
-  const month = new Date().toISOString().slice(0, 7);
+  const month = aqtobeMonthKey();
   const groupIds = roster.groups.map((group) => group.crmGroupId);
   const plans = groupIds.length
     ? await prisma.groupMonthlyPlan.findMany({

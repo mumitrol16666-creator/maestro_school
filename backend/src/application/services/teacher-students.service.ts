@@ -1,6 +1,7 @@
 import { prisma } from "../../infrastructure/database/prisma.js";
 import { BadRequestError } from "../../domain/errors.js";
 import { fetchTeacherStudents } from "../../infrastructure/crm/crm-client.js";
+import { aqtobeMonthKey } from "../../lib/aqtobe-month.js";
 
 export async function requireCrmTeacherId(appUserId: string) {
   const user = await prisma.user.findFirst({
@@ -135,7 +136,7 @@ export async function listTeacherStudents(appTeacherId: string) {
   const crmStudentIds = students
     .map((student) => student.crmStudentId)
     .filter((studentId): studentId is string => Boolean(studentId));
-  const month = new Date().toISOString().slice(0, 7);
+  const month = aqtobeMonthKey();
   const [checks, plans] = crmStudentIds.length
     ? await Promise.all([
         prisma.offlineLessonStudentCheck.findMany({

@@ -12,15 +12,11 @@ import {
 import { useEffect, useState } from "react";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { teacherStudentsApi } from "@/lib/teacher-students-api";
+import { currentAqtobeMonth } from "@/lib/aqtobe-month";
 import type {
   GroupMonthlyPlan,
   MonthlyPlanItemStatus,
 } from "@/types/teacher-students";
-
-function currentMonth() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-}
 
 function emptyPlan(month: string): GroupMonthlyPlan {
   return {
@@ -43,11 +39,18 @@ const itemStatuses: Array<{ value: MonthlyPlanItemStatus; label: string }> = [
 ];
 
 function materialHref(value: string) {
-  return /^https?:\/\//i.test(value.trim()) ? value.trim() : null;
+  const input = value.trim();
+  if (!input) return null;
+  try {
+    const url = new URL(input);
+    return ["http:", "https:"].includes(url.protocol) && url.hostname ? url.toString() : null;
+  } catch {
+    return null;
+  }
 }
 
 export function GroupMonthlyPlanEditor({ crmGroupId }: { crmGroupId: string }) {
-  const [month, setMonth] = useState(currentMonth);
+  const [month, setMonth] = useState(currentAqtobeMonth);
   const resource = useApiResource(
     () => teacherStudentsApi.groupMonthlyPlan(crmGroupId, month),
     [crmGroupId, month],
@@ -88,6 +91,13 @@ export function GroupMonthlyPlanEditor({ crmGroupId }: { crmGroupId: string }) {
   }
 
   async function save() {
+    const hasInvalidMaterialUrl = draft.materials.some((material) => (
+      material.url.trim() && !materialHref(material.url)
+    ));
+    if (hasInvalidMaterialUrl) {
+      setError("Ссылка на материал должна начинаться с http:// или https://");
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -251,6 +261,7 @@ export function GroupMonthlyPlanEditor({ crmGroupId }: { crmGroupId: string }) {
                   />
                   <div className="flex min-w-0 gap-2">
                     <input
+                      type="url"
                       value={material.url}
                       onChange={(event) => {
                         const url = event.target.value;

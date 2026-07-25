@@ -19,6 +19,15 @@ async function bootstrap() {
   });
 
   app.setErrorHandler(errorHandler);
+  app.addHook("onRequest", async (_request, reply) => {
+    reply.headers({
+      "Referrer-Policy": "strict-origin-when-cross-origin",
+      "X-Content-Type-Options": "nosniff",
+      "X-Frame-Options": "DENY",
+      "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+      "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+    });
+  });
 
   const corsOrigins = env.CORS_ORIGIN.split(",").map((origin) => origin.trim()).filter(Boolean);
   await app.register(cors, {

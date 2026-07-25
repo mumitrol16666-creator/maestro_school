@@ -67,15 +67,8 @@ export type TeacherStudentsResponse = {
 
 export type TeacherGroupStudent = {
   crmStudentId: string;
-  appUserId: string | null;
   name: string;
-  firstName: string;
-  lastName: string;
-  middleName: string;
-  phone: string;
   avatarUrl: string | null;
-  learningLevel: string | null;
-  directions: string[];
   assignedDirectly: boolean;
 };
 

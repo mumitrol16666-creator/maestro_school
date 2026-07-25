@@ -4,15 +4,11 @@ import { CheckCircle2, LoaderCircle, Plus, Save, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { teacherStudentsApi } from "@/lib/teacher-students-api";
+import { currentAqtobeMonth } from "@/lib/aqtobe-month";
 import type {
   MonthlyPlanItemStatus,
   StudentMonthlyPlan,
 } from "@/types/teacher-students";
-
-function currentMonth() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-}
 
 function emptyPlan(month: string): StudentMonthlyPlan {
   return {
@@ -34,7 +30,7 @@ const itemStatuses: Array<{ value: MonthlyPlanItemStatus; label: string }> = [
 ];
 
 export function StudentMonthlyPlanEditor({ crmStudentId }: { crmStudentId: string }) {
-  const [month, setMonth] = useState(currentMonth);
+  const [month, setMonth] = useState(currentAqtobeMonth);
   const resource = useApiResource(
     () => teacherStudentsApi.monthlyPlan(crmStudentId, month),
     [crmStudentId, month],
