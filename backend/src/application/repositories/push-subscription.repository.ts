@@ -7,7 +7,11 @@ export async function upsertPushSubscription(params: {
   auth: string;
   userAgent?: string;
 }) {
-  return prisma.pushSubscription.upsert({
+  const existing = await prisma.pushSubscription.findUnique({
+    where: { endpoint: params.endpoint },
+    select: { userId: true },
+  });
+  const subscription = await prisma.pushSubscription.upsert({
     where: { endpoint: params.endpoint },
     create: {
       userId: params.userId,
@@ -23,6 +27,10 @@ export async function upsertPushSubscription(params: {
       userAgent: params.userAgent ?? null,
     },
   });
+  return {
+    subscription,
+    created: !existing || existing.userId !== params.userId,
+  };
 }
 
 export async function deletePushSubscription(userId: string, endpoint: string) {

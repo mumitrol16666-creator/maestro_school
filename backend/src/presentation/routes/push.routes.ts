@@ -30,13 +30,22 @@ export async function pushRoutes(app: FastifyInstance) {
     if (!publicKey) throw new BadRequestError("Уведомления пока не настроены");
 
     const body = subscriptionSchema.parse(request.body);
-    const subscription = await upsertPushSubscription({
+    const { subscription, created } = await upsertPushSubscription({
       userId: request.user!.id,
       endpoint: body.endpoint,
       p256dh: body.keys.p256dh,
       auth: body.keys.auth,
       userAgent: request.headers["user-agent"],
     });
+
+    if (created && request.user!.roleSlug === "student") {
+      await sendPushToUser(request.user!.id, {
+        title: "🎸 НИ ФИГА СЕБЕ!",
+        body: "Кто это на гитару записался? Уведомления включены — теперь ни один урок не потеряется 🤘",
+        url: "/dashboard",
+        tag: "maestro-push-welcome",
+      }).catch(() => undefined);
+    }
 
     return { data: { id: subscription.id, subscribed: true } };
   });
