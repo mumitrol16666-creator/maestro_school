@@ -264,7 +264,11 @@ export default function AdminOfflineLessonDetailPage() {
   const isSubmittedAbsence = lesson?.teacherOutcomeHint === "no_submission";
   const isIndividualLesson = Boolean(
     !isTrialLesson
-      && (lesson?.classType === "individual" || (!lesson?.group && students.length === 1)),
+      && (
+        lesson?.classType === "individual"
+        || lesson?.crmIndividualStudentId
+        || (!lesson?.group && students.length === 1)
+      ),
   );
   const draftFor = (student: TeacherOfflineStudent) =>
     studentCheckDrafts[student.crmStudentId] ?? studentLessonCheckDraft(student);
@@ -1761,12 +1765,17 @@ function StudentLessonCheckCard({
         </div>
       </fieldset>
 
-      {showHomeworkReview && attended ? (
+      {showHomeworkReview ? (
         <fieldset className="mt-5 border-t border-stone-100 pt-5">
           <legend className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.14em] text-stone-500">
             <BookCheck size={15} className="text-gold" />
             Выполнение прошлого ДЗ
           </legend>
+          {!attended ? (
+            <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
+              Сначала отметьте «Присутствовал» или «Опоздал», затем укажите выполнение домашнего задания.
+            </p>
+          ) : null}
           <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
             {homeworkOptions.map(({ value, label }) => {
               const selected = homeworkReview.status === value;
@@ -1774,7 +1783,7 @@ function StudentLessonCheckCard({
                 <button
                   key={value}
                   type="button"
-                  disabled={disabled}
+                  disabled={disabled || !attended}
                   onClick={() => chooseHomeworkStatus(value)}
                   className={`min-h-11 rounded-xl border px-2 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-65 ${
                     selected
@@ -1788,7 +1797,7 @@ function StudentLessonCheckCard({
             })}
           </div>
 
-          {["completed", "partial"].includes(homeworkReview.status) ? (
+          {attended && ["completed", "partial"].includes(homeworkReview.status) ? (
             <div className="mt-4 rounded-xl bg-stone-50 p-4">
               <div className="flex items-center justify-between gap-3">
                 <label htmlFor={`homework-percent-${student.crmStudentId}`} className="text-sm font-bold text-stone-700">
@@ -1803,7 +1812,7 @@ function StudentLessonCheckCard({
                 max={100}
                 step={10}
                 value={homeworkReview.completionPercent ?? 50}
-                disabled={disabled}
+                disabled={disabled || !attended}
                 onChange={(event) => {
                   const completionPercent = Number(event.target.value);
                   onChange({
@@ -1821,7 +1830,7 @@ function StudentLessonCheckCard({
                 Трудности или что осталось доделать
                 <textarea
                   value={homeworkReview.difficulties ?? ""}
-                  disabled={disabled}
+                  disabled={disabled || !attended}
                   onChange={(event) => onChange({
                     ...draft,
                     homeworkReview: { ...homeworkReview, difficulties: event.target.value },
@@ -1836,12 +1845,12 @@ function StudentLessonCheckCard({
             </div>
           ) : null}
 
-          {homeworkNeedsReason ? (
+          {attended && homeworkNeedsReason ? (
             <label className="mt-4 block text-xs font-bold uppercase tracking-wider text-red-700">
               Почему домашнее задание не выполнено
               <textarea
                 value={homeworkReview.notCompletedReason ?? ""}
-                disabled={disabled}
+                disabled={disabled || !attended}
                 onChange={(event) => onChange({
                   ...draft,
                   homeworkReview: { ...homeworkReview, notCompletedReason: event.target.value },
