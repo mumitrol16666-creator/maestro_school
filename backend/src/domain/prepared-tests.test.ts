@@ -32,6 +32,25 @@ describe("prepared test answer quality", () => {
     });
 
     assert.ok(uniqueLongestCorrect.length <= Math.ceil(questions.length * 0.1));
-    assert.ok(uniqueShortestCorrect.length <= Math.ceil(questions.length * 0.25));
+    assert.ok(uniqueShortestCorrect.length <= Math.ceil(questions.length * 0.1));
+  });
+
+  it("uses substantive distractors with the same level of detail as correct answers", () => {
+    const correctOptions = questions.map((question) => (
+      question.options.find((option) => option.id === question.correctOptionId)!
+    ));
+    const distractors = questions.flatMap((question) => (
+      question.options.filter((option) => option.id !== question.correctOptionId)
+    ));
+    const substantiveDistractors = distractors.filter((option) => (
+      option.text.trim().split(/\s+/).length >= 5
+    ));
+    const averageLength = (options: Array<{ text: string }>) => (
+      options.reduce((sum, option) => sum + option.text.length, 0) / options.length
+    );
+
+    // Compact alternatives remain appropriate for notes, intervals, symbols and numbers.
+    assert.ok(substantiveDistractors.length >= Math.ceil(distractors.length * 0.75));
+    assert.ok(Math.abs(averageLength(correctOptions) - averageLength(distractors)) <= 5);
   });
 });
