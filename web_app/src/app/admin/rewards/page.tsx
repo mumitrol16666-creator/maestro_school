@@ -9,6 +9,7 @@ import {
   PackageCheck,
   Pencil,
   Plus,
+  X,
   XCircle,
 } from "lucide-react";
 import { FormEvent, useMemo, useState } from "react";
@@ -64,6 +65,8 @@ export default function AdminRewardsPage() {
   const [form, setForm] = useState<RewardForm>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [processing, setProcessing] = useState<string | null>(null);
+  const [rejecting, setRejecting] = useState<RewardRedemption | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
   const [requestFilter, setRequestFilter] = useState<"active" | "all">("active");
   const [error, setError] = useState<string | null>(null);
 
@@ -126,23 +129,17 @@ export default function AdminRewardsPage() {
   async function process(
     redemption: RewardRedemption,
     status: "approved" | "fulfilled" | "rejected",
+    adminComment = "",
   ) {
-    let comment = "";
-    if (status === "rejected") {
-      const value = window.prompt(
-        "Причина отказа для ученика. Coins вернутся автоматически:",
-        "",
-      );
-      if (value === null) return;
-      comment = value;
-    }
     setProcessing(redemption.id);
     setError(null);
     try {
-      await rewardsApi.process(redemption.id, status, comment);
+      await rewardsApi.process(redemption.id, status, adminComment);
       await resource.reload();
+      return true;
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Не удалось обновить заявку");
+      return false;
     } finally {
       setProcessing(null);
     }
@@ -245,7 +242,11 @@ export default function AdminRewardsPage() {
                         <button
                           type="button"
                           disabled={busy}
-                          onClick={() => void process(redemption, "rejected")}
+                          onClick={() => {
+                            setRejecting(redemption);
+                            setRejectReason("");
+                            setError(null);
+                          }}
                           className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 text-sm font-bold text-red-700"
                         >
                           <XCircle size={15} /> Отклонить
@@ -373,6 +374,74 @@ export default function AdminRewardsPage() {
           </div>
         </form>
       </div>
+
+      {rejecting ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/45 p-4 backdrop-blur-sm">
+          <section role="dialog" aria-modal="true" aria-labelledby="reject-reward-title" className="w-full max-w-lg rounded-[30px] bg-paper p-6 shadow-2xl sm:p-8">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-red-600">Отказ в награде</p>
+                <h2 id="reject-reward-title" className="font-display mt-2 text-3xl">{rejecting.rewardTitle}</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRejecting(null)}
+                aria-label="Закрыть"
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-stone-200"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <p className="mt-4 text-sm leading-6 text-stone-500">
+              Ученику автоматически вернутся{" "}
+              <strong className="text-ink">{rejecting.costCoins} Maestro Coins</strong>.
+              Укажите короткую причину — она появится в его истории заявок.
+            </p>
+            <label className="mt-5 block text-xs font-bold uppercase tracking-wider text-stone-500">
+              Причина отказа
+              <textarea
+                autoFocus
+                required
+                minLength={3}
+                maxLength={500}
+                value={rejectReason}
+                onChange={(event) => setRejectReason(event.target.value)}
+                placeholder="Например, уточните другую песню для разбора"
+                className={`${inputClass} mt-2 min-h-28 normal-case tracking-normal`}
+              />
+            </label>
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setRejecting(null)}
+                className={secondaryButton}
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                disabled={processing === rejecting.id || rejectReason.trim().length < 3}
+                onClick={() => {
+                  void process(rejecting, "rejected", rejectReason).then((completed) => {
+                    if (completed) {
+                      setRejecting(null);
+                      setRejectReason("");
+                    }
+                  });
+                }}
+                className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-red-600 px-5 text-sm font-bold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {processing === rejecting.id ? (
+                  <LoaderCircle size={16} className="animate-spin" />
+                ) : (
+                  <XCircle size={16} />
+                )}
+                Отклонить и вернуть {rejecting.costCoins} Coins
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </>
   );
 }
