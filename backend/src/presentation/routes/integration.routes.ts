@@ -21,6 +21,7 @@ import {
   notifyStaffTaskAssigned,
 } from "../../application/services/notification.service.js";
 import { generateWhatsappHomeworkDrafts } from "../../application/services/whatsapp-homework-message.service.js";
+import { archiveStudentAccess } from "../../application/services/student-access-archive.service.js";
 
 const linkSchema = z.object({
   phone: z.string().optional(),
@@ -63,6 +64,12 @@ const updatePasswordSchema = z.object({
   crmStudentId: z.string().optional(),
   crmTeacherId: z.string().optional(),
   password: z.string().min(4).max(72),
+});
+
+const archiveStudentAccessSchema = z.object({
+  appUserId: z.string().uuid(),
+  crmStudentId: z.string().min(1).max(64),
+  force: z.boolean().optional(),
 });
 
 const onlineLessonSyncSchema = z.discriminatedUnion("action", [
@@ -181,6 +188,14 @@ export async function integrationRoutes(app: FastifyInstance) {
     await updateUserPassword(user.id, passwordHash);
 
     return { success: true, message: "Пароль успешно синхронизирован" };
+  });
+
+  app.post("/users/archive-student-access", async (request) => {
+    const body = archiveStudentAccessSchema.parse(request.body);
+    return {
+      success: true,
+      data: await archiveStudentAccess(body),
+    };
   });
 
   app.post("/online-lessons/:requestId/sync", async (request) => {

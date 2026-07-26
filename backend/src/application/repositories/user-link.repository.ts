@@ -197,6 +197,7 @@ export async function getUserLinkStatus(phoneNormalized: string) {
       linkedAt: user.linkedAt,
       appUser: {
         id: user.id,
+        login: user.login,
         firstName: user.firstName,
         lastName: user.lastName,
         phone: user.phone,
