@@ -95,6 +95,7 @@ enum OnlineLessonAssignmentSubmissionStatus {
 
 enum MaestroCoinTransactionType {
   earn
+  spend
   adjustment
   correction
 }
@@ -104,7 +105,15 @@ enum MaestroCoinSourceType {
   offline_lesson
   assignment
   course
+  reward
   manual
+}
+
+enum RewardRedemptionStatus {
+  requested
+  approved
+  fulfilled
+  rejected
 }
 
 enum AuditAction {
@@ -248,6 +257,8 @@ enum UserNotificationType {
   achievement_earned
   points_awarded
   coins_awarded
+  reward_requested
+  reward_status_updated
   staff_task_assigned
 }
 
@@ -310,6 +321,8 @@ model User {
   directMessages              TeacherMessage[] @relation("TeacherMessageSender")
   preparedTestAttempts        PreparedTestAttempt[] @relation("PreparedTestStudent")
   preparedTestDrafts          PreparedTestDraft[] @relation("PreparedTestDraftStudent")
+  rewardRedemptions           RewardRedemption[] @relation("RewardStudent")
+  processedRewardRedemptions  RewardRedemption[] @relation("RewardProcessor")
 
   @@index([roleId])
   @@index([email])
@@ -875,6 +888,51 @@ model MaestroCoinTransaction {
   @@index([studentId, createdAt])
   @@index([sourceType, sourceId])
   @@map("maestro_coin_transactions")
+}
+
+// ─── Maestro Rewards ─────────────────────────────────────────────────────────
+
+model RewardCatalogItem {
+  id          String   @id @default(uuid()) @db.Uuid
+  title       String   @db.VarChar(255)
+  description String   @db.Text
+  category    String   @default("learning") @db.VarChar(64)
+  costCoins   Int      @map("cost_coins")
+  stock       Int?
+  isActive    Boolean  @default(true) @map("is_active")
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  redemptions RewardRedemption[]
+
+  @@index([isActive, sortOrder])
+  @@map("reward_catalog_items")
+}
+
+model RewardRedemption {
+  id            String                   @id @default(uuid()) @db.Uuid
+  studentId     String                   @map("student_id") @db.Uuid
+  rewardId      String                   @map("reward_id") @db.Uuid
+  rewardTitle   String                   @map("reward_title") @db.VarChar(255)
+  costCoins     Int                      @map("cost_coins")
+  status        RewardRedemptionStatus   @default(requested)
+  studentNote   String?                  @map("student_note") @db.VarChar(500)
+  adminComment  String?                  @map("admin_comment") @db.VarChar(500)
+  processedById String?                  @map("processed_by") @db.Uuid
+  processedAt   DateTime?                @map("processed_at") @db.Timestamptz(6)
+  createdAt     DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  student     User              @relation("RewardStudent", fields: [studentId], references: [id], onDelete: Cascade)
+  reward      RewardCatalogItem @relation(fields: [rewardId], references: [id], onDelete: Restrict)
+  processedBy User?             @relation("RewardProcessor", fields: [processedById], references: [id], onDelete: SetNull)
+
+  @@index([studentId, createdAt])
+  @@index([status, createdAt])
+  @@index([rewardId])
+  @@index([processedById])
+  @@map("reward_redemptions")
 }
 
 // ─── In-app notifications ────────────────────────────────────────────────────

@@ -8,6 +8,7 @@ import {
 import { calculateCourseProgressPercent } from "./course-progress.service.js";
 import { calculateStudentPoints } from "./points.service.js";
 import { syncLessonAvailability } from "./lesson-unlock.service.js";
+import { getStudentRank } from "../../domain/student-rank.js";
 
 const ACTIONABLE_STATUSES: LessonProgressStatus[] = [
   "available",
@@ -29,6 +30,7 @@ export interface StudentDashboardData {
   completedLessonsCount: number;
   totalLessonsCount: number;
   points: number;
+  rank: ReturnType<typeof getStudentRank>;
   nextAvailableLesson: {
     id: string;
     title: string;
@@ -52,6 +54,7 @@ export async function getStudentDashboard(studentId: string): Promise<StudentDas
       completedLessonsCount: 0,
       totalLessonsCount: 0,
       points,
+      rank: getStudentRank(points),
       nextAvailableLesson: null,
     };
   }
@@ -100,6 +103,7 @@ export async function getStudentDashboard(studentId: string): Promise<StudentDas
     completedLessonsCount,
     totalLessonsCount: orderedLessons.length,
     points,
+    rank: getStudentRank(points),
     nextAvailableLesson,
   };
 }

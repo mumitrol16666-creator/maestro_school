@@ -4,9 +4,10 @@ import { ArrowRight, BookOpen, Coins, Newspaper, Star, Video } from "lucide-reac
 import Link from "next/link";
 import { AchievementsWall } from "@/components/achievements-wall";
 import { CourseCard } from "@/components/course-card";
+import { RankProgressCard } from "@/components/rank-progress-card";
 import { useAuth } from "@/components/auth-provider";
 import type { Course } from "@/types";
-import type { ApiNewsPost, StudentAchievementItem } from "@/types/api";
+import type { ApiNewsPost, StudentAchievementItem, StudentRankOverview } from "@/types/api";
 
 export function DashboardWelcome({
   points,
@@ -15,6 +16,7 @@ export function DashboardWelcome({
   achievements,
   earnedCount,
   totalAchievements,
+  rank,
 }: {
   points: number;
   courses: Course[];
@@ -22,6 +24,7 @@ export function DashboardWelcome({
   achievements: StudentAchievementItem[];
   earnedCount: number;
   totalAchievements: number;
+  rank: StudentRankOverview;
 }) {
   const { user } = useAuth();
   const firstName = user?.firstName || "ученик";
@@ -71,6 +74,10 @@ export function DashboardWelcome({
         <QuickLink href="/courses" icon={BookOpen} label="Курсы" hint="Начать обучение" />
         <QuickLink href="/online-lessons" icon={Video} label="Онлайн-урок" hint="Запись с преподавателем" />
       </section>
+
+      <div className="mt-5">
+        <RankProgressCard rank={rank} compact />
+      </div>
 
       <section className="mt-8 rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
         <div className="flex flex-wrap items-end justify-between gap-4">

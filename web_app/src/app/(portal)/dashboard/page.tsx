@@ -47,6 +47,7 @@ export default function DashboardPage() {
         achievements={achievements.data}
         earnedCount={achievements.meta?.earnedCount ?? 0}
         totalAchievements={achievements.meta?.totalCount ?? achievements.data.length}
+        rank={dashboard.rank}
       />
     );
   }
@@ -122,7 +123,7 @@ export default function DashboardPage() {
         </Link>
 
         <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-1">
-          <div className="premium-surface rounded-[28px] p-6 shadow-soft">
+          <Link href="/rewards" className="premium-surface card-hover rounded-[28px] p-6 shadow-soft">
             <div className="flex items-start justify-between"><span className="grid h-11 w-11 place-items-center rounded-2xl bg-amber-50 text-gold ring-1 ring-gold/10"><Star size={20} fill="currentColor" /></span><span className="text-xs font-bold text-emerald-700">Баланс</span></div>
             <p className="font-display mt-8 text-4xl">{dashboard.points.toLocaleString("ru-RU")}</p>
             <p className="mt-1 text-sm text-stone-500">баллов Maestro</p>
@@ -130,7 +131,16 @@ export default function DashboardPage() {
               <Coins size={14} />
               {(user?.coins ?? 0).toLocaleString("ru-RU")} Maestro Coins
             </p>
-          </div>
+            <div className="mt-4">
+              <div className="mb-2 flex items-center justify-between gap-2 text-[11px] font-bold text-stone-500">
+                <span>Ранг: {dashboard.rank.current.title}</span>
+                <span>{dashboard.rank.next ? `ещё ${dashboard.rank.pointsToNext}` : "максимум"}</span>
+              </div>
+              <div className="h-1.5 overflow-hidden rounded-full bg-stone-100">
+                <div className="h-full rounded-full bg-gold" style={{ width: `${dashboard.rank.progressPercent}%` }} />
+              </div>
+            </div>
+          </Link>
           <div className="premium-surface rounded-[28px] p-6 shadow-soft">
             <div className="flex items-start justify-between"><span className="grid h-11 w-11 place-items-center rounded-2xl bg-orange-50 text-orange-500 ring-1 ring-orange-200/60"><Flame size={20} /></span><span className="text-xs font-bold text-stone-400">Пройдено</span></div>
             <p className="font-display mt-8 text-4xl">{dashboard.completedLessonsCount}</p>

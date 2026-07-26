@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { awardSystemPoints } from "../../application/services/points.service.js";
+import { evaluateAchievements } from "../../application/services/achievement.service.js";
 import { BadRequestError, ForbiddenError, NotFoundError } from "../../domain/errors.js";
 import {
   gradeHomeworkTest,
@@ -276,6 +277,9 @@ export async function preparedTestsRoutes(app: FastifyInstance) {
             sourceKey: `prepared-test:${studentId}:${testId}`,
           })
         : { awarded: false };
+      if (passed) {
+        await evaluateAchievements(studentId);
+      }
       const remaining = null;
       const nextTest = passed || wasAlreadyPassed
         ? listPreparedTestTemplates()[index + 1] ?? null

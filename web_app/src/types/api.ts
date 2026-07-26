@@ -184,6 +184,7 @@ export interface ApiDashboard {
   completedLessonsCount: number;
   totalLessonsCount: number;
   points: number;
+  rank: StudentRankOverview;
   nextAvailableLesson: {
     id: string;
     title: string;
@@ -191,6 +192,15 @@ export interface ApiDashboard {
     moduleSortOrder: number;
     sortOrder: number;
   } | null;
+}
+
+export interface StudentRankOverview {
+  current: { code: string; title: string; minPoints: number };
+  next: { code: string; title: string; minPoints: number } | null;
+  points: number;
+  pointsToNext: number;
+  progressPercent: number;
+  isMaxRank: boolean;
 }
 
 export interface ApiEnrollment {

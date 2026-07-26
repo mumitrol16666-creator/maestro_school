@@ -6,6 +6,7 @@ import type {
 import { prisma } from "../../infrastructure/database/prisma.js";
 import { BadRequestError, ForbiddenError, NotFoundError } from "../../domain/errors.js";
 import { addMaestroCoins } from "./coins.service.js";
+import { evaluateAchievements } from "./achievement.service.js";
 import { deliverUserNotification } from "./notification.service.js";
 import { awardManualPoints } from "./points.service.js";
 import { postOnlineLessonBooking, postOnlineLessonStatus } from "../../infrastructure/crm/crm-client.js";
@@ -620,6 +621,9 @@ export async function completeOnlineLessonRequest(requestId: string, params: {
       createdBy: params.completedBy,
     });
   }
+  if (params.lessonPoints > 0 || params.lessonCoins > 0) {
+    await evaluateAchievements(item.studentId);
+  }
 
   await syncCrmStatus(requestId, "completed");
   await bestEffortNotification({
@@ -774,6 +778,9 @@ export async function reviewOnlineLessonAssignment(submissionId: string, params:
       sourceId: submissionId,
       createdBy: params.reviewerId,
     });
+  }
+  if (params.action !== "return" && (params.reviewPoints > 0 || params.reviewCoins > 0)) {
+    await evaluateAchievements(submission.studentId);
   }
 
   const reviewTitle = params.action === "return"

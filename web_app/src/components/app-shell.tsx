@@ -1,6 +1,6 @@
 "use client";
 
-import { BookMarked, CircleUserRound, ClipboardCheck, House, Megaphone, Menu, MessagesSquare, MonitorPlay, School, X } from "lucide-react";
+import { BookMarked, CircleUserRound, ClipboardCheck, Gift, House, Megaphone, Menu, MessagesSquare, MonitorPlay, School, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
@@ -21,6 +21,7 @@ const navigation = [
   { href: "/courses", label: "Курсы", icon: BookMarked },
   { href: "/school-lessons", label: "Уроки в школе", icon: School, studentOnly: true },
   { href: "/tests", label: "Тесты", icon: ClipboardCheck, studentOnly: true },
+  { href: "/rewards", label: "Награды", icon: Gift, studentOnly: true },
   { href: "/messages", label: "Обращения", icon: MessagesSquare, studentOnly: true, messagesOnly: true },
   { href: "/online-lessons", label: "Онлайн-уроки", icon: MonitorPlay },
   { href: "/board", label: "Доска Maestro", icon: Megaphone },
@@ -32,6 +33,7 @@ const studentMobileNavigation = [
   { href: "/courses", label: "Курсы", icon: BookMarked },
   { href: "/tests", label: "Тесты", icon: ClipboardCheck },
   { href: "/school-lessons", label: "Школа", icon: School },
+  { href: "/rewards", label: "Награды", icon: Gift },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
