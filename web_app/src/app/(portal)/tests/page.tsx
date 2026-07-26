@@ -6,6 +6,7 @@ import {
   ClipboardCheck,
   LockKeyhole,
   Medal,
+  RotateCcw,
   TriangleAlert,
 } from "lucide-react";
 import Link from "next/link";
@@ -29,7 +30,7 @@ export default function TestsPage() {
   }
 
   const { tests, completedCount, total, totalRewardPoints } = resource.data;
-  const next = tests.find((test) => test.available);
+  const next = tests.find((test) => test.available && !test.passed);
   const sections = [...new Set(tests.map((test) => test.section))];
 
   return (
@@ -61,7 +62,7 @@ export default function TestsPage() {
               </span>
               <span className="mt-1 block font-display text-2xl leading-tight">{next.title}</span>
               <span className="mt-1 block text-sm text-white/60">
-                {next.questionCount} вопросов · осталось попыток: {next.attemptsRemaining}
+                {next.questionCount} вопросов · проходной результат {next.passingScore}%
               </span>
             </span>
             <ChevronRight className="shrink-0 text-gold transition group-hover:translate-x-1" />
@@ -135,11 +136,11 @@ export default function TestsPage() {
                     <span className="mt-1 block text-sm text-stone-500">{test.description}</span>
                     <span className="mt-2 block text-xs font-bold uppercase tracking-[0.1em] text-stone-400">
                       {test.questionCount} вопросов
-                      {test.attemptsUsed ? ` · попыток ${test.attemptsUsed}/${test.maxAttempts}` : ""}
+                      {test.attemptsUsed ? ` · попыток: ${test.attemptsUsed}` : ""}
                       {test.bestScore != null ? ` · лучший результат ${test.bestScore}%` : ""}
                     </span>
                   </span>
-                  {test.available ? (
+                  {test.available && !test.passed ? (
                     <Link
                       href={`/tests/${test.id}`}
                       className="inline-flex shrink-0 items-center gap-1 rounded-full bg-ink px-4 py-2.5 text-sm font-bold text-white transition hover:bg-gold hover:text-ink"
@@ -148,9 +149,13 @@ export default function TestsPage() {
                       <ChevronRight size={16} />
                     </Link>
                   ) : test.passed ? (
-                    <span className="hidden shrink-0 items-center gap-1 text-sm font-bold text-emerald-700 sm:flex">
-                      <CheckCircle2 size={16} /> Пройден
-                    </span>
+                    <Link
+                      href={`/tests/${test.id}`}
+                      className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-300 bg-white px-4 py-2.5 text-sm font-bold text-emerald-800 transition hover:border-emerald-500"
+                    >
+                      <RotateCcw size={15} />
+                      <span className="hidden sm:inline">Пройти ещё раз</span>
+                    </Link>
                   ) : null}
                 </div>
               ))}

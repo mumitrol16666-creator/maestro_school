@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { awardSystemPoints } from "../../application/services/points.service.js";
-import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from "../../domain/errors.js";
+import { BadRequestError, ForbiddenError, NotFoundError } from "../../domain/errors.js";
 import {
   gradeHomeworkTest,
   publicHomeworkTestQuestions,
@@ -16,6 +16,7 @@ import {
   PREPARED_TEST_MAX_ATTEMPTS,
   PREPARED_TEST_PASSING_SCORE,
   PREPARED_TEST_REWARD_POINTS,
+  shufflePreparedTestOptions,
   validatePreparedTestDraft,
 } from "../../domain/prepared-test-progress.js";
 import { listPreparedTestTemplates } from "../../domain/prepared-tests.js";
@@ -64,8 +65,8 @@ function assertTestAccess(testId: string, attempts: Attempt[]) {
   return index;
 }
 
-function attemptsRemaining(attempts: Attempt[], testId: string) {
-  return Math.max(0, PREPARED_TEST_MAX_ATTEMPTS - attemptsForTest(attempts, testId).length);
+function attemptsRemaining() {
+  return null;
 }
 
 function buildProgress(attempts: Attempt[]) {
@@ -76,7 +77,7 @@ function buildProgress(attempts: Attempt[]) {
     const latest = latestAttempt(attempts, template.id);
     const passed = hasPassedPreparedTest(attempts, template.id);
     const unlocked = isPreparedTestUnlocked(index, orderedIds, attempts);
-    const remaining = attemptsRemaining(attempts, template.id);
+    const remaining = attemptsRemaining();
     return {
       id: template.id,
       title: template.title,
@@ -87,8 +88,8 @@ function buildProgress(attempts: Attempt[]) {
       passingScore: PREPARED_TEST_PASSING_SCORE,
       maxAttempts: PREPARED_TEST_MAX_ATTEMPTS,
       locked: !unlocked,
-      available: unlocked && !passed && remaining > 0,
-      exhausted: unlocked && !passed && remaining === 0,
+      available: unlocked,
+      exhausted: false,
       passed,
       bestScore: bestPreparedTestScore(attempts, template.id),
       latestScore: latest?.score ?? null,
@@ -143,7 +144,7 @@ export async function preparedTestsRoutes(app: FastifyInstance) {
       const index = assertTestAccess(testId, attempts);
       const latest = latestAttempt(attempts, testId);
       const passed = hasPassedPreparedTest(attempts, testId);
-      const remaining = attemptsRemaining(attempts, testId);
+      const remaining = attemptsRemaining();
       const latestAnswers = (latest?.answers ?? {}) as HomeworkTestAnswerMap;
       const nextTemplate = passed ? listPreparedTestTemplates()[index + 1] ?? null : null;
       return {
@@ -157,9 +158,12 @@ export async function preparedTestsRoutes(app: FastifyInstance) {
           passingScore: PREPARED_TEST_PASSING_SCORE,
           maxAttempts: PREPARED_TEST_MAX_ATTEMPTS,
           rewardPoints: PREPARED_TEST_REWARD_POINTS,
-          questions: publicHomeworkTestQuestions(template.questions),
+          questions: shufflePreparedTestOptions(
+            publicHomeworkTestQuestions(template.questions),
+            `${studentId}:${testId}:${attemptsForTest(attempts, testId).length + 1}`,
+          ),
           passed,
-          exhausted: !passed && remaining === 0,
+          exhausted: false,
           bestScore: bestPreparedTestScore(attempts, testId),
           attemptsUsed: attemptsForTest(attempts, testId).length,
           attemptsRemaining: remaining,
@@ -180,11 +184,7 @@ export async function preparedTestsRoutes(app: FastifyInstance) {
                 passed: latest.passed,
                 attemptNumber: latest.attemptNumber,
                 createdAt: latest.createdAt,
-                review: buildPreparedTestReview(
-                  template.questions,
-                  latestAnswers,
-                  latest.passed || remaining === 0,
-                ),
+                review: buildPreparedTestReview(template.questions, latestAnswers),
               }
             : null,
         },
@@ -202,12 +202,6 @@ export async function preparedTestsRoutes(app: FastifyInstance) {
       const studentId = request.user!.id;
       const attempts = await listAttempts(studentId);
       assertTestAccess(testId, attempts);
-      if (hasPassedPreparedTest(attempts, testId)) {
-        throw new ConflictError("Этот тест уже пройден");
-      }
-      if (attemptsRemaining(attempts, testId) === 0) {
-        throw new ConflictError("Все попытки по этому тесту использованы");
-      }
       validateDraftOrThrow(template.questions, body.answers, body.currentQuestion);
 
       const draft = await prisma.preparedTestDraft.upsert({
@@ -243,14 +237,8 @@ export async function preparedTestsRoutes(app: FastifyInstance) {
       const studentId = request.user!.id;
       const attempts = await listAttempts(studentId);
       const index = assertTestAccess(testId, attempts);
-      if (hasPassedPreparedTest(attempts, testId)) {
-        throw new ConflictError("Этот тест уже пройден");
-      }
-
+      const wasAlreadyPassed = hasPassedPreparedTest(attempts, testId);
       const testAttempts = attemptsForTest(attempts, testId);
-      if (testAttempts.length >= PREPARED_TEST_MAX_ATTEMPTS) {
-        throw new ConflictError("Все попытки по этому тесту использованы");
-      }
 
       validateDraftOrThrow(template.questions, body.answers as HomeworkTestAnswerMap, 0);
       const result = gradeHomeworkTest(template.questions, body.answers as HomeworkTestAnswerMap);
@@ -288,8 +276,10 @@ export async function preparedTestsRoutes(app: FastifyInstance) {
             sourceKey: `prepared-test:${studentId}:${testId}`,
           })
         : { awarded: false };
-      const remaining = PREPARED_TEST_MAX_ATTEMPTS - attemptNumber;
-      const nextTest = passed ? listPreparedTestTemplates()[index + 1] ?? null : null;
+      const remaining = null;
+      const nextTest = passed || wasAlreadyPassed
+        ? listPreparedTestTemplates()[index + 1] ?? null
+        : null;
       return reply.status(201).send({
         data: {
           id: attempt.id,
@@ -305,7 +295,6 @@ export async function preparedTestsRoutes(app: FastifyInstance) {
           review: buildPreparedTestReview(
             template.questions,
             body.answers as HomeworkTestAnswerMap,
-            passed || remaining === 0,
           ),
           topicsToRepeat: passed ? [] : [template.description],
           nextTest: nextTest ? { id: nextTest.id, title: nextTest.title } : null,

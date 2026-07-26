@@ -5,6 +5,7 @@ import {
   bestPreparedTestScore,
   buildPreparedTestReview,
   isPreparedTestUnlocked,
+  shufflePreparedTestOptions,
   validatePreparedTestDraft,
 } from "./prepared-test-progress.js";
 
@@ -36,8 +37,32 @@ describe("prepared test progress", () => {
     assert.throws(() => validatePreparedTestDraft(questions, { q1: "missing" }, 0));
   });
 
-  it("reveals correct answers only when requested", () => {
-    assert.equal(buildPreparedTestReview(questions, { q1: "b" }, false)[0]?.correctOptionText, null);
-    assert.equal(buildPreparedTestReview(questions, { q1: "b" }, true)[0]?.correctOptionText, "Верно");
+  it("returns every answer with the selected and correct option", () => {
+    const incorrect = buildPreparedTestReview(questions, { q1: "b" })[0];
+    const correct = buildPreparedTestReview(questions, { q1: "a" })[0];
+    assert.equal(incorrect?.isCorrect, false);
+    assert.equal(incorrect?.selectedOptionText, "Неверно");
+    assert.equal(incorrect?.correctOptionText, "Верно");
+    assert.equal(correct?.isCorrect, true);
+    assert.equal(correct?.selectedOptionText, "Верно");
+  });
+
+  it("shuffles option display without changing ids or the source questions", () => {
+    const source = [{
+      ...questions[0],
+      options: [
+        { id: "a", text: "A" },
+        { id: "b", text: "B" },
+        { id: "c", text: "C" },
+        { id: "d", text: "D" },
+      ],
+    }];
+    const first = shufflePreparedTestOptions(source, "student:test:1");
+    const repeated = shufflePreparedTestOptions(source, "student:test:1");
+    const nextAttempt = shufflePreparedTestOptions(source, "student:test:2");
+    assert.deepEqual(first, repeated);
+    assert.deepEqual(new Set(first[0]?.options.map((option) => option.id)), new Set(["a", "b", "c", "d"]));
+    assert.notDeepEqual(first[0]?.options, nextAttempt[0]?.options);
+    assert.equal(source[0]?.options[0]?.id, "a");
   });
 });

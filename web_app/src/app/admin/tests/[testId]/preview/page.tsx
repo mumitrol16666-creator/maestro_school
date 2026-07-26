@@ -52,7 +52,7 @@ export default function AdminTestPreviewPage() {
         </div>
         <div className="rounded-2xl border border-stone-200 bg-paper p-4">
           <p className="text-xs text-stone-500">Попыток ученику</p>
-          <p className="mt-1 font-display text-2xl">{test.maxAttempts}</p>
+          <p className="mt-1 font-display text-2xl">{test.maxAttempts ?? "Без лимита"}</p>
         </div>
         <div className="rounded-2xl border border-stone-200 bg-paper p-4">
           <p className="text-xs text-stone-500">Награда за первое прохождение</p>

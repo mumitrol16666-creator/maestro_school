@@ -1,7 +1,7 @@
 import type { HomeworkTestAnswerMap, HomeworkTestQuestion } from "./homework-test.js";
 
 export const PREPARED_TEST_PASSING_SCORE = 70;
-export const PREPARED_TEST_MAX_ATTEMPTS = 3;
+export const PREPARED_TEST_MAX_ATTEMPTS = null;
 export const PREPARED_TEST_REWARD_POINTS = 10;
 
 export interface PreparedAttemptSummary {
@@ -35,6 +35,29 @@ export function bestPreparedTestScore(attempts: PreparedAttemptSummary[], testId
   return scores.length ? Math.max(...scores) : null;
 }
 
+function stableHash(value: string) {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+/** Keeps option ids stable but changes their display order for every new attempt. */
+export function shufflePreparedTestOptions<
+  T extends { id: string; options: Array<{ id: string }> },
+>(questions: T[], attemptSeed: string): T[] {
+  return questions.map((question) => {
+    const options = [...question.options];
+    for (let index = options.length - 1; index > 0; index -= 1) {
+      const swapIndex = stableHash(`${attemptSeed}:${question.id}:${index}`) % (index + 1);
+      [options[index], options[swapIndex]] = [options[swapIndex], options[index]];
+    }
+    return { ...question, options };
+  });
+}
+
 export function validatePreparedTestDraft(
   questions: HomeworkTestQuestion[],
   answers: HomeworkTestAnswerMap,
@@ -56,16 +79,12 @@ export function validatePreparedTestDraft(
 export function buildPreparedTestReview(
   questions: HomeworkTestQuestion[],
   answers: HomeworkTestAnswerMap,
-  revealCorrectAnswers: boolean,
 ) {
-  return questions
-    .filter((question) => answers[question.id] !== question.correctOptionId)
-    .map((question) => ({
-      questionId: question.id,
-      prompt: question.prompt,
-      selectedOptionText: question.options.find((option) => option.id === answers[question.id])?.text ?? null,
-      correctOptionText: revealCorrectAnswers
-        ? question.options.find((option) => option.id === question.correctOptionId)?.text ?? null
-        : null,
-    }));
+  return questions.map((question) => ({
+    questionId: question.id,
+    prompt: question.prompt,
+    isCorrect: answers[question.id] === question.correctOptionId,
+    selectedOptionText: question.options.find((option) => option.id === answers[question.id])?.text ?? null,
+    correctOptionText: question.options.find((option) => option.id === question.correctOptionId)?.text ?? null,
+  }));
 }

@@ -39,6 +39,7 @@ export default function PreparedTestPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [hydratedTestId, setHydratedTestId] = useState<string | null>(null);
+  const [retakeMode, setRetakeMode] = useState(false);
 
   useEffect(() => {
     const test = resource.data;
@@ -46,12 +47,13 @@ export default function PreparedTestPage() {
     setAnswers(test.draft?.answers ?? {});
     setCurrentQuestion(Math.min(test.draft?.currentQuestion ?? 0, test.questions.length - 1));
     setHydratedTestId(test.id);
+    setRetakeMode(Boolean(test.draft));
     setSaveState(test.draft ? "saved" : "idle");
   }, [hydratedTestId, resource.data]);
 
   useEffect(() => {
     const test = resource.data;
-    if (!test || hydratedTestId !== test.id || result || test.passed || test.exhausted) return;
+    if (!test || hydratedTestId !== test.id || result || (test.passed && !retakeMode)) return;
     setSaveState("saving");
     const timer = window.setTimeout(() => {
       void api.savePreparedTestDraft(test.id, answers, currentQuestion)
@@ -59,7 +61,7 @@ export default function PreparedTestPage() {
         .catch(() => setSaveState("error"));
     }, 650);
     return () => window.clearTimeout(timer);
-  }, [answers, currentQuestion, hydratedTestId, resource.data, result]);
+  }, [answers, currentQuestion, hydratedTestId, resource.data, result, retakeMode]);
 
   const answeredCount = Object.keys(answers).length;
   const test = resource.data;
@@ -81,6 +83,7 @@ export default function PreparedTestPage() {
     try {
       const submittedResult = await api.submitPreparedTest(testId, answers);
       setResult(submittedResult);
+      setRetakeMode(false);
       if (submittedResult.rewardPointsAwarded > 0) {
         void refreshUser();
       }
@@ -94,25 +97,26 @@ export default function PreparedTestPage() {
 
   function retry() {
     setResult(null);
+    setRetakeMode(true);
     setAnswers({});
     setCurrentQuestion(0);
     setSubmitError(null);
     setSaveState("idle");
   }
 
-  const completed = result ?? (test.passed || test.exhausted ? {
+  const completed = result ?? (!retakeMode && (test.passed || test.exhausted) ? {
     id: "latest",
     testId: test.id,
     attemptNumber: test.latestAttempt?.attemptNumber ?? test.attemptsUsed,
     score: test.latestAttempt?.score ?? test.bestScore ?? 0,
     correctAnswers: test.latestAttempt?.correctAnswers ?? 0,
     totalQuestions: test.latestAttempt?.totalQuestions ?? test.questionCount,
-    passed: test.passed,
+    passed: test.latestAttempt?.passed ?? test.passed,
     passingScore: test.passingScore,
     attemptsRemaining: test.attemptsRemaining,
     rewardPointsAwarded: 0,
     review,
-    topicsToRepeat: test.passed ? [] : [test.description],
+    topicsToRepeat: (test.latestAttempt?.passed ?? test.passed) ? [] : [test.description],
     nextTest: test.nextTest,
     createdAt: test.latestAttempt?.createdAt ?? "",
   } : null);
@@ -147,7 +151,7 @@ export default function PreparedTestPage() {
             </span>
             <div className="min-w-0">
               <p className="text-xs font-black uppercase tracking-[0.16em] text-stone-500">
-                Попытка {completed.attemptNumber} из {test.maxAttempts}
+                Попытка {completed.attemptNumber}
               </p>
               <h2 className="mt-1 font-display text-3xl leading-tight">
                 {completed.passed ? "Тест пройден" : "Есть темы, которые стоит повторить"}
@@ -170,63 +174,77 @@ export default function PreparedTestPage() {
             </div>
             <div className="rounded-2xl bg-white/75 p-4">
               <p className="text-xs font-bold uppercase tracking-wide text-stone-500">
-                {completed.passed ? "Награда" : "Осталось попыток"}
+                {completed.passed ? "Награда" : "Повторные попытки"}
               </p>
               <p className="mt-1 flex items-center gap-2 font-display text-3xl">
                 {completed.passed ? (
-                  <><Medal size={22} className="text-gold" /> +{completed.rewardPointsAwarded || test.rewardPoints}</>
-                ) : completed.attemptsRemaining}
+                  completed.rewardPointsAwarded > 0
+                    ? <><Medal size={22} className="text-gold" /> +{completed.rewardPointsAwarded}</>
+                    : <span className="text-xl">Уже получена</span>
+                ) : <span className="text-xl">Без лимита</span>}
               </p>
             </div>
           </div>
 
-          {!completed.passed ? (
-            <div className="mt-6 rounded-[24px] border border-amber-200 bg-white/70 p-5">
-              <h3 className="font-display text-2xl">Что повторить</h3>
-              <p className="mt-2 text-sm text-stone-600">{test.description}</p>
-              {review.length ? (
-                <div className="mt-4 space-y-3">
-                  {review.map((item) => (
-                    <div key={item.questionId} className="rounded-2xl border border-stone-200 bg-white p-4">
-                      <div className="flex items-start gap-2">
-                        <XCircle size={17} className="mt-0.5 shrink-0 text-red-500" />
-                        <p className="text-sm font-semibold">{item.prompt}</p>
-                      </div>
-                      {item.correctOptionText ? (
-                        <p className="mt-2 flex items-start gap-2 text-sm text-emerald-700">
-                          <Check size={16} className="mt-0.5 shrink-0" />
-                          Верный ответ: {item.correctOptionText}
-                        </p>
-                      ) : (
-                        <p className="mt-2 text-xs text-stone-500">
-                          Верный вариант покажем после последней попытки.
-                        </p>
-                      )}
+          <div className="mt-6 rounded-[24px] border border-stone-200 bg-white/75 p-5">
+            <h3 className="font-display text-2xl">Разбор ответов</h3>
+            <p className="mt-2 text-sm text-stone-600">
+              Зелёным отмечены правильные ответы. В ошибках показаны ваш и правильный варианты.
+            </p>
+            <div className="mt-4 space-y-3">
+              {review.map((item, index) => (
+                <article
+                  key={item.questionId}
+                  className={`rounded-2xl border p-4 ${
+                    item.isCorrect
+                      ? "border-emerald-200 bg-emerald-50/70"
+                      : "border-red-200 bg-red-50/60"
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    {item.isCorrect ? (
+                      <CheckCircle2 size={19} className="mt-0.5 shrink-0 text-emerald-700" />
+                    ) : (
+                      <XCircle size={19} className="mt-0.5 shrink-0 text-red-600" />
+                    )}
+                    <div className="min-w-0">
+                      <p className="text-xs font-black uppercase tracking-wider text-stone-500">
+                        Вопрос {index + 1} · {item.isCorrect ? "Верно" : "Ошибка"}
+                      </p>
+                      <p className="mt-1 text-sm font-semibold">{item.prompt}</p>
                     </div>
-                  ))}
-                </div>
-              ) : null}
+                  </div>
+                  <p className={`mt-3 text-sm ${item.isCorrect ? "text-emerald-800" : "text-red-800"}`}>
+                    <strong>Ваш ответ:</strong> {item.selectedOptionText ?? "Нет ответа"}
+                  </p>
+                  {!item.isCorrect && item.correctOptionText ? (
+                    <p className="mt-2 flex items-start gap-2 text-sm text-emerald-800">
+                      <Check size={16} className="mt-0.5 shrink-0" />
+                      <span><strong>Правильный ответ:</strong> {item.correctOptionText}</span>
+                    </p>
+                  ) : null}
+                </article>
+              ))}
             </div>
-          ) : null}
+          </div>
 
           <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-            {completed.passed ? (
+            {completed.nextTest ? (
               <Link
-                href={completed.nextTest ? `/tests/${completed.nextTest.id}` : "/tests"}
+                href={`/tests/${completed.nextTest.id}`}
                 className="inline-flex items-center justify-center gap-2 rounded-2xl bg-ink px-5 py-3.5 text-sm font-bold text-white transition hover:bg-gold hover:text-ink"
               >
-                {completed.nextTest ? "Следующий тест" : "К списку тестов"}
+                Следующий тест
                 <ChevronRight size={16} />
               </Link>
-            ) : completed.attemptsRemaining > 0 ? (
-              <button
-                type="button"
-                onClick={retry}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-ink px-5 py-3.5 text-sm font-bold text-white transition hover:bg-gold hover:text-ink"
-              >
-                <RotateCcw size={16} /> Попробовать ещё раз
-              </button>
             ) : null}
+            <button
+              type="button"
+              onClick={retry}
+              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-stone-300 bg-white px-5 py-3.5 text-sm font-bold transition hover:border-gold"
+            >
+              <RotateCcw size={16} /> Пройти ещё раз
+            </button>
             <Link
               href="/tests"
               className="inline-flex items-center justify-center gap-2 rounded-2xl border border-stone-300 bg-white px-5 py-3.5 text-sm font-bold"
