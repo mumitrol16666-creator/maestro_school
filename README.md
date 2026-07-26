@@ -53,6 +53,8 @@ client, JWT-авторизация, typed responses и состояния заг
 
 Подключенные endpoint-ы и ограничения описаны в `web_app/INTEGRATION.md`.
 Документация CMS находится в `backend/docs/CMS.md`.
+Политика приоритета экранов и целевая навигация:
+[docs/app-screen-priority-policy.md](./docs/app-screen-priority-policy.md).
 Актуальный аудит реализации: [IMPLEMENTATION_AUDIT_2026-06-19.md](./IMPLEMENTATION_AUDIT_2026-06-19.md).
 
 ## Деплой на VPS
