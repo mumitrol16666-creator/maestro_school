@@ -29,4 +29,14 @@ export const teacherStudentsApi = {
       `/teachers/me/groups/${encodeURIComponent(crmGroupId)}/monthly-plan`,
       { method: "PUT", body: JSON.stringify(plan) },
     ),
+  awardWeeklyLeagueBonus: (body: {
+    studentId: string;
+    amount: number;
+    reason: string;
+    idempotencyKey: string;
+  }) =>
+    apiRequest<{ awarded: boolean; eventId?: string }>(
+      "/teacher/weekly-league/bonus",
+      { method: "POST", body: JSON.stringify(body) },
+    ),
 };

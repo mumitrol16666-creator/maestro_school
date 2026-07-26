@@ -1,6 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { awardSystemPoints } from "../../application/services/points.service.js";
+import { awardLeagueXp } from "../../application/services/weekly-league.service.js";
+import { preparedTestLeagueXp } from "../../application/services/weekly-league-policy.js";
 import { evaluateAchievements } from "../../application/services/achievement.service.js";
 import { BadRequestError, ForbiddenError, NotFoundError } from "../../domain/errors.js";
 import {
@@ -278,6 +280,15 @@ export async function preparedTestsRoutes(app: FastifyInstance) {
           })
         : { awarded: false };
       if (passed) {
+        await awardLeagueXp({
+          studentId,
+          amount: preparedTestLeagueXp(attemptNumber),
+          sourceType: "prepared_test",
+          sourceKey: `prepared-test:${studentId}:${testId}`,
+          description: attemptNumber === 1
+            ? `Тест «${template.title}» пройден с первой попытки`
+            : `Тест «${template.title}» пройден с ${attemptNumber}-й попытки`,
+        });
         await evaluateAchievements(studentId);
       }
       const remaining = null;

@@ -23,6 +23,7 @@ import {
 import { validateOfflineLessonSubmission } from "./offline-lesson-submission-policy.js";
 import { awardManualPoints } from "./points.service.js";
 import { addMaestroCoins } from "./coins.service.js";
+import { awardLeagueXp } from "./weekly-league.service.js";
 import { evaluateAchievements } from "./achievement.service.js";
 import { aqtobeMonthKey } from "../../lib/aqtobe-month.js";
 
@@ -75,6 +76,8 @@ async function applyOfflineLessonLearningResults(crmClassId: string, approvedBy:
       ? check.planTopicUpdates as StoredPlanTopicUpdate[]
       : [];
     let appliedPlanTopics = 0;
+    let completedPlanId: string | null = null;
+    const completedPlanTopics: Array<{ id: string; title: string }> = [];
 
     if (check.monthlyPlanId && updates.length) {
       const plan = await prisma.studentMonthlyPlan.findFirst({
@@ -84,12 +87,16 @@ async function applyOfflineLessonLearningResults(crmClassId: string, approvedBy:
         },
       });
       if (plan) {
+        completedPlanId = plan.id;
         const byId = new Map(updates.map((item) => [item.itemId, item.status]));
         const items = (Array.isArray(plan.items) ? plan.items : []) as StoredMonthlyPlanItem[];
         const nextItems = items.map((item) => {
           const nextStatus = byId.get(item.id);
           if (!nextStatus || item.status === "moved") return item;
           appliedPlanTopics += 1;
+          if (nextStatus === "completed" && item.status !== "completed") {
+            completedPlanTopics.push({ id: item.id, title: item.title });
+          }
           return {
             ...item,
             status: item.status === "completed" ? "completed" : nextStatus,
@@ -110,6 +117,26 @@ async function applyOfflineLessonLearningResults(crmClassId: string, approvedBy:
     let awardedCoins = 0;
 
     if (student) {
+      await awardLeagueXp({
+        studentId: student.id,
+        amount: 20,
+        sourceType: "offline_lesson",
+        sourceKey: `offline-lesson:${crmClassId}:${check.crmStudentId}`,
+        description: "Посещение офлайн-урока в школе",
+        awardedById: check.teacherUserId ?? approvedBy,
+      });
+      if (completedPlanId) {
+        for (const topic of completedPlanTopics) {
+          await awardLeagueXp({
+            studentId: student.id,
+            amount: 3,
+            sourceType: "monthly_plan",
+            sourceKey: `monthly-plan-topic:${completedPlanId}:${topic.id}`,
+            description: `Освоена тема плана «${topic.title}»`,
+            awardedById: check.teacherUserId ?? approvedBy,
+          });
+        }
+      }
       const pointsResult = await awardManualPoints({
         studentId: student.id,
         amount: check.lessonPoints,

@@ -14,6 +14,7 @@ import { syncLessonAvailability } from "./lesson-unlock.service.js";
 import { requireCourseEnrollment } from "./enrollment.service.js";
 import { syncCourseCompletionStatus } from "./course-progress.service.js";
 import { evaluateAchievements } from "./achievement.service.js";
+import { courseHomeworkLeagueXp } from "./weekly-league-policy.js";
 
 /** Student opens an available lesson → IN_PROGRESS */
 export async function startLesson(studentId: string, lessonId: string) {
@@ -122,6 +123,23 @@ export async function completeLesson(params: {
     amount: params.pointsReward,
     reason: `Урок «${params.lessonTitle}»`,
     awardedBy: params.reviewerId,
+  });
+  const submissionAttempts = await prisma.homeworkSubmission.count({
+    where: {
+      studentId: params.studentId,
+      homework: { lessonId: params.lessonId },
+    },
+  });
+  const { awardLeagueXp } = await import("./weekly-league.service.js");
+  await awardLeagueXp({
+    studentId: params.studentId,
+    amount: courseHomeworkLeagueXp(submissionAttempts),
+    sourceType: "course_homework",
+    sourceKey: `course-homework:${params.studentId}:${params.lessonId}`,
+    description: submissionAttempts > 1
+      ? `ДЗ к уроку «${params.lessonTitle}» принято после доработки`
+      : `ДЗ к уроку «${params.lessonTitle}» принято`,
+    awardedById: params.reviewerId,
   });
   const courseCompleted = await syncCourseCompletionStatus(params.studentId, params.courseId);
   if (courseCompleted) {

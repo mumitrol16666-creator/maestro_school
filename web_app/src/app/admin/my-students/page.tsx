@@ -2,12 +2,14 @@
 
 import {
   BookOpen,
+  Bolt,
   CalendarDays,
   CheckCircle2,
   CircleAlert,
   CircleX,
   AlertTriangle,
   GraduationCap,
+  LoaderCircle,
   MessageCircle,
   Search,
   TrendingUp,
@@ -284,6 +286,11 @@ export default function TeacherStudentsPage() {
 
 function StudentCard({ student }: { student: TeacherStudent }) {
   const [planOpen, setPlanOpen] = useState(false);
+  const [bonusOpen, setBonusOpen] = useState(false);
+  const [bonusAmount, setBonusAmount] = useState(3);
+  const [bonusReason, setBonusReason] = useState("");
+  const [bonusBusy, setBonusBusy] = useState(false);
+  const [bonusFeedback, setBonusFeedback] = useState<string | null>(null);
   const upcomingOnline = nextOnlineLesson(student);
   const latestAttendance = student.attendanceHistory[0];
   const latestAttendanceView = latestAttendance ? attendancePresentation(latestAttendance) : null;
@@ -435,6 +442,19 @@ function StudentCard({ student }: { student: TeacherStudent }) {
           </button>
         ) : null}
         {student.appUserId ? (
+          <button
+            type="button"
+            onClick={() => {
+              setBonusOpen((value) => !value);
+              setBonusFeedback(null);
+            }}
+            className="inline-flex items-center gap-2 rounded-full bg-violet-50 px-4 py-2 text-xs font-bold text-violet-800 transition hover:bg-violet-100"
+          >
+            <Bolt size={14} />
+            {bonusOpen ? "Скрыть бонус" : "Бонус в лиге"}
+          </button>
+        ) : null}
+        {student.appUserId ? (
           <Link
             href={`/admin/messages?contact=${student.appUserId}`}
             className="inline-flex items-center gap-2 rounded-full bg-ink px-4 py-2 text-xs font-bold text-white transition hover:bg-stone-700"
@@ -462,6 +482,61 @@ function StudentCard({ student }: { student: TeacherStudent }) {
           </span>
         )}
       </div>
+      {bonusOpen && student.appUserId ? (
+        <section className="mt-4 rounded-2xl border border-violet-200 bg-violet-50/60 p-4">
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-violet-700">Учебное поощрение</p>
+          <p className="mt-2 text-xs leading-5 text-stone-600">
+            До 10 XP одному ученику в неделю. Баланс и финансовые данные преподавателю не показываются.
+          </p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-[100px_1fr]">
+            <label className="text-xs font-bold text-stone-600">
+              XP
+              <input
+                type="number"
+                min={1}
+                max={10}
+                value={bonusAmount}
+                onChange={(event) => setBonusAmount(Number(event.target.value))}
+                className="mt-2 min-h-11 w-full rounded-xl border border-violet-200 bg-white px-3 text-sm outline-none focus:border-violet-500"
+              />
+            </label>
+            <label className="text-xs font-bold text-stone-600">
+              За что
+              <input
+                value={bonusReason}
+                maxLength={160}
+                onChange={(event) => setBonusReason(event.target.value)}
+                placeholder="Например: заметный прогресс в ритме"
+                className="mt-2 min-h-11 w-full rounded-xl border border-violet-200 bg-white px-3 text-sm outline-none focus:border-violet-500"
+              />
+            </label>
+          </div>
+          {bonusFeedback ? <p className="mt-3 text-xs font-bold text-violet-800">{bonusFeedback}</p> : null}
+          <button
+            type="button"
+            disabled={bonusBusy || bonusAmount < 1 || bonusAmount > 10 || bonusReason.trim().length < 3}
+            onClick={() => {
+              setBonusBusy(true);
+              setBonusFeedback(null);
+              void teacherStudentsApi.awardWeeklyLeagueBonus({
+                studentId: student.appUserId!,
+                amount: bonusAmount,
+                reason: bonusReason.trim(),
+                idempotencyKey: crypto.randomUUID(),
+              }).then((result) => {
+                setBonusFeedback(result.awarded ? `Начислено +${bonusAmount} XP` : "Этот бонус уже был начислен");
+                if (result.awarded) setBonusReason("");
+              }).catch((error) => {
+                setBonusFeedback(error instanceof Error ? error.message : "Не удалось начислить бонус");
+              }).finally(() => setBonusBusy(false));
+            }}
+            className="mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-violet-700 px-4 text-xs font-black text-white transition hover:bg-violet-800 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {bonusBusy ? <LoaderCircle size={14} className="animate-spin" /> : <Bolt size={14} />}
+            Начислить +{bonusAmount || 0} XP
+          </button>
+        </section>
+      ) : null}
       {planOpen && student.crmStudentId ? (
         <StudentMonthlyPlanEditor crmStudentId={student.crmStudentId} />
       ) : null}

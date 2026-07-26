@@ -9,6 +9,8 @@ import { addMaestroCoins } from "./coins.service.js";
 import { evaluateAchievements } from "./achievement.service.js";
 import { deliverUserNotification } from "./notification.service.js";
 import { awardManualPoints } from "./points.service.js";
+import { awardLeagueXp } from "./weekly-league.service.js";
+import { onlineAssignmentLeagueXp } from "./weekly-league-policy.js";
 import { postOnlineLessonBooking, postOnlineLessonStatus } from "../../infrastructure/crm/crm-client.js";
 
 const requestSelect = {
@@ -610,6 +612,14 @@ export async function completeOnlineLessonRequest(requestId: string, params: {
       idempotencyKey: `online-lesson-points:${requestId}`,
     });
   }
+  await awardLeagueXp({
+    studentId: item.studentId,
+    amount: 20,
+    sourceType: "online_lesson",
+    sourceKey: `online-lesson:${requestId}`,
+    description: `Онлайн-урок «${item.directionTitle}» завершён`,
+    awardedById: params.completedBy,
+  });
 
   if (params.lessonCoins > 0) {
     await addMaestroCoins({
@@ -766,6 +776,28 @@ export async function reviewOnlineLessonAssignment(submissionId: string, params:
       reason: `ДЗ после онлайн-урока: ${submission.assignment.request.directionTitle}`,
       awardedBy: params.reviewerId,
       idempotencyKey: `online-assignment-points:${submissionId}`,
+    });
+  }
+  if (params.action !== "return") {
+    const late = Boolean(
+      submission.assignment.dueAt
+      && submission.createdAt.getTime() > submission.assignment.dueAt.getTime()
+    );
+    const leagueXp = onlineAssignmentLeagueXp({
+      late,
+      withRemarks: params.action === "approve_with_remarks",
+    });
+    await awardLeagueXp({
+      studentId: submission.studentId,
+      amount: leagueXp,
+      sourceType: "online_assignment",
+      sourceKey: `online-assignment:${submissionId}`,
+      description: late
+        ? `ДЗ «${submission.assignment.title}» принято после срока`
+        : params.action === "approve_with_remarks"
+          ? `ДЗ «${submission.assignment.title}» принято с замечаниями`
+          : `ДЗ «${submission.assignment.title}» принято`,
+      awardedById: params.reviewerId,
     });
   }
 

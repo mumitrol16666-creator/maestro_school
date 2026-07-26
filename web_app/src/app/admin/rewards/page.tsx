@@ -9,9 +9,11 @@ import {
   PackageCheck,
   Pencil,
   Plus,
+  Trophy,
   X,
   XCircle,
 } from "lucide-react";
+import Link from "next/link";
 import { FormEvent, useMemo, useState } from "react";
 import { inputClass, primaryButton, secondaryButton } from "@/components/admin-ui";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
@@ -151,6 +153,12 @@ export default function AdminRewardsPage() {
         eyebrow="Maestro Rewards"
         title="Награды"
         description="Управляйте витриной и подтверждайте обмен Maestro Coins."
+        action={(
+          <Link href="/admin/league" className={secondaryButton}>
+            <Trophy size={16} />
+            Управление лигой
+          </Link>
+        )}
       />
 
       {error ? (

@@ -105,8 +105,26 @@ enum MaestroCoinSourceType {
   offline_lesson
   assignment
   course
+  weekly_league
   reward
   manual
+}
+
+enum LeagueXpSourceType {
+  online_lesson
+  offline_lesson
+  course_homework
+  online_assignment
+  prepared_test
+  monthly_plan
+  teacher_bonus
+}
+
+enum WeeklyLeagueAwardType {
+  first_place
+  second_place
+  third_place
+  personal_goal
 }
 
 enum RewardRedemptionStatus {
@@ -278,6 +296,7 @@ model User {
   profilePublic Boolean @default(false) @map("profile_public")
   roleId       String    @map("role_id") @db.Uuid
   isActive     Boolean   @default(true) @map("is_active")
+  leagueEligible Boolean @default(true) @map("league_eligible")
 
   // Integration: CRM user link
   crmStudentId         String?   @unique @map("crm_student_id") @db.VarChar(64)
@@ -299,6 +318,9 @@ model User {
   reviewedSubmissions  HomeworkSubmission[] @relation("HomeworkReviewer")
   pointsReceived       PointsTransaction[]  @relation("PointsStudent")
   pointsAwarded        PointsTransaction[]  @relation("PointsAwarder")
+  leagueXpEvents       LeagueXpEvent[]       @relation("LeagueXpStudent")
+  leagueXpAwarded      LeagueXpEvent[]       @relation("LeagueXpAwarder")
+  weeklyLeagueAwards   WeeklyLeagueAward[]
   achievements         StudentAchievement[]
   newsPosts            NewsPost[]
   auditLogs            AuditLog[]
@@ -687,6 +709,46 @@ model PointsTransaction {
   @@index([studentId, lessonId])
   @@index([awardedBy])
   @@map("points_transactions")
+}
+
+// ─── Weekly Maestro League (resets by date window, not by deleting points) ─
+
+model LeagueXpEvent {
+  id           String             @id @default(uuid()) @db.Uuid
+  studentId    String             @map("student_id") @db.Uuid
+  amount       Int
+  sourceType   LeagueXpSourceType @map("source_type")
+  sourceKey    String             @unique @map("source_key") @db.VarChar(191)
+  description  String             @db.VarChar(512)
+  awardedById  String?            @map("awarded_by") @db.Uuid
+  createdAt    DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  student   User  @relation("LeagueXpStudent", fields: [studentId], references: [id], onDelete: Cascade)
+  awardedBy User? @relation("LeagueXpAwarder", fields: [awardedById], references: [id], onDelete: SetNull)
+
+  @@index([studentId, createdAt])
+  @@index([sourceType, createdAt])
+  @@index([createdAt])
+  @@index([awardedById])
+  @@map("league_xp_events")
+}
+
+model WeeklyLeagueAward {
+  id         String                @id @default(uuid()) @db.Uuid
+  studentId  String                @map("student_id") @db.Uuid
+  weekStart  DateTime              @map("week_start") @db.Timestamptz(6)
+  awardType  WeeklyLeagueAwardType @map("award_type")
+  position   Int?
+  xp         Int
+  coins      Int
+  createdAt  DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  student User @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([weekStart, studentId, awardType])
+  @@index([studentId, weekStart])
+  @@index([weekStart, position])
+  @@map("weekly_league_awards")
 }
 
 // ─── Achievements (learning engine — schema only in UI) ─────────────────────

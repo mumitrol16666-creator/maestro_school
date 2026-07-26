@@ -7,9 +7,11 @@ import {
   Gift,
   LoaderCircle,
   Sparkles,
+  Trophy,
   X,
   XCircle,
 } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { ErrorState, LoadingState } from "@/components/data-states";
@@ -67,6 +69,12 @@ export default function RewardsPage() {
         eyebrow="Maestro Rewards"
         title="Ранги и награды"
         description="Учитесь, повышайте ранг и обменивайте Maestro Coins на полезные награды."
+        action={(
+          <Link href="/league" className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-ink px-5 text-sm font-bold text-white transition hover:bg-gold hover:text-ink sm:w-auto">
+            <Trophy size={17} />
+            Недельная лига
+          </Link>
+        )}
       />
 
       <div className="grid gap-5 lg:grid-cols-[1fr_300px]">
