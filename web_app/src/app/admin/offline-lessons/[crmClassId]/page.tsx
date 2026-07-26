@@ -40,12 +40,14 @@ import type {
 const statusLabels: Record<string, string> = {
   scheduled: "Запланирован",
   started: "Идёт",
+  not_filled: "Просрочен",
   pending_admin_review: "На проверке",
   completed: "Проведён",
   cancelled: "Отменён",
 };
 
 const REPORT_SUBMISSION_LEAD_MINUTES = 20;
+const teacherEditableLessonStatuses = new Set(["started", "not_filled"]);
 
 const attendanceLabels: Record<string, string> = {
   unmarked: "Не отмечен",
@@ -260,7 +262,7 @@ export default function AdminOfflineLessonDetailPage() {
   const isTrialReportReady = isTrialLesson ? trialReportReady(trialReport) : true;
   const canEditTeacherReport = Boolean(
     lesson
-      && lesson.status === "started"
+      && teacherEditableLessonStatuses.has(lesson.status)
       && (!isAdmin || canActForTeacher),
   );
   const canEditAdminReview = isAdmin && lesson?.status === "pending_admin_review";
@@ -723,7 +725,7 @@ export default function AdminOfflineLessonDetailPage() {
         )}
       </div>
 
-      {canActForTeacher && lesson.teacher?.name && ["scheduled", "started"].includes(lesson.status) ? (
+      {canActForTeacher && lesson.teacher?.name && ["scheduled", ...teacherEditableLessonStatuses].includes(lesson.status) ? (
         <div className="mb-6 rounded-[24px] border border-violet-200 bg-violet-50 p-5">
           <p className="text-sm font-bold text-violet-950">
             Вы работаете за преподавателя: {lesson.teacher.name}
