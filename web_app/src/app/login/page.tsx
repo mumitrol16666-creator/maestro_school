@@ -114,16 +114,19 @@ export default function LoginPage() {
 
           <form onSubmit={handleSubmit} className="mt-10 space-y-5">
             <label className="block">
-              <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-stone-500">Телефон</span>
+              <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-stone-500">Логин, email или телефон</span>
               <input
-                type="tel"
+                type="text"
                 required
-                autoComplete="tel"
+                autoComplete="username"
                 value={phone}
                 onChange={(event) => setPhone(event.target.value)}
-                placeholder="+7 999 123-45-67"
+                placeholder="s_77001234567"
                 className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-4 text-sm outline-none transition focus:border-gold"
               />
+              <span className="mt-2 block text-xs leading-5 text-stone-500">
+                Если один номер используется несколькими учениками, входите по логину.
+              </span>
             </label>
             <label className="block">
               <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-stone-500">Пароль</span>

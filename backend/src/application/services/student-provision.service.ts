@@ -10,11 +10,12 @@ import {
 import {
   applyUserLink,
   findUserByCrmStudentId,
-  findUserByPhoneNormalized,
+  findUsersByPhoneNormalized,
 } from "../repositories/user-link.repository.js";
 import { BadRequestError, ConflictError } from "../../domain/errors.js";
 import { isValidLogin, normalizeLogin } from "../../lib/login.js";
 import { isValidPhone, normalizePhoneDigits } from "../../lib/phone.js";
+import { selectProvisionCandidate } from "../../domain/shared-phone-accounts.js";
 
 export type ProvisionStudentInput = {
   crmStudentId: string;
@@ -77,11 +78,16 @@ export async function provisionStudentFromCrm(input: ProvisionStudentInput) {
     };
   }
 
-  const byPhone = await findUserByPhoneNormalized(digits);
-  if (byPhone) {
-    if (byPhone.crmStudentId && byPhone.crmStudentId !== crmStudentId) {
-      throw new ConflictError("Телефон уже привязан к другому ученику CRM");
-    }
+  const phoneCandidates = await findUsersByPhoneNormalized(digits);
+  const provisionCandidate = selectProvisionCandidate(phoneCandidates, { firstName, lastName });
+  if (provisionCandidate.kind === "ambiguous") {
+    throw new ConflictError(
+      "По этому номеру найдено несколько одноимённых аккаунтов. Выберите нужный аккаунт вручную.",
+      "PHONE_ACCOUNT_AMBIGUOUS",
+    );
+  }
+  if (provisionCandidate.kind === "reuse") {
+    const byPhone = provisionCandidate.user;
 
     if (input.password) {
       const passwordHash = await bcrypt.hash(input.password.trim(), 10);
@@ -130,7 +136,14 @@ export async function provisionStudentFromCrm(input: ProvisionStudentInput) {
     });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-      throw new ConflictError("Пользователь с таким телефоном или CRM ID уже существует");
+      const target = Array.isArray(error.meta?.target) ? error.meta.target.join(",") : "";
+      if (target.includes("login")) {
+        throw new ConflictError("Этот логин уже занят", "LOGIN_ALREADY_EXISTS");
+      }
+      if (target.includes("crm_student_id")) {
+        throw new ConflictError("Этот ученик CRM уже связан с другим аккаунтом", "CRM_STUDENT_ALREADY_LINKED");
+      }
+      throw new ConflictError("Не удалось создать аккаунт: уникальные данные уже используются");
     }
     throw error;
   }

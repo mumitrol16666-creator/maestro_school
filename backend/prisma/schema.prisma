@@ -271,7 +271,7 @@ model User {
   // Integration: CRM user link
   crmStudentId         String?   @unique @map("crm_student_id") @db.VarChar(64)
   crmTeacherId         String?   @unique @map("crm_teacher_id") @db.VarChar(64)
-  phoneNormalized      String?   @unique @map("phone_normalized") @db.VarChar(32)
+  phoneNormalized      String?   @map("phone_normalized") @db.VarChar(32)
   externalLinkStatus   String?   @map("external_link_status") @db.VarChar(32)
   linkedAt             DateTime? @map("linked_at") @db.Timestamptz(6)
 
@@ -314,6 +314,7 @@ model User {
   @@index([roleId])
   @@index([email])
   @@index([login])
+  @@index([phoneNormalized])
   @@index([isActive])
   @@index([deletedAt])
 

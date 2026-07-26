@@ -10,7 +10,7 @@ import {
   findUserWithRoleById,
   findUserWithRoleByLogin,
   findUserWithRoleByLoginOrEmail,
-  findUserWithRoleByPhone,
+  findUsersWithRoleByPhone,
   updateUserPassword,
   updateUserProfile,
 } from "../../application/repositories/auth.repository.js";
@@ -31,6 +31,7 @@ import {
   buildAuthUserProfile,
   exchangeSsoBridgeToken,
 } from "../../application/services/sso-bridge.service.js";
+import { classifyPhoneLoginCandidates } from "../../domain/shared-phone-accounts.js";
 
 const ssoExchangeSchema = z.object({
   token: z.string().min(10),
@@ -129,7 +130,14 @@ export async function authRoutes(app: FastifyInstance) {
     const looksLikePhone = /^\+?\d[\d\s\-()]{5,}$/.test(input);
     if (looksLikePhone) {
       const digits = normalizePhoneDigits(input);
-      user = await findUserWithRoleByPhone(digits);
+      const resolution = classifyPhoneLoginCandidates(await findUsersWithRoleByPhone(digits));
+      if (resolution.kind === "ambiguous") {
+        throw new ConflictError(
+          "На этот номер зарегистрировано несколько учеников. Войдите по уникальному логину.",
+          "PHONE_LOGIN_AMBIGUOUS",
+        );
+      }
+      user = resolution.kind === "single" ? resolution.user : null;
     } else if (input.includes("@")) {
       user = await findUserWithRoleByLoginOrEmail(input);
     } else {
@@ -137,7 +145,7 @@ export async function authRoutes(app: FastifyInstance) {
     }
 
     if (!user || !(await bcrypt.compare(body.password, user.passwordHash))) {
-      throw new UnauthorizedError("Неверный телефон или пароль");
+      throw new UnauthorizedError("Неверный логин, email или пароль");
     }
 
     const token = await reply.jwtSign({ sub: user.id, role: user.role.slug });
@@ -205,9 +213,6 @@ export async function authRoutes(app: FastifyInstance) {
         if (target.includes("login")) {
           throw new ConflictError("Этот логин уже занят", "LOGIN_ALREADY_EXISTS");
         }
-        if (target.includes("phone_normalized")) {
-          throw new ConflictError("Пользователь с таким телефоном уже зарегистрирован", "PHONE_ALREADY_EXISTS");
-        }
         throw new ConflictError("Пользователь с таким email уже зарегистрирован", "EMAIL_ALREADY_EXISTS");
       }
       throw error;
@@ -265,7 +270,12 @@ export async function authRoutes(app: FastifyInstance) {
       ...(body.firstName ? { firstName: body.firstName } : {}),
       ...(body.lastName ? { lastName: body.lastName } : {}),
       ...(body.middleName !== undefined ? { middleName: body.middleName || null } : {}),
-      ...(body.phone ? { phone: normalizePhoneDigits(body.phone) } : {}),
+      ...(body.phone
+        ? {
+            phone: normalizePhoneDigits(body.phone),
+            phoneNormalized: normalizePhoneDigits(body.phone),
+          }
+        : {}),
       ...(body.profileBio !== undefined ? { profileBio: body.profileBio || null } : {}),
       ...(body.profileInstrument !== undefined ? { profileInstrument: body.profileInstrument || null } : {}),
       ...(body.profileInterests !== undefined

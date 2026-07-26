@@ -187,7 +187,14 @@ export async function integrationRoutes(app: FastifyInstance) {
     const passwordHash = await bcrypt.hash(password, 10);
     await updateUserPassword(user.id, passwordHash);
 
-    return { success: true, message: "Пароль успешно синхронизирован" };
+    return {
+      success: true,
+      message: "Пароль успешно синхронизирован",
+      data: {
+        appUserId: user.id,
+        login: user.login,
+      },
+    };
   });
 
   app.post("/users/archive-student-access", async (request) => {

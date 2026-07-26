@@ -30,10 +30,11 @@ export async function findUserWithRoleByLoginOrEmail(identifier: string) {
   return findUserWithRoleByLogin(value);
 }
 
-export async function findUserWithRoleByPhone(phoneNormalized: string) {
-  return prisma.user.findFirst({
+export async function findUsersWithRoleByPhone(phoneNormalized: string) {
+  return prisma.user.findMany({
     where: { phoneNormalized, ...notDeleted, isActive: true },
     include: userWithRoleInclude,
+    orderBy: { createdAt: "asc" },
   });
 }
 
@@ -58,6 +59,7 @@ export async function updateUserProfile(
     lastName?: string;
     middleName?: string | null;
     phone?: string;
+    phoneNormalized?: string;
     avatar?: string | null;
     profileBio?: string | null;
     profileInstrument?: string | null;

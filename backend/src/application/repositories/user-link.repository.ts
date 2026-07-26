@@ -1,19 +1,30 @@
 import { prisma, notDeleted } from "../../infrastructure/database/prisma.js";
 import { normalizePhoneDigits } from "../../lib/phone.js";
 
-export async function findUserByPhoneNormalized(phoneNormalized: string) {
+export async function findUsersByPhoneNormalized(phoneNormalized: string) {
   const digits = normalizePhoneDigits(phoneNormalized);
-  if (!digits) return null;
+  if (!digits) return [];
 
-  const users = await prisma.user.findMany({
-    where: { ...notDeleted, isActive: true },
+  return prisma.user.findMany({
+    where: {
+      ...notDeleted,
+      isActive: true,
+      OR: [
+        { phoneNormalized: digits },
+        { phone: digits },
+      ],
+    },
     include: {
       role: true,
       teacherProfile: true,
     },
+    orderBy: { createdAt: "asc" },
   });
+}
 
-  return users.find((user) => normalizePhoneDigits(user.phone) === digits) ?? null;
+export async function findUserByPhoneNormalized(phoneNormalized: string) {
+  const users = await findUsersByPhoneNormalized(phoneNormalized);
+  return users.length === 1 ? users[0] : null;
 }
 
 export async function findUserByCrmStudentId(crmStudentId: string) {
@@ -53,7 +64,15 @@ export async function applyUserLink(params: {
     user = await findUserByAppUserId(params.appUserId);
   }
   if (!user && digits) {
-    user = await findUserByPhoneNormalized(digits);
+    const candidates = await findUsersByPhoneNormalized(digits);
+    if (candidates.length > 1) {
+      return {
+        success: false as const,
+        error: "По этому номеру найдено несколько аккаунтов. Выберите аккаунт по логину.",
+        status: "ambiguous" as const,
+      };
+    }
+    user = candidates[0] ?? null;
   }
 
   if (!user) {
@@ -169,9 +188,9 @@ export async function linkUserToCrm(
 
 export async function getUserLinkStatus(phoneNormalized: string) {
   const digits = normalizePhoneDigits(phoneNormalized);
-  const user = await findUserByPhoneNormalized(digits);
+  const users = await findUsersByPhoneNormalized(digits);
 
-  if (!user) {
+  if (users.length === 0) {
     return {
       success: true as const,
       data: {
@@ -185,6 +204,39 @@ export async function getUserLinkStatus(phoneNormalized: string) {
     };
   }
 
+  const candidate = (user: (typeof users)[number]) => ({
+    appUserId: user.id,
+    crmStudentId: user.crmStudentId,
+    crmTeacherId: user.crmTeacherId,
+    status: user.externalLinkStatus
+      || (user.crmStudentId || user.crmTeacherId ? "linked" : "unlinked"),
+    linkedAt: user.linkedAt,
+    appUser: {
+      id: user.id,
+      login: user.login,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      phone: user.phone,
+      role: user.role.slug,
+    },
+  });
+
+  if (users.length > 1) {
+    return {
+      success: true as const,
+      data: {
+        phoneNormalized: digits,
+        status: "manual_review" as const,
+        appUserId: null,
+        crmStudentId: null,
+        crmTeacherId: null,
+        appUser: null,
+        candidates: users.map(candidate),
+      },
+    };
+  }
+
+  const user = users[0];
   const linked = Boolean(user.crmStudentId || user.crmTeacherId);
   return {
     success: true as const,
