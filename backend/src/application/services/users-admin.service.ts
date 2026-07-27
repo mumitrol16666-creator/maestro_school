@@ -174,6 +174,11 @@ export async function updateAdminUserRole(input: {
     include: { role: { select: { slug: true } } },
   });
   if (!user) throw new NotFoundError("User");
+  if (user.role.slug === "parent") {
+    throw new BadRequestError(
+      "Роль родительского аккаунта управляется только в карточке ученика",
+    );
+  }
 
   if (user.role.slug === "admin" && input.roleSlug !== "admin") {
     const remainingAdmins = await countActiveAdmins(input.userId);

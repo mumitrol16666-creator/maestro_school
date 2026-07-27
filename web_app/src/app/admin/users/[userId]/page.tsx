@@ -41,6 +41,7 @@ export default function AdminUserDetailPage() {
   const roleValue = selectedRole || user.role;
   const isSelf = currentUser?.id === user.id;
   const canAssignRoles = isContentAdminRole(currentUser?.role);
+  const roleManagedInStudentCard = user.role === "parent";
 
   async function saveRole() {
     setBusy(true);
@@ -74,7 +75,7 @@ export default function AdminUserDetailPage() {
           </div>
           <div className="mt-6 space-y-2 text-sm text-stone-600">
             <p><span className="font-bold text-ink">Логин:</span> @{user.login}</p>
-            <p><span className="font-bold text-ink">Email:</span> {user.email}</p>
+            <p><span className="font-bold text-ink">Email:</span> {user.email || "не указан"}</p>
             <p><span className="font-bold text-ink">Телефон:</span> {formatPhoneDisplay(user.phone)}</p>
             <p><span className="font-bold text-ink">Зарегистрирован:</span> {new Date(user.createdAt).toLocaleDateString("ru-RU")}</p>
           </div>
@@ -117,10 +118,13 @@ export default function AdminUserDetailPage() {
           <div className="mt-5 space-y-4">
             <select
               value={roleValue}
-              disabled={!canAssignRoles || isSelf || busy}
+              disabled={!canAssignRoles || isSelf || busy || roleManagedInStudentCard}
               onChange={(event) => setSelectedRole(event.target.value)}
               className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-3.5 text-sm outline-none disabled:opacity-60"
             >
+              {roleManagedInStudentCard ? (
+                <option value="parent">{roleLabel("parent")}</option>
+              ) : null}
               {roles.map((role) => (
                 <option key={role.slug} value={role.slug}>
                   {roleLabel(role.slug)}
@@ -128,10 +132,12 @@ export default function AdminUserDetailPage() {
               ))}
             </select>
             <p className="rounded-2xl bg-stone-50 px-4 py-3 text-sm leading-6 text-stone-600">
-              {roleDescription(roleValue)}
+              {roleManagedInStudentCard
+                ? "Родительский доступ создаётся и отключается в карточке привязанного ученика."
+                : roleDescription(roleValue)}
             </p>
 
-            {canAssignRoles && !isSelf ? (
+            {canAssignRoles && !isSelf && !roleManagedInStudentCard ? (
               <button
                 type="button"
                 disabled={busy || roleValue === user.role}

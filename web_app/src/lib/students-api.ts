@@ -32,6 +32,26 @@ export interface AdminStudentDetail extends AdminStudentSummary {
     scheduledAt: string | null;
     createdAt: string;
   }[];
+  parents: ParentStudentLink[];
+}
+
+export type FamilyRelationship = "mother" | "father" | "guardian" | "other";
+
+export interface ParentStudentLink {
+  linkId: string;
+  relationship: FamilyRelationship;
+  isActive: boolean;
+  parent: {
+    id: string;
+    login: string | null;
+    firstName: string;
+    lastName: string;
+    middleName?: string | null;
+    fullName: string;
+    phone: string;
+    isActive: boolean;
+    role: "parent";
+  };
 }
 
 export const studentsApi = {
@@ -45,4 +65,37 @@ export const studentsApi = {
     );
   },
   get: (id: string) => apiRequest<AdminStudentDetail>(`/admin/students/${id}`),
+  createParent: (
+    studentId: string,
+    body: {
+      firstName: string;
+      lastName: string;
+      middleName?: string;
+      phone: string;
+      login: string;
+      password: string;
+      relationship: FamilyRelationship;
+    },
+  ) =>
+    apiRequest<ParentStudentLink>(`/admin/students/${studentId}/parents`, {
+      method: "POST",
+      body: JSON.stringify({ mode: "create", ...body }),
+    }),
+  linkParent: (
+    studentId: string,
+    body: { login: string; relationship: FamilyRelationship },
+  ) =>
+    apiRequest<ParentStudentLink>(`/admin/students/${studentId}/parents`, {
+      method: "POST",
+      body: JSON.stringify({ mode: "link", ...body }),
+    }),
+  unlinkParent: (studentId: string, linkId: string) =>
+    apiRequest<{ revoked: boolean }>(`/admin/students/${studentId}/parents/${linkId}`, {
+      method: "DELETE",
+    }),
+  resetParentPassword: (studentId: string, linkId: string, password: string) =>
+    apiRequest<{ updated: boolean }>(`/admin/students/${studentId}/parents/${linkId}/password`, {
+      method: "PATCH",
+      body: JSON.stringify({ password }),
+    }),
 };

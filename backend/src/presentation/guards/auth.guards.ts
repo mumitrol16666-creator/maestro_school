@@ -65,6 +65,13 @@ export async function requireStudent(request: FastifyRequest): Promise<void> {
   }
 }
 
+export async function requireParent(request: FastifyRequest): Promise<void> {
+  if (!request.user) throw new UnauthorizedError();
+  if (request.user.roleSlug !== "parent") {
+    throw new ForbiddenError("Parent account required");
+  }
+}
+
 export async function requireTeacher(request: FastifyRequest): Promise<void> {
   if (!request.user) throw new UnauthorizedError();
   if (request.user.roleSlug !== "teacher") {

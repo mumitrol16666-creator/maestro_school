@@ -345,6 +345,9 @@ model User {
   preparedTestDrafts          PreparedTestDraft[] @relation("PreparedTestDraftStudent")
   rewardRedemptions           RewardRedemption[] @relation("RewardStudent")
   processedRewardRedemptions  RewardRedemption[] @relation("RewardProcessor")
+  parentLinksAsParent         ParentStudentLink[] @relation("ParentLinkParent")
+  parentLinksAsStudent        ParentStudentLink[] @relation("ParentLinkStudent")
+  parentLinksCreated          ParentStudentLink[] @relation("ParentLinkCreator")
 
   @@index([roleId])
   @@index([email])
@@ -356,6 +359,28 @@ model User {
   @@index([crmStudentId])
   @@index([crmTeacherId])
   @@map("users")
+}
+
+model ParentStudentLink {
+  id             String    @id @default(uuid()) @db.Uuid
+  parentUserId   String    @map("parent_user_id") @db.Uuid
+  studentUserId  String    @map("student_user_id") @db.Uuid
+  relationship   String    @default("guardian") @db.VarChar(32)
+  isActive       Boolean   @default(true) @map("is_active")
+  createdById    String?   @map("created_by_id") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  revokedAt      DateTime? @map("revoked_at") @db.Timestamptz(6)
+
+  parent    User  @relation("ParentLinkParent", fields: [parentUserId], references: [id], onDelete: Cascade)
+  student   User  @relation("ParentLinkStudent", fields: [studentUserId], references: [id], onDelete: Cascade)
+  createdBy User? @relation("ParentLinkCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([parentUserId, studentUserId])
+  @@index([parentUserId, isActive])
+  @@index([studentUserId, isActive])
+  @@index([createdById])
+  @@map("parent_student_links")
 }
 
 model PreparedTestAttempt {

@@ -7,7 +7,7 @@ export interface AdminUserSummary {
   lastName: string;
   middleName?: string | null;
   fullName?: string;
-  email: string;
+  email: string | null;
   phone: string;
   isActive: boolean;
   createdAt: string;

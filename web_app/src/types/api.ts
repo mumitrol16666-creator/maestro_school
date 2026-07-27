@@ -12,7 +12,7 @@ export interface ApiDirection {
 export interface ApiAuthUser {
   id: string;
   login?: string;
-  email: string;
+  email?: string | null;
   firstName?: string;
   lastName?: string;
   middleName?: string | null;

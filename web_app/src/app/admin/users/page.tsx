@@ -9,7 +9,7 @@ import { PageHeader } from "@/components/page-header";
 import { RoleBadge } from "@/components/role-badge";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { formatFio } from "@/lib/name";
-import { ASSIGNABLE_ROLES, roleLabel } from "@/lib/role-labels";
+import { roleLabel, USER_FILTER_ROLES } from "@/lib/role-labels";
 import { formatPhoneDisplay } from "@/lib/phone";
 import { usersApi } from "@/lib/users-api";
 
@@ -52,7 +52,7 @@ export default function AdminUsersPage() {
           className="rounded-2xl border border-stone-200 bg-white px-4 py-3 text-sm outline-none"
         >
           <option value="">Все роли</option>
-          {ASSIGNABLE_ROLES.map((slug) => (
+          {USER_FILTER_ROLES.map((slug) => (
             <option key={slug} value={slug}>{roleLabel(slug)}</option>
           ))}
         </select>

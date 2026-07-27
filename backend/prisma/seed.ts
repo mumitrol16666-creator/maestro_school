@@ -12,6 +12,7 @@ const ROLES = [
   { name: "Teacher", slug: "teacher", description: "Instructor" },
   { name: "Curator", slug: "curator", description: "Student progress curator" },
   { name: "Student", slug: "student", description: "Learner" },
+  { name: "Parent", slug: "parent", description: "Read-only family access to linked students" },
   { name: "Admin", slug: "admin", description: "Content and learning administrator" },
 ] as const;
 
@@ -35,6 +36,7 @@ const PERMISSIONS = [
   { code: "coins.award", description: "Award Maestro Coins manually" },
   { code: "offline_school.read", description: "View offline school lessons from CRM" },
   { code: "offline_school.write", description: "Manage offline school lessons via CRM proxy" },
+  { code: "family.read", description: "View family dashboard for linked students" },
 ] as const;
 
 const ROLE_PERMISSION_MAP: Record<string, string[]> = {
@@ -71,6 +73,7 @@ const ROLE_PERMISSION_MAP: Record<string, string[]> = {
     "progress.write", "homework.submit", "news.read", "points.read",
     "online_lessons.read", "online_lessons.request", "coins.read",
   ],
+  parent: ["family.read"],
 };
 
 const adminSchema = z.object({

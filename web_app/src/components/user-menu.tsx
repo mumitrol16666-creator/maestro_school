@@ -13,7 +13,7 @@ export function UserMenu() {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
-  const fullName = (user ? formatFio(user) : "") || user?.email || "Пользователь";
+  const fullName = (user ? formatFio(user) : "") || user?.email || user?.login || "Пользователь";
   const initials = user ? initialsFromName(user) : fullName.slice(0, 2).toUpperCase();
   const student = isStudentRole(user?.role);
   const settingsHref = settingsPathForRole(user?.role);
@@ -60,7 +60,9 @@ export function UserMenu() {
         >
           <div className="border-b border-stone-100 bg-stone-50/90 px-4 py-3.5">
             <p className="truncate text-sm font-bold">{fullName}</p>
-            <p className="mt-0.5 truncate text-xs text-stone-400">{user?.email}</p>
+            <p className="mt-0.5 truncate text-xs text-stone-400">
+              {user?.email || user?.login || user?.phone || roleLabel(user?.role)}
+            </p>
           </div>
           <div className="space-y-1 p-2">
             <Link

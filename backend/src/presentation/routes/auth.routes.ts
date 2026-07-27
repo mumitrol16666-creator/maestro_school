@@ -32,6 +32,10 @@ import {
   exchangeSsoBridgeToken,
 } from "../../application/services/sso-bridge.service.js";
 import { classifyPhoneLoginCandidates } from "../../domain/shared-phone-accounts.js";
+import {
+  filterLoginCandidatesByProfile,
+  roleMatchesLoginProfile,
+} from "../../domain/login-profile.js";
 
 const ssoExchangeSchema = z.object({
   token: z.string().min(10),
@@ -40,6 +44,7 @@ const ssoExchangeSchema = z.object({
 const loginSchema = z.object({
   phone: z.string().trim().min(1).max(32),
   password: z.string().min(8).max(72),
+  profile: z.enum(["student", "parent", "staff"]).optional(),
 });
 
 const registerSchema = z.object({
@@ -130,10 +135,14 @@ export async function authRoutes(app: FastifyInstance) {
     const looksLikePhone = /^\+?\d[\d\s\-()]{5,}$/.test(input);
     if (looksLikePhone) {
       const digits = normalizePhoneDigits(input);
-      const resolution = classifyPhoneLoginCandidates(await findUsersWithRoleByPhone(digits));
+      const candidates = filterLoginCandidatesByProfile(
+        await findUsersWithRoleByPhone(digits),
+        body.profile,
+      );
+      const resolution = classifyPhoneLoginCandidates(candidates);
       if (resolution.kind === "ambiguous") {
         throw new ConflictError(
-          "На этот номер зарегистрировано несколько учеников. Войдите по уникальному логину.",
+          "На этот номер зарегистрировано несколько профилей этого типа. Войдите по уникальному логину.",
           "PHONE_LOGIN_AMBIGUOUS",
         );
       }
@@ -144,6 +153,9 @@ export async function authRoutes(app: FastifyInstance) {
       user = await findUserWithRoleByLoginOrEmail(input);
     }
 
+    if (user && !roleMatchesLoginProfile(user.role.slug, body.profile)) {
+      user = null;
+    }
     if (!user || !(await bcrypt.compare(body.password, user.passwordHash))) {
       throw new UnauthorizedError("Неверный логин, email или пароль");
     }

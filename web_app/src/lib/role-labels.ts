@@ -6,6 +6,7 @@ const ROLE_LABELS: Record<string, string> = {
   curator: "Куратор",
   branch_manager: "Менеджер филиала",
   student: "Ученик",
+  parent: "Родитель",
 };
 
 const PERMISSION_LABELS: Record<string, string> = {
@@ -28,6 +29,7 @@ const PERMISSION_LABELS: Record<string, string> = {
   "coins.award": "Начисление Maestro Coins",
   "offline_school.read": "Расписание школы",
   "offline_school.write": "Посещаемость и отчёты по урокам",
+  "family.read": "Семейный кабинет",
 };
 
 const ROLE_DESCRIPTIONS: Record<string, string> = {
@@ -37,6 +39,7 @@ const ROLE_DESCRIPTIONS: Record<string, string> = {
   curator: "Следит за учениками, домашними заданиями и обратной связью.",
   teacher: "Видит своих учеников, проводит уроки и заполняет отчёты.",
   student: "Видит своё расписание, материалы, задания и результаты.",
+  parent: "Видит расписание, домашние задания, итоги и абонемент привязанных учеников.",
   super_admin: "Полный доступ ко всем разделам школы.",
 };
 
@@ -48,6 +51,8 @@ export const ASSIGNABLE_ROLES = [
   "admin",
   "owner",
 ] as const;
+
+export const USER_FILTER_ROLES = [...ASSIGNABLE_ROLES, "parent"] as const;
 
 const STAFF_ROLES = ["admin", "owner", "teacher", "curator", "branch_manager", "super_admin"] as const;
 const CONTENT_ADMIN_ROLES = ["admin", "owner", "super_admin"] as const;
@@ -83,5 +88,6 @@ export function isOfflineCoordinatorRole(role?: string | null) {
 }
 
 export function settingsPathForRole(role?: string | null) {
+  if (role === "parent") return "/family/settings";
   return isStudentRole(role) ? "/settings" : "/admin/settings";
 }

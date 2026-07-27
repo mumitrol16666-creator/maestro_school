@@ -7,6 +7,7 @@ const ROLE_STYLES: Record<string, string> = {
   curator: "bg-violet-100 text-violet-900",
   branch_manager: "bg-orange-100 text-orange-900",
   student: "bg-amber-50 text-amber-900",
+  parent: "bg-emerald-50 text-emerald-900",
 };
 
 export function RoleBadge({ role }: { role: string }) {

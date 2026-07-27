@@ -1,6 +1,14 @@
 "use client";
 
-import { ArrowRight, Eye, EyeOff, LoaderCircle } from "lucide-react";
+import {
+  ArrowRight,
+  BriefcaseBusiness,
+  Eye,
+  EyeOff,
+  GraduationCap,
+  LoaderCircle,
+  UsersRound,
+} from "lucide-react";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AuthHeroPanel } from "@/components/auth-hero-panel";
@@ -12,6 +20,7 @@ import { isStaffRole } from "@/lib/role-labels";
 
 function homePathForRole(role?: string | null) {
   if (!role || role === "student") return "/dashboard";
+  if (role === "parent") return "/family";
   if (role === "admin" || role === "owner" || role === "super_admin") return "/admin";
   if (isStaffRole(role)) return "/admin/offline-lessons";
   return "/dashboard";
@@ -32,6 +41,7 @@ export default function LoginPage() {
   const { login, loginWithSso, user, loading: authLoading } = useAuth();
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [profile, setProfile] = useState<"student" | "parent" | "staff">("student");
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [ssoPending, setSsoPending] = useState(false);
@@ -80,7 +90,7 @@ export default function LoginPage() {
     setSubmitting(true);
     setError(null);
     try {
-      const loggedInUser = await login(phone, password);
+      const loggedInUser = await login(phone, password, profile);
       router.replace(homePathForRole(loggedInUser.role));
     } catch (reason) {
       setError(reason instanceof ApiError ? reason.message : "Не удалось войти в кабинет");
@@ -113,6 +123,39 @@ export default function LoginPage() {
           </p>
 
           <form onSubmit={handleSubmit} className="mt-10 space-y-5">
+            <fieldset>
+              <legend className="mb-2 text-xs font-bold uppercase tracking-wider text-stone-500">
+                Какой кабинет открыть
+              </legend>
+              <div className="grid grid-cols-3 gap-2 rounded-2xl border border-stone-200 bg-stone-50 p-1.5">
+                {([
+                  { value: "student", label: "Ученик", icon: GraduationCap },
+                  { value: "parent", label: "Родитель", icon: UsersRound },
+                  { value: "staff", label: "Сотрудник", icon: BriefcaseBusiness },
+                ] as const).map((item) => {
+                  const Icon = item.icon;
+                  const selected = profile === item.value;
+                  return (
+                    <button
+                      key={item.value}
+                      type="button"
+                      onClick={() => {
+                        setProfile(item.value);
+                        setError(null);
+                      }}
+                      className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl px-2 text-xs font-bold transition sm:flex-row ${
+                        selected
+                          ? "bg-ink text-white shadow-sm"
+                          : "text-stone-500 hover:bg-white hover:text-ink"
+                      }`}
+                    >
+                      <Icon size={16} className={selected ? "text-gold" : undefined} />
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </fieldset>
             <label className="block">
               <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-stone-500">Логин, email или телефон</span>
               <input
@@ -125,7 +168,7 @@ export default function LoginPage() {
                 className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-4 text-sm outline-none transition focus:border-gold"
               />
               <span className="mt-2 block text-xs leading-5 text-stone-500">
-                Если один номер используется несколькими учениками, входите по логину.
+                Один номер можно использовать для профилей ученика и родителя. Пароли у них разные.
               </span>
             </label>
             <label className="block">
@@ -171,9 +214,9 @@ export default function LoginPage() {
           <AndroidAppDownloadLink />
 
           <div className="mt-8 rounded-2xl border border-gold/20 bg-gold/5 px-4 py-4 text-center">
-            <p className="text-sm font-bold text-ink">Платформа Maestro — для учеников школы</p>
+            <p className="text-sm font-bold text-ink">Платформа Maestro — для учеников и их родителей</p>
             <p className="mt-2 text-sm leading-6 text-stone-500">
-              Это внутренняя экосистема: уроки, домашние задания, материалы и прогресс. Доступ выдаём после записи в школу.
+              Ученик занимается и сдаёт задания. Родитель видит только результаты, расписание и абонемент.
             </p>
           </div>
 

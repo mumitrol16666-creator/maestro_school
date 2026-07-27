@@ -5,6 +5,7 @@ import { getStudentAchievementsOverview } from "./achievement.service.js";
 import { getStudentCoins } from "./coins.service.js";
 import { calculateStudentPoints } from "./points.service.js";
 import { countCompletedLessons } from "../repositories/learning.repository.js";
+import { listStudentParents } from "./family.service.js";
 
 export async function listAdminStudents(input: {
   search?: string;
@@ -83,7 +84,7 @@ export async function getAdminStudent(studentId: string) {
   });
   if (!student) throw new NotFoundError("Student");
 
-  const [pointsResult, coinsResult, completedLessonsResult, achievementsResult, enrollmentsResult, onlineLessonsResult] = await Promise.allSettled([
+  const [pointsResult, coinsResult, completedLessonsResult, achievementsResult, enrollmentsResult, onlineLessonsResult, parentsResult] = await Promise.allSettled([
     calculateStudentPoints(studentId),
     getStudentCoins(studentId),
     countCompletedLessons(studentId),
@@ -107,11 +108,13 @@ export async function getAdminStudent(studentId: string) {
         createdAt: true,
       },
     }),
+    listStudentParents(studentId),
   ]);
 
   const achievements = achievementsResult.status === "fulfilled" ? achievementsResult.value : [];
   const enrollments = enrollmentsResult.status === "fulfilled" ? enrollmentsResult.value : [];
   const onlineLessons = onlineLessonsResult.status === "fulfilled" ? onlineLessonsResult.value : [];
+  const parents = parentsResult.status === "fulfilled" ? parentsResult.value : [];
   const earnedAchievements = achievements.filter((item) => item.earned);
 
   return {
@@ -129,5 +132,6 @@ export async function getAdminStudent(studentId: string) {
       course: item.course,
     })),
     onlineLessons,
+    parents,
   };
 }

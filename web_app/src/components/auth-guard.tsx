@@ -11,8 +11,9 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
+    if (!loading && user?.role === "parent") router.replace("/family");
   }, [loading, router, user]);
 
-  if (loading || !user) return <div className="min-h-screen bg-cream p-8"><LoadingState label="Проверяем вход в кабинет" /></div>;
+  if (loading || !user || user.role === "parent") return <div className="min-h-screen bg-cream p-8"><LoadingState label="Проверяем вход в кабинет" /></div>;
   return children;
 }
