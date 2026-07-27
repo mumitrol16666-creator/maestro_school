@@ -90,3 +90,217 @@ button.card-hover:focus-visible {
 .section-eyebrow {
   letter-spacing: 0.2em;
 }
+
+.maestro-loading-stage {
+  isolation: isolate;
+  background-image:
+    radial-gradient(circle at 50% -20%, rgba(197, 154, 69, 0.2), transparent 45%),
+    linear-gradient(145deg, #1d1e1a 0%, #151613 65%, #11120f 100%);
+}
+
+.maestro-loading-stage::after {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.08) 0.6px, transparent 0.6px);
+  background-size: 6px 6px;
+  content: "";
+  opacity: 0.22;
+  pointer-events: none;
+}
+
+.maestro-loading-glow {
+  position: absolute;
+  width: 13rem;
+  height: 13rem;
+  border-radius: 999px;
+  filter: blur(68px);
+  opacity: 0.2;
+  pointer-events: none;
+}
+
+.maestro-loading-glow-left {
+  top: -6rem;
+  left: -5rem;
+  background: #c59a45;
+  animation: maestro-glow-drift 5s ease-in-out infinite;
+}
+
+.maestro-loading-glow-right {
+  right: -5rem;
+  bottom: -7rem;
+  background: #6d58a7;
+  animation: maestro-glow-drift 5s ease-in-out 1.2s infinite reverse;
+}
+
+.maestro-loading-staff {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(620px, 90%);
+  height: 88px;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 16px,
+    rgba(255, 255, 255, 0.055) 17px,
+    rgba(255, 255, 255, 0.055) 18px
+  );
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
+  transform: translate(-50%, -50%) rotate(-3deg);
+  opacity: 0.65;
+  pointer-events: none;
+}
+
+.maestro-loading-mark {
+  position: relative;
+  display: grid;
+  width: 86px;
+  height: 86px;
+  place-items: center;
+  animation: maestro-mark-float 2.8s ease-in-out infinite;
+}
+
+.maestro-loading-monogram {
+  display: grid;
+  width: 62px;
+  height: 62px;
+  place-items: center;
+  border: 1px solid rgba(197, 154, 69, 0.45);
+  border-radius: 22px;
+  background: linear-gradient(145deg, rgba(197, 154, 69, 0.22), rgba(197, 154, 69, 0.05));
+  box-shadow:
+    0 18px 55px rgba(0, 0, 0, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  color: #f2d28a;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 34px;
+  line-height: 1;
+}
+
+.maestro-loading-orbit {
+  position: absolute;
+  inset: 0;
+  border: 1px solid rgba(197, 154, 69, 0.18);
+  border-top-color: rgba(242, 210, 138, 0.9);
+  border-radius: 999px;
+  animation: maestro-orbit 2.5s linear infinite;
+}
+
+.maestro-loading-orbit-dot {
+  position: absolute;
+  top: 2px;
+  left: 50%;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #f2d28a;
+  box-shadow: 0 0 18px rgba(242, 210, 138, 0.8);
+  transform: translateX(-50%);
+}
+
+.maestro-loading-note {
+  position: absolute;
+  right: -7px;
+  bottom: 5px;
+  color: #c59a45;
+  filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.35));
+  animation: maestro-note-pulse 1.8s ease-in-out infinite;
+}
+
+.maestro-loading-equalizer {
+  display: flex;
+  height: 22px;
+  align-items: center;
+  gap: 5px;
+}
+
+.maestro-loading-equalizer span {
+  width: 3px;
+  height: 7px;
+  border-radius: 999px;
+  background: linear-gradient(to top, #9d742d, #f2d28a);
+  animation: maestro-equalizer 1s ease-in-out infinite;
+}
+
+.maestro-loading-equalizer span:nth-child(2) {
+  animation-delay: 0.12s;
+}
+
+.maestro-loading-equalizer span:nth-child(3) {
+  animation-delay: 0.24s;
+}
+
+.maestro-loading-equalizer span:nth-child(4) {
+  animation-delay: 0.36s;
+}
+
+.maestro-loading-equalizer span:nth-child(5) {
+  animation-delay: 0.48s;
+}
+
+@keyframes maestro-orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes maestro-mark-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes maestro-note-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: translateY(0) rotate(-5deg) scale(0.92);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-5px) rotate(4deg) scale(1.08);
+  }
+}
+
+@keyframes maestro-equalizer {
+  0%,
+  100% {
+    height: 6px;
+    opacity: 0.45;
+  }
+  50% {
+    height: 21px;
+    opacity: 1;
+  }
+}
+
+@keyframes maestro-glow-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(22px, 14px, 0) scale(1.12);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .maestro-loading-mark,
+  .maestro-loading-note,
+  .maestro-loading-orbit,
+  .maestro-loading-glow,
+  .maestro-loading-equalizer span {
+    animation: none;
+  }
+
+  .maestro-loading-equalizer span {
+    height: 10px;
+    opacity: 0.8;
+  }
+}
