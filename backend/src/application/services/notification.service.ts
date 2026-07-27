@@ -1,8 +1,15 @@
 import type { UserNotificationType } from "@prisma/client";
 import { prisma, notDeleted } from "../../infrastructure/database/prisma.js";
 import { NotFoundError } from "../../domain/errors.js";
+import { formatFio } from "../../domain/name.js";
+import {
+  parentBalanceAlert,
+  parentOfflineEventType,
+  shouldNotifyParentForOfflineEvent,
+} from "../../domain/parent-notification-policy.js";
 import { findUserByCrmStudentId, findUserByCrmTeacherId } from "../repositories/user-link.repository.js";
 import { sendPushToUser } from "./push-notification.service.js";
+import { getStudentSchoolOfflineSummary } from "./school-offline.service.js";
 
 export async function createUserNotification(params: {
   userId: string;
@@ -130,6 +137,150 @@ export type OfflineLessonNotificationEvent =
   | "cancelled"
   | "rescheduled";
 
+type ParentLessonSummary = {
+  crmClassId?: string;
+  title?: string;
+  date?: string;
+  attended?: boolean | null;
+  homework?: string | null;
+  homeworkResult?: {
+    status?: "completed" | "partial" | "not_completed";
+    completionPercent?: number | null;
+    reviewedAt?: string | Date | null;
+  } | null;
+};
+
+type ParentOfflineSummary = {
+  lessonHistory?: ParentLessonSummary[];
+  balanceSnapshot?: {
+    classesRemainingTotal?: number | null;
+    debtAmountKzt?: number | null;
+  };
+};
+
+const homeworkStatusText = {
+  completed: "выполнено",
+  partial: "выполнено частично",
+  not_completed: "не выполнено",
+} as const;
+
+function shortened(value: string, maxLength = 140) {
+  const compact = value.replace(/\s+/g, " ").trim();
+  return compact.length > maxLength
+    ? `${compact.slice(0, maxLength - 1).trimEnd()}…`
+    : compact;
+}
+
+function familyNotificationUrl(
+  studentId: string,
+  notice: string,
+  identity?: string | number | null,
+) {
+  const query = new URLSearchParams({ student: studentId, notice });
+  if (identity !== undefined && identity !== null && String(identity)) {
+    query.set("event", String(identity));
+  }
+  return `/family?${query.toString()}`;
+}
+
+async function notifyParentsAboutApprovedLesson(params: {
+  student: NonNullable<Awaited<ReturnType<typeof findUserByCrmStudentId>>>;
+  parentUserIds: string[];
+  crmClassId: string;
+  lessonTitle: string;
+  context: string;
+}) {
+  let summary: ParentOfflineSummary | null = null;
+  const localCheck = params.student.crmStudentId
+    ? await prisma.offlineLessonStudentCheck.findUnique({
+        where: {
+          crmClassId_crmStudentId: {
+            crmClassId: params.crmClassId,
+            crmStudentId: params.student.crmStudentId,
+          },
+        },
+        select: { attendanceStatus: true },
+      }).catch(() => null)
+    : null;
+  try {
+    summary = await getStudentSchoolOfflineSummary(params.student.id) as ParentOfflineSummary;
+  } catch {
+    // The CRM event may arrive before the enriched summary is available. The
+    // core lesson notification still goes out with safe fallback copy.
+  }
+
+  const childName = formatFio(params.student) || "ученика";
+  const lessons = Array.isArray(summary?.lessonHistory) ? summary.lessonHistory : [];
+  const currentLesson = lessons.find((lesson) => lesson.crmClassId === params.crmClassId);
+  const attended = currentLesson?.attended ?? (
+    localCheck
+      ? ["present", "late"].includes(localCheck.attendanceStatus)
+      : undefined
+  );
+  const reviewedHomework = lessons
+    .filter((lesson) => lesson.homeworkResult?.reviewedAt)
+    .sort((left, right) => (
+      new Date(right.homeworkResult!.reviewedAt!).getTime()
+      - new Date(left.homeworkResult!.reviewedAt!).getTime()
+    ))[0];
+  const homeworkResult = reviewedHomework?.homeworkResult;
+  const homeworkStatus = homeworkResult?.status;
+  const homeworkReviewCopy = homeworkStatus
+    ? ` Прошлое ДЗ: ${homeworkStatusText[homeworkStatus]}${
+        homeworkResult.completionPercent == null ? "" : ` · ${homeworkResult.completionPercent}%`
+      }.`
+    : "";
+  const reportType = attended === false
+    ? parentOfflineEventType("approved", false)
+    : homeworkStatus
+      ? "parent_homework_reviewed" as const
+      : parentOfflineEventType("approved", attended);
+  const reportTitle = attended === false
+    ? `Пропуск занятия: ${childName}`
+    : homeworkStatus
+      ? `Итог урока и ДЗ: ${childName}`
+      : `Готов итог урока: ${childName}`;
+  const homework = currentLesson?.homework?.trim();
+  const reportBody = attended === false
+    ? `${params.lessonTitle}${params.context}. Ученик отмечен как отсутствовавший. Подробности доступны в семейном кабинете.`
+    : `${params.lessonTitle}${params.context}. Итог занятия готов.${homeworkReviewCopy}${homework ? ` Новое ДЗ: ${shortened(homework)}.` : ""}`;
+
+  if (reportType) {
+    await Promise.allSettled(params.parentUserIds.map((parentUserId) => deliverUserNotification({
+      userId: parentUserId,
+      type: reportType,
+      title: reportTitle,
+      body: reportBody,
+      url: familyNotificationUrl(
+        params.student.id,
+        attended === false ? "absence" : homeworkStatus ? "homework" : "report",
+        params.crmClassId,
+      ),
+      tag: `parent-lesson-${params.crmClassId}-${params.student.id}`,
+      dedupeWindowMs: 14 * 24 * 60 * 60 * 1000,
+    })));
+  }
+
+  const balanceAlert = summary?.balanceSnapshot
+    ? parentBalanceAlert(summary.balanceSnapshot)
+    : null;
+  if (balanceAlert) {
+    await Promise.allSettled(params.parentUserIds.map((parentUserId) => deliverUserNotification({
+      userId: parentUserId,
+      type: "parent_balance_alert",
+      title: `${balanceAlert.title}: ${childName}`,
+      body: `${balanceAlert.body} Информация об абонементе доступна в семейном кабинете.`,
+      url: familyNotificationUrl(
+        params.student.id,
+        "balance",
+        `${balanceAlert.kind}-${balanceAlert.value}`,
+      ),
+      tag: `parent-balance-${balanceAlert.kind}-${params.student.id}`,
+      dedupeWindowMs: 14 * 24 * 60 * 60 * 1000,
+    })));
+  }
+}
+
 export async function notifyOfflineLessonEvent(params: {
   crmClassId: string;
   crmTeacherId?: string;
@@ -210,10 +361,74 @@ export async function notifyOfflineLessonEvent(params: {
     dedupeWindowMs: 10 * 60 * 1000,
   }).catch(() => undefined)));
 
+  let parentsDelivered = 0;
+  if (students.length && shouldNotifyParentForOfflineEvent(params.event)) {
+    const parentLinks = await prisma.parentStudentLink.findMany({
+      where: {
+        studentUserId: { in: students.map((student) => student.id) },
+        isActive: true,
+        parent: {
+          ...notDeleted,
+          isActive: true,
+          role: { slug: "parent" },
+        },
+      },
+      select: { studentUserId: true, parentUserId: true },
+    });
+    const parentsByStudent = new Map<string, string[]>();
+    for (const link of parentLinks) {
+      const parentUserIds = parentsByStudent.get(link.studentUserId) ?? [];
+      parentUserIds.push(link.parentUserId);
+      parentsByStudent.set(link.studentUserId, parentUserIds);
+    }
+    parentsDelivered = parentLinks.length;
+
+    await Promise.allSettled(students.map(async (student) => {
+      const parentUserIds = [...new Set(parentsByStudent.get(student.id) ?? [])];
+      if (!parentUserIds.length) return;
+
+      if (params.event === "approved") {
+        await notifyParentsAboutApprovedLesson({
+          student,
+          parentUserIds,
+          crmClassId: params.crmClassId,
+          lessonTitle,
+          context,
+        });
+        return;
+      }
+
+      const type = parentOfflineEventType(params.event);
+      if (!type) return;
+      const childName = formatFio(student) || "ученика";
+      const copy = params.event === "cancelled"
+        ? {
+            title: `Урок отменён: ${childName}`,
+            body: `${lessonTitle}${context}. Занятие отменено. Проверьте актуальное расписание в семейном кабинете.`,
+            notice: "cancelled",
+          }
+        : {
+            title: `Урок перенесён: ${childName}`,
+            body: `${lessonTitle}${context}. Дата или время изменились. Проверьте актуальное расписание в семейном кабинете.`,
+            notice: "schedule",
+          };
+      await Promise.allSettled(parentUserIds.map((parentUserId) => deliverUserNotification({
+        userId: parentUserId,
+        type,
+        title: copy.title,
+        body: copy.body,
+        url: familyNotificationUrl(student.id, copy.notice, params.crmClassId),
+        tag: `parent-${copy.notice}-${params.crmClassId}-${student.id}`,
+        dedupeWindowMs: 10 * 60 * 1000,
+      })));
+    }));
+  }
+
   return {
-    delivered: Boolean(teacherResult || students.length),
+    delivered: Boolean(teacherResult || students.length || parentsDelivered),
     teacherLinked: Boolean(teacher),
     studentsDelivered: students.length,
+    parentsDelivered,
     duplicate: teacherResult?.duplicate ?? false,
     notificationId: teacherResult?.notification.id ?? null,
   };

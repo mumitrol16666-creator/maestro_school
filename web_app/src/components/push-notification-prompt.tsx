@@ -20,7 +20,7 @@ export function PushNotificationPrompt({
   audience,
 }: {
   userId: string;
-  audience: "student" | "teacher";
+  audience: "student" | "teacher" | "parent";
 }) {
   const [visible, setVisible] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -79,6 +79,7 @@ export function PushNotificationPrompt({
   if (!visible) return null;
 
   const teacher = audience === "teacher";
+  const parent = audience === "parent";
 
   return (
     <aside
@@ -101,7 +102,13 @@ export function PushNotificationPrompt({
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gold">Уведомления на телефон</p>
           <h2 className="mt-1 text-lg font-black">
-            {enabled ? "Уведомления включены" : teacher ? "Не пропускайте начало урока" : "Не пропускайте занятия"}
+            {enabled
+              ? "Уведомления включены"
+              : teacher
+                ? "Не пропускайте начало урока"
+                : parent
+                  ? "Следите за занятиями ребёнка"
+                  : "Не пропускайте занятия"}
           </h2>
         </div>
       </div>
@@ -111,7 +118,9 @@ export function PushNotificationPrompt({
           <p className="mt-3 text-sm leading-5 text-white/65">
             {teacher
               ? "Напомним за 30 и 5 минут — сразу со ссылкой на карточку урока."
-              : "Напомним за 24 часа и за 2 часа — с датой, временем и преподавателем."}
+              : parent
+                ? "Напомним об уроке, переносе, ДЗ, пропуске и низком остатке занятий."
+                : "Напомним за 24 часа и за 2 часа — с датой, временем и преподавателем."}
           </p>
           <button
             type="button"

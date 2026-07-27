@@ -3,7 +3,11 @@
 import { House, Settings, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
+import { useAuth } from "./auth-provider";
 import { Brand } from "./brand";
+import { NotificationCenter } from "./teacher-notification-center";
+import { PushNotificationPrompt } from "./push-notification-prompt";
 import { UserMenu } from "./user-menu";
 
 const parentNavigation = [
@@ -13,6 +17,8 @@ const parentNavigation = [
 
 export function ParentShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { user } = useAuth();
+  const { count: unreadNotifications, reload: reloadUnreadNotifications } = useUnreadNotifications();
 
   function isActive(item: typeof parentNavigation[number]) {
     return item.exact ? pathname === item.href : pathname.startsWith(item.href);
@@ -68,7 +74,15 @@ export function ParentShell({ children }: { children: React.ReactNode }) {
           <p className="ml-3 hidden text-xs font-bold uppercase tracking-[0.16em] text-stone-400 sm:block lg:ml-0">
             Семейный кабинет
           </p>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
+            {user ? (
+              <NotificationCenter
+                userId={user.id}
+                unreadCount={unreadNotifications}
+                reloadUnread={reloadUnreadNotifications}
+                audience="parent"
+              />
+            ) : null}
             <UserMenu />
           </div>
         </header>
@@ -99,6 +113,7 @@ export function ParentShell({ children }: { children: React.ReactNode }) {
           );
         })}
       </nav>
+      {user ? <PushNotificationPrompt userId={user.id} audience="parent" /> : null}
     </div>
   );
 }

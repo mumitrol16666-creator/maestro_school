@@ -278,6 +278,13 @@ enum UserNotificationType {
   reward_requested
   reward_status_updated
   staff_task_assigned
+  parent_lesson_reminder
+  parent_lesson_report_ready
+  parent_schedule_changed
+  parent_lesson_cancelled
+  parent_absence_alert
+  parent_homework_reviewed
+  parent_balance_alert
 }
 
 model User {

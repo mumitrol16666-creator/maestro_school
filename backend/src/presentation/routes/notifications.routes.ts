@@ -24,6 +24,8 @@ export async function notificationsRoutes(app: FastifyInstance) {
     "offline_lesson_cancelled",
     "offline_lesson_rescheduled",
     "offline_lesson_report_due",
+    "lesson_teacher_reminder",
+    "lesson_student_reminder",
     "direct_message_received",
     "homework_submitted",
     "homework_reviewed",
@@ -32,7 +34,16 @@ export async function notificationsRoutes(app: FastifyInstance) {
     "achievement_earned",
     "points_awarded",
     "coins_awarded",
+    "reward_requested",
+    "reward_status_updated",
     "staff_task_assigned",
+    "parent_lesson_reminder",
+    "parent_lesson_report_ready",
+    "parent_schedule_changed",
+    "parent_lesson_cancelled",
+    "parent_absence_alert",
+    "parent_homework_reviewed",
+    "parent_balance_alert",
   ]);
 
   app.get("/students/me/notifications/unread-count", { preHandler: [authenticate] }, async (request) => {

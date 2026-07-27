@@ -153,7 +153,24 @@ async function sendStudentOfflineReminders(now: Date) {
       crmStudentId: { not: null },
       role: { slug: "student" },
     },
-    select: { id: true, crmStudentId: true },
+    select: {
+      id: true,
+      crmStudentId: true,
+      firstName: true,
+      lastName: true,
+      middleName: true,
+      parentLinksAsStudent: {
+        where: {
+          isActive: true,
+          parent: {
+            ...notDeleted,
+            isActive: true,
+            role: { slug: "parent" },
+          },
+        },
+        select: { parentUserId: true },
+      },
+    },
   });
 
   await inBatches(students, 5, async (student) => {
@@ -173,6 +190,7 @@ async function sendStudentOfflineReminders(now: Date) {
       const teacherName = compactString(item.teacherName);
       const roomName = compactString(item.roomName);
       const context = [teacherName, roomName].filter(Boolean).join(" · ");
+      const childName = personName(student) || "ученика";
 
       for (const rule of dueLessonReminderRules(startsAt, "student", now)) {
         await deliverLessonReminder({
@@ -186,6 +204,17 @@ async function sendStudentOfflineReminders(now: Date) {
           lessonId: crmClassId,
           startsAt,
         });
+        await Promise.allSettled(student.parentLinksAsStudent.map((link) => deliverLessonReminder({
+          userId: link.parentUserId,
+          type: "parent_lesson_reminder",
+          rule,
+          title: `Урок ${childName} через ${rule.label}`,
+          body: `${lessonTitle} · ${formatLessonTime(startsAt)}${context ? ` · ${context}` : ""}. Расписание доступно в семейном кабинете.`,
+          url: `/family?student=${encodeURIComponent(student.id)}`,
+          source: "offline",
+          lessonId: `${crmClassId}-${student.id}`,
+          startsAt,
+        })));
       }
     }
   });

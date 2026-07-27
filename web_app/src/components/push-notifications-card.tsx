@@ -11,7 +11,11 @@ import {
   unsubscribeFromPushNotifications,
 } from "@/lib/push-notifications";
 
-export function PushNotificationsCard() {
+export function PushNotificationsCard({
+  audience = "default",
+}: {
+  audience?: "default" | "parent";
+}) {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [serverReady, setServerReady] = useState(false);
@@ -144,14 +148,28 @@ export function PushNotificationsCard() {
           <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold">Уведомления</p>
           <h3 className="font-display mt-2 text-3xl">О важных событиях</h3>
           <p className="mt-3 text-sm leading-6 text-stone-500">
-            Сообщим об изменениях по урокам, отчётам и домашним заданиям.
+            {audience === "parent"
+              ? "Сообщим только о важных событиях по привязанным ученикам."
+              : "Сообщим об изменениях по урокам, отчётам и домашним заданиям."}
           </p>
           <ul className="mt-4 space-y-2 text-sm leading-6 text-stone-500">
-            <li>✓ Напоминания перед началом урока</li>
-            <li>✓ Отчёт по уроку принят</li>
-            <li>✓ Домашнее задание принято</li>
-            <li>✓ Нужна доработка задания</li>
-            <li>✓ Переносы, отмены и новые сообщения</li>
+            {audience === "parent" ? (
+              <>
+                <li>✓ Напоминания перед офлайн-уроком</li>
+                <li>✓ Переносы, отмены и пропуски</li>
+                <li>✓ Итог урока и проверка ДЗ</li>
+                <li>✓ Низкий остаток занятий или сумма к оплате</li>
+                <li>× Без курсов, тестов, рейтингов и переписок</li>
+              </>
+            ) : (
+              <>
+                <li>✓ Напоминания перед началом урока</li>
+                <li>✓ Отчёт по уроку принят</li>
+                <li>✓ Домашнее задание принято</li>
+                <li>✓ Нужна доработка задания</li>
+                <li>✓ Переносы, отмены и новые сообщения</li>
+              </>
+            )}
           </ul>
 
           {enabled ? (

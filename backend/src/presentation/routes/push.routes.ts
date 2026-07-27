@@ -46,6 +46,14 @@ export async function pushRoutes(app: FastifyInstance) {
         tag: "maestro-push-welcome",
       }).catch(() => undefined);
     }
+    if (created && request.user!.roleSlug === "parent") {
+      await sendPushToUser(request.user!.id, {
+        title: "Семейные уведомления включены",
+        body: "Сообщим об уроках, ДЗ, посещаемости и абонементе привязанных учеников.",
+        url: "/family",
+        tag: "maestro-parent-push-welcome",
+      }).catch(() => undefined);
+    }
 
     return { data: { id: subscription.id, subscribed: true } };
   });
@@ -57,10 +65,13 @@ export async function pushRoutes(app: FastifyInstance) {
   });
 
   app.post("/push/test", { preHandler: [authenticate] }, async (request) => {
+    const parent = request.user!.roleSlug === "parent";
     const result = await sendPushToUser(request.user!.id, {
       title: "Maestro",
-      body: "Уведомления работают — важные изменения появятся на экране телефона.",
-      url: "/settings",
+      body: parent
+        ? "Уведомления работают — важные события по ученику появятся на экране телефона."
+        : "Уведомления работают — важные изменения появятся на экране телефона.",
+      url: parent ? "/family/settings" : "/settings",
       tag: "maestro-test",
     });
     return { data: result };

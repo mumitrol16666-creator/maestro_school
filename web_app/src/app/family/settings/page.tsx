@@ -3,6 +3,7 @@
 import { LockKeyhole, LogOut, ShieldCheck, UserRound } from "lucide-react";
 import { ChangePasswordForm } from "@/components/change-password-form";
 import { useAuth } from "@/components/auth-provider";
+import { PushNotificationsCard } from "@/components/push-notifications-card";
 import { formatFio } from "@/lib/name";
 
 export default function FamilySettingsPage() {
@@ -41,6 +42,8 @@ export default function FamilySettingsPage() {
         </section>
 
         <div className="space-y-6">
+          <PushNotificationsCard audience="parent" />
+
           <section className="rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
             <div className="flex items-center gap-3">
               <LockKeyhole className="text-gold" />

@@ -10,7 +10,7 @@ function seenKey(userId: string, notificationId: string) {
   return `maestro_notification_alert:${userId}:${notificationId}`;
 }
 
-type NotificationAudience = "student" | "teacher" | "staff";
+type NotificationAudience = "student" | "teacher" | "staff" | "parent";
 
 export function NotificationCenter({
   userId,
@@ -107,15 +107,25 @@ export function NotificationCenter({
                 <X size={18} />
               </button>
               <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gold">
-                {audience === "student" ? "Важное для вас" : "Рабочие события"}
+                {audience === "student"
+                  ? "Важное для вас"
+                  : audience === "parent"
+                    ? "Важное для семьи"
+                    : "Рабочие события"}
               </p>
               <h2 id="teacher-notifications-title" className="font-display mt-2 pr-10 text-3xl">
-                {audience === "student" ? "Ваши уведомления" : "Новое в вашем кабинете"}
+                {audience === "student"
+                  ? "Ваши уведомления"
+                  : audience === "parent"
+                    ? "События по ученику"
+                    : "Новое в вашем кабинете"}
               </h2>
               <p className="mt-2 text-sm text-white/60">
                 {audience === "student"
                   ? "Сообщения, уроки, задания и результаты проверки в одном месте."
-                  : "Сообщения, отчёты и изменения по назначенным урокам в одном месте."}
+                  : audience === "parent"
+                    ? "Уроки, домашние задания, посещаемость и абонемент в одном месте."
+                    : "Сообщения, отчёты и изменения по назначенным урокам в одном месте."}
               </p>
             </div>
 
@@ -133,7 +143,10 @@ export function NotificationCenter({
                   ? MessagesSquare
                   : item.type === "staff_task_assigned"
                     ? ClipboardCheck
-                  : item.type.includes("online_lesson")
+                    : item.type.includes("lesson_reminder")
+                      || item.type.includes("schedule")
+                      || item.type.includes("cancelled")
+                      || item.type.includes("online_lesson")
                     ? CalendarClock
                     : item.type.includes("assignment") || item.type.includes("homework")
                       ? BookOpenCheck

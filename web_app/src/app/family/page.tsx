@@ -75,10 +75,13 @@ export default function FamilyPage() {
 
   useEffect(() => {
     if (!childrenResource.data?.length) return;
+    const requestedChildId = new URLSearchParams(window.location.search).get("student");
     setSelectedChildId((current) => (
       current && childrenResource.data?.some((child) => child.id === current)
         ? current
-        : childrenResource.data![0].id
+        : requestedChildId && childrenResource.data?.some((child) => child.id === requestedChildId)
+          ? requestedChildId
+          : childrenResource.data![0].id
     ));
   }, [childrenResource.data]);
 

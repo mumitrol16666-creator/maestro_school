@@ -25,6 +25,15 @@ export type UserNotificationType =
   | "achievement_earned"
   | "points_awarded"
   | "coins_awarded"
+  | "reward_requested"
+  | "reward_status_updated"
+  | "parent_lesson_reminder"
+  | "parent_lesson_report_ready"
+  | "parent_schedule_changed"
+  | "parent_lesson_cancelled"
+  | "parent_absence_alert"
+  | "parent_homework_reviewed"
+  | "parent_balance_alert"
   | "staff_task_assigned";
 
 export interface UserNotification {
