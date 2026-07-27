@@ -465,7 +465,12 @@ function MonthlyPlanProgress({
 /* ─── homework folder ───────────────────────────────────────────────── */
 
 function HomeworkFolder({ lessons }: { lessons: SchoolOfflineLesson[] }) {
-  const withHomework = lessons.filter((l) => l.homework).slice(0, 10);
+  const withHomework = lessons
+    .filter((lesson) => lesson.homework)
+    .sort((left, right) => (
+      `${right.date}-${right.startTime}`.localeCompare(`${left.date}-${left.startTime}`)
+    ))
+    .slice(0, 10);
 
   if (withHomework.length === 0) {
     return (
@@ -485,15 +490,105 @@ function HomeworkFolder({ lessons }: { lessons: SchoolOfflineLesson[] }) {
   );
 }
 
+const homeworkResultLabels = {
+  completed: "Выполнено",
+  partial: "Выполнено частично",
+  not_completed: "Не выполнено",
+} as const;
+
+const homeworkResultStyles = {
+  completed: {
+    panel: "border-emerald-100 bg-emerald-50/60",
+    label: "text-emerald-700",
+    bar: "bg-emerald-500",
+  },
+  partial: {
+    panel: "border-amber-100 bg-amber-50/60",
+    label: "text-amber-800",
+    bar: "bg-amber-400",
+  },
+  not_completed: {
+    panel: "border-red-100 bg-red-50/60",
+    label: "text-red-700",
+    bar: "bg-red-500",
+  },
+} as const;
+
+function HomeworkProgress({
+  result,
+}: {
+  result: SchoolOfflineLesson["homeworkResult"];
+}) {
+  if (!result) {
+    return (
+      <span className="rounded-2xl border border-stone-200 bg-stone-50 px-3 py-2 text-center">
+        <span className="block text-[10px] font-bold uppercase tracking-wide text-stone-400">Проверка</span>
+        <span className="mt-0.5 block text-xs font-bold text-stone-600">Ожидается</span>
+      </span>
+    );
+  }
+
+  const percent = result.completionPercent;
+  const safePercent = percent ?? 0;
+  const color = safePercent >= 100
+    ? "#10b981"
+    : safePercent >= 50
+      ? "#f59e0b"
+      : safePercent > 0
+        ? "#f97316"
+        : "#ef4444";
+
+  return (
+    <div className="flex items-center gap-2.5">
+      <span
+        role="img"
+        aria-label={percent == null ? homeworkResultLabels[result.status] : `Домашнее задание выполнено на ${percent}%`}
+        className="grid h-14 w-14 shrink-0 place-items-center rounded-full"
+        style={{ background: `conic-gradient(${color} ${safePercent}%, #e7e5e4 ${safePercent}% 100%)` }}
+      >
+        <span className="grid h-10 w-10 place-items-center rounded-full bg-white text-xs font-black text-ink">
+          {percent == null ? "—" : `${percent}%`}
+        </span>
+      </span>
+      <span className="hidden max-w-28 text-xs font-bold leading-4 text-stone-600 sm:block">
+        {homeworkResultLabels[result.status]}
+      </span>
+    </div>
+  );
+}
+
+function HomeworkPoints({ lesson }: { lesson: SchoolOfflineLesson }) {
+  if (lesson.lessonPointsAwarded == null) {
+    return (
+      <span className="rounded-2xl border border-stone-200 bg-white px-3 py-2 text-center">
+        <span className="block text-sm font-black text-stone-400">—</span>
+        <span className="block text-[10px] font-bold text-stone-400">баллы</span>
+      </span>
+    );
+  }
+
+  return (
+    <span className="rounded-2xl border border-violet-100 bg-violet-50 px-3 py-2 text-center">
+      <span className="block text-sm font-black text-violet-800">
+        {lesson.lessonPointsAwarded > 0 ? "+" : ""}{lesson.lessonPointsAwarded}
+      </span>
+      <span className="block text-[10px] font-bold text-violet-600">баллов за занятие</span>
+    </span>
+  );
+}
+
 function HomeworkCard({ lesson }: { lesson: SchoolOfflineLesson }) {
   const [open, setOpen] = useState(false);
+  const resultStyle = lesson.homeworkResult
+    ? homeworkResultStyles[lesson.homeworkResult.status]
+    : null;
 
   return (
     <article
       className="rounded-[24px] border border-amber-100 bg-white shadow-soft cursor-pointer transition-all hover:border-amber-200"
       onClick={() => setOpen(!open)}
     >
-      <div className="flex items-start justify-between gap-3 p-5">
+      <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <BookOpen size={16} className="text-amber-600 shrink-0" />
@@ -510,16 +605,54 @@ function HomeworkCard({ lesson }: { lesson: SchoolOfflineLesson }) {
             <p className="mt-2 text-sm text-stone-600 line-clamp-2">{lesson.homework}</p>
           )}
         </div>
-        <ChevronDown
-          size={18}
-          className={`text-stone-400 transition-transform duration-200 shrink-0 mt-1 ${
-            open ? "rotate-180" : ""
-          }`}
-        />
+        <div className="flex shrink-0 items-center gap-2 self-stretch sm:self-start">
+          <HomeworkProgress result={lesson.homeworkResult} />
+          <HomeworkPoints lesson={lesson} />
+          <ChevronDown
+            size={18}
+            className={`ml-auto shrink-0 text-stone-400 transition-transform duration-200 sm:ml-1 ${
+              open ? "rotate-180" : ""
+            }`}
+          />
+        </div>
       </div>
 
       {open && (
         <div className="border-t border-amber-100 px-5 pb-5 pt-4 space-y-3">
+          <div className={`rounded-2xl border p-4 ${
+            resultStyle?.panel ?? "border-stone-200 bg-stone-50"
+          }`}>
+            <p className={`text-xs font-bold uppercase tracking-wider ${
+              resultStyle?.label ?? "text-stone-400"
+            }`}>
+              Результат проверки
+            </p>
+            {lesson.homeworkResult ? (
+              <>
+                <div className="mt-3 flex items-center justify-between gap-3 text-sm">
+                  <span className="font-semibold text-stone-700">
+                    {homeworkResultLabels[lesson.homeworkResult.status]}
+                  </span>
+                  <strong className="text-lg text-ink">
+                    {lesson.homeworkResult.completionPercent == null
+                      ? "Без процента"
+                      : `${lesson.homeworkResult.completionPercent}%`}
+                  </strong>
+                </div>
+                <div className="mt-3 h-2 overflow-hidden rounded-full bg-white">
+                  <div
+                    className={`h-full rounded-full ${resultStyle?.bar ?? "bg-stone-300"}`}
+                    style={{ width: `${lesson.homeworkResult.completionPercent ?? 0}%` }}
+                  />
+                </div>
+              </>
+            ) : (
+              <p className="mt-2 text-sm leading-6 text-stone-500">
+                Преподаватель отметит результат на следующем занятии.
+              </p>
+            )}
+          </div>
+
           <div className="rounded-2xl border border-amber-100 bg-amber-50/60 p-4">
             <p className="text-xs font-bold uppercase tracking-wider text-amber-800">Домашнее задание</p>
             <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-amber-950">{lesson.homework}</p>

@@ -18,6 +18,12 @@ export type SchoolOfflineLesson = {
   attended: boolean | null;
   isPast?: boolean;
   lessonPoints?: number;
+  lessonPointsAwarded?: number | null;
+  homeworkResult?: {
+    status: "completed" | "partial" | "not_completed";
+    completionPercent: number | null;
+    reviewedAt: string | null;
+  } | null;
   planTopicResults?: Array<{
     itemId: string;
     title: string;

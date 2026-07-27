@@ -1,10 +1,16 @@
 import { prisma } from "../../infrastructure/database/prisma.js";
 import { BadRequestError } from "../../domain/errors.js";
+import { linkOfflineHomeworkResults } from "../../domain/offline-homework-progress.js";
 import { fetchStudentOfflineSummary } from "../../infrastructure/crm/crm-client.js";
 import { aqtobeMonthKey } from "../../lib/aqtobe-month.js";
 
 type OfflineSummaryLesson = {
   crmClassId?: string;
+  date?: string;
+  startTime?: string | null;
+  homework?: string | null;
+  groupName?: string | null;
+  teacherName?: string | null;
   [key: string]: unknown;
 };
 
@@ -73,16 +79,40 @@ export async function getStudentSchoolOfflineSummary(appUserId: string) {
     ]),
   );
   const checksByClassId = new Map(checks.map((check) => [check.crmClassId, check]));
+  const homeworkResultsByClassId = linkOfflineHomeworkResults(
+    lessonHistory
+      .filter((lesson): lesson is OfflineSummaryLesson & { crmClassId: string; date: string } =>
+        Boolean(lesson.crmClassId && lesson.date))
+      .map((lesson) => ({
+        crmClassId: lesson.crmClassId,
+        date: lesson.date,
+        startTime: lesson.startTime,
+        homework: lesson.homework,
+        groupName: lesson.groupName,
+        teacherName: lesson.teacherName,
+      })),
+    checks.map((check) => ({
+      crmClassId: check.crmClassId,
+      status: check.homeworkStatus,
+      completionPercent: check.homeworkCompletionPercent,
+      reviewedAt: check.markedAt,
+    })),
+  );
   const mergedLessonHistory = lessonHistory.map((lesson) => {
     const check = lesson.crmClassId ? checksByClassId.get(lesson.crmClassId) : null;
-    if (!check) return lesson;
-    const planItems = check.monthlyPlanId ? planItemsById.get(check.monthlyPlanId) : null;
-    const updates = Array.isArray(check.planTopicUpdates)
+    const homeworkResult = lesson.crmClassId
+      ? homeworkResultsByClassId.get(lesson.crmClassId) ?? null
+      : null;
+    if (!check && !homeworkResult) return lesson;
+    const planItems = check?.monthlyPlanId ? planItemsById.get(check.monthlyPlanId) : null;
+    const updates = Array.isArray(check?.planTopicUpdates)
       ? check.planTopicUpdates as OfflinePlanTopicUpdate[]
       : [];
     return {
       ...lesson,
-      lessonPoints: check.lessonPoints,
+      lessonPoints: check?.lessonPoints,
+      lessonPointsAwarded: check?.rewardsAppliedAt ? check.lessonPoints : null,
+      homeworkResult,
       planTopicResults: updates.map((update) => ({
         itemId: update.itemId,
         title: planItems?.get(update.itemId)?.title ?? "Тема учебного плана",
