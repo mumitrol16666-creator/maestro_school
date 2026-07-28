@@ -45,17 +45,25 @@ export async function studentsAdminRoutes(app: FastifyInstance) {
     const body = z.discriminatedUnion("mode", [
       z.object({
         mode: z.literal("create"),
-        firstName: z.string().trim().min(1).max(128),
-        lastName: z.string().trim().min(1).max(128),
-        middleName: z.string().trim().max(128).optional().nullable(),
-        phone: z.string().trim().min(10).max(32),
-        login: z.string().trim().min(3).max(32),
-        password: z.string().min(8).max(72),
+        firstName: z.string().trim().min(1, "Укажите имя родителя").max(128, "Имя слишком длинное"),
+        lastName: z.string().trim().min(1, "Укажите фамилию родителя").max(128, "Фамилия слишком длинная"),
+        middleName: z.string().trim().max(128, "Отчество слишком длинное").optional().nullable(),
+        phone: z.string().trim()
+          .min(10, "Укажите корректный номер телефона")
+          .max(32, "Номер телефона слишком длинный"),
+        login: z.string().trim()
+          .min(3, "Логин должен содержать минимум 3 символа")
+          .max(32, "Логин должен содержать не более 32 символов"),
+        password: z.string()
+          .min(8, "Пароль должен содержать минимум 8 символов")
+          .max(72, "Пароль должен содержать не более 72 символов"),
         relationship: relationship.default("guardian"),
       }),
       z.object({
         mode: z.literal("link"),
-        login: z.string().trim().min(3).max(32),
+        login: z.string().trim()
+          .min(3, "Укажите логин существующего родителя")
+          .max(32, "Логин должен содержать не более 32 символов"),
         relationship: relationship.default("guardian"),
       }),
     ]).parse(request.body);
@@ -105,7 +113,9 @@ export async function studentsAdminRoutes(app: FastifyInstance) {
         linkId: z.string().uuid(),
       }).parse(request.params);
       const { password } = z.object({
-        password: z.string().min(8).max(72),
+        password: z.string()
+          .min(8, "Пароль должен содержать минимум 8 символов")
+          .max(72, "Пароль должен содержать не более 72 символов"),
       }).parse(request.body);
       return {
         data: await resetLinkedParentPassword({

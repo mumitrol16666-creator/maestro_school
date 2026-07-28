@@ -2,6 +2,11 @@ import type { FastifyError, FastifyReply, FastifyRequest } from "fastify";
 import { AppError } from "../../domain/errors.js";
 import { ZodError } from "zod";
 
+export function validationErrorMessage(error: ZodError) {
+  const localized = error.issues.find((issue) => /[А-Яа-яЁё]/.test(issue.message));
+  return localized?.message ?? "Проверьте правильность заполнения полей";
+}
+
 export function errorHandler(
   error: FastifyError | Error,
   _request: FastifyRequest,
@@ -20,7 +25,7 @@ export function errorHandler(
     return reply.status(400).send({
       error: {
         code: "VALIDATION_ERROR",
-        message: "Invalid request",
+        message: validationErrorMessage(error),
         details: error.flatten(),
       },
     });

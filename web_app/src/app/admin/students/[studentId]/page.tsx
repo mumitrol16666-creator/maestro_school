@@ -327,8 +327,23 @@ function ParentAccessCard({
                 <Field label="Отчество" value={middleName} onChange={setMiddleName} />
               </div>
               <div className="grid gap-4 md:grid-cols-3">
-                <Field label="Телефон" value={phone} onChange={setPhone} placeholder="+7 700 000 00 00" required />
-                <Field label="Уникальный логин" value={login} onChange={setLogin} placeholder="parent_anna" required />
+                <Field
+                  label="Телефон"
+                  value={phone}
+                  onChange={setPhone}
+                  placeholder="+7 700 000 00 00"
+                  type="tel"
+                  maxLength={32}
+                  required
+                />
+                <Field
+                  label="Уникальный логин"
+                  value={login}
+                  onChange={setLogin}
+                  placeholder="parent_anna"
+                  maxLength={32}
+                  required
+                />
                 <Field label="Временный пароль" value={password} onChange={setPassword} type="password" minLength={8} required />
               </div>
             </>
@@ -339,6 +354,7 @@ function ParentAccessCard({
                 value={login}
                 onChange={setLogin}
                 placeholder="parent_anna"
+                maxLength={32}
                 required
               />
               <p className="mt-2 text-xs leading-5 text-stone-500">
@@ -385,6 +401,7 @@ function Field({
   placeholder,
   required = false,
   minLength,
+  maxLength,
 }: {
   label: string;
   value: string;
@@ -393,6 +410,7 @@ function Field({
   placeholder?: string;
   required?: boolean;
   minLength?: number;
+  maxLength?: number;
 }) {
   return (
     <label className="block">
@@ -404,7 +422,10 @@ function Field({
         placeholder={placeholder}
         required={required}
         minLength={minLength}
-        maxLength={type === "password" ? 72 : 128}
+        maxLength={maxLength ?? (type === "password" ? 72 : 128)}
+        inputMode={type === "tel" ? "tel" : undefined}
+        autoCapitalize={type === "tel" || label.toLocaleLowerCase("ru-RU").includes("логин") ? "none" : undefined}
+        spellCheck={label.toLocaleLowerCase("ru-RU").includes("логин") ? false : undefined}
         className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-3.5 text-sm outline-none focus:border-gold"
       />
     </label>
