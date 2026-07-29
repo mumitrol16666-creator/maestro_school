@@ -15,11 +15,11 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
-      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
-      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
-      { url: "/icons/icon.svg", type: "image/svg+xml" },
+      { url: "/icons/icon-192.png?v=student-purple-1", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png?v=student-purple-1", sizes: "512x512", type: "image/png" },
+      { url: "/icons/icon.svg?v=student-purple-1", type: "image/svg+xml" },
     ],
-    apple: [{ url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }],
+    apple: [{ url: "/icons/icon-192.png?v=student-purple-1", sizes: "192x192", type: "image/png" }],
   },
   formatDetection: {
     telephone: false,
@@ -27,7 +27,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#181816",
+  themeColor: "#24134F",
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
