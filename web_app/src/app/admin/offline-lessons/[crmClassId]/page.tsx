@@ -10,6 +10,7 @@ import {
   LoaderCircle,
   Play,
   RotateCcw,
+  Save,
   Send,
   ShieldCheck,
   Star,
@@ -195,6 +196,65 @@ type FeedbackMessage = {
 
 type LessonMaterialDraft = { type?: string; url: string; title?: string; description?: string | null };
 
+type OfflineLessonFormDraft = {
+  version: 1;
+  lessonId: string;
+  ownerId: string;
+  updatedAt: number;
+  form: {
+    topic: string;
+    lessonGoals: string;
+    lessonSummary: string;
+    homework: string;
+    nextLessonFocus: string;
+    materialsText: string;
+    materialEntries: LessonMaterialDraft[];
+    comment: string;
+    trialReport: TrialLessonReport;
+    studentCheckDrafts: Record<string, StudentLessonCheckDraft>;
+    notHeldReason: string;
+  };
+};
+
+type DraftSaveStatus =
+  | { kind: "restored"; updatedAt: number }
+  | { kind: "saved"; updatedAt: number }
+  | { kind: "error" };
+
+const OFFLINE_LESSON_DRAFT_PREFIX = "maestro:offline-lesson-report:v1";
+const OFFLINE_LESSON_DRAFT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+function readOfflineLessonDraft(
+  key: string,
+  lessonId: string,
+  ownerId: string,
+): OfflineLessonFormDraft | null {
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return null;
+    const draft = JSON.parse(raw) as OfflineLessonFormDraft;
+    const isValid = draft?.version === 1
+      && draft.lessonId === lessonId
+      && draft.ownerId === ownerId
+      && typeof draft.updatedAt === "number"
+      && draft.form
+      && typeof draft.form === "object";
+    const isExpired = isValid && Date.now() - draft.updatedAt > OFFLINE_LESSON_DRAFT_TTL_MS;
+    if (!isValid || isExpired) {
+      window.localStorage.removeItem(key);
+      return null;
+    }
+    return draft;
+  } catch {
+    try {
+      window.localStorage.removeItem(key);
+    } catch {
+      // A blocked storage must never prevent the teacher from filling the lesson.
+    }
+    return null;
+  }
+}
+
 export default function AdminOfflineLessonDetailPage() {
   const params = useParams<{ crmClassId: string }>();
   const crmClassId = params.crmClassId;
@@ -230,7 +290,16 @@ export default function AdminOfflineLessonDetailPage() {
   const [notHeldReason, setNotHeldReason] = useState("");
   const [clockNow, setClockNow] = useState(() => Date.now());
   const [submissionProgress, setSubmissionProgress] = useState<string | null>(null);
+  const [hydratedLessonDraftKey, setHydratedLessonDraftKey] = useState<string | null>(null);
+  const [draftSaveStatus, setDraftSaveStatus] = useState<DraftSaveStatus | null>(null);
   const submissionLock = useRef(false);
+  const lastSavedDraftForm = useRef<string | null>(null);
+  const lessonDraftKey = useMemo(
+    () => user?.id
+      ? `${OFFLINE_LESSON_DRAFT_PREFIX}:${user.id}:${crmClassId}`
+      : null,
+    [crmClassId, user?.id],
+  );
 
   const lesson = lessonResource.data;
   const loadedStudents = studentsResource.data?.students ?? [];
@@ -350,6 +419,172 @@ export default function AdminOfflineLessonDetailPage() {
       return next;
     });
   }, [studentsResource.data, trialLeadFallback]);
+
+  useEffect(() => {
+    if (
+      !lesson
+      || !user?.id
+      || !lessonDraftKey
+      || studentsResource.loading
+      || hydratedLessonDraftKey === lessonDraftKey
+    ) {
+      return;
+    }
+
+    if (!canEditReport) {
+      try {
+        window.localStorage.removeItem(lessonDraftKey);
+      } catch {
+        // Storage can be unavailable in a restricted WebView.
+      }
+      lastSavedDraftForm.current = null;
+      setDraftSaveStatus(null);
+      setHydratedLessonDraftKey(lessonDraftKey);
+      return;
+    }
+
+    const savedDraft = readOfflineLessonDraft(lessonDraftKey, crmClassId, user.id);
+    if (savedDraft) {
+      const saved = savedDraft.form;
+      setTopic(saved.topic ?? "");
+      setLessonGoals(saved.lessonGoals ?? "");
+      setLessonSummary(saved.lessonSummary ?? "");
+      setHomework(saved.homework ?? "");
+      setNextLessonFocus(saved.nextLessonFocus ?? "");
+      setMaterialsText(saved.materialsText ?? "");
+      setMaterialEntries(Array.isArray(saved.materialEntries) ? saved.materialEntries : []);
+      setComment(saved.comment ?? "");
+      setTrialReport(mergeTrialReport(saved.trialReport));
+      setNotHeldReason(saved.notHeldReason ?? "");
+      setStudentCheckDrafts((current) => {
+        const next = { ...current };
+        for (const student of students) {
+          const storedStudent = saved.studentCheckDrafts?.[student.crmStudentId];
+          if (!storedStudent) continue;
+          next[student.crmStudentId] = {
+            ...studentLessonCheckDraft(student),
+            ...storedStudent,
+            homeworkReview: normalizeHomeworkReview(storedStudent.homeworkReview),
+            planTopicUpdates: Array.isArray(storedStudent.planTopicUpdates)
+              ? storedStudent.planTopicUpdates
+              : [],
+          };
+        }
+        return next;
+      });
+      lastSavedDraftForm.current = JSON.stringify(saved);
+      setDraftSaveStatus({ kind: "restored", updatedAt: savedDraft.updatedAt });
+    } else {
+      setTopic(lesson.topic ?? "");
+      setLessonGoals(lesson.lessonGoals ?? "");
+      setLessonSummary(lesson.lessonSummary ?? "");
+      setHomework(lesson.homeworkDraft ?? "");
+      setNextLessonFocus(lesson.nextLessonFocus ?? "");
+      setMaterialsText(
+        lesson.materials?.map((item) => item.url || item.title || "").filter(Boolean).join("\n") ?? "",
+      );
+      setMaterialEntries(
+        lesson.materials?.filter((item) => item.url).map((item) => ({
+          type: item.type,
+          url: item.url!,
+          title: item.title,
+        })) ?? [],
+      );
+      setComment(lesson.teacherComment ?? "");
+      setTrialReport(isTrialLesson ? mergeTrialReport(lesson.trialReport) : mergeTrialReport());
+      setNotHeldReason("");
+      setStudentCheckDrafts(Object.fromEntries(
+        students.map((student) => [student.crmStudentId, studentLessonCheckDraft(student)]),
+      ));
+      lastSavedDraftForm.current = null;
+      setDraftSaveStatus(null);
+    }
+    setHydratedLessonDraftKey(lessonDraftKey);
+  }, [
+    canEditReport,
+    crmClassId,
+    hydratedLessonDraftKey,
+    lesson,
+    lessonDraftKey,
+    isTrialLesson,
+    students,
+    studentsResource.loading,
+    user?.id,
+  ]);
+
+  useEffect(() => {
+    if (
+      !lesson
+      || !user?.id
+      || !lessonDraftKey
+      || !canEditReport
+      || hydratedLessonDraftKey !== lessonDraftKey
+    ) {
+      return;
+    }
+
+    const form: OfflineLessonFormDraft["form"] = {
+      topic,
+      lessonGoals,
+      lessonSummary,
+      homework,
+      nextLessonFocus,
+      materialsText,
+      materialEntries,
+      comment,
+      trialReport,
+      studentCheckDrafts,
+      notHeldReason,
+    };
+    const serializedForm = JSON.stringify(form);
+    if (serializedForm === lastSavedDraftForm.current) return;
+
+    const updatedAt = Date.now();
+    const draft: OfflineLessonFormDraft = {
+      version: 1,
+      lessonId: crmClassId,
+      ownerId: user.id,
+      updatedAt,
+      form,
+    };
+    try {
+      window.localStorage.setItem(lessonDraftKey, JSON.stringify(draft));
+      lastSavedDraftForm.current = serializedForm;
+      setDraftSaveStatus({ kind: "saved", updatedAt });
+    } catch {
+      setDraftSaveStatus({ kind: "error" });
+    }
+  }, [
+    canEditReport,
+    comment,
+    crmClassId,
+    homework,
+    hydratedLessonDraftKey,
+    lesson,
+    lessonDraftKey,
+    lessonGoals,
+    lessonSummary,
+    materialEntries,
+    materialsText,
+    nextLessonFocus,
+    notHeldReason,
+    studentCheckDrafts,
+    topic,
+    trialReport,
+    user?.id,
+  ]);
+
+  function clearOfflineLessonDraft() {
+    if (lessonDraftKey) {
+      try {
+        window.localStorage.removeItem(lessonDraftKey);
+      } catch {
+        // The report is already on the server; a storage cleanup failure is harmless.
+      }
+    }
+    lastSavedDraftForm.current = null;
+    setDraftSaveStatus(null);
+  }
 
   const updateTrialSection: TrialSectionUpdater = function updateTrialSection<K extends keyof TrialLessonReport>(
     section: K,
@@ -615,7 +850,10 @@ export default function AdminOfflineLessonDetailPage() {
           ? adminOfflineApi.submitForTeacher(crmClassId, payload)
           : teacherOfflineApi.submit(crmClassId, payload);
       });
-      if (submitted) setSubmitConfirmationOpen(false);
+      if (submitted) {
+        clearOfflineLessonDraft();
+        setSubmitConfirmationOpen(false);
+      }
     } finally {
       submissionLock.current = false;
       setSubmissionProgress(null);
@@ -626,12 +864,13 @@ export default function AdminOfflineLessonDetailPage() {
     const reason = notHeldReason.trim();
     if (reason.length < 3) return;
     setNotHeldOpen(false);
-    await runAction(
+    const submitted = await runAction(
       "not-held",
       () => canActForTeacher
         ? adminOfflineApi.notHeldForTeacher(crmClassId, reason)
         : teacherOfflineApi.notHeld(crmClassId, reason),
     );
+    if (submitted) clearOfflineLessonDraft();
     setNotHeldReason("");
   }
 
@@ -644,7 +883,7 @@ export default function AdminOfflineLessonDetailPage() {
       setError("Зафиксируйте выполнение прошлого домашнего задания");
       return;
     }
-    await runAction("approve", async () => {
+    const approved = await runAction("approve", async () => {
       if (!isNotHeld) await saveStudentChecks();
       return adminOfflineApi.approve(crmClassId, {
         deduct: !isNotHeld,
@@ -664,6 +903,7 @@ export default function AdminOfflineLessonDetailPage() {
           .map((url) => materialEntries.find((item) => item.url === url) ?? ({ type: "link", url, title: url })),
       });
     });
+    if (approved) clearOfflineLessonDraft();
   }
 
   function askReason(message: string) {
@@ -794,6 +1034,29 @@ export default function AdminOfflineLessonDetailPage() {
                 ? "Проверьте отчёт преподавателя, при необходимости отредактируйте и подтвердите урок."
                 : "Заполните тему, итог и домашнее задание. Ученик увидит материалы после подтверждения администратором."}
             </p>
+
+            {canEditReport && hydratedLessonDraftKey === lessonDraftKey ? (
+              <div
+                className={`mt-4 flex items-center gap-2 rounded-2xl border px-3 py-2 text-xs font-semibold ${
+                  draftSaveStatus?.kind === "error"
+                    ? "border-amber-200 bg-amber-50 text-amber-900"
+                    : "border-emerald-100 bg-emerald-50 text-emerald-800"
+                }`}
+              >
+                {draftSaveStatus?.kind === "error"
+                  ? <AlertTriangle size={15} className="shrink-0" />
+                  : <Save size={15} className="shrink-0" />}
+                <span>
+                  {draftSaveStatus?.kind === "restored"
+                    ? "Черновик восстановлен. Новые изменения сохраняются автоматически."
+                    : draftSaveStatus?.kind === "saved"
+                      ? `Черновик сохранён автоматически в ${formatClockTime(draftSaveStatus.updatedAt)}.`
+                      : draftSaveStatus?.kind === "error"
+                        ? "Не удалось сохранить черновик на устройстве. Не закрывайте приложение до отправки."
+                        : "Автосохранение черновика включено."}
+                </span>
+              </div>
+            ) : null}
 
             {isAbsenceOnly ? (
               <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
