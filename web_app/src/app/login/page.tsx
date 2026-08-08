@@ -16,18 +16,19 @@ import { AndroidAppDownloadLink } from "@/components/android-app-download";
 import { Brand } from "@/components/brand";
 import { useAuth } from "@/components/auth-provider";
 import { ApiError } from "@/lib/api-client";
-import { isStaffRole } from "@/lib/role-labels";
-
-function homePathForRole(role?: string | null) {
-  if (!role || role === "student") return "/dashboard";
-  if (role === "parent") return "/family";
-  if (role === "admin" || role === "owner" || role === "super_admin") return "/admin";
-  if (isStaffRole(role)) return "/admin/offline-lessons";
-  return "/dashboard";
-}
+import { homePathForRole, isStaffRole } from "@/lib/role-labels";
 
 function safeNextPath(next: string | null, role?: string | null) {
   if (!next || !next.startsWith("/") || next.startsWith("//")) {
+    return homePathForRole(role);
+  }
+  if (isStaffRole(role) && !next.startsWith("/admin")) {
+    return homePathForRole(role);
+  }
+  if (role === "parent" && !next.startsWith("/family")) {
+    return homePathForRole(role);
+  }
+  if (!isStaffRole(role) && role !== "parent" && (next.startsWith("/admin") || next.startsWith("/family"))) {
     return homePathForRole(role);
   }
   return next;

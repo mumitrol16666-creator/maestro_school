@@ -87,6 +87,14 @@ export function isOfflineCoordinatorRole(role?: string | null) {
   return !!role && ["admin", "owner", "curator", "branch_manager"].includes(role);
 }
 
+export function homePathForRole(role?: string | null) {
+  if (!role || isStudentRole(role)) return "/dashboard";
+  if (role === "parent") return "/family";
+  if (role === "admin" || role === "owner" || role === "super_admin") return "/admin";
+  if (isStaffRole(role)) return "/admin/offline-lessons";
+  return "/dashboard";
+}
+
 export function settingsPathForRole(role?: string | null) {
   if (role === "parent") return "/family/settings";
   return isStudentRole(role) ? "/settings" : "/admin/settings";
