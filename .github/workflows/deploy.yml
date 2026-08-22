@@ -32,15 +32,24 @@ jobs:
           cache-dependency-path: |
             backend/package-lock.json
             web_app/package-lock.json
-      - name: Verify backend
+      - name: Install backend dependencies
         working-directory: backend
-        run: |
-          npm ci
-          npm run db:generate
-          npm run lint
-          npm run typecheck
-          npm test
-          npm run build
+        run: npm ci
+      - name: Generate Prisma client
+        working-directory: backend
+        run: npm run db:generate
+      - name: Lint backend
+        working-directory: backend
+        run: npm run lint
+      - name: Typecheck backend
+        working-directory: backend
+        run: npm run typecheck
+      - name: Test backend
+        working-directory: backend
+        run: npm test
+      - name: Build backend
+        working-directory: backend
+        run: npm run build
       - name: Verify frontend
         working-directory: web_app
         run: |
