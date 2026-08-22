@@ -1,5 +1,15 @@
 "use client";
 
+function formatMonthTitle(monthKey: string) {
+  const [yearStr, monthStr] = monthKey.split("-");
+  const monthNum = parseInt(monthStr, 10) - 1;
+  const monthNames = [
+    "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
+    "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"
+  ];
+  return `${monthNames[monthNum] || monthStr} ${yearStr}`;
+}
+
 import {
   BookOpen,
   CalendarDays,
@@ -761,6 +771,7 @@ export default function SchoolLessonsPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
+  const [historyFilterMonth, setHistoryFilterMonth] = useState<string>("auto");
   const [alerts, setAlerts] = useState<SchoolAlertCounts>({
     homework: 0,
     reports: 0,
@@ -768,6 +779,33 @@ export default function SchoolLessonsPage() {
     todayLessons: 0,
     tomorrowLessons: 0,
   });
+
+  const lessonHistory = resource.data?.lessonHistory ?? [];
+
+  const availableMonths = useMemo(() => {
+    const monthsMap = new Map<string, number>();
+    for (const lesson of lessonHistory) {
+      if (!lesson.date) continue;
+      const monthKey = lesson.date.slice(0, 7);
+      monthsMap.set(monthKey, (monthsMap.get(monthKey) ?? 0) + 1);
+    }
+    return Array.from(monthsMap.entries())
+      .sort((a, b) => b[0].localeCompare(a[0]))
+      .map(([monthKey, count]) => ({
+        monthKey,
+        count,
+        title: formatMonthTitle(monthKey),
+      }));
+  }, [lessonHistory]);
+
+  const activeMonth = historyFilterMonth === "auto"
+    ? (reportMonth || (availableMonths[0]?.monthKey ?? currentAqtobeMonth()))
+    : historyFilterMonth;
+
+  const displayHistory = useMemo(() => {
+    if (activeMonth === "all") return lessonHistory;
+    return lessonHistory.filter((lesson) => lesson.date && lesson.date.startsWith(activeMonth));
+  }, [lessonHistory, activeMonth]);
 
   useEffect(() => {
     if (!user || !resource.data) return;
@@ -808,45 +846,9 @@ export default function SchoolLessonsPage() {
     return <ErrorState message="Не удалось загрузить данные" retry={resource.reload} />;
   }
 
-  const { balanceSnapshot, upcomingLessons, lessonHistory } = data;
+  const { balanceSnapshot, upcomingLessons } = data;
   const currentMembership = balanceSnapshot.currentMembership;
   const groupDayNames = ["", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
-function formatMonthTitle(monthKey: string) {
-  const [yearStr, monthStr] = monthKey.split("-");
-  const monthNum = parseInt(monthStr, 10) - 1;
-  const monthNames = [
-    "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
-    "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"
-  ];
-  return `${monthNames[monthNum] || monthStr} ${yearStr}`;
-}
-
-  const availableMonths = useMemo(() => {
-    const monthsMap = new Map<string, number>();
-    for (const lesson of lessonHistory) {
-      if (!lesson.date) continue;
-      const monthKey = lesson.date.slice(0, 7);
-      monthsMap.set(monthKey, (monthsMap.get(monthKey) ?? 0) + 1);
-    }
-    return Array.from(monthsMap.entries())
-      .sort((a, b) => b[0].localeCompare(a[0]))
-      .map(([monthKey, count]) => ({
-        monthKey,
-        count,
-        title: formatMonthTitle(monthKey),
-      }));
-  }, [lessonHistory]);
-
-  const [historyFilterMonth, setHistoryFilterMonth] = useState<string>("auto");
-
-  const activeMonth = historyFilterMonth === "auto"
-    ? (reportMonth || (availableMonths[0]?.monthKey ?? currentAqtobeMonth()))
-    : historyFilterMonth;
-
-  const displayHistory = useMemo(() => {
-    if (activeMonth === "all") return lessonHistory;
-    return lessonHistory.filter((lesson) => lesson.date && lesson.date.startsWith(activeMonth));
-  }, [lessonHistory, activeMonth]);
 
   async function refreshFromCrm() {
     setRefreshing(true);
