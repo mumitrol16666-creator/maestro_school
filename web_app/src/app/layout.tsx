@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { AuthProvider } from "@/components/auth-provider";
 import { PwaProvider } from "@/components/pwa-provider";
+import { APP_CACHE_VERSION } from "@/lib/pwa-version";
 
 export const metadata: Metadata = {
   title: "Maestro — кабинет ученика",
@@ -36,6 +37,9 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="ru">
+      <head>
+        <meta name="maestro-release" content={APP_CACHE_VERSION} />
+      </head>
       <body>
         <AuthProvider>
           {children}

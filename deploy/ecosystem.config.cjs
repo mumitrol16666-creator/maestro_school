@@ -10,6 +10,8 @@ module.exports = {
       max_memory_restart: "512M",
       env: {
         NODE_ENV: "production",
+        RELEASE_SHA: process.env.RELEASE_SHA || "unknown",
+        RELEASE_BUILT_AT: process.env.RELEASE_BUILT_AT || "unknown",
       },
     },
     {

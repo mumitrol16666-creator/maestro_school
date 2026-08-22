@@ -1,4 +1,6 @@
-const CACHE_VERSION = "maestro-2026-07-25-v1";
+const releaseVersion = new URL(self.location.href).searchParams.get("v") || "dev";
+const cacheSuffix = releaseVersion.replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 80) || "dev";
+const CACHE_VERSION = `maestro-${cacheSuffix}`;
 
 self.addEventListener("install", (event) => {
   event.waitUntil(self.skipWaiting());
@@ -7,7 +9,11 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((key) => key !== CACHE_VERSION).map((key) => caches.delete(key))),
+      Promise.all(
+        keys
+          .filter((key) => key.startsWith("maestro-") && key !== CACHE_VERSION)
+          .map((key) => caches.delete(key)),
+      ),
     ).then(() => self.clients.claim()),
   );
 });

@@ -1,2 +1,2 @@
-export const APP_CACHE_VERSION = "2026-07-25-v1";
-export const SERVICE_WORKER_URL = `/sw.js?v=${APP_CACHE_VERSION}`;
+export const APP_CACHE_VERSION = process.env.NEXT_PUBLIC_RELEASE_SHA?.trim() || "dev";
+export const SERVICE_WORKER_URL = `/sw.js?v=${encodeURIComponent(APP_CACHE_VERSION)}`;

@@ -46,12 +46,20 @@ async function bootstrap() {
   app.get("/health", async (_request, reply) => {
     try {
       await prisma.$queryRaw`SELECT 1`;
-      return { status: "ok", service: "maestro-api", database: "ok" };
+      return {
+        status: "ok",
+        service: "maestro-api",
+        database: "ok",
+        releaseSha: env.RELEASE_SHA,
+        builtAt: env.RELEASE_BUILT_AT,
+      };
     } catch {
       return reply.status(503).send({
         status: "error",
         service: "maestro-api",
         database: "unavailable",
+        releaseSha: env.RELEASE_SHA,
+        builtAt: env.RELEASE_BUILT_AT,
       });
     }
   });

@@ -14,6 +14,11 @@ const envSchema = z.object({
   INTEGRATION_SERVICE_SECRET: z.string().min(16).optional(),
   INTEGRATION_SSO_SECRET: z.string().min(16).optional(),
   CRM_API_URL: z.string().default("http://127.0.0.1:5000"),
+  RELEASE_SHA: z.string().trim().regex(/^(unknown|[0-9a-f]{40})$/i).default("unknown"),
+  RELEASE_BUILT_AT: z.union([
+    z.literal("unknown"),
+    z.string().datetime({ offset: true }),
+  ]).default("unknown"),
 });
 
 export const env = envSchema.parse(process.env);
