@@ -19,6 +19,7 @@
     "lint": "tsc --noEmit",
     "test": "tsx --test src/**/*.test.ts",
     "smoke": "tsx scripts/smoke.ts",
+    "smoke:production": "tsx scripts/production-smoke.ts",
     "e2e": "tsx scripts/e2e-flow.ts",
     "e2e:parent-family": "tsx scripts/parent-family-e2e.ts",
     "e2e:online-lessons": "tsx scripts/online-lessons-e2e.ts",
