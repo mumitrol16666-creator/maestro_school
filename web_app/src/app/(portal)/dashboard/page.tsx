@@ -17,19 +17,34 @@ import { getSchoolAlertCounts } from "@/lib/student-school-alerts";
 export default function DashboardPage() {
   const { user } = useAuth();
   const resource = useApiResource(async () => {
-    const [dashboard, news, achievements, courses, offlineSummary] = await Promise.all([
+    const [dashboard, secondary] = await Promise.all([
       api.dashboard(),
-      api.news(),
-      api.achievements(),
-      api.courses(),
-      api.studentOfflineSummary().catch(() => null),
+      Promise.allSettled([
+        api.news(),
+        api.achievements(),
+        api.courses(),
+        api.studentOfflineSummary(),
+      ]),
     ]);
+    const [newsResult, achievementsResult, coursesResult, offlineSummaryResult] = secondary;
+    const news = newsResult.status === "fulfilled" ? newsResult.value : [];
+    const achievements = achievementsResult.status === "fulfilled"
+      ? achievementsResult.value
+      : { data: [], meta: { earnedCount: 0, totalCount: 0 } };
+    const courses = coursesResult.status === "fulfilled" ? coursesResult.value : [];
+    const offlineSummary = offlineSummaryResult.status === "fulfilled" ? offlineSummaryResult.value : null;
     return {
       dashboard,
       news,
       achievements,
       courses: courses.map((course, index) => toCourse(course, index)),
       offlineSummary,
+      unavailable: {
+        news: newsResult.status === "rejected",
+        achievements: achievementsResult.status === "rejected",
+        courses: coursesResult.status === "rejected",
+        offlineSummary: offlineSummaryResult.status === "rejected",
+      },
     };
   }, []);
 
@@ -48,6 +63,8 @@ export default function DashboardPage() {
         earnedCount={achievements.meta?.earnedCount ?? 0}
         totalAchievements={achievements.meta?.totalCount ?? achievements.data.length}
         rank={dashboard.rank}
+        unavailable={data.unavailable}
+        onRetry={resource.reload}
       />
     );
   }
@@ -82,6 +99,15 @@ export default function DashboardPage() {
           >
             Посмотреть ДЗ
           </Link>
+        </div>
+      )}
+
+      {data.unavailable.offlineSummary && (
+        <div className="mb-6 rounded-2xl border border-stone-200 bg-paper px-5 py-4 text-sm text-stone-500 shadow-sm">
+          Школьные уроки временно не загрузились. {" "}
+          <button type="button" onClick={() => void resource.reload()} className="font-bold text-gold hover:underline">
+            Обновить
+          </button>
         </div>
       )}
 
@@ -163,7 +189,12 @@ export default function DashboardPage() {
             <p className="mt-4 text-sm text-stone-500">Нет активного урока</p>
           </div>
         )}
-        {latestPost ? (
+        {data.unavailable.news ? (
+          <div className="rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft">
+            <p className="font-display text-3xl">Новости временно не загрузились</p>
+            <button type="button" onClick={() => void resource.reload()} className="mt-4 text-sm font-bold text-gold hover:underline">Обновить</button>
+          </div>
+        ) : latestPost ? (
           <Link href="/board" className="card-hover rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft">
             <div className="flex items-center justify-between"><p className="text-xs font-bold uppercase tracking-[0.16em] text-stone-400">Последнее на доске</p><ArrowRight size={18} className="text-gold" /></div>
             <p className="font-display mt-8 text-3xl">{latestPost.title}</p>
@@ -181,7 +212,9 @@ export default function DashboardPage() {
             <div>
               <h2 className="font-display text-3xl">Достижения</h2>
               <p className="mt-1 text-sm text-stone-500">
-                {achievements.meta?.earnedCount ?? 0} из {achievements.meta?.totalCount ?? achievements.data.length} получено
+                {data.unavailable.achievements
+                  ? "Временно недоступно"
+                  : `${achievements.meta?.earnedCount ?? 0} из ${achievements.meta?.totalCount ?? achievements.data.length} получено`}
               </p>
             </div>
           </div>
@@ -189,7 +222,14 @@ export default function DashboardPage() {
             Все достижения
           </Link>
         </div>
-        <AchievementsWall achievements={achievements.data} compact />
+        {data.unavailable.achievements ? (
+          <div className="rounded-2xl border border-dashed border-stone-200 bg-stone-50 p-5 text-sm text-stone-500">
+            Достижения временно не загрузились. {" "}
+            <button type="button" onClick={() => void resource.reload()} className="font-bold text-gold hover:underline">Обновить</button>
+          </div>
+        ) : (
+          <AchievementsWall achievements={achievements.data} compact />
+        )}
       </section>
 
       {nextLesson && (

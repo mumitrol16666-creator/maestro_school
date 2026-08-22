@@ -17,6 +17,8 @@ export function DashboardWelcome({
   earnedCount,
   totalAchievements,
   rank,
+  unavailable,
+  onRetry,
 }: {
   points: number;
   courses: Course[];
@@ -25,6 +27,8 @@ export function DashboardWelcome({
   earnedCount: number;
   totalAchievements: number;
   rank: StudentRankOverview;
+  unavailable: { news: boolean; achievements: boolean; courses: boolean; offlineSummary: boolean };
+  onRetry: () => void | Promise<void>;
 }) {
   const { user } = useAuth();
   const firstName = user?.firstName || "ученик";
@@ -90,7 +94,12 @@ export function DashboardWelcome({
           </Link>
         </div>
 
-        {section.items.length ? (
+        {unavailable.courses ? (
+          <div className="mt-6 rounded-2xl border border-dashed border-stone-200 bg-stone-50 p-6 text-sm text-stone-500">
+            Курсы временно не загрузились. {" "}
+            <button type="button" onClick={() => void onRetry()} className="font-bold text-gold hover:underline">Обновить</button>
+          </div>
+        ) : section.items.length ? (
           <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
             {section.items.slice(0, 3).map((course) => (
               <CourseCard key={course.id} course={course} />
@@ -108,7 +117,13 @@ export function DashboardWelcome({
       </section>
 
       <section className="mt-5 grid gap-5 lg:grid-cols-2">
-        {latestPost ? (
+        {unavailable.news ? (
+          <div className="rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft">
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-stone-400">Доска Maestro</p>
+            <p className="font-display mt-6 text-2xl">Новости временно не загрузились</p>
+            <button type="button" onClick={() => void onRetry()} className="mt-3 text-sm font-bold text-gold hover:underline">Обновить</button>
+          </div>
+        ) : latestPost ? (
           <Link href="/board" className="card-hover rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft">
             <div className="flex items-center justify-between">
               <p className="text-xs font-bold uppercase tracking-[0.16em] text-stone-400">Доска Maestro</p>
@@ -130,7 +145,7 @@ export function DashboardWelcome({
             <div>
               <h2 className="font-display text-2xl">Достижения</h2>
               <p className="mt-1 text-sm text-stone-500">
-                {earnedCount} из {totalAchievements} получено
+                {unavailable.achievements ? "Временно недоступно" : `${earnedCount} из ${totalAchievements} получено`}
               </p>
             </div>
             <Link href="/progress" className="text-sm font-bold text-gold hover:underline">
@@ -138,7 +153,11 @@ export function DashboardWelcome({
             </Link>
           </div>
           <div className="mt-4">
-            <AchievementsWall achievements={achievements} compact />
+            {unavailable.achievements ? (
+              <button type="button" onClick={() => void onRetry()} className="text-sm font-bold text-gold hover:underline">Обновить достижения</button>
+            ) : (
+              <AchievementsWall achievements={achievements} compact />
+            )}
           </div>
         </div>
       </section>
