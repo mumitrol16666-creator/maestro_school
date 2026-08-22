@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { selectOfflineHomeworks } from "./services/student-home.service.js";
+import { selectOfflineHomeworks } from "../domain/offline-homework-selection.js";
 
 test("student home keeps new homework separate from the previous review", () => {
   const history = [
