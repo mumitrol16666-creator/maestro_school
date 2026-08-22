@@ -1,13 +1,20 @@
 "use client";
 
 import {
+  Calendar,
   CheckCircle2,
   Clock3,
+  Coffee,
   Coins,
+  Crown,
   Gift,
   LoaderCircle,
+  Music,
+  Percent,
   Sparkles,
+  Tag,
   Trophy,
+  Video,
   X,
   XCircle,
 } from "lucide-react";
@@ -22,10 +29,37 @@ import { rewardsApi } from "@/lib/rewards-api";
 import type { RewardCatalogItem, RewardRedemptionStatus } from "@/types/rewards";
 
 const categoryCopy: Record<string, string> = {
+  accessories: "Расходники",
+  merch: "Стикеры",
+  beverage: "Напитки и уют",
+  digital: "Цифровая награда",
+  rehearsal: "Практика",
+  studio: "Творчество",
+  discount: "Абонемент",
   lesson: "На уроке",
   learning: "Для обучения",
-  digital: "Персональный материал",
 };
+
+function getCategoryStyle(category: string) {
+  switch (category) {
+    case "accessories":
+      return { bg: "bg-blue-50 text-blue-700", icon: Music };
+    case "merch":
+      return { bg: "bg-rose-50 text-rose-700", icon: Tag };
+    case "beverage":
+      return { bg: "bg-amber-50 text-amber-800", icon: Coffee };
+    case "digital":
+      return { bg: "bg-yellow-50 text-yellow-800", icon: Crown };
+    case "rehearsal":
+      return { bg: "bg-emerald-50 text-emerald-800", icon: Calendar };
+    case "studio":
+      return { bg: "bg-purple-50 text-purple-700", icon: Video };
+    case "discount":
+      return { bg: "bg-teal-50 text-teal-800", icon: Percent };
+    default:
+      return { bg: "bg-violet-50 text-violet-700", icon: Gift };
+  }
+}
 
 const statusCopy: Record<RewardRedemptionStatus, { label: string; className: string; icon: typeof Clock3 }> = {
   requested: { label: "Ждёт подтверждения", className: "bg-amber-50 text-amber-800", icon: Clock3 },
@@ -100,11 +134,13 @@ export default function RewardsPage() {
           {data.catalog.map((reward) => {
             const unavailable = reward.stock === 0;
             const canAfford = data.coins >= reward.costCoins;
+            const catStyle = getCategoryStyle(reward.category);
+            const CatIcon = catStyle.icon;
             return (
               <article key={reward.id} className="flex min-h-[280px] flex-col rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft">
                 <div className="flex items-start justify-between gap-3">
-                  <span className="grid h-12 w-12 place-items-center rounded-2xl bg-violet-50 text-violet-700">
-                    <Gift size={22} />
+                  <span className={`grid h-12 w-12 place-items-center rounded-2xl ${catStyle.bg}`}>
+                    <CatIcon size={22} />
                   </span>
                   <span className="rounded-full bg-amber-50 px-3 py-1.5 text-xs font-black text-amber-900">
                     {reward.costCoins} Coins

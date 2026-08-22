@@ -325,10 +325,15 @@ export default function AdminRewardsPage() {
               className={`${inputClass} min-h-28`}
             />
             <select value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })} className={inputClass}>
+              <option value="accessories">Расходники (Медиатор / Струны)</option>
+              <option value="merch">Стикеры и подарки</option>
+              <option value="beverage">Напитки и уют (Кофе / Чай)</option>
+              <option value="digital">Цифровая награда (Рамка / Статус)</option>
+              <option value="rehearsal">Практика (Репетиция в классе)</option>
+              <option value="studio">Творчество (Видеозапись трека)</option>
+              <option value="discount">Абонемент (Скидка)</option>
               <option value="learning">Для обучения</option>
               <option value="lesson">На уроке</option>
-              <option value="digital">Персональный материал</option>
-              <option value="physical">Физический подарок</option>
             </select>
             <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
               Цена в Maestro Coins
