@@ -53,7 +53,6 @@ export interface Student {
   directionId: string;
   currentCourseId: string;
   points: number;
-  level: number;
 }
 
 export interface BoardPost {
