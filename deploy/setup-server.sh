@@ -28,7 +28,7 @@ mkdir -p /var/www/maestro_school
 
 log "Opening app ports in UFW (if active)..."
 if command -v ufw >/dev/null 2>&1 && ufw status | grep -q "Status: active"; then
-  ufw allow 3000/tcp
+  ufw allow 3001/tcp
   ufw allow 4000/tcp
 fi
 

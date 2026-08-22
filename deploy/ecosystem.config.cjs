@@ -18,7 +18,7 @@ module.exports = {
       name: "maestro-web",
       cwd: "/var/www/maestro_school/web_app",
       script: "node_modules/next/dist/bin/next",
-      args: "start -H 0.0.0.0 -p 3000",
+      args: "start -H 0.0.0.0 -p 3001",
       instances: 1,
       autorestart: true,
       max_memory_restart: "768M",

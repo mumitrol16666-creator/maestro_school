@@ -11,7 +11,7 @@
 | **Домен** | `https://maestro-school.duckdns.org` |
 | Web | `https://maestro-school.duckdns.org` |
 | API | `https://maestro-school.duckdns.org/api/v1` |
-| IP (fallback) | `http://178.105.59.89:3000` |
+| IP (fallback) | `http://178.105.59.89:3001` |
 
 Workflow: `.github/workflows/deploy.yml` — срабатывает при push в `main`.
 
@@ -27,7 +27,7 @@ ssh -p 14579 root@178.105.59.89
 
 `deploy.sh` **сам установит** Docker, Node.js 20 и PM2 при первом деплое (Ubuntu/Debian).
 
-Опционально вручную: откройте порты `3000` и `4000` в firewall.
+Опционально вручную: откройте порты `3001` и `4000` в firewall.
 
 ---
 

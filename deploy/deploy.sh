@@ -184,6 +184,7 @@ npm run build
 cd "$APP_DIR"
 
 log "Restarting PM2 apps..."
+pm2 delete maestro-web >/dev/null 2>&1 || true
 pm2 startOrReload deploy/ecosystem.config.cjs --update-env
 pm2 save
 
