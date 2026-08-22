@@ -185,6 +185,7 @@ Query params:
       "description": "...",
       "thumbnail": null,
       "difficultyLevel": "beginner",
+      "completionCoinsReward": 25,
       "modulesCount": 1,
       "lessonsCount": 4,
       "progress": 68,
@@ -197,11 +198,15 @@ Query params:
 
 > `progress` вычисляется при валидном JWT ученика. Для гостевого запроса
 > публичного каталога возвращается 0 и отсутствует активное зачисление.
+> `completionCoinsReward` всегда является неотрицательным целым числом и
+> совпадает со значением в `GET /courses/:courseId`.
 
 ### `GET /courses/:courseId`
 
 Публичное описание опубликованного курса с модулями и названиями уроков.
 Не содержит `videoUrl`, материалы или домашнее задание и не создает зачисление.
+Поле `completionCoinsReward` возвращает награду Maestro Coins за завершение
+курса и имеет тот же контракт, что и в списке курсов.
 
 ### `POST /courses/:courseId/enroll`
 

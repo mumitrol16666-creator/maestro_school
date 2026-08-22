@@ -58,6 +58,7 @@ export async function catalogRoutes(app: FastifyInstance) {
           description: course.description,
           thumbnail: course.thumbnail,
           difficultyLevel: course.difficultyLevel,
+          completionCoinsReward: course.completionCoinsReward,
           isPublished: course.isPublished,
           direction: course.direction,
           modulesCount: course.modules.length,
