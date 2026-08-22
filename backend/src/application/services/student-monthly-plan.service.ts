@@ -144,6 +144,27 @@ export async function publishStudentMonthlyPlan(
       publishedRevision: plan.draftRevision,
     },
   });
+
+  try {
+    const studentUser = await prisma.user.findFirst({
+      where: { crmStudentId, deletedAt: null, isActive: true },
+      select: { id: true },
+    });
+    if (studentUser) {
+      const { deliverUserNotification } = await import("./notification.service.js");
+      await deliverUserNotification({
+        userId: studentUser.id,
+        type: "offline_lesson_report_ready",
+        title: `Учебный план на ${month} готов!`,
+        body: `Цель месяца: «${snapshot.goal}». Посмотри список тем и песен на главной.`,
+        url: "/dashboard",
+        tag: `monthly-plan-${month}`,
+      });
+    }
+  } catch {
+    // Non-blocking notification delivery
+  }
+
   return planDto(updated);
 }
 
