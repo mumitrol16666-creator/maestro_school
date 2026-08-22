@@ -7,6 +7,7 @@ import {
   ChevronDown,
   Clock3,
   Download,
+  FileSpreadsheet,
   GraduationCap,
   History,
   MapPin,
@@ -31,6 +32,8 @@ import {
   type SchoolAlertCounts,
 } from "@/lib/student-school-alerts";
 import type { SchoolOfflineLesson, StudentOfflineSummary } from "@/types/school-offline";
+import { MonthlyReportModal } from "@/components/monthly-report-modal";
+import { downloadMonthlyReportExcel } from "@/lib/monthly-report-excel";
 
 /* ─── label maps ────────────────────────────────────────────────────── */
 
@@ -753,6 +756,7 @@ export default function SchoolLessonsPage() {
   const initialTab = tabs.some((item) => item.key === requestedTab) ? requestedTab as Tab : "overview";
   const [activeTab, setActiveTab] = useState<Tab>(initialTab);
   const [reportMonth, setReportMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [reportModalOpen, setReportModalOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
@@ -823,36 +827,9 @@ export default function SchoolLessonsPage() {
   /* ── CSV download ──────────────────── */
 
   function downloadMonthlyReport() {
-    const lessons = lessonHistory.filter((lesson) =>
-      lesson.status === "completed" && lesson.date.slice(0, 7) === reportMonth,
-    );
-    const rows = [
-      ["Дата", "Урок", "Преподаватель", "Тема", "Цели", "Что сделали", "Что доработать", "Домашнее задание", "Учебные баллы", "Темы плана"],
-      ...lessons.map((lesson) => [
-        formatLessonDate(lesson.date),
-        lesson.title,
-        lesson.teacherName || "",
-        lesson.topic || "",
-        lesson.lessonGoals || "",
-        lesson.lessonSummary || "",
-        lesson.nextLessonFocus || "",
-        lesson.homework || "",
-        lesson.lessonPoints ?? 0,
-        (lesson.planTopicResults ?? [])
-          .map((item) => `${item.title} — ${item.status === "completed" ? "освоено" : "в работе"}`)
-          .join(", "),
-      ]),
-    ];
-    const csv = rows
-      .map((row) => row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(";"))
-      .join("\n");
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(
-      new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" }),
-    );
-    link.download = `maestro-report-${reportMonth}.csv`;
-    link.click();
-    URL.revokeObjectURL(link.href);
+    if (data) {
+      downloadMonthlyReportExcel(data, reportMonth);
+    }
   }
 
   /* ── upcoming: sorted + limited to 3 ── */
@@ -1216,14 +1193,22 @@ export default function SchoolLessonsPage() {
                   type="month"
                   value={reportMonth}
                   onChange={(event) => setReportMonth(event.target.value)}
-                  className="w-full rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm sm:w-auto"
+                  className="w-full rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm font-bold sm:w-auto"
                 />
                 <button
                   type="button"
-                  onClick={downloadMonthlyReport}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-ink px-4 py-2 text-sm font-bold text-white sm:w-auto"
+                  onClick={() => setReportModalOpen(true)}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-ink px-4 py-2 text-sm font-bold text-white transition hover:bg-stone-800 sm:w-auto shadow-sm"
                 >
-                  <Download size={15} /> Скачать отчёт за месяц
+                  <FileSpreadsheet size={15} /> Отчёт за месяц
+                </button>
+                <button
+                  type="button"
+                  onClick={downloadMonthlyReport}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-stone-200 bg-white px-3.5 py-2 text-sm font-bold text-stone-700 transition hover:bg-stone-50 sm:w-auto"
+                  title="Скачать отчёт в формате Excel (.xls)"
+                >
+                  <Download size={15} /> Excel
                 </button>
               </div>
             </div>
@@ -1241,6 +1226,15 @@ export default function SchoolLessonsPage() {
             )}
           </section>
         </>
+      )}
+
+      {data && (
+        <MonthlyReportModal
+          open={reportModalOpen}
+          onClose={() => setReportModalOpen(false)}
+          summary={data}
+          initialMonth={reportMonth}
+        />
       )}
     </>
   );
