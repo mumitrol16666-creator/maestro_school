@@ -125,7 +125,7 @@ export async function awardTeacherLeagueBonus(params: {
   const sourceKey = `teacher-bonus:${params.teacherId}:${params.idempotencyKey}`;
   return prisma.$transaction(async (tx) => {
     const lockKey = `weekly-league-bonus:${range.key}:${params.teacherId}:${params.studentId}`;
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
 
     const duplicate = await tx.leagueXpEvent.findUnique({
       where: { sourceKey },

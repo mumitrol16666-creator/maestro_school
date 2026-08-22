@@ -489,17 +489,36 @@ function StudentCard({ student }: { student: TeacherStudent }) {
             До 10 XP одному ученику в неделю. Баланс и финансовые данные преподавателю не показываются.
           </p>
           <div className="mt-4 grid gap-3 sm:grid-cols-[100px_1fr]">
-            <label className="text-xs font-bold text-stone-600">
-              XP
+            <div className="text-xs font-bold text-stone-600">
+              <label className="block">XP (1-10)</label>
               <input
                 type="number"
                 min={1}
                 max={10}
-                value={bonusAmount}
-                onChange={(event) => setBonusAmount(Number(event.target.value))}
+                value={bonusAmount || ""}
+                onChange={(event) => {
+                  const val = event.target.value === "" ? 0 : Number(event.target.value);
+                  setBonusAmount(Math.max(0, Math.min(10, val)));
+                }}
                 className="mt-2 min-h-11 w-full rounded-xl border border-violet-200 bg-white px-3 text-sm outline-none focus:border-violet-500"
               />
-            </label>
+              <div className="mt-1 flex gap-1">
+                {[10, 5, 3].map((val) => (
+                  <button
+                    key={val}
+                    type="button"
+                    onClick={() => setBonusAmount(val)}
+                    className={`rounded-md px-2 py-0.5 text-[10px] font-bold transition ${
+                      bonusAmount === val
+                        ? "bg-violet-700 text-white"
+                        : "border border-violet-200 bg-white text-violet-800 hover:bg-violet-50"
+                    }`}
+                  >
+                    +{val}
+                  </button>
+                ))}
+              </div>
+            </div>
             <label className="text-xs font-bold text-stone-600">
               За что
               <input
