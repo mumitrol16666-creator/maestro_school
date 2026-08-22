@@ -8,6 +8,7 @@ import type {
   ApiLessonDetail,
   ApiNewsPost,
   ApiProgress,
+  CompleteLessonResponse,
   HomeworkSubmissionResponse,
   LoginResponse,
   RegisterInput,
@@ -196,6 +197,8 @@ export const api = {
     apiRequest<ApiProgress>(`/students/me/progress${courseId ? `?courseId=${encodeURIComponent(courseId)}` : ""}`),
   startLesson: (lessonId: string) =>
     apiRequest<StartLessonResponse>(`/lessons/${lessonId}/start`, { method: "POST" }),
+  completeLesson: (lessonId: string) =>
+    apiRequest<CompleteLessonResponse>(`/lessons/${lessonId}/complete`, { method: "POST" }),
   myHomeworkSubmissions: (homeworkId: string) =>
     apiRequest<HomeworkAttempt[]>(`/homeworks/${homeworkId}/submissions/me`),
   submitHomework: (

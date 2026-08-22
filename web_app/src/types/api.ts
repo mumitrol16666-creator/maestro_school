@@ -194,6 +194,15 @@ export interface ApiDashboard {
   } | null;
 }
 
+export interface CompleteLessonResponse {
+  lessonId: string;
+  courseId: string;
+  status: "completed";
+  alreadyCompleted: boolean;
+  nextLessonId: string | null;
+  courseCompleted: boolean;
+}
+
 export interface StudentRankOverview {
   current: { code: string; title: string; minPoints: number };
   next: { code: string; title: string; minPoints: number } | null;

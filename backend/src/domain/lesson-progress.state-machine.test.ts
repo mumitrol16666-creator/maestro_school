@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  canStudentCompleteWithoutHomework,
   canStudentTransition,
   canSystemTransition,
   isLessonCompleted,
@@ -20,6 +21,13 @@ describe("lesson progress state machine", () => {
     assert.equal(canStudentTransition("in_progress", "submitted"), true);
     assert.equal(canStudentTransition("locked", "available"), false);
     assert.equal(canStudentTransition("submitted", "completed"), false);
+  });
+
+  it("allows self-completion only for an in-progress lesson without homework", () => {
+    assert.equal(canStudentCompleteWithoutHomework("in_progress", false), true);
+    assert.equal(canStudentCompleteWithoutHomework("available", false), false);
+    assert.equal(canStudentCompleteWithoutHomework("in_progress", true), false);
+    assert.equal(canStudentCompleteWithoutHomework("completed", false), false);
   });
 
   it("allows system unlock locked → available", () => {

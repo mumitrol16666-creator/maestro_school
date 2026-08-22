@@ -108,6 +108,17 @@ export async function updateLessonProgressStatus(
   });
 }
 
+export async function completeLessonProgressIfInProgress(
+  studentId: string,
+  lessonId: string,
+  completedAt: Date,
+) {
+  return prisma.lessonProgress.updateMany({
+    where: { studentId, lessonId, status: "in_progress" },
+    data: { status: "completed", completedAt },
+  });
+}
+
 export async function getProgressMapForCourse(studentId: string, courseId: string) {
   const rows = await prisma.lessonProgress.findMany({
     where: {

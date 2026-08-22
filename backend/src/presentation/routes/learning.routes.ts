@@ -1,10 +1,13 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { getStudentAchievementsOverview } from "../../application/services/achievement.service.js";
-import { startLesson } from "../../application/services/lesson-progress.service.js";
+import {
+  completeLessonWithoutHomework,
+  startLesson,
+} from "../../application/services/lesson-progress.service.js";
 import { getStudentDashboard } from "../../application/services/student-dashboard.service.js";
 import { writeAuditLog } from "../../application/services/audit.service.js";
-import { authenticate, requirePermission } from "../guards/auth.guards.js";
+import { authenticate, requirePermission, requireStudent } from "../guards/auth.guards.js";
 
 export async function learningRoutes(app: FastifyInstance) {
   app.post(
@@ -22,6 +25,31 @@ export async function learningRoutes(app: FastifyInstance) {
         action: "update",
         actorId: studentId,
         payload: { status: result.status, courseId: result.courseId },
+      });
+
+      return { data: result };
+    },
+  );
+
+  app.post(
+    "/lessons/:lessonId/complete",
+    { preHandler: [authenticate, requireStudent, requirePermission("progress.write")] },
+    async (request) => {
+      const { lessonId } = z.object({ lessonId: z.string().uuid() }).parse(request.params);
+      const studentId = request.user!.id;
+      const result = await completeLessonWithoutHomework(studentId, lessonId);
+
+      await writeAuditLog({
+        entityType: "lesson_progress",
+        entityId: lessonId,
+        action: "update",
+        actorId: studentId,
+        payload: {
+          status: result.status,
+          courseId: result.courseId,
+          reason: "student_completed_no_homework",
+          alreadyCompleted: result.alreadyCompleted,
+        },
       });
 
       return { data: result };

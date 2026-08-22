@@ -76,6 +76,7 @@ export default function LessonPage() {
   }, [lessonId]);
 
   const [starting, setStarting] = useState(false);
+  const [completing, setCompleting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -149,6 +150,29 @@ export default function LessonPage() {
       setActionError(reason instanceof ApiError ? reason.message : "Не удалось отправить домашнее задание");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleCompleteWithoutHomework() {
+    if (completing) return;
+    setCompleting(true);
+    setActionError(null);
+    setSuccess(null);
+    try {
+      const result = await api.completeLesson(lessonId);
+      await resource.reload();
+      setSuccess(
+        result.courseCompleted
+          ? "Курс завершён."
+          : "Урок завершён. Следующий урок открыт.",
+      );
+    } catch (reason) {
+      if (reason instanceof ApiError && reason.code === "LESSON_REQUIRES_HOMEWORK") {
+        await resource.reload();
+      }
+      setActionError(reason instanceof ApiError ? reason.message : "Не удалось завершить урок");
+    } finally {
+      setCompleting(false);
     }
   }
 
@@ -267,6 +291,25 @@ export default function LessonPage() {
               <p className="mt-4 text-sm text-stone-500">К этому уроку пока нет дополнительных материалов.</p>
             )}
           </section>
+
+          {lessonStarted && !detail.homework && lesson.status === "in_progress" && (
+            <section className="mt-9 rounded-[28px] border border-emerald-100 bg-emerald-50 p-6">
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-700">Завершение урока</p>
+              <h2 className="font-display mt-2 text-3xl text-ink">Материал изучен?</h2>
+              <p className="mt-3 text-sm leading-6 text-stone-600">
+                У этого урока нет домашнего задания. Подтвердите изучение, чтобы открыть следующий урок.
+              </p>
+              <button
+                type="button"
+                onClick={() => void handleCompleteWithoutHomework()}
+                disabled={completing}
+                className="mt-5 inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-700 px-5 py-3 text-sm font-bold text-white disabled:opacity-60"
+              >
+                {completing ? <LoaderCircle size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+                {completing ? "Завершаем…" : "Урок изучен"}
+              </button>
+            </section>
+          )}
 
           {lessonStarted && lesson.homeworkId && lesson.homeworkDescription && (
             <>

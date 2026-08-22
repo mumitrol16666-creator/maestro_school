@@ -37,6 +37,14 @@ export function canStudentTransition(
   return STUDENT_TRANSITIONS[from]?.includes(to) ?? false;
 }
 
+/** A student may self-complete only a started lesson that has no homework. */
+export function canStudentCompleteWithoutHomework(
+  status: LessonProgressState,
+  hasHomework: boolean,
+): boolean {
+  return status === "in_progress" && !hasHomework;
+}
+
 export function canSystemTransition(
   from: LessonProgressState,
   to: LessonProgressState,
