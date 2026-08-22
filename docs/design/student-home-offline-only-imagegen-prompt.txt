@@ -1,0 +1,7 @@
+Use case: ui-mockup
+Asset type: Maestro student home for a learner who studies only at the physical school
+Reference: Student Home V2 visual system.
+Required content: header, greeting, real Points/Coins/achievements, nearest physical lesson hero, published monthly goal, assignments only from the teacher, nearest school schedule, stable bottom navigation.
+Required absence: no online lesson, no online homework, no self-study course and no empty placeholders for unavailable learning modes.
+Hero copy: “СЕГОДНЯ · УРОК В ШКОЛЕ”, “Гитара”, “17:00–17:45 · кабинет 2”, “Иван Петров”, “До начала 2 часа”, CTA “Детали урока”.
+Constraints: black-and-gold Maestro style, Russian Cyrillic, no fake level or streak, no finances, no duplicate content, no ambiguous CTA, no watermark.

@@ -1,0 +1,8 @@
+Use case: ui-mockup
+Asset type: high-fidelity vertical mobile app home-screen mockup for Maestro Music School student application
+Input image: use the existing Maestro student home only as a brand/style reference; redesign the information architecture completely.
+Primary request: create one polished iPhone-width student dashboard screen that answers “what should I do now?” and avoids repeated large course blocks.
+Style: production-ready mobile UI, near-black background, restrained warm gold accents, off-white text, subtle dark cards, generous spacing and rounded corners.
+Hierarchy: Maestro header; greeting; compact real Points, Coins and achievements; one “Сейчас” priority; monthly goal with progress; three Unified Tasks rows; one secondary course; five-item bottom navigation.
+Exact key copy: “Добрый день, Артём”, “Вот что важно сегодня”, “Доработать переход C → G”, “Нужна доработка”, “ЦЕЛЬ АВГУСТА”, “Сыграть «Куклу колдуна» целиком”, “4 из 7 пунктов”, “57%”, “ЗАДАНИЯ”, “ДОПОЛНИТЕЛЬНЫЙ КУРС”.
+Constraints: no duplicate information, no finances or salary, no fake level, no streak, no leaderboard, no giant course hero, no excessive decoration, no illegible text, no watermark.

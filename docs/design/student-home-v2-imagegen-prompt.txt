@@ -1,0 +1,9 @@
+Use case: ui-mockup
+Asset type: revised high-fidelity Maestro student mobile dashboard V2
+Input: Student Home V1 as the visual reference and edit target.
+Preserve: black-and-gold Maestro system, header, metrics, monthly goal, secondary course and bottom navigation.
+Change: make the hero source explicit as “СЕЙЧАС · УРОК В ШКОЛЕ”, show “Иван Петров · гитара”, “К следующему уроку: сегодня, 17:00”, and replace generic “Продолжить” with “Открыть ДЗ”.
+Remove: the repeated “Переход C → G” task below the hero.
+Task source language: use “Онлайн с преподавателем”, “Самостоятельный курс”, and “Урок в школе” as secondary context lines instead of technical chips.
+Task examples: “Ритм под метроном”, “Бой «шестёрка»”, “Повторить вступление”.
+Constraints: exact Russian copy, no ambiguous generic hero CTA, no duplicate task, no fake level or streak, no finance, no watermark.
