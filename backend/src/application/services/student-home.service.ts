@@ -96,6 +96,16 @@ export async function getStudentHome(studentUserId: string) {
   };
 }
 
+function getNextMonthKey(monthKey: string): string {
+  const [yearStr, monthStr] = monthKey.split("-");
+  const year = parseInt(yearStr, 10) || new Date().getFullYear();
+  const monthNum = parseInt(monthStr, 10) || 1;
+  if (monthNum >= 12) {
+    return `${year + 1}-01`;
+  }
+  return `${year}-${String(monthNum + 1).padStart(2, "0")}`;
+}
+
 export async function getPublishedMonthlyPlansForStudent(
   studentUserId: string,
   month: string,
@@ -116,5 +126,14 @@ export async function getPublishedMonthlyPlansForStudent(
     listPublishedStudentMonthlyPlans(user.crmStudentId, month),
     listPublishedGroupMonthlyPlans(groupIds, month),
   ]);
-  return [...studentPlans, ...groupPlans];
+  let plans = [...studentPlans, ...groupPlans];
+  if (!plans.length) {
+    const nextMonth = getNextMonthKey(month);
+    const [nextStudentPlans, nextGroupPlans] = await Promise.all([
+      listPublishedStudentMonthlyPlans(user.crmStudentId, nextMonth),
+      listPublishedGroupMonthlyPlans(groupIds, nextMonth),
+    ]);
+    plans = [...nextStudentPlans, ...nextGroupPlans];
+  }
+  return plans;
 }

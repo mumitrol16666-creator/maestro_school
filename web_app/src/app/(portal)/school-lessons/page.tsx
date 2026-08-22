@@ -19,12 +19,13 @@ import {
   XCircle,
 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
 import { PageHeader } from "@/components/page-header";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { api } from "@/lib/api-client";
+import { currentAqtobeMonth } from "@/lib/aqtobe-month";
 import { parseVideoUrl } from "@/lib/parse-video-url";
 import {
   getSchoolAlertCounts,
@@ -810,6 +811,42 @@ export default function SchoolLessonsPage() {
   const { balanceSnapshot, upcomingLessons, lessonHistory } = data;
   const currentMembership = balanceSnapshot.currentMembership;
   const groupDayNames = ["", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+function formatMonthTitle(monthKey: string) {
+  const [yearStr, monthStr] = monthKey.split("-");
+  const monthNum = parseInt(monthStr, 10) - 1;
+  const monthNames = [
+    "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
+    "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"
+  ];
+  return `${monthNames[monthNum] || monthStr} ${yearStr}`;
+}
+
+  const availableMonths = useMemo(() => {
+    const monthsMap = new Map<string, number>();
+    for (const lesson of lessonHistory) {
+      if (!lesson.date) continue;
+      const monthKey = lesson.date.slice(0, 7);
+      monthsMap.set(monthKey, (monthsMap.get(monthKey) ?? 0) + 1);
+    }
+    return Array.from(monthsMap.entries())
+      .sort((a, b) => b[0].localeCompare(a[0]))
+      .map(([monthKey, count]) => ({
+        monthKey,
+        count,
+        title: formatMonthTitle(monthKey),
+      }));
+  }, [lessonHistory]);
+
+  const [historyFilterMonth, setHistoryFilterMonth] = useState<string>("auto");
+
+  const activeMonth = historyFilterMonth === "auto"
+    ? (reportMonth || (availableMonths[0]?.monthKey ?? currentAqtobeMonth()))
+    : historyFilterMonth;
+
+  const displayHistory = useMemo(() => {
+    if (activeMonth === "all") return lessonHistory;
+    return lessonHistory.filter((lesson) => lesson.date && lesson.date.startsWith(activeMonth));
+  }, [lessonHistory, activeMonth]);
 
   async function refreshFromCrm() {
     setRefreshing(true);
@@ -1191,13 +1228,19 @@ export default function SchoolLessonsPage() {
               <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:flex-wrap">
                 <input
                   type="month"
-                  value={reportMonth}
-                  onChange={(event) => setReportMonth(event.target.value)}
+                  value={activeMonth === "all" ? reportMonth : activeMonth}
+                  onChange={(event) => {
+                    setReportMonth(event.target.value);
+                    setHistoryFilterMonth(event.target.value);
+                  }}
                   className="w-full rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm font-bold sm:w-auto"
                 />
                 <button
                   type="button"
-                  onClick={() => setReportModalOpen(true)}
+                  onClick={() => {
+                    setReportMonth(activeMonth === "all" ? currentAqtobeMonth() : activeMonth);
+                    setReportModalOpen(true);
+                  }}
                   className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-ink px-4 py-2 text-sm font-bold text-white transition hover:bg-stone-800 sm:w-auto shadow-sm"
                 >
                   <FileSpreadsheet size={15} /> Отчёт за месяц
@@ -1212,14 +1255,51 @@ export default function SchoolLessonsPage() {
                 </button>
               </div>
             </div>
-            {lessonHistory.length === 0 ? (
+
+            {/* Quick Month Filter Bar */}
+            {availableMonths.length > 0 ? (
+              <div className="mb-5 flex flex-wrap items-center gap-2 border-b border-stone-100 pb-3">
+                <span className="text-xs font-bold text-stone-400 mr-1">Месяцы:</span>
+                {availableMonths.map(({ monthKey, count, title }: { monthKey: string; count: number; title: string }) => (
+                  <button
+                    key={monthKey}
+                    type="button"
+                    onClick={() => {
+                      setHistoryFilterMonth(monthKey);
+                      setReportMonth(monthKey);
+                    }}
+                    className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold transition ${
+                      activeMonth === monthKey
+                        ? "bg-amber-100 text-amber-950 border border-amber-300 font-black shadow-xs"
+                        : "bg-white border border-stone-200 text-stone-600 hover:bg-stone-50"
+                    }`}
+                  >
+                    <CalendarDays size={13} className={activeMonth === monthKey ? "text-gold" : "text-stone-400"} />
+                    {title} ({count})
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setHistoryFilterMonth("all")}
+                  className={`rounded-xl px-3 py-1.5 text-xs font-bold transition ${
+                    activeMonth === "all"
+                      ? "bg-stone-800 text-white font-black shadow-xs"
+                      : "bg-white border border-stone-200 text-stone-600 hover:bg-stone-50"
+                  }`}
+                >
+                  Все ({lessonHistory.length})
+                </button>
+              </div>
+            ) : null}
+
+            {displayHistory.length === 0 ? (
               <EmptyState
-                title="История пуста"
-                description="После проведённых занятий здесь появятся темы и домашние задания."
+                title="Занятий в этом месяце нет"
+                description="Выберите другой месяц или переключитесь на «Все», чтобы просмотреть историю занятий."
               />
             ) : (
               <div className="space-y-4">
-                {lessonHistory.map((lesson) => (
+                {displayHistory.map((lesson: SchoolOfflineLesson) => (
                   <LessonCard key={lesson.crmClassId} lesson={lesson} />
                 ))}
               </div>

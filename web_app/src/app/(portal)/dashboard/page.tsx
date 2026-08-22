@@ -21,6 +21,7 @@ import { ErrorState, LoadingState } from "@/components/data-states";
 import { ProgressBar } from "@/components/progress-bar";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { api } from "@/lib/api-client";
+import { currentAqtobeMonth } from "@/lib/aqtobe-month";
 import type { SchoolOfflineLesson } from "@/types/school-offline";
 import type { StudentHomeHomework, StudentHomeMonthlyPlan } from "@/types/api";
 
@@ -197,34 +198,45 @@ function ReviewLine({ homework, previous = false }: { homework: StudentHomeHomew
 }
 
 function MonthlyPlanCard({ plan }: { plan: StudentHomeMonthlyPlan }) {
+  const currentMonth = currentAqtobeMonth();
+  const isFuture = plan.month > currentMonth;
+
   return (
     <section className="rounded-[28px] border border-stone-200 bg-white p-6 shadow-soft sm:p-7">
       <div className="flex items-start justify-between gap-3">
         <span className="grid h-11 w-11 place-items-center rounded-2xl bg-amber-50 text-gold">
           <CircleDot size={22} />
         </span>
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3.5 py-1.5 text-xs font-black text-amber-950">
-          <Sparkles size={13} className="text-gold" />
-          {plan.progress.percent}% освоено
+        <span className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-black ${
+          isFuture ? "bg-violet-50 text-violet-900 border border-violet-200" : "bg-amber-50 text-amber-950"
+        }`}>
+          <Sparkles size={13} className={isFuture ? "text-violet-600" : "text-gold"} />
+          {isFuture ? "План на следующий месяц" : `${plan.progress.percent}% освоено`}
         </span>
       </div>
 
       <p className="mt-5 text-xs font-black uppercase tracking-[0.2em] text-gold">
-        Учебный план · {monthTitle(plan.month)}
+        Учебный план · {monthTitle(plan.month)} {isFuture ? "(Старт скоро)" : ""}
       </p>
       <h2 className="font-display mt-2 text-3xl leading-tight text-ink sm:text-4xl">
         {plan.goal}
       </h2>
 
-      <div className="mt-5">
-        <ProgressBar value={plan.progress.percent} />
-        <div className="mt-2.5 flex items-center justify-between text-xs font-semibold text-stone-500">
-          <span>{plan.progress.completed} из {plan.progress.total} тем освоено</span>
-          {plan.progress.inProgress ? (
-            <span className="text-amber-900 font-bold">{plan.progress.inProgress} в активной работе</span>
-          ) : null}
+      {!isFuture ? (
+        <div className="mt-5">
+          <ProgressBar value={plan.progress.percent} />
+          <div className="mt-2.5 flex items-center justify-between text-xs font-semibold text-stone-500">
+            <span>{plan.progress.completed} из {plan.progress.total} тем освоено</span>
+            {plan.progress.inProgress ? (
+              <span className="text-amber-900 font-bold">{plan.progress.inProgress} в активной работе</span>
+            ) : null}
+          </div>
         </div>
-      </div>
+      ) : (
+        <p className="mt-3 text-xs font-semibold text-violet-800">
+          Преподаватель заранее подготовил программу на {monthTitle(plan.month).toLowerCase()}. Всего в плане {plan.progress.total} тем.
+        </p>
+      )}
 
       {plan.items.length ? (
         <div className="mt-5 space-y-2">
