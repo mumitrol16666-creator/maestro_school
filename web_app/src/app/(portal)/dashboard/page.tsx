@@ -1,249 +1,251 @@
 "use client";
 
-import { ArrowRight, CheckCircle2, Clock3, Coins, Flame, Play, Sparkles, Star, Trophy } from "lucide-react";
-import { AchievementsWall } from "@/components/achievements-wall";
-import { DashboardWelcome } from "@/components/dashboard-welcome";
-import { FounderMessage } from "@/components/founder-message";
+import {
+  ArrowRight,
+  BookOpenCheck,
+  CalendarDays,
+  CheckCircle2,
+  ChevronRight,
+  CircleDot,
+  Coins,
+  MapPin,
+  School,
+  Sparkles,
+  Star,
+  Trophy,
+  UserRound,
+} from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/components/auth-provider";
-import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
+import { ErrorState, LoadingState } from "@/components/data-states";
 import { ProgressBar } from "@/components/progress-bar";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { api } from "@/lib/api-client";
-import { lessonStatusLabels } from "@/lib/ui";
-import { difficultyLabel, normalizeLessonStatus, toCourse } from "@/lib/adapters";
-import { getSchoolAlertCounts } from "@/lib/student-school-alerts";
+import type { SchoolOfflineLesson } from "@/types/school-offline";
+import type { StudentHomeHomework, StudentHomeMonthlyPlan } from "@/types/api";
+
+const monthNames = [
+  "января", "февраля", "марта", "апреля", "мая", "июня",
+  "июля", "августа", "сентября", "октября", "ноября", "декабря",
+];
+
+function formatLessonDate(value: string) {
+  const date = new Date(value);
+  const today = new Date();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+  const sameDay = (left: Date, right: Date) => left.getFullYear() === right.getFullYear()
+    && left.getMonth() === right.getMonth() && left.getDate() === right.getDate();
+  if (sameDay(date, today)) return "Сегодня";
+  if (sameDay(date, tomorrow)) return "Завтра";
+  return new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" }).format(date);
+}
+
+function monthTitle(month: string) {
+  const index = Number(month.slice(5, 7)) - 1;
+  return monthNames[index] ?? "месяца";
+}
+
+function homeworkStatus(homework: StudentHomeHomework) {
+  if (homework.status === "needs_revision") return { label: "Нужна доработка", className: "bg-red-50 text-red-800" };
+  if (homework.status === "completed") return { label: "Проверено", className: "bg-emerald-50 text-emerald-800" };
+  return { label: "Нужно сделать", className: "bg-amber-50 text-amber-900" };
+}
 
 export default function DashboardPage() {
   const { user } = useAuth();
-  const resource = useApiResource(async () => {
-    const [dashboard, secondary] = await Promise.all([
-      api.dashboard(),
-      Promise.allSettled([
-        api.news(),
-        api.achievements(),
-        api.courses(),
-        api.studentOfflineSummary(),
-      ]),
-    ]);
-    const [newsResult, achievementsResult, coursesResult, offlineSummaryResult] = secondary;
-    const news = newsResult.status === "fulfilled" ? newsResult.value : [];
-    const achievements = achievementsResult.status === "fulfilled"
-      ? achievementsResult.value
-      : { data: [], meta: { earnedCount: 0, totalCount: 0 } };
-    const courses = coursesResult.status === "fulfilled" ? coursesResult.value : [];
-    const offlineSummary = offlineSummaryResult.status === "fulfilled" ? offlineSummaryResult.value : null;
-    return {
-      dashboard,
-      news,
-      achievements,
-      courses: courses.map((course, index) => toCourse(course, index)),
-      offlineSummary,
-      unavailable: {
-        news: newsResult.status === "rejected",
-        achievements: achievementsResult.status === "rejected",
-        courses: coursesResult.status === "rejected",
-        offlineSummary: offlineSummaryResult.status === "rejected",
-      },
-    };
-  }, []);
-
-  if (resource.loading) return <LoadingState label="Собираем вашу главную страницу" />;
-  if (resource.error) return <ErrorState message={resource.error} retry={resource.reload} />;
-  const data = resource.data;
-  if (!data) return <ErrorState message="Не удалось загрузить данные" retry={resource.reload} />;
-  if (!data.dashboard.currentCourse) {
-    const { dashboard, news, achievements, courses } = data;
-    return (
-      <DashboardWelcome
-        points={dashboard.points}
-        courses={courses}
-        news={news}
-        achievements={achievements.data}
-        earnedCount={achievements.meta?.earnedCount ?? 0}
-        totalAchievements={achievements.meta?.totalCount ?? achievements.data.length}
-        rank={dashboard.rank}
-        unavailable={data.unavailable}
-        onRetry={resource.reload}
-      />
-    );
+  const resource = useApiResource(() => api.studentHome(), []);
+  if (resource.loading) return <LoadingState label="Собираем вашу учебную главную" />;
+  if (resource.error || !resource.data) {
+    return <ErrorState message={resource.error ?? "Не удалось загрузить главную"} retry={resource.reload} />;
   }
 
-  const { dashboard, news, achievements, offlineSummary } = data;
-  const course = dashboard.currentCourse;
-  if (!course) return <EmptyState title="Курс пока не назначен" description="После зачисления на курс здесь появятся уроки, прогресс и баллы." />;
-  const nextLesson = dashboard.nextAvailableLesson;
-  const latestPost = news[0];
-  const firstName = user?.firstName || "ученик";
-
-  const schoolAlerts = user && offlineSummary ? getSchoolAlertCounts(user.id, offlineSummary) : null;
+  const data = resource.data;
+  const school = data.school;
+  const upcoming = school?.upcomingLessons ?? [];
+  const nearestLesson = upcoming[0] ?? null;
+  const plan = data.monthlyPlans[0] ?? null;
+  const hasLearningData = Boolean(nearestLesson || data.currentHomework || plan || data.dashboard.currentCourse);
 
   return (
-    <>
-      {schoolAlerts && schoolAlerts.homework > 0 && (
-        <div className="mb-6 flex flex-col gap-4 rounded-[24px] border border-amber-200 bg-amber-50 p-5 shadow-sm animate-in fade-in slide-in-from-top-4 duration-300 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex min-w-0 items-center gap-3">
-            <span className="grid h-10 w-10 place-items-center rounded-2xl bg-amber-100 text-gold flex-shrink-0">
-              <Trophy size={20} />
-            </span>
-            <div>
-              <p className="text-sm font-bold text-amber-950">Новые домашние задания!</p>
-              <p className="text-xs text-stone-500 mt-1">
-                Преподаватели оставили вам {schoolAlerts.homework} новых домашних заданий по офлайн-урокам.
-              </p>
-            </div>
-          </div>
-          <Link
-            href="/school-lessons"
-            className="w-full rounded-xl bg-gold px-4 py-2.5 text-center text-xs font-bold text-white transition hover:bg-gold/80 sm:w-auto sm:flex-shrink-0"
-          >
-            Посмотреть ДЗ
-          </Link>
+    <div className="mx-auto max-w-6xl">
+      <header className="mb-7 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.2em] text-gold">Твоя учебная неделя</p>
+          <h1 className="font-display mt-2 text-4xl leading-tight sm:text-5xl">
+            Привет, {user?.firstName || "ученик"}!
+          </h1>
+          <p className="mt-2 text-sm text-stone-500">Здесь только то, что важно сейчас.</p>
         </div>
-      )}
+        <div className="flex flex-wrap gap-2 sm:justify-end">
+          <span className="inline-flex items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-2 text-xs font-bold text-stone-700">
+            <Trophy size={15} className="text-gold" />
+            {data.dashboard.rank.current.title}
+          </span>
+          <span className="inline-flex items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-2 text-xs font-bold text-stone-700">
+            <Star size={15} className="text-gold" fill="currentColor" />
+            {data.dashboard.points.toLocaleString("ru-RU")} баллов
+          </span>
+          <span className="inline-flex items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-2 text-xs font-bold text-stone-700">
+            <Coins size={15} className="text-amber-600" />
+            {(user?.coins ?? 0).toLocaleString("ru-RU")} Coins
+          </span>
+        </div>
+      </header>
 
-      {data.unavailable.offlineSummary && (
-        <div className="mb-6 rounded-2xl border border-stone-200 bg-paper px-5 py-4 text-sm text-stone-500 shadow-sm">
-          Школьные уроки временно не загрузились. {" "}
-          <button type="button" onClick={() => void resource.reload()} className="font-bold text-gold hover:underline">
-            Обновить
-          </button>
-        </div>
-      )}
+      {nearestLesson ? <NearestLessonCard lesson={nearestLesson} /> : null}
 
-      <div className="mb-9 flex flex-col gap-3 pt-2 sm:flex-row sm:items-end sm:justify-between sm:pt-0">
-        <div className="min-w-0">
-          <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-gold">Личный кабинет Maestro</p>
-          <h1 className="font-display break-words text-4xl leading-tight sm:text-5xl">Добрый день, {firstName}</h1>
-          <p className="mt-3 text-sm text-stone-500">Продолжим с того места, где остановились?</p>
-        </div>
-        {nextLesson && (
-          <Link href={`/lessons/${nextLesson.id}`} className="inline-flex items-center justify-center gap-2 rounded-full bg-ink px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-stone-800 hover:shadow-soft">
-            Продолжить урок <ArrowRight size={16} />
-          </Link>
-        )}
+      <div className="mt-5 grid gap-5 lg:grid-cols-2">
+        {data.currentHomework ? (
+          <HomeworkCard homework={data.currentHomework} lastReview={data.lastHomeworkReview} />
+        ) : null}
+        {plan ? <MonthlyPlanCard plan={plan} /> : null}
       </div>
 
-      <section className="grid gap-5 xl:grid-cols-[1.55fr_0.85fr]">
-        <Link href={`/courses/${course.id}`} className="card-hover group relative block min-h-[350px] overflow-hidden rounded-[28px] bg-ink p-5 text-white shadow-soft sm:rounded-[32px] sm:p-9">
-          <div className="noise absolute inset-0 opacity-20" />
-          <div className="absolute -bottom-36 -right-24 h-[380px] w-[380px] rounded-full border border-gold/25" />
-          <div className="relative flex h-full min-w-0 flex-col">
-            <div className="flex items-start justify-between gap-3">
-              <span className="min-w-0 break-words rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/60">{course.direction.title} · {difficultyLabel(course.difficultyLevel)}</span>
-              <span className="flex shrink-0 items-center gap-2 font-display text-2xl text-gold">
-                {dashboard.progressPercent}%
-                <ArrowRight size={18} className="opacity-0 transition group-hover:opacity-100" />
-              </span>
-            </div>
-            <div className="my-auto max-w-xl py-8 sm:py-10">
-              <p className="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-gold">Текущий курс</p>
-              <h2 className="font-display break-words text-4xl leading-tight sm:text-6xl sm:leading-none">{course.title}</h2>
-              <p className="mt-5 max-w-lg break-words text-sm leading-6 text-white/55">{course.description}</p>
-            </div>
+      {upcoming.length > 1 ? <UpcomingLessons lessons={upcoming.slice(1, 4)} /> : null}
+
+      {data.dashboard.currentCourse ? (
+        <section className="mt-6 rounded-[26px] border border-stone-200 bg-white p-5 shadow-soft sm:p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <div className="mb-3 flex flex-wrap justify-between gap-2 text-xs text-white/50"><span>Прогресс курса</span><span>{dashboard.completedLessonsCount} из {dashboard.totalLessonsCount} уроков</span></div>
-              <ProgressBar value={dashboard.progressPercent} dark />
-            </div>
-          </div>
-        </Link>
-
-        <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-1">
-          <Link href="/rewards" className="premium-surface card-hover rounded-[28px] p-6 shadow-soft">
-            <div className="flex items-start justify-between"><span className="grid h-11 w-11 place-items-center rounded-2xl bg-amber-50 text-gold ring-1 ring-gold/10"><Star size={20} fill="currentColor" /></span><span className="text-xs font-bold text-emerald-700">Баланс</span></div>
-            <p className="font-display mt-8 text-4xl">{dashboard.points.toLocaleString("ru-RU")}</p>
-            <p className="mt-1 text-sm text-stone-500">баллов Maestro</p>
-            <p className="mt-4 inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-900">
-              <Coins size={14} />
-              {(user?.coins ?? 0).toLocaleString("ru-RU")} Maestro Coins
-            </p>
-            <div className="mt-4">
-              <div className="mb-2 flex items-center justify-between gap-2 text-[11px] font-bold text-stone-500">
-                <span>Ранг: {dashboard.rank.current.title}</span>
-                <span>{dashboard.rank.next ? `ещё ${dashboard.rank.pointsToNext}` : "максимум"}</span>
-              </div>
-              <div className="h-1.5 overflow-hidden rounded-full bg-stone-100">
-                <div className="h-full rounded-full bg-gold" style={{ width: `${dashboard.rank.progressPercent}%` }} />
-              </div>
-            </div>
-          </Link>
-          <div className="premium-surface rounded-[28px] p-6 shadow-soft">
-            <div className="flex items-start justify-between"><span className="grid h-11 w-11 place-items-center rounded-2xl bg-orange-50 text-orange-500 ring-1 ring-orange-200/60"><Flame size={20} /></span><span className="text-xs font-bold text-stone-400">Пройдено</span></div>
-            <p className="font-display mt-8 text-4xl">{dashboard.completedLessonsCount}</p>
-            <p className="mt-1 text-sm text-stone-500">завершённых уроков</p>
-          </div>
-        </div>
-      </section>
-
-      <section className="mt-5 grid gap-5 lg:grid-cols-2">
-        {nextLesson ? (
-          <Link href={`/lessons/${nextLesson.id}`} className="card-hover rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft">
-            <div className="flex items-center justify-between"><p className="text-xs font-bold uppercase tracking-[0.16em] text-stone-400">Следующий урок</p><ArrowRight size={18} className="text-gold" /></div>
-            <p className="font-display mt-8 text-3xl">{nextLesson.title}</p>
-            <p className="mt-4 flex items-center gap-2 text-sm font-semibold text-amber-800"><Sparkles size={15} /> {lessonStatusLabels[normalizeLessonStatus(nextLesson.status)]}</p>
-          </Link>
-        ) : (
-          <div className="rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft">
-            <div className="flex items-center justify-between"><p className="text-xs font-bold uppercase tracking-[0.16em] text-stone-400">Следующий урок</p><Clock3 size={18} className="text-stone-300" /></div>
-            <p className="font-display mt-8 text-3xl">Все доступные уроки пройдены</p>
-            <p className="mt-4 text-sm text-stone-500">Нет активного урока</p>
-          </div>
-        )}
-        {data.unavailable.news ? (
-          <div className="rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft">
-            <p className="font-display text-3xl">Новости временно не загрузились</p>
-            <button type="button" onClick={() => void resource.reload()} className="mt-4 text-sm font-bold text-gold hover:underline">Обновить</button>
-          </div>
-        ) : latestPost ? (
-          <Link href="/board" className="card-hover rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft">
-            <div className="flex items-center justify-between"><p className="text-xs font-bold uppercase tracking-[0.16em] text-stone-400">Последнее на доске</p><ArrowRight size={18} className="text-gold" /></div>
-            <p className="font-display mt-8 text-3xl">{latestPost.title}</p>
-            <p className="mt-4 line-clamp-2 text-sm leading-6 text-stone-500">{latestPost.excerpt}</p>
-          </Link>
-        ) : <div className="rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft"><p className="font-display text-3xl">Новостей пока нет</p></div>}
-      </section>
-
-      <section className="mt-10 rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <span className="grid h-11 w-11 place-items-center rounded-2xl bg-amber-50 text-gold">
-              <Trophy size={20} />
-            </span>
-            <div>
-              <h2 className="font-display text-3xl">Достижения</h2>
-              <p className="mt-1 text-sm text-stone-500">
-                {data.unavailable.achievements
-                  ? "Временно недоступно"
-                  : `${achievements.meta?.earnedCount ?? 0} из ${achievements.meta?.totalCount ?? achievements.data.length} получено`}
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-stone-400">Самостоятельный курс</p>
+              <h2 className="font-display mt-2 text-2xl">{data.dashboard.currentCourse.title}</h2>
+              <p className="mt-2 text-sm text-stone-500">
+                {data.dashboard.completedLessonsCount} из {data.dashboard.totalLessonsCount} уроков · {data.dashboard.progressPercent}%
               </p>
             </div>
+            <Link
+              href={data.dashboard.nextAvailableLesson ? `/lessons/${data.dashboard.nextAvailableLesson.id}` : `/courses/${data.dashboard.currentCourse.id}`}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-stone-300 px-4 text-sm font-bold"
+            >
+              {data.dashboard.nextAvailableLesson ? "Открыть урок" : "Открыть курс"}
+              <ArrowRight size={16} />
+            </Link>
           </div>
-          <Link href="/progress" className="text-sm font-bold text-gold hover:underline">
-            Все достижения
-          </Link>
-        </div>
-        {data.unavailable.achievements ? (
-          <div className="rounded-2xl border border-dashed border-stone-200 bg-stone-50 p-5 text-sm text-stone-500">
-            Достижения временно не загрузились. {" "}
-            <button type="button" onClick={() => void resource.reload()} className="font-bold text-gold hover:underline">Обновить</button>
-          </div>
-        ) : (
-          <AchievementsWall achievements={achievements.data} compact />
-        )}
-      </section>
-
-      {nextLesson && (
-        <section className="mt-10">
-          <div className="mb-5 flex items-center justify-between"><h2 className="font-display text-3xl">Продолжить обучение</h2><Link href="/courses" className="text-sm font-bold">Все курсы</Link></div>
-          <Link href={`/lessons/${nextLesson.id}`} className="card-hover flex flex-col gap-5 rounded-[28px] border border-stone-200 bg-paper p-5 shadow-soft sm:flex-row sm:items-center">
-            <span className="grid h-20 w-20 shrink-0 place-items-center rounded-2xl bg-[#715844] text-white"><Play fill="currentColor" /></span>
-            <div className="flex-1"><p className="text-xs font-bold uppercase tracking-[0.16em] text-gold">Следующий доступный урок</p><h3 className="font-display mt-1 text-2xl">{nextLesson.title}</h3><p className="mt-2 text-sm text-stone-500">Откройте урок, чтобы продолжить обучение.</p></div>
-            <div className="flex items-center gap-2 text-sm font-bold text-emerald-700"><CheckCircle2 size={18} /> {lessonStatusLabels[normalizeLessonStatus(nextLesson.status)]}</div>
-          </Link>
+          <ProgressBar value={data.dashboard.progressPercent} />
         </section>
-      )}
+      ) : null}
 
-      <FounderMessage className="mt-10" />
-    </>
+      {!hasLearningData ? (
+        <section className="mt-8 rounded-[28px] border border-dashed border-stone-300 bg-white p-8 text-center">
+          <Sparkles className="mx-auto text-gold" />
+          <h2 className="font-display mt-4 text-3xl">Учебный маршрут готовится</h2>
+          <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-stone-500">
+            После назначения расписания, домашнего задания или плана месяца здесь появятся следующие действия.
+          </p>
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
+function NearestLessonCard({ lesson }: { lesson: SchoolOfflineLesson }) {
+  return (
+    <Link href="/school-lessons?tab=schedule" className="group block overflow-hidden rounded-[30px] bg-ink p-6 text-white shadow-soft sm:p-8">
+      <div className="flex flex-col gap-8 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.2em] text-gold">{formatLessonDate(lesson.date)} · урок в школе</p>
+          <h2 className="font-display mt-3 text-4xl leading-tight sm:text-5xl">{lesson.title}</h2>
+          <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-sm text-white/70">
+            <span className="inline-flex items-center gap-2"><CalendarDays size={16} /> {lesson.startTime}–{lesson.endTime}</span>
+            {lesson.teacherName ? <span className="inline-flex items-center gap-2"><UserRound size={16} /> {lesson.teacherName}</span> : null}
+            {lesson.roomName ? <span className="inline-flex items-center gap-2"><MapPin size={16} /> {lesson.roomName}</span> : null}
+          </div>
+        </div>
+        <span className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-gold px-5 text-sm font-black text-ink transition group-hover:translate-x-1">
+          Детали урока <ChevronRight size={18} />
+        </span>
+      </div>
+    </Link>
+  );
+}
+
+function HomeworkCard({ homework, lastReview }: { homework: StudentHomeHomework; lastReview: StudentHomeHomework | null }) {
+  const status = homeworkStatus(homework);
+  const separateReview = lastReview && lastReview.sourceLessonId !== homework.sourceLessonId ? lastReview : null;
+  return (
+    <section className="rounded-[28px] border border-stone-200 bg-white p-6 shadow-soft">
+      <div className="flex items-start justify-between gap-3">
+        <span className="grid h-11 w-11 place-items-center rounded-2xl bg-amber-50 text-gold"><BookOpenCheck size={21} /></span>
+        <span className={`rounded-full px-3 py-1.5 text-[10px] font-black uppercase tracking-wide ${status.className}`}>{status.label}</span>
+      </div>
+      <p className="mt-6 text-xs font-black uppercase tracking-[0.18em] text-stone-400">Текущее домашнее задание</p>
+      <h2 className="font-display mt-2 text-3xl leading-tight">{homework.title}</h2>
+      <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-stone-600">{homework.description}</p>
+      {homework.due ? (
+        <p className="mt-4 inline-flex items-center gap-2 text-xs font-bold text-amber-900">
+          <CalendarDays size={15} /> К следующему уроку: {formatLessonDate(homework.due.date)}, {homework.due.time}
+        </p>
+      ) : null}
+      {homework.review?.completionPercent != null ? <ReviewLine homework={homework} /> : null}
+      {separateReview?.review?.completionPercent != null ? <ReviewLine homework={separateReview} previous /> : null}
+      <Link href={homework.href} className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl bg-ink px-4 text-sm font-bold text-white">
+        {homework.status === "needs_revision" ? "Посмотреть доработку" : "Открыть задание"} <ArrowRight size={16} />
+      </Link>
+    </section>
+  );
+}
+
+function ReviewLine({ homework, previous = false }: { homework: StudentHomeHomework; previous?: boolean }) {
+  return (
+    <div className="mt-4 rounded-2xl bg-stone-50 p-4">
+      <p className="text-[10px] font-black uppercase tracking-[0.16em] text-stone-400">{previous ? "Проверка прошлого ДЗ" : "Оценка преподавателя"}</p>
+      <p className="mt-1 text-sm font-bold text-stone-800">Выполнено на {homework.review?.completionPercent}%</p>
+      {homework.review?.feedback ? <p className="mt-1 text-xs leading-5 text-stone-600">{homework.review.feedback}</p> : null}
+    </div>
+  );
+}
+
+function MonthlyPlanCard({ plan }: { plan: StudentHomeMonthlyPlan }) {
+  return (
+    <section className="rounded-[28px] border border-stone-200 bg-white p-6 shadow-soft">
+      <div className="flex items-start justify-between gap-3">
+        <span className="grid h-11 w-11 place-items-center rounded-2xl bg-emerald-50 text-emerald-700"><CircleDot size={21} /></span>
+        <strong className="font-display text-3xl text-gold">{plan.progress.percent}%</strong>
+      </div>
+      <p className="mt-6 text-xs font-black uppercase tracking-[0.18em] text-stone-400">Фокус {monthTitle(plan.month)}</p>
+      <h2 className="font-display mt-2 text-3xl leading-tight">{plan.goal}</h2>
+      {plan.expectedResult ? <p className="mt-3 text-sm leading-6 text-stone-600">{plan.expectedResult}</p> : null}
+      <div className="mt-5">
+        <ProgressBar value={plan.progress.percent} />
+        <p className="mt-2 text-xs text-stone-500">
+          {plan.progress.completed} из {plan.progress.total} тем освоено
+          {plan.progress.inProgress ? ` · ${plan.progress.inProgress} в работе` : ""}
+        </p>
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2">
+        {plan.items.slice(0, 4).map((item) => (
+          <span key={item.id} className={`rounded-full px-3 py-1.5 text-[11px] font-bold ${item.status === "completed" ? "bg-emerald-50 text-emerald-800" : item.status === "in_progress" ? "bg-amber-50 text-amber-900" : "bg-stone-100 text-stone-500"}`}>
+            {item.status === "completed" ? "✓ " : ""}{item.title}
+          </span>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function UpcomingLessons({ lessons }: { lessons: SchoolOfflineLesson[] }) {
+  return (
+    <section className="mt-6 rounded-[28px] border border-stone-200 bg-white p-6 shadow-soft">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-stone-400">Дальше по расписанию</p>
+          <h2 className="font-display mt-1 text-3xl">Ближайшие уроки</h2>
+        </div>
+        <Link href="/school-lessons?tab=schedule" className="text-sm font-bold text-gold">Все уроки</Link>
+      </div>
+      <div className="mt-5 divide-y divide-stone-100">
+        {lessons.map((lesson) => (
+          <Link key={lesson.crmClassId} href="/school-lessons?tab=schedule" className="flex items-center gap-4 py-4 first:pt-0 last:pb-0">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-stone-100 text-stone-600"><School size={19} /></span>
+            <span className="min-w-0 flex-1">
+              <strong className="block truncate text-sm text-stone-800">{lesson.title}</strong>
+              <span className="mt-1 block text-xs text-stone-500">{formatLessonDate(lesson.date)} · {lesson.startTime}{lesson.teacherName ? ` · ${lesson.teacherName}` : ""}</span>
+            </span>
+            <ChevronRight size={18} className="text-stone-300" />
+          </Link>
+        ))}
+      </div>
+    </section>
   );
 }

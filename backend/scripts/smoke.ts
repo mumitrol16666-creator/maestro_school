@@ -34,7 +34,9 @@ async function main() {
   const registration = await request<{ token: string; user: { role: string } }>("POST", "/auth/register", undefined, {
     firstName: "Smoke",
     lastName: "Student",
+    login: `smoke_${suffix}`,
     email: `smoke-${suffix}@maestro.test`,
+    phone: `+7701${String(suffix).slice(-7)}`,
     password: `student-${suffix}`,
   }, 201);
   if (registration.user.role !== "student") throw new Error("Registration returned a non-student role");
@@ -44,6 +46,7 @@ async function main() {
   await request("GET", "/courses", registration.token);
   await request("GET", "/news", registration.token);
   await request("GET", "/students/me/dashboard", registration.token);
+  await request("GET", "/students/me/home", registration.token);
   await request("GET", "/students/me/progress", registration.token);
   console.log("Smoke checks passed.");
 }

@@ -7,6 +7,7 @@ import {
   LoaderCircle,
   Plus,
   Save,
+  Send,
   Trash2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -30,12 +31,10 @@ function emptyPlan(month: string): GroupMonthlyPlan {
     materials: [],
   };
 }
-
 const itemStatuses: Array<{ value: MonthlyPlanItemStatus; label: string }> = [
   { value: "planned", label: "Запланировано" },
   { value: "in_progress", label: "В работе" },
   { value: "completed", label: "Выполнено" },
-  { value: "moved", label: "Перенесено" },
 ];
 
 function materialHref(value: string) {
@@ -58,6 +57,7 @@ export function GroupMonthlyPlanEditor({ crmGroupId }: { crmGroupId: string }) {
   const [draft, setDraft] = useState<GroupMonthlyPlan>(() => emptyPlan(month));
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -112,10 +112,33 @@ export function GroupMonthlyPlanEditor({ crmGroupId }: { crmGroupId: string }) {
       setDraft(plan);
       setSaved(true);
       await resource.reload();
+      return plan;
     } catch {
       setError("Не удалось сохранить план группы. Проверьте интернет и повторите.");
+      return null;
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function publish() {
+    setPublishing(true);
+    setError(null);
+    try {
+      const savedPlan = await save();
+      if (!savedPlan) return;
+      const plan = await teacherStudentsApi.publishGroupMonthlyPlan(
+        crmGroupId,
+        month,
+        savedPlan.publication?.draftRevision,
+      );
+      setDraft(plan);
+      setSaved(true);
+      await resource.reload();
+    } catch {
+      setError("Не удалось опубликовать план группы. Проверьте фокус и темы.");
+    } finally {
+      setPublishing(false);
     }
   }
 
@@ -147,7 +170,7 @@ export function GroupMonthlyPlanEditor({ crmGroupId }: { crmGroupId: string }) {
       ) : null}
 
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
-        <PlanField label="Главная цель месяца" value={draft.goal} onChange={(value) => setField("goal", value)} />
+        <PlanField label="Фокус месяца" value={draft.goal} onChange={(value) => setField("goal", value)} />
         <PlanField label="Ожидаемый результат" value={draft.expectedResult} onChange={(value) => setField("expectedResult", value)} />
         <PlanField label="Навыки для закрепления" value={draft.skills} onChange={(value) => setField("skills", value)} />
         <PlanField label="Контрольная точка" value={draft.checkpoint} onChange={(value) => setField("checkpoint", value)} />
@@ -339,15 +362,26 @@ export function GroupMonthlyPlanEditor({ crmGroupId }: { crmGroupId: string }) {
       </label>
 
       {error ? <p className="mt-3 text-sm font-semibold text-red-700">{error}</p> : null}
-      <button
-        type="button"
-        disabled={saving}
-        onClick={() => void save()}
-        className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl bg-ink px-5 text-sm font-bold text-white disabled:opacity-60"
-      >
-        {saving ? <LoaderCircle size={16} className="animate-spin" /> : saved ? <CheckCircle2 size={16} /> : <Save size={16} />}
-        {saving ? "Сохраняем…" : saved ? "План сохранён" : "Сохранить план группы"}
-      </button>
+      <div className="mt-5 flex flex-wrap gap-3">
+        <button
+          type="button"
+          disabled={saving || publishing}
+          onClick={() => void save()}
+          className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-stone-300 bg-white px-5 text-sm font-bold text-ink disabled:opacity-60"
+        >
+          {saving ? <LoaderCircle size={16} className="animate-spin" /> : saved ? <CheckCircle2 size={16} /> : <Save size={16} />}
+          {saving ? "Сохраняем…" : "Сохранить черновик"}
+        </button>
+        <button
+          type="button"
+          disabled={saving || publishing || !draft.goal.trim() || !draft.items.some((item) => item.title.trim())}
+          onClick={() => void publish()}
+          className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-ink px-5 text-sm font-bold text-white disabled:opacity-50"
+        >
+          {publishing ? <LoaderCircle size={16} className="animate-spin" /> : <Send size={16} />}
+          {publishing ? "Публикуем…" : draft.publication?.isPublished ? "Обновить у учеников" : "Опубликовать группе"}
+        </button>
+      </div>
     </section>
   );
 }

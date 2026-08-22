@@ -26,6 +26,7 @@ import { addMaestroCoins } from "./coins.service.js";
 import { awardLeagueXp } from "./weekly-league.service.js";
 import { evaluateAchievements } from "./achievement.service.js";
 import { aqtobeMonthKey } from "../../lib/aqtobe-month.js";
+import { buildMonthlyPlanSnapshot } from "../../domain/monthly-plan.js";
 
 type AdminOfflineLesson = {
   teacher?: { crmTeacherId?: string; name?: string } | null;
@@ -102,9 +103,21 @@ async function applyOfflineLessonLearningResults(crmClassId: string, approvedBy:
             status: item.status === "completed" ? "completed" : nextStatus,
           };
         });
+        const nextRevision = plan.draftRevision + 1;
+        const publishedSnapshot = plan.publishedAt && plan.publishedSnapshot
+          ? buildMonthlyPlanSnapshot({ ...plan, items: nextItems })
+          : null;
         await prisma.studentMonthlyPlan.update({
           where: { id: plan.id },
-          data: { items: nextItems as Prisma.InputJsonValue },
+          data: {
+            items: nextItems as Prisma.InputJsonValue,
+            draftRevision: nextRevision,
+            ...(publishedSnapshot ? {
+              publishedSnapshot: publishedSnapshot as unknown as Prisma.InputJsonValue,
+              publishedRevision: nextRevision,
+              publishedAt: new Date(),
+            } : {}),
+          },
         });
       }
     }

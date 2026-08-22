@@ -1,9 +1,15 @@
 import { Prisma } from "@prisma/client";
-import { BadRequestError } from "../../domain/errors.js";
+import {
+  buildMonthlyPlanSnapshot,
+  calculateMonthlyPlanProgress,
+  normalizeMonthlyPlanItems,
+  parseMonthlyPlanSnapshot,
+} from "../../domain/monthly-plan.js";
+import { BadRequestError, ConflictError } from "../../domain/errors.js";
 import { prisma } from "../../infrastructure/database/prisma.js";
 import { fetchTeacherGroups } from "../../infrastructure/crm/crm-client.js";
 import { requireCrmTeacherId } from "./teacher-students.service.js";
-import type { MonthlyPlanInput, MonthlyPlanItem } from "./student-monthly-plan.service.js";
+import type { MonthlyPlanInput } from "./student-monthly-plan.service.js";
 
 export type GroupPlanMaterial = {
   id: string;
@@ -15,6 +21,30 @@ export type GroupPlanMaterial = {
 export type GroupMonthlyPlanInput = MonthlyPlanInput & {
   materials: GroupPlanMaterial[];
 };
+
+function planDto<T extends {
+  items: Prisma.JsonValue;
+  materials: Prisma.JsonValue;
+  publishedSnapshot: Prisma.JsonValue | null;
+  publishedAt: Date | null;
+  draftRevision: number;
+  publishedRevision: number;
+}>(plan: T) {
+  const items = normalizeMonthlyPlanItems(plan.items);
+  return {
+    ...plan,
+    items,
+    materials: Array.isArray(plan.materials) ? plan.materials as GroupPlanMaterial[] : [],
+    progress: calculateMonthlyPlanProgress(items),
+    publication: {
+      isPublished: Boolean(plan.publishedAt && plan.publishedSnapshot),
+      publishedAt: plan.publishedAt,
+      draftRevision: plan.draftRevision,
+      publishedRevision: plan.publishedRevision,
+      hasUnpublishedChanges: plan.draftRevision > plan.publishedRevision,
+    },
+  };
+}
 
 async function requireAssignedGroup(teacherUserId: string, crmGroupId: string) {
   const crmTeacherId = await requireCrmTeacherId(teacherUserId);
@@ -47,13 +77,7 @@ export async function getGroupMonthlyPlan(
       name: group.name,
     },
     month,
-    plan: plan
-      ? {
-          ...plan,
-          items: plan.items as MonthlyPlanItem[],
-          materials: plan.materials as GroupPlanMaterial[],
-        }
-      : null,
+    plan: plan ? planDto(plan) : null,
   };
 }
 
@@ -64,35 +88,108 @@ export async function saveGroupMonthlyPlan(
   input: GroupMonthlyPlanInput,
 ) {
   await requireAssignedGroup(teacherUserId, crmGroupId);
-  const data = {
+  const items = normalizeMonthlyPlanItems(input.items);
+  const materials = input.materials.map((material) => ({
+    id: material.id,
+    title: material.title.trim(),
+    url: material.url.trim(),
+    note: material.note.trim(),
+  })).filter((material) => material.title || material.url || material.note);
+  const normalized = {
     goal: input.goal.trim(),
     expectedResult: input.expectedResult.trim(),
     skills: input.skills.trim(),
     checkpoint: input.checkpoint.trim(),
     note: input.note.trim(),
-    items: input.items.map((item) => ({
-      id: item.id,
-      title: item.title.trim(),
-      status: item.status,
-    })).filter((item) => item.title) as Prisma.InputJsonValue,
-    materials: input.materials.map((material) => ({
-      id: material.id,
-      title: material.title.trim(),
-      url: material.url.trim(),
-      note: material.note.trim(),
-    })).filter((material) => material.title || material.url || material.note) as Prisma.InputJsonValue,
+    items,
+    materials,
   };
 
-  return prisma.groupMonthlyPlan.upsert({
-    where: {
-      crmGroupId_teacherUserId_month: { crmGroupId, teacherUserId, month },
-    },
+  const where = { crmGroupId_teacherUserId_month: { crmGroupId, teacherUserId, month } };
+  const existing = await prisma.groupMonthlyPlan.findUnique({ where });
+  const unchanged = existing
+    && existing.goal === normalized.goal
+    && existing.expectedResult === normalized.expectedResult
+    && existing.skills === normalized.skills
+    && existing.checkpoint === normalized.checkpoint
+    && existing.note === normalized.note
+    && JSON.stringify(normalizeMonthlyPlanItems(existing.items)) === JSON.stringify(items)
+    && JSON.stringify(existing.materials) === JSON.stringify(materials);
+  if (unchanged) return planDto(existing);
+
+  const data = {
+    ...normalized,
+    items: items as Prisma.InputJsonValue,
+    materials: materials as Prisma.InputJsonValue,
+  };
+
+  const plan = await prisma.groupMonthlyPlan.upsert({
+    where,
     create: {
       crmGroupId,
       teacherUserId,
       month,
       ...data,
     },
-    update: data,
+    update: { ...data, draftRevision: { increment: 1 } },
+  });
+  return planDto(plan);
+}
+
+export async function publishGroupMonthlyPlan(
+  teacherUserId: string,
+  crmGroupId: string,
+  month: string,
+  expectedDraftRevision?: number,
+) {
+  await requireAssignedGroup(teacherUserId, crmGroupId);
+  const where = { crmGroupId_teacherUserId_month: { crmGroupId, teacherUserId, month } };
+  const plan = await prisma.groupMonthlyPlan.findUnique({ where });
+  if (!plan) throw new BadRequestError("План группы не найден", "MONTHLY_PLAN_NOT_FOUND");
+  if (expectedDraftRevision != null && plan.draftRevision !== expectedDraftRevision) {
+    throw new ConflictError("План изменился. Обновите страницу и повторите публикацию.", "MONTHLY_PLAN_STALE_DRAFT");
+  }
+  const snapshot = buildMonthlyPlanSnapshot(plan);
+  if (!snapshot.goal) throw new BadRequestError("Заполните фокус месяца", "MONTHLY_PLAN_GOAL_REQUIRED");
+  if (!snapshot.items.length) throw new BadRequestError("Добавьте хотя бы одну тему", "MONTHLY_PLAN_ITEMS_REQUIRED");
+  if (plan.publishedRevision === plan.draftRevision && plan.publishedSnapshot) return planDto(plan);
+  const updated = await prisma.groupMonthlyPlan.update({
+    where,
+    data: {
+      publishedSnapshot: snapshot as unknown as Prisma.InputJsonValue,
+      publishedAt: new Date(),
+      publishedRevision: plan.draftRevision,
+    },
+  });
+  return planDto(updated);
+}
+
+export async function listPublishedGroupMonthlyPlans(crmGroupIds: string[], month: string) {
+  if (!crmGroupIds.length) return [];
+  const plans = await prisma.groupMonthlyPlan.findMany({
+    where: {
+      crmGroupId: { in: crmGroupIds },
+      month,
+      publishedAt: { not: null },
+      publishedSnapshot: { not: Prisma.DbNull },
+    },
+    include: { teacherUser: { select: { firstName: true, lastName: true, middleName: true } } },
+    orderBy: { publishedAt: "desc" },
+  });
+  return plans.flatMap((plan) => {
+    const snapshot = parseMonthlyPlanSnapshot(plan.publishedSnapshot);
+    if (!snapshot) return [];
+    return [{
+      id: plan.id,
+      scope: "group" as const,
+      targetId: plan.crmGroupId,
+      month: plan.month,
+      teacher: {
+        name: [plan.teacherUser.lastName, plan.teacherUser.firstName, plan.teacherUser.middleName]
+          .filter(Boolean).join(" "),
+      },
+      ...snapshot,
+      publishedAt: plan.publishedAt,
+    }];
   });
 }

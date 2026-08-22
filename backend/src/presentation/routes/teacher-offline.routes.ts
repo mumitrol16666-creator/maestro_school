@@ -22,10 +22,12 @@ import { authenticate, requirePermission, requireTeacher } from "../guards/auth.
 import { offlineLessonStudentCheckSchema } from "./offline-lesson.schemas.js";
 import {
   getStudentMonthlyPlan,
+  publishStudentMonthlyPlan,
   saveStudentMonthlyPlan,
 } from "../../application/services/student-monthly-plan.service.js";
 import {
   getGroupMonthlyPlan,
+  publishGroupMonthlyPlan,
   saveGroupMonthlyPlan,
 } from "../../application/services/group-monthly-plan.service.js";
 import { isSupportedMaterialUrl } from "../../domain/group-material.js";
@@ -65,7 +67,7 @@ export async function teacherOfflineRoutes(app: FastifyInstance) {
   const monthlyPlanItemSchema = z.object({
     id: z.string().min(1).max(100),
     title: z.string().trim().min(1).max(1000),
-    status: z.enum(["planned", "in_progress", "completed", "moved"]),
+    status: z.enum(["planned", "in_progress", "completed"]),
   });
 
   app.get(
@@ -98,6 +100,26 @@ export async function teacherOfflineRoutes(app: FastifyInstance) {
           crmStudentId,
           body.month,
           body,
+        ),
+      };
+    },
+  );
+
+  app.post(
+    "/teachers/me/students/:crmStudentId/monthly-plan/publish",
+    { preHandler: [authenticate, requireTeacher, requirePermission("offline_school.write")] },
+    async (request) => {
+      const { crmStudentId } = z.object({ crmStudentId: z.string().min(1).max(128) }).parse(request.params);
+      const body = z.object({
+        month: monthSchema,
+        expectedDraftRevision: z.number().int().positive().optional(),
+      }).parse(request.body ?? {});
+      return {
+        data: await publishStudentMonthlyPlan(
+          request.user!.id,
+          crmStudentId,
+          body.month,
+          body.expectedDraftRevision,
         ),
       };
     },
@@ -146,6 +168,26 @@ export async function teacherOfflineRoutes(app: FastifyInstance) {
           crmGroupId,
           body.month,
           body,
+        ),
+      };
+    },
+  );
+
+  app.post(
+    "/teachers/me/groups/:crmGroupId/monthly-plan/publish",
+    { preHandler: [authenticate, requireTeacher, requirePermission("offline_school.write")] },
+    async (request) => {
+      const { crmGroupId } = z.object({ crmGroupId: z.string().min(1).max(128) }).parse(request.params);
+      const body = z.object({
+        month: monthSchema,
+        expectedDraftRevision: z.number().int().positive().optional(),
+      }).parse(request.body ?? {});
+      return {
+        data: await publishGroupMonthlyPlan(
+          request.user!.id,
+          crmGroupId,
+          body.month,
+          body.expectedDraftRevision,
         ),
       };
     },

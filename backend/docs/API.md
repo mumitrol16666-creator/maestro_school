@@ -19,12 +19,20 @@
 
 ### Уроки в школе
 
+- `GET /students/me/home` — динамическая главная: ближайшие занятия, актуальное
+  ДЗ, последняя проверка, опубликованные планы месяца и курс;
+- `GET /students/me/monthly-plans?month=YYYY-MM` — опубликованные ученику
+  индивидуальные и групповые планы;
 - `GET /students/me/offline-summary` — расписание, история, абонементы,
   долг, заморозки и опубликованные итоги ученика;
 - `GET /teachers/me/offline-lessons` — расписание преподавателя;
 - `GET /teachers/me/students` — офлайн- и онлайн-ученики текущего преподавателя;
 - `GET /teachers/me/offline-lessons/:crmClassId` — карточка урока;
 - `GET /teachers/me/offline-lessons/:crmClassId/students` — ученики;
+- `GET/PUT /teachers/me/students/:crmStudentId/monthly-plan` — черновик плана;
+- `POST /teachers/me/students/:crmStudentId/monthly-plan/publish` — публикация
+  плана ученику;
+- аналогичные `GET/PUT/.../publish` доступны для плана группы;
 - `POST .../start`, `.../finish`, `.../submit`, `.../not-held`,
   `.../attendance` — рабочий цикл преподавателя;
 - `GET /admin/offline-lessons/pending-review` — очередь администратора;
@@ -251,6 +259,27 @@ Query params:
 
 Переводит урок `AVAILABLE` → `IN_PROGRESS`.
 
+### `POST /lessons/:lessonId/complete`
+
+🔒 JWT ученика + permission `progress.write`
+
+Завершает начатый урок без домашнего задания. Для урока с обычным ДЗ или тестом
+возвращает `409 LESSON_REQUIRES_HOMEWORK`. Повторный запрос после успешного
+завершения идемпотентен и не дублирует баллы или Coins.
+
+```json
+{
+  "data": {
+    "lessonId": "uuid",
+    "courseId": "uuid",
+    "status": "completed",
+    "alreadyCompleted": false,
+    "nextLessonId": "uuid",
+    "courseCompleted": false
+  }
+}
+```
+
 ### `GET /students/me/dashboard`
 
 🔒 JWT + permission `progress.read`
@@ -394,7 +423,13 @@ Query: `limit` (1–50, default 20)
 ### `GET /health`
 
 ```json
-{ "status": "ok", "service": "maestro-api", "database": "ok" }
+{
+  "status": "ok",
+  "service": "maestro-api",
+  "database": "ok",
+  "releaseSha": "40-character git SHA or unknown",
+  "builtAt": "ISO timestamp or unknown"
+}
 ```
 
 ---

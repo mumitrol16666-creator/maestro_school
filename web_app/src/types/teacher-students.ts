@@ -122,6 +122,14 @@ export type StudentMonthlyPlan = {
   checkpoint: string;
   note: string;
   items: MonthlyPlanItem[];
+  progress?: { completed: number; inProgress: number; total: number; percent: number };
+  publication?: {
+    isPublished: boolean;
+    publishedAt: string | null;
+    draftRevision: number;
+    publishedRevision: number;
+    hasUnpublishedChanges: boolean;
+  };
   updatedAt?: string;
 };
 

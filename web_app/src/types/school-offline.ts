@@ -6,6 +6,8 @@ export type SchoolOfflineLesson = {
   endTime: string;
   status: string;
   classType?: string;
+  crmGroupId?: string | null;
+  crmTeacherId?: string | null;
   groupName: string | null;
   teacherName: string | null;
   roomName: string | null;
@@ -13,6 +15,12 @@ export type SchoolOfflineLesson = {
   lessonGoals: string | null;
   lessonSummary: string | null;
   homework: string | null;
+  homeworkReview?: {
+    status: "not_checked" | "completed" | "partial" | "not_completed" | "not_assigned";
+    completionPercent?: number | null;
+    difficulties?: string | null;
+    notCompletedReason?: string | null;
+  } | null;
   nextLessonFocus: string | null;
   materials: Array<{ type?: string; url?: string; title?: string; description?: string | null; mimeType?: string | null }>;
   attended: boolean | null;

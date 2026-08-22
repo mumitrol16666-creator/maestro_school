@@ -1,5 +1,6 @@
 import type { LessonStatus } from "@/types";
 import type { HomeworkTestQuestion, HomeworkType } from "@/types/homework";
+import type { StudentOfflineSummary } from "@/types/school-offline";
 
 export interface ApiDirection {
   id: string;
@@ -192,6 +193,51 @@ export interface ApiDashboard {
     moduleSortOrder: number;
     sortOrder: number;
   } | null;
+}
+
+export interface StudentHomeHomework {
+  id: string;
+  sourceLessonId: string;
+  title: string;
+  description: string;
+  status: "todo" | "needs_revision" | "completed";
+  teacherName: string | null;
+  assignedAt: string;
+  due: {
+    kind: "next_lesson";
+    date: string;
+    time: string;
+    lessonId: string;
+  } | null;
+  review: {
+    status: string;
+    completionPercent: number | null;
+    feedback: string | null;
+  } | null;
+  href: string;
+}
+
+export interface StudentHomeMonthlyPlan {
+  id: string;
+  scope: "student" | "group";
+  targetId: string;
+  month: string;
+  teacher: { name: string };
+  goal: string;
+  expectedResult: string;
+  checkpoint: string;
+  items: Array<{ id: string; title: string; status: "planned" | "in_progress" | "completed" }>;
+  progress: { completed: number; inProgress: number; total: number; percent: number };
+  publishedAt: string;
+}
+
+export interface ApiStudentHome {
+  generatedAt: string;
+  dashboard: ApiDashboard;
+  school: StudentOfflineSummary | null;
+  monthlyPlans: StudentHomeMonthlyPlan[];
+  currentHomework: StudentHomeHomework | null;
+  lastHomeworkReview: StudentHomeHomework | null;
 }
 
 export interface CompleteLessonResponse {

@@ -90,6 +90,10 @@ git push origin main
 5. Собирает backend и frontend, затем перезапускает PM2
 6. Проверяет API, PostgreSQL и frontend
 
+Backend health и frontend HTML публикуют один `releaseSha`. PWA использует тот
+же SHA как версию service worker, поэтому новая сборка не зависит от ручного
+изменения cache version.
+
 ---
 
 ## 5. Проверка после деплоя
@@ -104,6 +108,16 @@ curl http://127.0.0.1:4000/health
 
 Вход администратора выполняется с `ADMIN_EMAIL` и `ADMIN_PASSWORD`.
 Ученики самостоятельно регистрируются на странице `/register`.
+
+Read-only production smoke, который не создаёт пользователей и контент:
+
+```bash
+cd /var/www/maestro_school/backend
+npm run smoke:production
+```
+
+`npm run smoke` и `npm run e2e` создают тестовые данные и не должны запускаться
+против production-базы.
 
 ---
 

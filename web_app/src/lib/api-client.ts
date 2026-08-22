@@ -8,6 +8,7 @@ import type {
   ApiLessonDetail,
   ApiNewsPost,
   ApiProgress,
+  ApiStudentHome,
   CompleteLessonResponse,
   HomeworkSubmissionResponse,
   LoginResponse,
@@ -191,6 +192,7 @@ export const api = {
       label?: string;
     }>(`/lessons/${lessonId}/signup`, { method: "POST" }),
   dashboard: () => apiRequest<ApiDashboard>("/students/me/dashboard"),
+  studentHome: () => apiRequest<ApiStudentHome>("/students/me/home"),
   achievements: () =>
     apiRequestEnvelope<StudentAchievementItem[], StudentAchievementsMeta>("/students/me/achievements"),
   progress: (courseId?: string) =>

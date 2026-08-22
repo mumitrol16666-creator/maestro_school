@@ -19,6 +19,11 @@ export const teacherStudentsApi = {
       `/teachers/me/students/${encodeURIComponent(crmStudentId)}/monthly-plan`,
       { method: "PUT", body: JSON.stringify(plan) },
     ),
+  publishMonthlyPlan: (crmStudentId: string, month: string, expectedDraftRevision?: number) =>
+    apiRequest<StudentMonthlyPlan>(
+      `/teachers/me/students/${encodeURIComponent(crmStudentId)}/monthly-plan/publish`,
+      { method: "POST", body: JSON.stringify({ month, expectedDraftRevision }) },
+    ),
   groups: () => apiRequest<TeacherGroupsResponse>("/teachers/me/groups"),
   groupMonthlyPlan: (crmGroupId: string, month: string) =>
     apiRequest<GroupMonthlyPlanResponse>(
@@ -28,6 +33,11 @@ export const teacherStudentsApi = {
     apiRequest<GroupMonthlyPlan>(
       `/teachers/me/groups/${encodeURIComponent(crmGroupId)}/monthly-plan`,
       { method: "PUT", body: JSON.stringify(plan) },
+    ),
+  publishGroupMonthlyPlan: (crmGroupId: string, month: string, expectedDraftRevision?: number) =>
+    apiRequest<GroupMonthlyPlan>(
+      `/teachers/me/groups/${encodeURIComponent(crmGroupId)}/monthly-plan/publish`,
+      { method: "POST", body: JSON.stringify({ month, expectedDraftRevision }) },
     ),
   awardWeeklyLeagueBonus: (body: {
     studentId: string;
