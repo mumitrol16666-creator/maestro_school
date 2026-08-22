@@ -2,6 +2,11 @@
 
 import {
   AlertTriangle,
+  ChevronDown,
+  ChevronUp,
+  Music,
+  Plus,
+  Sparkles,
   BookCheck,
   Check,
   CheckCircle2,
@@ -30,6 +35,8 @@ import { ApiError } from "@/lib/api-client";
 import { isContentAdminRole, isOfflineCoordinatorRole } from "@/lib/role-labels";
 import { adminOfflineApi } from "@/lib/admin-offline-api";
 import { teacherOfflineApi } from "@/lib/teacher-offline-api";
+import { teacherStudentsApi } from "@/lib/teacher-students-api";
+import { currentAqtobeMonth } from "@/lib/aqtobe-month";
 import { MediaPicker } from "@/components/media-picker";
 import type { CmsMedia } from "@/types/cms";
 import type {
@@ -48,6 +55,23 @@ const statusLabels: Record<string, string> = {
 };
 
 const REPORT_SUBMISSION_LEAD_MINUTES = 20;
+
+const summaryPresets = [
+  "Разобрали вступление и аккорды",
+  "Отработали ритм и бой",
+  "Сыграли песню под метроном",
+  "Закрепили переходы аккордов",
+  "Поставили дыхание и распевки",
+];
+
+const homeworkPresets = [
+  "Отработать песню под метроном",
+  "Переходы аккордов 5 мин/день",
+  "Доучить 1 куплет и припев",
+  "Играть под оригинальный трек",
+  "Упражнения на дыхание",
+];
+
 const teacherEditableLessonStatuses = new Set(["started", "not_filled"]);
 
 const attendanceLabels: Record<string, string> = {
@@ -183,7 +207,7 @@ function studentLessonCheckDraft(student: TeacherOfflineStudent): StudentLessonC
     attendanceStatus: student.attendanceStatus ?? "unmarked",
     teacherNote: student.teacherNote ?? "",
     homeworkReview: normalizeHomeworkReview(student.homeworkReview),
-    lessonPoints: student.lessonPoints ?? 0,
+    lessonPoints: student.lessonPoints ?? 100,
     monthlyPlanId: student.monthlyPlan?.id ?? student.monthlyPlanId ?? null,
     planTopicUpdates: student.planTopicUpdates ?? [],
   };
@@ -288,6 +312,7 @@ export default function AdminOfflineLessonDetailPage() {
   const [submitConfirmationOpen, setSubmitConfirmationOpen] = useState(false);
   const [notHeldOpen, setNotHeldOpen] = useState(false);
   const [notHeldReason, setNotHeldReason] = useState("");
+  const [extraDetailsOpen, setExtraDetailsOpen] = useState(false);
   const [clockNow, setClockNow] = useState(() => Date.now());
   const [submissionProgress, setSubmissionProgress] = useState<string | null>(null);
   const [hydratedLessonDraftKey, setHydratedLessonDraftKey] = useState<string | null>(null);
@@ -329,6 +354,13 @@ export default function AdminOfflineLessonDetailPage() {
   const students = loadedStudents.length ? loadedStudents : trialLeadFallback ? [trialLeadFallback] : loadedStudents;
   const hasTrialRosterFallback = Boolean(trialLeadFallback);
   const isTrialReportReady = isTrialLesson ? trialReportReady(trialReport) : true;
+  const availablePlanTopics = useMemo(() => {
+    const list = [
+      ...students.flatMap((s) => ("monthlyPlan" in s && s.monthlyPlan?.items ? s.monthlyPlan.items.map((i: { title: string }) => i.title) : [])),
+      ...students.flatMap((s) => ("recentLessons" in s && s.recentLessons ? s.recentLessons.map((l: { topic?: string | null }) => l.topic || "") : [])),
+    ].map((t) => t.trim()).filter(Boolean);
+    return Array.from(new Set(list));
+  }, [students]);
   const canEditTeacherReport = Boolean(
     lesson
       && teacherEditableLessonStatuses.has(lesson.status)
@@ -1013,6 +1045,10 @@ export default function AdminOfflineLessonDetailPage() {
           drafts={studentCheckDrafts}
           studentsError={studentsResource.error}
           onRetryStudents={studentsResource.reload}
+          onSelectTopic={(selected) => {
+            setTopic(selected);
+            if (!lessonSummary) setLessonSummary(`Разобрали тему «${selected}»`);
+          }}
           onDraftChange={(studentId, draft) => {
             setStudentCheckDrafts((current) => ({ ...current, [studentId]: draft }));
           }}
@@ -1075,96 +1111,190 @@ export default function AdminOfflineLessonDetailPage() {
               />
             ) : (
               <>
-                <label className="mt-6 block text-xs font-bold uppercase tracking-wider text-stone-500">
+                {availablePlanTopics.length > 0 ? (
+                  <div className="mt-5 rounded-2xl border border-violet-100 bg-violet-50/60 p-3.5">
+                    <p className="flex items-center gap-1.5 text-xs font-bold text-violet-900">
+                      <Sparkles size={14} className="text-violet-600" />
+                      Быстрый выбор темы из плана месяца:
+                    </p>
+                    <div className="mt-2.5 flex flex-wrap gap-1.5">
+                      {availablePlanTopics.map((item) => (
+                        <button
+                          key={item}
+                          type="button"
+                          disabled={!canEditReport}
+                          onClick={() => {
+                            setTopic(item);
+                            if (!lessonSummary) {
+                              setLessonSummary(`Разобрали тему «${item}»`);
+                            }
+                          }}
+                          className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold transition ${
+                            topic === item
+                              ? "bg-violet-700 text-white shadow-xs"
+                              : "border border-violet-200 bg-white text-violet-900 hover:bg-violet-100/80"
+                          }`}
+                        >
+                          <Music size={12} />
+                          {item}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                <label className="mt-5 block text-xs font-bold uppercase tracking-wider text-stone-500">
                   Тема урока
                   <textarea
                     value={topic}
                     onChange={(event) => setTopic(event.target.value)}
                     disabled={!canEditReport}
-                    className="mt-2 min-h-24 w-full rounded-2xl border border-stone-200 px-4 py-3 text-sm"
-                    placeholder="Что проходили на занятии?"
+                    rows={2}
+                    className="mt-2 min-h-16 w-full rounded-2xl border border-stone-200 px-4 py-3 text-sm outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-200"
+                    placeholder="Какую песню или тему разбирали сегодня?"
                   />
                 </label>
 
-                <label className="mt-4 block text-xs font-bold uppercase tracking-wider text-stone-500">
-                  Цель урока
-                  <textarea
-                    value={lessonGoals}
-                    onChange={(event) => setLessonGoals(event.target.value)}
-                    disabled={!canEditReport}
-                    className="mt-2 min-h-20 w-full rounded-2xl border border-stone-200 px-4 py-3 text-sm"
-                    placeholder="Что планировали освоить?"
-                  />
-                </label>
-
-                <label className="mt-4 block text-xs font-bold uppercase tracking-wider text-stone-500">
-                  Итог урока
+                <div className="mt-5">
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
+                      Что сделали на уроке (Итог)
+                    </label>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {summaryPresets.map((preset) => (
+                      <button
+                        key={preset}
+                        type="button"
+                        disabled={!canEditReport}
+                        onClick={() => {
+                          setLessonSummary((curr) => curr ? `${curr}. ${preset}` : preset);
+                        }}
+                        className="rounded-lg border border-stone-200 bg-stone-50 px-2.5 py-1 text-[11px] font-semibold text-stone-600 transition hover:bg-stone-100 hover:text-ink"
+                      >
+                        + {preset}
+                      </button>
+                    ))}
+                  </div>
                   <textarea
                     value={lessonSummary}
                     onChange={(event) => setLessonSummary(event.target.value)}
                     disabled={!canEditReport}
-                    className="mt-2 min-h-28 w-full rounded-2xl border border-stone-200 px-4 py-3 text-sm"
-                    placeholder="Что получилось, что разобрали, какой результат?"
+                    rows={3}
+                    className="mt-2 min-h-20 w-full rounded-2xl border border-stone-200 px-4 py-3 text-sm outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-200"
+                    placeholder="Что получилось, что разобрали, какой результат занятия?"
                   />
-                </label>
+                </div>
 
-                <label className="mt-4 block text-xs font-bold uppercase tracking-wider text-stone-500">
-                  Домашнее задание
+                <div className="mt-5">
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
+                      Домашнее задание
+                    </label>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {homeworkPresets.map((preset) => (
+                      <button
+                        key={preset}
+                        type="button"
+                        disabled={!canEditReport}
+                        onClick={() => {
+                          setHomework((curr) => curr ? `${curr}. ${preset}` : preset);
+                        }}
+                        className="rounded-lg border border-amber-200 bg-amber-50/70 px-2.5 py-1 text-[11px] font-semibold text-amber-900 transition hover:bg-amber-100"
+                      >
+                        + {preset}
+                      </button>
+                    ))}
+                  </div>
                   <textarea
                     value={homework}
                     onChange={(event) => setHomework(event.target.value)}
                     disabled={!canEditReport}
-                    className="mt-2 min-h-32 w-full rounded-2xl border border-stone-200 px-4 py-3 text-sm"
-                    placeholder="Что отработать до следующего урока?"
+                    rows={3}
+                    className="mt-2 min-h-24 w-full rounded-2xl border border-stone-200 px-4 py-3 text-sm outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-200"
+                    placeholder="Что отработать дома до следующего урока?"
                   />
-                </label>
+                </div>
 
-                <label className="mt-4 block text-xs font-bold uppercase tracking-wider text-stone-500">
-                  Фокус следующего урока
-                  <textarea
-                    value={nextLessonFocus}
-                    onChange={(event) => setNextLessonFocus(event.target.value)}
-                    disabled={!canEditReport}
-                    className="mt-2 min-h-20 w-full rounded-2xl border border-stone-200 px-4 py-3 text-sm"
-                    placeholder="С чего продолжить на следующем занятии?"
-                  />
-                </label>
+                <div className="mt-6 border-t border-stone-100 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setExtraDetailsOpen(!extraDetailsOpen)}
+                    className="inline-flex items-center gap-1.5 text-xs font-bold text-stone-500 transition hover:text-ink"
+                  >
+                    {extraDetailsOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                    {extraDetailsOpen
+                      ? "Скрыть дополнительные поля"
+                      : "+ Дополнительные детали (Цели, фокус следующего, материалы, комментарий админу)"}
+                  </button>
+
+                  {extraDetailsOpen ? (
+                    <div className="mt-4 space-y-4 rounded-2xl border border-stone-100 bg-stone-50/60 p-4">
+                      <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
+                        Цель урока
+                        <textarea
+                          value={lessonGoals}
+                          onChange={(event) => setLessonGoals(event.target.value)}
+                          disabled={!canEditReport}
+                          rows={2}
+                          className="mt-2 min-h-16 w-full rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm"
+                          placeholder="Что планировали освоить?"
+                        />
+                      </label>
+
+                      <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
+                        Фокус следующего урока
+                        <textarea
+                          value={nextLessonFocus}
+                          onChange={(event) => setNextLessonFocus(event.target.value)}
+                          disabled={!canEditReport}
+                          rows={2}
+                          className="mt-2 min-h-16 w-full rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm"
+                          placeholder="С чего продолжить на следующем занятии?"
+                        />
+                      </label>
+
+                      <div>
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
+                            Материалы и ссылки
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setMediaPickerOpen(true)}
+                            disabled={!canEditReport}
+                            className="rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-xs font-bold text-stone-700 transition hover:border-gold disabled:opacity-50"
+                          >
+                            Выбрать из медиатеки
+                          </button>
+                        </div>
+                        <textarea
+                          value={materialsText}
+                          onChange={(event) => setMaterialsText(event.target.value)}
+                          disabled={!canEditReport}
+                          rows={2}
+                          className="mt-2 min-h-16 w-full rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm"
+                          placeholder="Одна ссылка на строку или выберите файл из медиатеки"
+                        />
+                      </div>
+
+                      <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
+                        Комментарий для админа
+                        <textarea
+                          value={comment}
+                          onChange={(event) => setComment(event.target.value)}
+                          disabled={!canEditReport}
+                          rows={2}
+                          className="mt-2 min-h-16 w-full rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm"
+                          placeholder="Замечания по ученикам, сложности, рекомендации — всё, что важно для администратора"
+                        />
+                      </label>
+                    </div>
+                  ) : null}
+                </div>
               </>
             )}
-
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-              <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
-                Материалы и ссылки
-              </label>
-              <button
-                type="button"
-                onClick={() => setMediaPickerOpen(true)}
-                disabled={!canEditReport}
-                className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-bold text-stone-700 transition hover:border-gold disabled:opacity-50"
-              >
-                Выбрать из медиатеки
-              </button>
-            </div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
-              <textarea
-                value={materialsText}
-                onChange={(event) => setMaterialsText(event.target.value)}
-                disabled={!canEditReport}
-                className="mt-2 min-h-20 w-full rounded-2xl border border-stone-200 px-4 py-3 text-sm"
-                placeholder="Одна ссылка на строку или выберите файл из медиатеки"
-              />
-            </label>
-
-            <label className="mt-4 block text-xs font-bold uppercase tracking-wider text-stone-500">
-              Комментарий для админа
-              <textarea
-                value={comment}
-                onChange={(event) => setComment(event.target.value)}
-                disabled={!canEditReport}
-                className="mt-2 min-h-20 w-full rounded-2xl border border-stone-200 px-4 py-3 text-sm"
-                placeholder="Замечания по ученикам, сложности, рекомендации — всё, что важно для администратора"
-              />
-            </label>
             </div>
 
             {canEditTeacherReport ? (
@@ -1882,6 +2012,7 @@ function StudentRoster({
   drafts,
   studentsError,
   onRetryStudents,
+  onSelectTopic,
   onDraftChange,
 }: {
   students: TeacherOfflineStudent[];
@@ -1892,6 +2023,7 @@ function StudentRoster({
   drafts: Record<string, StudentLessonCheckDraft>;
   studentsError: string | null;
   onRetryStudents: () => void;
+  onSelectTopic?: (topic: string) => void;
   onDraftChange: (studentId: string, draft: StudentLessonCheckDraft) => void;
 }) {
   return (
@@ -1907,7 +2039,7 @@ function StudentRoster({
       </div>
       <p className="mt-2 text-sm text-stone-500">
         {canManageAttendance
-          ? "В начале отметьте присутствие и прошлое ДЗ. В конце — темы плана и учебные баллы."
+          ? "Отметьте посещаемость, проверку прошлого ДЗ и освоенные темы из плана месяца."
           : "Отметки доступны во время урока и сохраняются в его истории."}
       </p>
 
@@ -1923,7 +2055,7 @@ function StudentRoster({
           />
         </div>
       ) : (
-        <div className="mt-6 space-y-3">
+        <div className="mt-6 space-y-4">
           {students.map((student) => (
             <StudentLessonCheckCard
               key={student.crmStudentId}
@@ -1932,6 +2064,7 @@ function StudentRoster({
               showHomeworkReview={showHomeworkReview}
               showLearningResult={showLearningResult}
               draft={drafts[student.crmStudentId] ?? studentLessonCheckDraft(student)}
+              onSelectTopic={onSelectTopic}
               onChange={(draft) => onDraftChange(student.crmStudentId, draft)}
             />
           ))}
@@ -1944,8 +2077,8 @@ function StudentRoster({
 const attendanceOptions = [
   { value: "present", label: "Присутствовал", icon: Check, active: "border-emerald-500 bg-emerald-50 text-emerald-800" },
   { value: "late", label: "Опоздал", icon: Clock3, active: "border-amber-500 bg-amber-50 text-amber-900" },
-  { value: "excused_absence", label: "Нет, причина есть", icon: UserX, active: "border-sky-500 bg-sky-50 text-sky-900" },
-  { value: "unexcused_absence", label: "Нет без причины", icon: CircleSlash2, active: "border-red-500 bg-red-50 text-red-800" },
+  { value: "excused_absence", label: "Пропуск с причиной", icon: UserX, active: "border-sky-500 bg-sky-50 text-sky-900" },
+  { value: "unexcused_absence", label: "Пропуск без причины", icon: CircleSlash2, active: "border-red-500 bg-red-50 text-red-800" },
 ] as const;
 
 const homeworkOptions = [
@@ -1970,6 +2103,7 @@ function StudentLessonCheckCard({
   showHomeworkReview,
   showLearningResult,
   draft,
+  onSelectTopic,
   onChange,
 }: {
   student: TeacherOfflineStudent;
@@ -1977,6 +2111,7 @@ function StudentLessonCheckCard({
   showHomeworkReview: boolean;
   showLearningResult: boolean;
   draft: StudentLessonCheckDraft;
+  onSelectTopic?: (topic: string) => void;
   onChange: (draft: StudentLessonCheckDraft) => void;
 }) {
   const { attendanceStatus, teacherNote, homeworkReview, lessonPoints, planTopicUpdates } = draft;
@@ -1985,6 +2120,10 @@ function StudentLessonCheckCard({
   const homeworkNeedsDifficulties = homeworkReview.status === "partial";
   const disabled = !canEdit;
   const planItems = (student.monthlyPlan?.items ?? []).filter((item) => item.status !== "moved");
+
+  const [quickTopicTitle, setQuickTopicTitle] = useState("");
+  const [addingQuickTopic, setAddingQuickTopic] = useState(false);
+  const [quickTopicError, setQuickTopicError] = useState<string | null>(null);
 
   function choosePlanTopicStatus(itemId: string, status: "in_progress" | "completed") {
     const selected = planTopicUpdates.find((item) => item.itemId === itemId);
@@ -2012,18 +2151,63 @@ function StudentLessonCheckCard({
               : status === "not_completed"
                 ? 0
                 : null,
-        difficulties: status === "partial" || status === "completed" ? homeworkReview.difficulties : "",
+        difficulties: status === "partial" ? homeworkReview.difficulties : "",
         notCompletedReason: status === "not_completed" ? homeworkReview.notCompletedReason : "",
       },
     });
   }
 
+  async function handleAddQuickTopic() {
+    if (!quickTopicTitle.trim() || !student.crmStudentId) return;
+    setAddingQuickTopic(true);
+    setQuickTopicError(null);
+    try {
+      const currentItems = (student.monthlyPlan?.items ?? []).map((item) => ({
+        id: item.id,
+        title: item.title,
+        status: item.status,
+      }));
+      const newItem = {
+        id: crypto.randomUUID(),
+        title: quickTopicTitle.trim(),
+        status: "in_progress" as const,
+      };
+      const month = student.monthlyPlan?.month || currentAqtobeMonth();
+      const saved = await teacherStudentsApi.saveMonthlyPlan(student.crmStudentId, {
+        month,
+        goal: student.monthlyPlan?.goal || `Освоить «${quickTopicTitle.trim()}»`,
+        expectedResult: "",
+        skills: "",
+        checkpoint: "",
+        note: "",
+        items: [...currentItems, newItem],
+      });
+      student.monthlyPlan = {
+        id: saved.id || crypto.randomUUID(),
+        month: saved.month,
+        goal: saved.goal,
+        items: saved.items.map((item) => ({
+          id: item.id,
+          title: item.title,
+          status: item.status as "planned" | "in_progress" | "completed" | "moved",
+        })),
+      };
+      choosePlanTopicStatus(newItem.id, "in_progress");
+      if (onSelectTopic) onSelectTopic(newItem.title);
+      setQuickTopicTitle("");
+    } catch {
+      setQuickTopicError("Не удалось добавить тему в план. Проверьте интернет.");
+    } finally {
+      setAddingQuickTopic(false);
+    }
+  }
+
   return (
     <div className="rounded-2xl border border-stone-200 bg-white p-4 sm:p-5">
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-100 pb-3">
         <div>
-          <p className="font-semibold text-ink">{student.name}</p>
-          {student.phone ? <p className="mt-1 text-xs text-stone-500">{student.phone}</p> : null}
+          <p className="font-semibold text-ink sm:text-lg">{student.name}</p>
+          {student.phone ? <p className="mt-0.5 text-xs text-stone-500">{student.phone}</p> : null}
         </div>
         <span
           className={`inline-flex w-fit rounded-full px-3 py-1 text-xs font-bold ${
@@ -2034,13 +2218,17 @@ function StudentLessonCheckCard({
         </span>
       </div>
 
-      <StudentPreviousContext student={student} />
+      <StudentPreviousContext
+        student={student}
+        onSelectTopic={onSelectTopic}
+      />
 
+      {/* Посещаемость */}
       <fieldset className="mt-4">
         <legend className="text-[11px] font-bold uppercase tracking-[0.14em] text-stone-500">
           Посещаемость
         </legend>
-        <div className="mt-2 grid grid-cols-2 gap-2 lg:grid-cols-4">
+        <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
           {attendanceOptions.map(({ value, label, icon: Icon, active }) => {
             const selected = attendanceStatus === value;
             return (
@@ -2049,11 +2237,11 @@ function StudentLessonCheckCard({
                 type="button"
                 disabled={disabled}
                 onClick={() => onChange({ ...draft, attendanceStatus: value })}
-                className={`flex min-h-12 items-center justify-center gap-2 rounded-xl border px-2 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-65 ${
-                  selected ? active : "border-stone-200 bg-white text-stone-500"
+                className={`flex min-h-11 items-center justify-center gap-2 rounded-xl border px-2.5 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-65 ${
+                  selected ? active : "border-stone-200 bg-stone-50/50 text-stone-600 hover:bg-stone-100"
                 }`}
               >
-                <Icon size={15} />
+                <Icon size={14} />
                 <span>{label}</span>
               </button>
             );
@@ -2061,18 +2249,19 @@ function StudentLessonCheckCard({
         </div>
       </fieldset>
 
+      {/* Проверка прошлого ДЗ */}
       {showHomeworkReview ? (
-        <fieldset className="mt-5 border-t border-stone-100 pt-5">
+        <fieldset className="mt-4 border-t border-stone-100 pt-4">
           <legend className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.14em] text-stone-500">
             <BookCheck size={15} className="text-gold" />
             Выполнение прошлого ДЗ
           </legend>
           {!attended ? (
-            <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
-              Сначала отметьте «Присутствовал» или «Опоздал», затем укажите выполнение домашнего задания.
+            <p className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
+              Сначала отметьте присутствие ученика.
             </p>
           ) : null}
-          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="mt-2.5 grid grid-cols-2 gap-2 sm:grid-cols-4">
             {homeworkOptions.map(({ value, label }) => {
               const selected = homeworkReview.status === value;
               return (
@@ -2081,10 +2270,10 @@ function StudentLessonCheckCard({
                   type="button"
                   disabled={disabled || !attended}
                   onClick={() => chooseHomeworkStatus(value)}
-                  className={`min-h-11 rounded-xl border px-2 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-65 ${
+                  className={`min-h-10 rounded-xl border px-2 py-1.5 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-65 ${
                     selected
-                      ? "border-gold bg-amber-50 text-amber-950"
-                      : "border-stone-200 bg-white text-stone-500"
+                      ? "border-gold bg-amber-50 text-amber-950 font-black shadow-xs"
+                      : "border-stone-200 bg-stone-50/50 text-stone-600 hover:bg-stone-100"
                   }`}
                 >
                   {label}
@@ -2093,19 +2282,26 @@ function StudentLessonCheckCard({
             })}
           </div>
 
-          {attended && ["completed", "partial"].includes(homeworkReview.status) ? (
-            <div className="mt-4 rounded-xl bg-stone-50 p-4">
+          {attended && homeworkReview.status === "completed" ? (
+            <div className="mt-3 flex items-center gap-2 rounded-xl bg-emerald-50 px-3.5 py-2.5 text-xs font-bold text-emerald-800">
+              <CheckCircle2 size={16} className="shrink-0 text-emerald-600" />
+              <span>Домашнее задание полностью отработано (100%)</span>
+            </div>
+          ) : null}
+
+          {attended && homeworkReview.status === "partial" ? (
+            <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50/40 p-3.5">
               <div className="flex items-center justify-between gap-3">
-                <label htmlFor={`homework-percent-${student.crmStudentId}`} className="text-sm font-bold text-stone-700">
-                  Выполнено примерно
+                <label htmlFor={`homework-percent-${student.crmStudentId}`} className="text-xs font-bold text-stone-700">
+                  Выполнено примерно:
                 </label>
-                <strong className="text-lg text-emerald-700">{homeworkReview.completionPercent ?? 0}%</strong>
+                <strong className="text-base font-black text-amber-900">{homeworkReview.completionPercent ?? 50}%</strong>
               </div>
               <input
                 id={`homework-percent-${student.crmStudentId}`}
                 type="range"
                 min={10}
-                max={100}
+                max={90}
                 step={10}
                 value={homeworkReview.completionPercent ?? 50}
                 disabled={disabled || !attended}
@@ -2115,15 +2311,15 @@ function StudentLessonCheckCard({
                     ...draft,
                     homeworkReview: {
                       ...homeworkReview,
-                      status: completionPercent === 100 ? "completed" : "partial",
+                      status: "partial",
                       completionPercent,
                     },
                   });
                 }}
-                className="mt-3 w-full accent-emerald-700"
+                className="mt-2 w-full accent-amber-600"
               />
-              <label className="mt-4 block text-xs font-bold uppercase tracking-wider text-stone-500">
-                Трудности или что осталось доделать
+              <label className="mt-3 block text-xs font-bold text-stone-600">
+                Что осталось доделать или где были сложности:
                 <textarea
                   value={homeworkReview.difficulties ?? ""}
                   disabled={disabled || !attended}
@@ -2131,19 +2327,17 @@ function StudentLessonCheckCard({
                     ...draft,
                     homeworkReview: { ...homeworkReview, difficulties: event.target.value },
                   })}
-                  className="mt-2 min-h-20 w-full rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm normal-case tracking-normal"
-                  placeholder="Например: не получается переход между аккордами"
+                  rows={2}
+                  className="mt-1.5 min-h-16 w-full rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs"
+                  placeholder="Например: переходы между аккордами в припеве"
                 />
               </label>
-              {homeworkNeedsDifficulties && !homeworkReview.difficulties?.trim() ? (
-                <p className="mt-2 text-xs font-semibold text-amber-800">Укажите, что осталось доделать.</p>
-              ) : null}
             </div>
           ) : null}
 
           {attended && homeworkNeedsReason ? (
-            <label className="mt-4 block text-xs font-bold uppercase tracking-wider text-red-700">
-              Почему домашнее задание не выполнено
+            <label className="mt-3 block text-xs font-bold text-red-700">
+              Причина невыполнения домашнего задания:
               <textarea
                 value={homeworkReview.notCompletedReason ?? ""}
                 disabled={disabled || !attended}
@@ -2151,127 +2345,203 @@ function StudentLessonCheckCard({
                   ...draft,
                   homeworkReview: { ...homeworkReview, notCompletedReason: event.target.value },
                 })}
-                className="mt-2 min-h-20 w-full rounded-xl border border-red-200 bg-red-50/40 px-3 py-2 text-sm normal-case tracking-normal text-stone-800"
-                placeholder="Причина обязательна"
+                rows={2}
+                className="mt-1.5 min-h-16 w-full rounded-xl border border-red-200 bg-red-50/40 px-3 py-2 text-xs text-stone-800"
+                placeholder="Укажите причину (обязательно)"
               />
             </label>
           ) : null}
         </fieldset>
       ) : null}
 
+      {/* Месячный план и Учебные баллы */}
       {showLearningResult && attended ? (
-        <fieldset className="mt-5 border-t border-stone-100 pt-5">
+        <fieldset className="mt-4 border-t border-stone-100 pt-4">
           <legend className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.14em] text-violet-700">
             <Target size={15} />
-            Результат урока
+            План месяца и учебные баллы
           </legend>
-          <p className="mt-2 text-sm text-stone-500">
-            Отметьте темы, которые продвинулись сегодня, и сами определите учебные баллы ученику.
-          </p>
 
-          <label className="mt-4 block rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
-            <span className="flex items-center gap-2 text-sm font-bold text-amber-950">
-              <Star size={17} className="text-gold" />
-              Учебные баллы за урок
-            </span>
-            <span className="mt-1 block text-xs leading-5 text-amber-900/70">
-              От 0 до 100. Количество выбирает преподаватель по работе ученика на занятии.
-            </span>
-            <input
-              type="number"
-              min={0}
-              max={100}
-              step={1}
-              inputMode="numeric"
-              value={lessonPoints}
-              disabled={disabled}
-              onChange={(event) => onChange({
-                ...draft,
-                lessonPoints: Math.max(0, Math.min(100, Number(event.target.value) || 0)),
-              })}
-              className="mt-3 h-12 w-32 rounded-xl border border-amber-200 bg-white px-4 text-lg font-black text-ink"
-              aria-label={`Учебные баллы для ${student.name}`}
-            />
-          </label>
-
-          {student.monthlyPlan ? (
-            <div className="mt-4 rounded-2xl border border-violet-100 bg-violet-50/50 p-4">
-              <p className="text-xs font-bold uppercase tracking-wider text-violet-700">
-                Темы плана · {student.monthlyPlan.month}
+          {/* Темы плана на месяц */}
+          <div className="mt-3 rounded-2xl border border-violet-100 bg-violet-50/50 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs font-black uppercase tracking-wider text-violet-900">
+                🎯 План на {student.monthlyPlan?.month || currentAqtobeMonth()}
               </p>
-              {student.monthlyPlan.goal ? (
-                <p className="mt-2 text-sm font-semibold text-violet-950">{student.monthlyPlan.goal}</p>
+              {student.monthlyPlan?.goal ? (
+                <span className="text-xs font-semibold text-violet-800">
+                  Цель: {student.monthlyPlan.goal}
+                </span>
               ) : null}
-              {planItems.length ? (
-                <div className="mt-4 space-y-3">
-                  {planItems.map((item) => {
-                    const selectedStatus = planTopicUpdates.find((update) => update.itemId === item.id)?.status;
-                    if (item.status === "completed" && !selectedStatus) {
-                      return (
-                        <div key={item.id} className="flex items-center justify-between gap-3 rounded-xl border border-emerald-100 bg-white px-3 py-3">
-                          <span className="text-sm font-semibold text-stone-600">{item.title}</span>
-                          <span className="shrink-0 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold uppercase text-emerald-700">
-                            Уже освоено
+            </div>
+
+            {planItems.length ? (
+              <div className="mt-3 space-y-2.5">
+                {planItems.map((item) => {
+                  const selectedStatus = planTopicUpdates.find((update) => update.itemId === item.id)?.status;
+                  const isDone = item.status === "completed" || selectedStatus === "completed";
+                  const isInProgress = selectedStatus === "in_progress" || (item.status === "in_progress" && !selectedStatus);
+
+                  return (
+                    <div
+                      key={item.id}
+                      className="flex flex-wrap items-center justify-between gap-2.5 rounded-xl border border-violet-100 bg-white p-3 shadow-xs"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-lg text-xs font-bold ${
+                            isDone
+                              ? "bg-emerald-100 text-emerald-800"
+                              : isInProgress
+                              ? "bg-amber-100 text-amber-900"
+                              : "bg-stone-100 text-stone-500"
+                          }`}>
+                            {isDone ? "✓" : "⏳"}
                           </span>
-                        </div>
-                      );
-                    }
-                    return (
-                      <div key={item.id} className="rounded-xl border border-violet-100 bg-white p-3">
-                        <p className="text-sm font-semibold text-stone-700">{item.title}</p>
-                        <div className="mt-3 grid grid-cols-2 gap-2">
-                          <button
-                            type="button"
-                            disabled={disabled}
-                            onClick={() => choosePlanTopicStatus(item.id, "in_progress")}
-                            className={`min-h-10 rounded-xl border px-2 text-xs font-bold transition disabled:opacity-60 ${
-                              selectedStatus === "in_progress"
-                                ? "border-amber-400 bg-amber-50 text-amber-900"
-                                : "border-stone-200 text-stone-500"
-                            }`}
-                          >
-                            Ещё в работе
-                          </button>
-                          <button
-                            type="button"
-                            disabled={disabled}
-                            onClick={() => choosePlanTopicStatus(item.id, "completed")}
-                            className={`min-h-10 rounded-xl border px-2 text-xs font-bold transition disabled:opacity-60 ${
-                              selectedStatus === "completed"
-                                ? "border-emerald-500 bg-emerald-50 text-emerald-800"
-                                : "border-stone-200 text-stone-500"
-                            }`}
-                          >
-                            Освоено
-                          </button>
+                          <p className="truncate text-sm font-bold text-ink">{item.title}</p>
                         </div>
                       </div>
-                    );
-                  })}
+
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          disabled={disabled}
+                          onClick={() => choosePlanTopicStatus(item.id, "in_progress")}
+                          className={`rounded-lg px-2.5 py-1 text-xs font-bold transition ${
+                            selectedStatus === "in_progress"
+                              ? "bg-amber-100 text-amber-900 border border-amber-300 font-black"
+                              : "bg-stone-50 text-stone-600 hover:bg-stone-100 border border-stone-200"
+                          }`}
+                        >
+                          В работе
+                        </button>
+                        <button
+                          type="button"
+                          disabled={disabled}
+                          onClick={() => choosePlanTopicStatus(item.id, "completed")}
+                          className={`rounded-lg px-2.5 py-1 text-xs font-bold transition ${
+                            selectedStatus === "completed" || (item.status === "completed" && !selectedStatus)
+                              ? "bg-emerald-600 text-white font-black"
+                              : "bg-stone-50 text-stone-600 hover:bg-stone-100 border border-stone-200"
+                          }`}
+                        >
+                          Освоено
+                        </button>
+                        {onSelectTopic ? (
+                          <button
+                            type="button"
+                            onClick={() => onSelectTopic(item.title)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-1 text-xs font-bold text-violet-800 transition hover:bg-violet-100"
+                            title="Использовать эту тему в отчёте урока"
+                          >
+                            <Music size={12} />
+                            В тему
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="mt-2 text-xs text-stone-500">В плане месяца пока нет тем.</p>
+            )}
+
+            {/* Быстрое добавление темы в план прямо на уроке */}
+            {canEdit ? (
+              <div className="mt-3.5 border-t border-violet-100/80 pt-3">
+                <div className="flex gap-2">
+                  <input
+                    value={quickTopicTitle}
+                    onChange={(e) => setQuickTopicTitle(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        void handleAddQuickTopic();
+                      }
+                    }}
+                    placeholder="+ Новая тема или песня в план (напр. Лесник)"
+                    className="h-10 flex-1 rounded-xl border border-violet-200 bg-white px-3 text-xs outline-none focus:ring-2 focus:ring-violet-200"
+                  />
+                  <button
+                    type="button"
+                    disabled={addingQuickTopic || !quickTopicTitle.trim()}
+                    onClick={() => void handleAddQuickTopic()}
+                    className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-violet-700 px-3.5 text-xs font-bold text-white transition hover:bg-violet-800 disabled:opacity-50"
+                  >
+                    {addingQuickTopic ? <LoaderCircle size={14} className="animate-spin" /> : <Plus size={14} />}
+                    Добавить
+                  </button>
                 </div>
-              ) : (
-                <p className="mt-3 text-sm text-stone-500">В плане пока нет тем.</p>
-              )}
+                {quickTopicError ? (
+                  <p className="mt-1.5 text-xs font-semibold text-red-600">{quickTopicError}</p>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+
+          {/* Учебные баллы за урок */}
+          <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50/50 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <span className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-amber-950">
+                  <Star size={16} className="text-gold" />
+                  Учебные баллы за занятие
+                </span>
+                <span className="mt-0.5 block text-[11px] text-amber-900/70">
+                  Выставите оценку за работу на уроке (от 0 до 100 XP)
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="flex gap-1">
+                  {[100, 80, 50, 0].map((val) => (
+                    <button
+                      key={val}
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => onChange({ ...draft, lessonPoints: val })}
+                      className={`rounded-lg px-2.5 py-1 text-xs font-bold transition ${
+                        lessonPoints === val
+                          ? "bg-amber-600 text-white font-black"
+                          : "border border-amber-200 bg-white text-amber-950 hover:bg-amber-100"
+                      }`}
+                    >
+                      {val}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={1}
+                  inputMode="numeric"
+                  value={lessonPoints}
+                  disabled={disabled}
+                  onChange={(event) => onChange({
+                    ...draft,
+                    lessonPoints: Math.max(0, Math.min(100, Number(event.target.value) || 0)),
+                  })}
+                  className="h-10 w-20 rounded-xl border border-amber-300 bg-white px-2.5 text-center text-base font-black text-ink outline-none"
+                  aria-label={`Учебные баллы для ${student.name}`}
+                />
+              </div>
             </div>
-          ) : (
-            <p className="mt-4 rounded-xl border border-stone-200 bg-stone-50 px-3 py-3 text-xs leading-5 text-stone-500">
-              Месячный план ещё не составлен. Темы можно добавить в карточке ученика.
-            </p>
-          )}
+          </div>
         </fieldset>
       ) : null}
 
       <label className="mt-4 block text-xs font-bold uppercase tracking-wider text-stone-500">
-        {attended ? "Комментарий по ученику" : "Комментарий или причина отсутствия"}
+        {attended ? "Заметка по ученику (необязательно)" : "Причина отсутствия"}
         <textarea
           value={teacherNote}
           disabled={disabled}
           onChange={(event) => onChange({ ...draft, teacherNote: event.target.value })}
-          className="mt-2 min-h-16 w-full rounded-xl border border-stone-200 px-3 py-2 text-sm normal-case tracking-normal"
-          placeholder={attended ? "Необязательная заметка" : "Что произошло?"}
+          rows={1}
+          className="mt-1.5 min-h-12 w-full rounded-xl border border-stone-200 px-3 py-2 text-xs normal-case tracking-normal"
+          placeholder={attended ? "Индивидуальные заметки для себя или школы" : "Что произошло?"}
         />
       </label>
-
     </div>
   );
 }
@@ -2287,55 +2557,70 @@ const homeworkReviewLabels: Record<string, string> = {
 function StudentPreviousContext({
   student,
   compact = false,
+  onSelectTopic,
 }: {
   student: TeacherOfflineStudent;
   compact?: boolean;
+  onSelectTopic?: (topic: string) => void;
 }) {
   const lessons = student.recentLessons ?? [];
   const latest = lessons[0];
   if (!latest) {
     return (
-      <div className={`${compact ? "mt-0" : "mt-4"} rounded-2xl border border-stone-200 bg-stone-50 p-4`}>
-        <p className="text-xs font-bold uppercase tracking-[0.14em] text-stone-400">Перед уроком</p>
-        <p className="mt-2 text-sm text-stone-500">Предыдущих уроков и домашнего задания пока нет.</p>
+      <div className={`${compact ? "mt-0" : "mt-3.5"} rounded-2xl border border-stone-200 bg-stone-50/70 p-3.5`}>
+        <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-stone-400">Перед уроком</p>
+        <p className="mt-1 text-xs text-stone-500">Предыдущих уроков и домашнего задания в системе пока нет.</p>
       </div>
     );
   }
 
   const review = latest.homeworkReview;
+  const topicTitle = latest.topic || latest.title;
+
   return (
-    <div className={`${compact ? "mt-0" : "mt-4"} rounded-2xl border border-gold/25 bg-amber-50/60 p-4`}>
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">
-            {compact ? student.name : "Контекст перед уроком"}
-          </p>
-          <p className="mt-1 text-sm font-bold text-ink">
-            {latest.topic || latest.title}
-          </p>
+    <div className={`${compact ? "mt-0" : "mt-3.5"} rounded-2xl border border-gold/25 bg-amber-50/50 p-4`}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-black uppercase tracking-[0.14em] text-gold">
+            {compact ? student.name : "Контекст прошлого урока"}
+          </span>
+          <span className="text-xs text-stone-500 font-semibold">
+            · {new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short" }).format(new Date(latest.date))}
+          </span>
         </div>
-        <span className="text-xs text-stone-500">
-          {new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short" }).format(new Date(latest.date))}
-        </span>
+        {onSelectTopic && topicTitle ? (
+          <button
+            type="button"
+            onClick={() => onSelectTopic(topicTitle)}
+            className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-900 hover:text-amber-700 underline"
+          >
+            <Music size={12} />
+            Продолжить тему «{topicTitle}»
+          </button>
+        ) : null}
       </div>
-      <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
-        <div className="rounded-xl bg-white/75 p-3">
-          <span className="block text-[10px] font-bold uppercase tracking-wider text-stone-400">Прошлое ДЗ</span>
-          <strong className="mt-1 block text-stone-800">{latest.homework || "Не задавалось"}</strong>
+
+      <p className="mt-1.5 text-sm font-bold text-ink">
+        {topicTitle}
+      </p>
+
+      <div className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+        <div className="rounded-xl bg-white/80 p-2.5">
+          <span className="block text-[10px] font-bold uppercase tracking-wider text-stone-400">Было задано на дом:</span>
+          <strong className="mt-1 block text-stone-800 leading-snug">{latest.homework || "Не задавалось"}</strong>
         </div>
-        <div className="rounded-xl bg-white/75 p-3">
-          <span className="block text-[10px] font-bold uppercase tracking-wider text-stone-400">Как выполнено</span>
-          <strong className="mt-1 block text-stone-800">
+        <div className="rounded-xl bg-white/80 p-2.5">
+          <span className="block text-[10px] font-bold uppercase tracking-wider text-stone-400">Статус выполнения:</span>
+          <strong className="mt-1 block text-stone-800 leading-snug">
             {homeworkReviewLabels[review?.status || "not_checked"]}
             {review?.completionPercent != null ? ` · ${review.completionPercent}%` : ""}
           </strong>
-          {review?.difficulties ? <p className="mt-1 text-xs text-stone-600">Сложности: {review.difficulties}</p> : null}
-          {review?.notCompletedReason ? <p className="mt-1 text-xs text-stone-600">Причина: {review.notCompletedReason}</p> : null}
+          {review?.difficulties ? <p className="mt-1 text-stone-600">Сложности: {review.difficulties}</p> : null}
         </div>
       </div>
       {latest.nextLessonFocus || latest.teacherNote ? (
-        <p className="mt-3 text-xs leading-5 text-stone-600">
-          <strong>Обратить внимание:</strong> {latest.nextLessonFocus || latest.teacherNote}
+        <p className="mt-2.5 text-xs leading-5 text-stone-600">
+          <strong>Фокус с прошлого раза:</strong> {latest.nextLessonFocus || latest.teacherNote}
         </p>
       ) : null}
     </div>
