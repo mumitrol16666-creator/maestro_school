@@ -169,27 +169,50 @@ export async function getCourseModules(courseId: string) {
 }
 
 export async function getActiveEnrollment(studentId: string, courseId?: string) {
-  return prisma.studentCourse.findFirst({
+  const where = {
+    studentId,
+    status: { in: ["enrolled", "active"] as StudentCourseStatus[] },
+    ...(courseId ? { courseId } : {}),
+  };
+  const course = {
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      thumbnail: true,
+      difficultyLevel: true,
+      directionId: true,
+      direction: { select: { id: true, title: true, slug: true } },
+    },
+  };
+
+  if (courseId) {
+    return prisma.studentCourse.findFirst({ where, include: { course } });
+  }
+
+  const enrollments = await prisma.studentCourse.findMany({
+    where,
+    include: { course },
+    orderBy: [{ enrolledAt: "desc" }, { courseId: "asc" }],
+  });
+  if (enrollments.length === 0) return null;
+
+  const activeCourseIds = enrollments.map((enrollment) => enrollment.courseId);
+  const latestLearningActivity = await prisma.lessonProgress.findFirst({
     where: {
       studentId,
-      status: { in: ["enrolled", "active"] },
-      ...(courseId ? { courseId } : {}),
+      status: { in: ["in_progress", "submitted", "reviewed", "completed"] },
+      lesson: { module: { courseId: { in: activeCourseIds } } },
     },
-    include: {
-      course: {
-        select: {
-          id: true,
-          title: true,
-          description: true,
-          thumbnail: true,
-          difficultyLevel: true,
-          directionId: true,
-          direction: { select: { id: true, title: true, slug: true } },
-        },
-      },
+    select: {
+      lesson: { select: { module: { select: { courseId: true } } } },
     },
-    orderBy: { updatedAt: "desc" },
+    orderBy: [{ updatedAt: "desc" }, { lessonId: "asc" }],
   });
+
+  const activeCourseId = latestLearningActivity?.lesson.module.courseId;
+  return enrollments.find((enrollment) => enrollment.courseId === activeCourseId)
+    ?? enrollments[0];
 }
 
 export async function updateStudentCourseStatus(
