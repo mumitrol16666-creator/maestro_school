@@ -1,6 +1,6 @@
 "use client";
 
-import { BookMarked, CircleUserRound, ClipboardCheck, Gift, House, Megaphone, Menu, MessagesSquare, MonitorPlay, School, X } from "lucide-react";
+import { BookMarked, CircleUserRound, ClipboardCheck, Gift, House, Megaphone, Menu, MessagesSquare, MonitorPlay, School, Trophy, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
@@ -19,6 +19,7 @@ import { UserMenu } from "./user-menu";
 const navigation = [
   { href: "/dashboard", label: "Главная", icon: House },
   { href: "/courses", label: "Курсы", icon: BookMarked },
+  { href: "/league", label: "Недельная лига", icon: Trophy, studentOnly: true },
   { href: "/school-lessons", label: "Уроки в школе", icon: School, studentOnly: true },
   { href: "/tests", label: "Тесты", icon: ClipboardCheck, studentOnly: true },
   { href: "/rewards", label: "Награды", icon: Gift, studentOnly: true },
