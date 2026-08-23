@@ -22,6 +22,7 @@ import {
 } from "../../application/services/notification.service.js";
 import { generateWhatsappHomeworkDrafts } from "../../application/services/whatsapp-homework-message.service.js";
 import { archiveStudentAccess } from "../../application/services/student-access-archive.service.js";
+import { applyOfflineLessonLearningResults } from "../../application/services/admin-offline.service.js";
 
 const linkSchema = z.object({
   phone: z.string().optional(),
@@ -216,9 +217,15 @@ export async function integrationRoutes(app: FastifyInstance) {
 
   app.post("/notifications/offline-lesson-approved", async (request) => {
     const body = offlineLessonApprovedSchema.parse(request.body);
+    const teacher = await findUserByCrmTeacherId(body.crmTeacherId);
+    const approvedBy = teacher?.id ?? "system";
+    const [notification, learningRewards] = await Promise.all([
+      notifyOfflineLessonApproved(body),
+      applyOfflineLessonLearningResults(body.crmClassId, approvedBy).catch(() => null),
+    ]);
     return {
       success: true,
-      data: await notifyOfflineLessonApproved(body),
+      data: { ...notification, learningRewards },
     };
   });
 

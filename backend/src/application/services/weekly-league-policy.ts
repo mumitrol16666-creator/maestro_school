@@ -7,9 +7,9 @@ export const WEEKLY_LEAGUE_GOAL_XP = 80;
 export const WEEKLY_LEAGUE_RULES = [
   { sourceType: "offline_lesson", label: "Посещение урока в школе", xp: 20 },
   { sourceType: "online_lesson", label: "Завершённый онлайн-урок", xp: 20 },
-  { sourceType: "course_homework", label: "Принятое ДЗ в курсе (до)", xp: 15 },
-  { sourceType: "online_assignment", label: "ДЗ после онлайн-урока (до)", xp: 15 },
-  { sourceType: "prepared_test", label: "Пройденный тест (до)", xp: 20 },
+  { sourceType: "course_homework", label: "Принятое ДЗ в курсе", xp: 15 },
+  { sourceType: "online_assignment", label: "ДЗ после онлайн-урока", xp: 15 },
+  { sourceType: "prepared_test", label: "Пройденный тест", xp: 20 },
   { sourceType: "monthly_plan", label: "Освоенная тема плана", xp: 3 },
 ] as const;
 

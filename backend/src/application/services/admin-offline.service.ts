@@ -51,7 +51,7 @@ function lessonMonth(lesson: Record<string, unknown>) {
   return date && !Number.isNaN(date.getTime()) ? aqtobeMonthKey(date) : aqtobeMonthKey();
 }
 
-async function applyOfflineLessonLearningResults(crmClassId: string, approvedBy: string) {
+export async function applyOfflineLessonLearningResults(crmClassId: string, approvedBy: string) {
   const checks = await prisma.offlineLessonStudentCheck.findMany({
     where: { crmClassId, rewardsAppliedAt: null },
   });
