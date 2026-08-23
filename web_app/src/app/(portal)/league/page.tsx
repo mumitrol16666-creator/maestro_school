@@ -186,9 +186,9 @@ export default function WeeklyLeaguePage() {
     <>
       {/* Header with week switch */}
       <PageHeader
-        eyebrow="Недельная лига Maestro"
-        title="Учимся вместе. Счёт идёт сейчас."
-        description="Каждый понедельник — новый раунд. Еженедельный XP обнуляется, но баллы, Coins и ранг остаются."
+        eyebrow="Соревнование школы"
+        title="Недельная лига"
+        description="Занимайся, сдавай домашние задания и тесты, поднимайся в топ недели и получай Coins каждое воскресенье."
         action={(
           <div className="inline-flex rounded-2xl border border-stone-200 bg-white p-1 shadow-sm">
             <button
