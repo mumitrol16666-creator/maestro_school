@@ -21,6 +21,7 @@ import { ErrorState, LoadingState } from "@/components/data-states";
 import { ProgressBar } from "@/components/progress-bar";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { api } from "@/lib/api-client";
+import { weeklyLeagueApi } from "@/lib/weekly-league-api";
 import { currentAqtobeMonth } from "@/lib/aqtobe-month";
 import type { SchoolOfflineLesson } from "@/types/school-offline";
 import type { StudentHomeHomework, StudentHomeMonthlyPlan } from "@/types/api";
@@ -96,10 +97,13 @@ export default function DashboardPage() {
 
       {nearestLesson ? <NearestLessonCard lesson={nearestLesson} /> : null}
 
-      <div className="mt-5 grid gap-5 lg:grid-cols-2">
-        {data.currentHomework ? (
-          <HomeworkCard homework={data.currentHomework} lastReview={data.lastHomeworkReview} />
-        ) : null}
+      <div className="mt-5 grid gap-5 lg:grid-cols-2 items-start">
+        <div className="space-y-5">
+          {data.currentHomework ? (
+            <HomeworkCard homework={data.currentHomework} lastReview={data.lastHomeworkReview} />
+          ) : null}
+          <LeagueMiniWidget />
+        </div>
         {plan ? <MonthlyPlanCard plan={plan} /> : null}
       </div>
 
@@ -158,6 +162,72 @@ function NearestLessonCard({ lesson }: { lesson: SchoolOfflineLesson }) {
         </span>
       </div>
     </Link>
+  );
+}
+
+
+function LeagueMiniWidget() {
+  const resource = useApiResource(() => weeklyLeagueApi.studentOverview(0), []);
+  const data = resource.data;
+  if (!data) return null;
+  const me = data.currentStudent;
+  const top3 = data.standings.slice(0, 3);
+  const medals = ["🥇", "🥈", "🥉"];
+
+  return (
+    <section className="rounded-[28px] border border-stone-200 bg-[#171813] p-6 text-white shadow-soft">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <span className="grid h-10 w-10 place-items-center rounded-xl bg-gold/15 text-gold">
+            <Trophy size={20} />
+          </span>
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-gold">Недельная лига</p>
+            <h3 className="font-display text-lg">Лидеры недели</h3>
+          </div>
+        </div>
+        <Link
+          href="/league"
+          className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-bold text-white/80 transition hover:bg-white/10 hover:text-white"
+        >
+          Таблица →
+        </Link>
+      </div>
+
+      {top3.length > 0 ? (
+        <div className="mt-4 space-y-2">
+          {top3.map((item, idx) => (
+            <div
+              key={item.displayName}
+              className={`flex items-center justify-between gap-3 rounded-xl px-3 py-2 text-xs font-bold ${
+                item.isCurrentStudent ? "bg-gold/20 text-gold" : "bg-white/[0.04] text-white/80"
+              }`}
+            >
+              <div className="flex items-center gap-2 truncate">
+                <span>{medals[idx]}</span>
+                <span className="truncate">{item.displayName} {item.isCurrentStudent ? "(вы)" : ""}</span>
+              </div>
+              <span className="shrink-0 font-display text-sm text-gold">{item.xp} XP</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-4 text-xs text-white/50">Неделя только началась. Сделай первое действие!</p>
+      )}
+
+      <div className="mt-4 border-t border-white/10 pt-3">
+        <div className="flex items-center justify-between text-xs text-white/60">
+          <span>{me?.position ? `Твоё место: #${me.position}` : "Цель на неделю"}</span>
+          <span className="font-bold text-white">{me?.xp ?? 0} / {me?.goalXp ?? 80} XP</span>
+        </div>
+        <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-gold to-amber-400 transition-all"
+            style={{ width: `${me?.goalProgress ?? 0}%` }}
+          />
+        </div>
+      </div>
+    </section>
   );
 }
 
