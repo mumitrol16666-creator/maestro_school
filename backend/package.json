@@ -17,7 +17,7 @@
     "db:studio": "prisma studio",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
-    "test": "tsx --test --test-concurrency=1 $(find src -name '*.test.ts' -type f | sort)",
+    "test": "tsx --test --test-concurrency=1 src/**/*.test.ts",
     "smoke": "tsx scripts/smoke.ts",
     "smoke:production": "tsx scripts/production-smoke.ts",
     "e2e": "tsx scripts/e2e-flow.ts",
