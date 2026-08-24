@@ -45,6 +45,10 @@ export function UnifiedTaskCard({ task, compact = false }: { task: UnifiedTask; 
   const SourceIcon = source.icon;
   const StatusIcon = status.icon;
   const due = dueLabel(task);
+  const homeworkPercent = task.source === "offline" ? task.result.completionPercent : null;
+  const safeHomeworkPercent = homeworkPercent == null
+    ? null
+    : Math.min(100, Math.max(0, Math.round(homeworkPercent)));
 
   return (
     <article className={`rounded-[24px] border bg-white shadow-soft ${
@@ -57,6 +61,17 @@ export function UnifiedTaskCard({ task, compact = false }: { task: UnifiedTask; 
         <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-black uppercase tracking-wide ${status.className}`}>
           <StatusIcon size={13} /> {status.label}
         </span>
+        {task.source === "offline" ? (
+          <span className={`ml-auto inline-flex items-center rounded-full px-3 py-1.5 text-[10px] font-black uppercase tracking-wide ${
+            safeHomeworkPercent == null
+              ? "bg-stone-100 text-stone-500"
+              : safeHomeworkPercent >= 100
+                ? "bg-emerald-50 text-emerald-800"
+                : "bg-amber-50 text-amber-900"
+          }`}>
+            {safeHomeworkPercent == null ? "Процент не выставлен" : `ДЗ · ${safeHomeworkPercent}%`}
+          </span>
+        ) : null}
       </div>
 
       <h3 className={`font-display mt-4 leading-tight ${compact ? "text-xl" : "text-2xl"}`}>{task.title}</h3>
@@ -78,12 +93,37 @@ export function UnifiedTaskCard({ task, compact = false }: { task: UnifiedTask; 
         ) : null}
       </div>
 
-      {(task.result.completionPercent != null || task.result.scorePercent != null || task.result.reviewComment || task.result.points != null) ? (
+      {(task.source === "offline" || task.result.scorePercent != null || task.result.reviewComment || task.result.points != null) ? (
         <div className="mt-4 rounded-2xl bg-stone-50 p-3 text-xs text-stone-600">
+          {task.source === "offline" ? (
+            safeHomeworkPercent == null ? (
+              <p className="font-semibold text-stone-500">
+                Преподаватель ещё не выставил процент выполнения этого ДЗ.
+              </p>
+            ) : (
+              <div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-bold text-stone-700">Выполнение домашнего задания</span>
+                  <strong className="text-sm text-stone-900">{safeHomeworkPercent}%</strong>
+                </div>
+                <div className="mt-2 h-2 overflow-hidden rounded-full bg-stone-200">
+                  <div
+                    className={`h-full rounded-full transition-all ${
+                      safeHomeworkPercent >= 100
+                        ? "bg-emerald-500"
+                        : safeHomeworkPercent >= 50
+                          ? "bg-amber-500"
+                          : "bg-orange-500"
+                    }`}
+                    style={{ width: `${safeHomeworkPercent}%` }}
+                  />
+                </div>
+              </div>
+            )
+          ) : null}
           <div className="flex flex-wrap gap-x-4 gap-y-1 font-bold text-stone-800">
-            {task.result.completionPercent != null ? <span>Выполнено: {task.result.completionPercent}%</span> : null}
             {task.result.scorePercent != null ? <span>Результат теста: {task.result.scorePercent}%</span> : null}
-            {task.result.points != null ? <span className="inline-flex items-center gap-1"><Star size={13} className="text-gold" /> {task.result.points} баллов</span> : null}
+            {task.result.points != null ? <span className={`inline-flex items-center gap-1 ${task.source === "offline" ? "mt-2" : ""}`}><Star size={13} className="text-gold" /> {task.result.points} баллов</span> : null}
           </div>
           {task.result.reviewComment ? <p className="mt-1 leading-5">{task.result.reviewComment}</p> : null}
         </div>
