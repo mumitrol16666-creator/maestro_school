@@ -20,6 +20,7 @@ import type {
   TrialBookingResponse,
 } from "@/types/api";
 import type { StudentOfflineSummary } from "@/types/school-offline";
+import type { UnifiedTaskFilters, UnifiedTasksData, UnifiedTasksMeta } from "@/types/unified-tasks";
 import type {
   PreparedTestAdminPreview,
   PreparedTestAttemptResponse,
@@ -193,6 +194,15 @@ export const api = {
     }>(`/lessons/${lessonId}/signup`, { method: "POST" }),
   dashboard: () => apiRequest<ApiDashboard>("/students/me/dashboard"),
   studentHome: () => apiRequest<ApiStudentHome>("/students/me/home"),
+  studentTasks: (filters: UnifiedTaskFilters = {}) => {
+    const query = new URLSearchParams();
+    if (filters.scope) query.set("scope", filters.scope);
+    if (filters.source) query.set("source", filters.source);
+    if (filters.status) query.set("status", filters.status);
+    if (filters.limit) query.set("limit", String(filters.limit));
+    const suffix = query.toString();
+    return apiRequestEnvelope<UnifiedTasksData, UnifiedTasksMeta>(`/students/me/tasks${suffix ? `?${suffix}` : ""}`);
+  },
   achievements: () =>
     apiRequestEnvelope<StudentAchievementItem[], StudentAchievementsMeta>("/students/me/achievements"),
   progress: (courseId?: string) =>

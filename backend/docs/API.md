@@ -19,6 +19,9 @@
 
 ### Уроки в школе
 
+- `GET /students/me/tasks` — единая очередь курсовых, офлайн- и онлайн-ДЗ;
+  поддерживает `scope`, `source`, `status`, `limit`, возвращает общие counts и
+  partial-source metadata без раскрытия чужого student id;
 - `GET /students/me/home` — динамическая главная: ближайшие занятия, актуальное
   ДЗ, последняя проверка, опубликованные планы месяца и курс;
 - `GET /students/me/monthly-plans?month=YYYY-MM` — опубликованные ученику

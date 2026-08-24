@@ -9,6 +9,7 @@ import {
   CircleDot,
   Coins,
   MapPin,
+  ListTodo,
   School,
   Sparkles,
   Star,
@@ -19,6 +20,7 @@ import Link from "next/link";
 import { useAuth } from "@/components/auth-provider";
 import { ErrorState, LoadingState } from "@/components/data-states";
 import { ProgressBar } from "@/components/progress-bar";
+import { UnifiedTaskCard } from "@/components/unified-task-card";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { api } from "@/lib/api-client";
 import { weeklyLeagueApi } from "@/lib/weekly-league-api";
@@ -57,6 +59,7 @@ function homeworkStatus(homework: StudentHomeHomework) {
 export default function DashboardPage() {
   const { user } = useAuth();
   const resource = useApiResource(() => api.studentHome(), []);
+  const taskResource = useApiResource(() => api.studentTasks({ scope: "active", limit: 3 }), []);
   if (resource.loading) return <LoadingState label="Собираем вашу учебную главную" />;
   if (resource.error || !resource.data) {
     return <ErrorState message={resource.error ?? "Не удалось загрузить главную"} retry={resource.reload} />;
@@ -99,7 +102,12 @@ export default function DashboardPage() {
 
       <div className="mt-5 grid gap-5 lg:grid-cols-2 items-start">
         <div className="space-y-5">
-          {data.currentHomework ? (
+          {taskResource.data ? (
+            <DashboardTasks
+              tasks={taskResource.data.data.items.filter((task) => task.actionRequired)}
+              actionCount={taskResource.data.data.counts.actionRequired}
+            />
+          ) : data.currentHomework ? (
             <HomeworkCard homework={data.currentHomework} lastReview={data.lastHomeworkReview} />
           ) : null}
           <LeagueMiniWidget />
@@ -141,6 +149,41 @@ export default function DashboardPage() {
         </section>
       ) : null}
     </div>
+  );
+}
+
+function DashboardTasks({
+  tasks,
+  actionCount,
+}: {
+  tasks: Awaited<ReturnType<typeof api.studentTasks>>["data"]["items"];
+  actionCount: number;
+}) {
+  if (actionCount === 0) {
+    return (
+      <Link href="/tasks" className="flex items-center justify-between gap-4 rounded-[24px] border border-emerald-100 bg-emerald-50/70 p-5 text-emerald-950 shadow-soft">
+        <span>
+          <span className="block text-xs font-black uppercase tracking-[0.18em] text-emerald-700">Задания</span>
+          <span className="font-display mt-1 block text-2xl">Сейчас всё сделано</span>
+        </span>
+        <CheckCircle2 className="shrink-0 text-emerald-600" />
+      </Link>
+    );
+  }
+
+  return (
+    <section>
+      <div className="mb-3 flex items-end justify-between gap-3">
+        <div>
+          <p className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-gold"><ListTodo size={16} /> Ближайшие задания</p>
+          <h2 className="font-display mt-1 text-2xl">Нужно сделать · {actionCount}</h2>
+        </div>
+        <Link href="/tasks" className="text-xs font-black text-stone-500">Все задания →</Link>
+      </div>
+      <div className="space-y-3">
+        {tasks.slice(0, 3).map((task) => <UnifiedTaskCard key={task.id} task={task} compact />)}
+      </div>
+    </section>
   );
 }
 

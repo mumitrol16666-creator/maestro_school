@@ -1,12 +1,14 @@
 "use client";
 
-import { BookMarked, CircleUserRound, ClipboardCheck, Gift, House, Megaphone, Menu, MessagesSquare, MonitorPlay, School, Trophy, X } from "lucide-react";
+import { BookMarked, CircleUserRound, ClipboardCheck, Gift, House, ListTodo, Megaphone, Menu, MessagesSquare, MonitorPlay, School, Trophy, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { useStudentSchoolAlerts } from "@/hooks/use-student-school-alerts";
 import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
 import { useMessageMailboxStatus } from "@/hooks/use-message-mailbox-status";
+import { useApiResource } from "@/hooks/use-api-resource";
+import { api } from "@/lib/api-client";
 import { isStaffRole, isStudentRole, roleLabel, settingsPathForRole } from "@/lib/role-labels";
 import { useAuth } from "./auth-provider";
 import { AdminPendingHomeworkBadge } from "./admin-pending-homework-badge";
@@ -18,6 +20,7 @@ import { UserMenu } from "./user-menu";
 
 const navigation = [
   { href: "/dashboard", label: "Главная", icon: House },
+  { href: "/tasks", label: "Задания", icon: ListTodo, studentOnly: true },
   { href: "/courses", label: "Курсы", icon: BookMarked },
   { href: "/league", label: "Недельная лига", icon: Trophy, studentOnly: true },
   { href: "/school-lessons", label: "Уроки в школе", icon: School, studentOnly: true },
@@ -31,8 +34,8 @@ const navigation = [
 
 const studentMobileNavigation = [
   { href: "/dashboard", label: "Главная", icon: House },
+  { href: "/tasks", label: "Задания", icon: ListTodo },
   { href: "/courses", label: "Курсы", icon: BookMarked },
-  { href: "/tests", label: "Тесты", icon: ClipboardCheck },
   { href: "/school-lessons", label: "Школа", icon: School },
   { href: "/rewards", label: "Награды", icon: Gift },
 ];
@@ -49,6 +52,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { count: onlineUnread } = useUnreadNotifications(60_000, "online_lesson_scheduled");
   const { count: unreadMessages, hasAccess: hasMessageAccess } = useMessageMailboxStatus(student);
   const { counts: schoolAlerts } = useStudentSchoolAlerts(student ? user?.id : undefined);
+  const taskSummary = useApiResource(
+    () => student ? api.studentTasks({ scope: "active", limit: 1 }) : Promise.resolve(null),
+    [student, user?.id],
+  );
+  const taskActionCount = taskSummary.data?.data.counts.actionRequired ?? 0;
   const mobileNavigation = studentMobileNavigation;
 
   const sidebar = (
@@ -97,6 +105,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               ) : null}
               {href === "/school-lessons" && schoolAlerts.totalUnread > 0 ? (
                 <AdminPendingHomeworkBadge count={schoolAlerts.totalUnread} />
+              ) : null}
+              {href === "/tasks" && taskActionCount > 0 ? (
+                <AdminPendingHomeworkBadge count={taskActionCount} />
               ) : null}
             </Link>
           );
@@ -159,6 +170,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             const active = pathname.startsWith(href);
             const badge = href === "/online-lessons"
               ? onlineUnread
+              : href === "/tasks"
+                ? taskActionCount
               : href === "/messages"
                 ? unreadMessages
               : href === "/school-lessons"

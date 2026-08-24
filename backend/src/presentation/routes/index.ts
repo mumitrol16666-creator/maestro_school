@@ -24,6 +24,7 @@ import { preparedTestsRoutes } from "./prepared-tests.routes.js";
 import { rewardsRoutes } from "./rewards.routes.js";
 import { weeklyLeagueRoutes } from "./weekly-league.routes.js";
 import { familyRoutes } from "./family.routes.js";
+import { studentTasksRoutes } from "./student-tasks.routes.js";
 
 export async function registerRoutes(app: FastifyInstance) {
   await app.register(async (api) => {
@@ -51,6 +52,7 @@ export async function registerRoutes(app: FastifyInstance) {
     await api.register(rewardsRoutes);
     await api.register(weeklyLeagueRoutes);
     await api.register(familyRoutes);
+    await api.register(studentTasksRoutes);
     await api.register(publicTrialRoutes);
   }, { prefix: "/api/v1" });
 }

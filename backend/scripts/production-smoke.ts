@@ -50,6 +50,14 @@ async function main() {
     );
   }
 
+  const tasksPage = await fetchText(WEB_BASE_URL, "/tasks");
+  assert(tasksPage.includes("maestro-release"), "tasks page did not return the application shell");
+
+  const protectedTasks = await fetch(`${API_BASE_URL}/api/v1/students/me/tasks`, {
+    headers: { Accept: "application/json" },
+  });
+  assert(protectedTasks.status === 401, `tasks endpoint must require authentication, got ${protectedTasks.status}`);
+
   console.log(`Production smoke passed for release ${health.releaseSha}.`);
 }
 

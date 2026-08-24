@@ -478,13 +478,12 @@ function MonthlyPlanProgress({
 
 /* ─── homework folder ───────────────────────────────────────────────── */
 
-function HomeworkFolder({ lessons }: { lessons: SchoolOfflineLesson[] }) {
+function HomeworkFolder({ lessons, requestedLessonId }: { lessons: SchoolOfflineLesson[]; requestedLessonId?: string | null }) {
   const withHomework = lessons
     .filter((lesson) => lesson.homework)
     .sort((left, right) => (
       `${right.date}-${right.startTime}`.localeCompare(`${left.date}-${left.startTime}`)
-    ))
-    .slice(0, 10);
+    ));
 
   if (withHomework.length === 0) {
     return (
@@ -498,7 +497,11 @@ function HomeworkFolder({ lessons }: { lessons: SchoolOfflineLesson[] }) {
   return (
     <div className="space-y-4">
       {withHomework.map((lesson) => (
-        <HomeworkCard key={lesson.crmClassId} lesson={lesson} />
+        <HomeworkCard
+          key={lesson.crmClassId}
+          lesson={lesson}
+          defaultOpen={lesson.crmClassId === requestedLessonId}
+        />
       ))}
     </div>
   );
@@ -591,14 +594,15 @@ function HomeworkPoints({ lesson }: { lesson: SchoolOfflineLesson }) {
   );
 }
 
-function HomeworkCard({ lesson }: { lesson: SchoolOfflineLesson }) {
-  const [open, setOpen] = useState(false);
+function HomeworkCard({ lesson, defaultOpen = false }: { lesson: SchoolOfflineLesson; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
   const resultStyle = lesson.homeworkResult
     ? homeworkResultStyles[lesson.homeworkResult.status]
     : null;
 
   return (
     <article
+      id={`homework-${lesson.crmClassId}`}
       className="rounded-[24px] border border-amber-100 bg-white shadow-soft cursor-pointer transition-all hover:border-amber-200"
       onClick={() => setOpen(!open)}
     >
@@ -764,6 +768,7 @@ export default function SchoolLessonsPage() {
   const { user } = useAuth();
   const resource = useApiResource(() => api.studentOfflineSummary(), []);
   const requestedTab = params.get("tab");
+  const requestedLessonId = params.get("lesson");
   const initialTab = tabs.some((item) => item.key === requestedTab) ? requestedTab as Tab : "overview";
   const [activeTab, setActiveTab] = useState<Tab>(initialTab);
   const [reportMonth, setReportMonth] = useState(() => new Date().toISOString().slice(0, 7));
@@ -781,6 +786,17 @@ export default function SchoolLessonsPage() {
   });
 
   const lessonHistory = resource.data?.lessonHistory ?? [];
+  const requestedHomeworkExists = requestedLessonId
+    ? lessonHistory.some((lesson) => lesson.crmClassId === requestedLessonId && Boolean(lesson.homework?.trim()))
+    : true;
+
+  useEffect(() => {
+    if (!resource.data || activeTab !== "homework" || !requestedLessonId || !requestedHomeworkExists) return;
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById(`homework-${requestedLessonId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeTab, requestedHomeworkExists, requestedLessonId, resource.data]);
 
   const availableMonths = useMemo(() => {
     const monthsMap = new Map<string, number>();
@@ -1041,7 +1057,12 @@ export default function SchoolLessonsPage() {
             </div>
             <p className="text-sm text-stone-500">Домашки за последние уроки. Нажмите на карточку, чтобы раскрыть задание.</p>
           </div>
-          <HomeworkFolder lessons={lessonHistory} />
+          {!requestedHomeworkExists ? (
+            <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-950">
+              Это задание уже не входит в доступное окно истории. Откройте полный отчёт за нужный месяц.
+            </div>
+          ) : null}
+          <HomeworkFolder lessons={lessonHistory} requestedLessonId={requestedLessonId} />
         </>
       )}
 
