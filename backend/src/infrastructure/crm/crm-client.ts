@@ -198,6 +198,14 @@ export async function fetchClassCard(crmClassId: string) {
 export async function fetchClassStudents(crmClassId: string) {
   return crmGet<{
     crmClassId: string;
+    previousGroupHomework?: {
+      crmClassId: string;
+      date: string;
+      title: string;
+      topic?: string | null;
+      homework: string;
+      nextLessonFocus?: string | null;
+    } | null;
     students: Array<{
       crmStudentId: string;
       appUserId?: string | null;
@@ -218,6 +226,7 @@ export async function fetchClassStudents(crmClassId: string) {
         attendanceStatus: string;
         teacherNote?: string | null;
         homeworkReview?: {
+          sourceCrmClassId?: string | null;
           status: "not_checked" | "completed" | "partial" | "not_completed" | "not_assigned";
           completionPercent?: number | null;
           difficulties?: string | null;
@@ -225,6 +234,7 @@ export async function fetchClassStudents(crmClassId: string) {
         } | null;
       }>;
       homeworkReview?: {
+        sourceCrmClassId?: string | null;
         status: "not_checked" | "completed" | "partial" | "not_completed" | "not_assigned";
         completionPercent?: number | null;
         difficulties?: string | null;
@@ -356,6 +366,7 @@ export async function postTeacherAttendance(
     attendanceStatus: string;
     teacherNote?: string;
     homeworkReview?: {
+      sourceCrmClassId?: string | null;
       status: "not_checked" | "completed" | "partial" | "not_completed" | "not_assigned";
       completionPercent?: number | null;
       difficulties?: string | null;
@@ -446,6 +457,13 @@ export async function postAdminAttendance(
     attended?: boolean;
     attendanceStatus: string;
     teacherNote?: string;
+    homeworkReview?: {
+      sourceCrmClassId?: string | null;
+      status: "not_checked" | "completed" | "partial" | "not_completed" | "not_assigned";
+      completionPercent?: number | null;
+      difficulties?: string | null;
+      notCompletedReason?: string | null;
+    };
   },
 ) {
   return crmPost<Record<string, unknown>>(

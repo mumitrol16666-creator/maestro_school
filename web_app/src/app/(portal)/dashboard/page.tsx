@@ -2,19 +2,20 @@
 
 import {
   ArrowRight,
+  Award,
   BookOpenCheck,
   CalendarDays,
   CheckCircle2,
   ChevronRight,
   CircleDot,
   Coins,
-  MapPin,
   ListTodo,
+  MonitorPlay,
   School,
   Sparkles,
   Star,
+  Target,
   Trophy,
-  UserRound,
 } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/components/auth-provider";
@@ -23,14 +24,15 @@ import { ProgressBar } from "@/components/progress-bar";
 import { UnifiedTaskCard } from "@/components/unified-task-card";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { api } from "@/lib/api-client";
+import { onlineLessonsApi } from "@/lib/online-lessons-api";
+import { selectStudentHomeHero, type StudentHomeHero } from "@/lib/student-home-priority";
 import { weeklyLeagueApi } from "@/lib/weekly-league-api";
-import { currentAqtobeMonth } from "@/lib/aqtobe-month";
 import type { SchoolOfflineLesson } from "@/types/school-offline";
-import type { StudentHomeHomework, StudentHomeMonthlyPlan } from "@/types/api";
+import type { StudentHomeHomework, StudentHomeMonthlyPlan, StudentMonthlyPlansResponse } from "@/types/api";
 
 const monthNames = [
-  "января", "февраля", "марта", "апреля", "мая", "июня",
-  "июля", "августа", "сентября", "октября", "ноября", "декабря",
+  "январь", "февраль", "март", "апрель", "май", "июнь",
+  "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь",
 ];
 
 function formatLessonDate(value: string) {
@@ -59,8 +61,13 @@ function homeworkStatus(homework: StudentHomeHomework) {
 export default function DashboardPage() {
   const { user } = useAuth();
   const resource = useApiResource(() => api.studentHome(), []);
-  const taskResource = useApiResource(() => api.studentTasks({ scope: "active", limit: 3 }), []);
-  if (resource.loading) return <LoadingState label="Собираем вашу учебную главную" />;
+  const taskResource = useApiResource(() => api.studentTasks({ scope: "active", limit: 4 }), []);
+  const planResource = useApiResource(() => api.studentMonthlyPlans(), []);
+  const onlineLessonResource = useApiResource(() => onlineLessonsApi.myRequests(), []);
+  const achievementsResource = useApiResource(() => api.achievements(), []);
+  if (resource.loading || taskResource.loading || planResource.loading || onlineLessonResource.loading) {
+    return <LoadingState label="Собираем вашу учебную главную" />;
+  }
   if (resource.error || !resource.data) {
     return <ErrorState message={resource.error ?? "Не удалось загрузить главную"} retry={resource.reload} />;
   }
@@ -68,9 +75,31 @@ export default function DashboardPage() {
   const data = resource.data;
   const school = data.school;
   const upcoming = school?.upcomingLessons ?? [];
-  const nearestLesson = upcoming[0] ?? null;
-  const plan = data.monthlyPlans[0] ?? null;
-  const hasLearningData = Boolean(nearestLesson || data.currentHomework || plan || data.dashboard.currentCourse);
+  const plans = planResource.data?.plans ?? data.monthlyPlans;
+  const planProgress = planResource.data?.aggregateProgress ?? aggregatePlanProgress(plans);
+  const actionTasks = taskResource.data?.data.items.filter((task) => task.actionRequired) ?? [];
+  const onlineLessons = onlineLessonResource.data ?? [];
+  const hero = selectStudentHomeHero({
+    tasks: actionTasks,
+    schoolLessons: upcoming,
+    onlineLessons,
+    plans,
+    dashboard: data.dashboard,
+  });
+  const visibleTasks = hero?.kind === "task"
+    ? actionTasks.filter((task) => task.id !== hero.id).slice(0, 3)
+    : actionTasks.slice(0, 3);
+  const visibleUpcoming = upcoming
+    .filter((lesson) => hero?.kind !== "school_lesson" || lesson.crmClassId !== hero.id)
+    .slice(0, 3);
+  const earnedAchievements = achievementsResource.data?.meta?.earnedCount;
+  const hasLearningData = Boolean(
+    hero
+    || data.currentHomework
+    || plans.length
+    || data.dashboard.currentCourse
+    || actionTasks.length,
+  );
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -82,42 +111,43 @@ export default function DashboardPage() {
           </h1>
           <p className="mt-2 text-sm text-stone-500">Здесь только то, что важно сейчас.</p>
         </div>
-        <div className="flex flex-wrap gap-2 sm:justify-end">
-          <span className="inline-flex items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-2 text-xs font-bold text-stone-700">
-            <Trophy size={15} className="text-gold" />
-            {data.dashboard.rank.current.title}
-          </span>
-          <span className="inline-flex items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-2 text-xs font-bold text-stone-700">
-            <Star size={15} className="text-gold" fill="currentColor" />
-            {data.dashboard.points.toLocaleString("ru-RU")} баллов
-          </span>
-          <span className="inline-flex items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-2 text-xs font-bold text-stone-700">
-            <Coins size={15} className="text-amber-600" />
-            {(user?.coins ?? 0).toLocaleString("ru-RU")} Coins
-          </span>
+        <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:grid-cols-3">
+          <MetricChip icon={Star} value={data.dashboard.points.toLocaleString("ru-RU")} label="баллов" />
+          <MetricChip icon={Coins} value={(user?.coins ?? 0).toLocaleString("ru-RU")} label="Coins" />
+          {earnedAchievements != null ? (
+            <MetricChip icon={Award} value={earnedAchievements.toLocaleString("ru-RU")} label="достижений" />
+          ) : null}
         </div>
       </header>
 
-      {nearestLesson ? <NearestLessonCard lesson={nearestLesson} /> : null}
+      {hero ? <NowHero hero={hero} /> : null}
 
-      <div className="mt-5 grid gap-5 lg:grid-cols-2 items-start">
-        <div className="space-y-5">
-          {taskResource.data ? (
-            <DashboardTasks
-              tasks={taskResource.data.data.items.filter((task) => task.actionRequired)}
-              actionCount={taskResource.data.data.counts.actionRequired}
+      {(plans.length || taskResource.data || data.currentHomework) ? (
+        <div className="mt-5 grid items-start gap-5 lg:grid-cols-2">
+          {plans.length ? (
+            <MonthlyPlanCard
+              plans={plans}
+              aggregateProgress={planProgress}
+              hideCurrentFocus={hero?.kind === "plan"}
             />
-          ) : data.currentHomework ? (
-            <HomeworkCard homework={data.currentHomework} lastReview={data.lastHomeworkReview} />
           ) : null}
-          <LeagueMiniWidget />
+          <div className="space-y-5">
+            {taskResource.data ? (
+              <DashboardTasks
+                tasks={visibleTasks}
+                actionCount={taskResource.data.data.counts.actionRequired}
+                hiddenInHero={hero?.kind === "task" ? 1 : 0}
+              />
+            ) : data.currentHomework ? (
+              <HomeworkCard homework={data.currentHomework} lastReview={data.lastHomeworkReview} />
+            ) : null}
+          </div>
         </div>
-        {plan ? <MonthlyPlanCard plan={plan} /> : null}
-      </div>
+      ) : null}
 
-      {upcoming.length > 1 ? <UpcomingLessons lessons={upcoming.slice(1, 4)} /> : null}
+      {visibleUpcoming.length ? <UpcomingLessons lessons={visibleUpcoming} /> : null}
 
-      {data.dashboard.currentCourse ? (
+      {data.dashboard.currentCourse && hero?.kind !== "course" ? (
         <section className="mt-6 rounded-[26px] border border-stone-200 bg-white p-5 shadow-soft sm:p-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -139,6 +169,10 @@ export default function DashboardPage() {
         </section>
       ) : null}
 
+      <div className="mt-6 max-w-xl">
+        <LeagueMiniWidget />
+      </div>
+
       {!hasLearningData ? (
         <section className="mt-8 rounded-[28px] border border-dashed border-stone-300 bg-white p-8 text-center">
           <Sparkles className="mx-auto text-gold" />
@@ -155,9 +189,11 @@ export default function DashboardPage() {
 function DashboardTasks({
   tasks,
   actionCount,
+  hiddenInHero,
 }: {
   tasks: Awaited<ReturnType<typeof api.studentTasks>>["data"]["items"];
   actionCount: number;
+  hiddenInHero: number;
 }) {
   if (actionCount === 0) {
     return (
@@ -170,13 +206,18 @@ function DashboardTasks({
       </Link>
     );
   }
+  if (!tasks.length) return null;
+
+  const visibleActionCount = Math.max(0, actionCount - hiddenInHero);
 
   return (
     <section>
       <div className="mb-3 flex items-end justify-between gap-3">
         <div>
           <p className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-gold"><ListTodo size={16} /> Ближайшие задания</p>
-          <h2 className="font-display mt-1 text-2xl">Нужно сделать · {actionCount}</h2>
+          <h2 className="font-display mt-1 text-2xl">
+            {hiddenInHero ? "Ещё нужно сделать" : "Нужно сделать"} · {visibleActionCount}
+          </h2>
         </div>
         <Link href="/tasks" className="text-xs font-black text-stone-500">Все задания →</Link>
       </div>
@@ -187,24 +228,73 @@ function DashboardTasks({
   );
 }
 
-function NearestLessonCard({ lesson }: { lesson: SchoolOfflineLesson }) {
+function MetricChip({
+  icon: Icon,
+  value,
+  label,
+}: {
+  icon: typeof Star;
+  value: string | number;
+  label: string;
+}) {
   return (
-    <Link href="/school-lessons?tab=schedule" className="group block overflow-hidden rounded-[30px] bg-ink p-6 text-white shadow-soft sm:p-8">
-      <div className="flex flex-col gap-8 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-xs font-black uppercase tracking-[0.2em] text-gold">{formatLessonDate(lesson.date)} · урок в школе</p>
-          <h2 className="font-display mt-3 text-4xl leading-tight sm:text-5xl">{lesson.title}</h2>
-          <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-sm text-white/70">
-            <span className="inline-flex items-center gap-2"><CalendarDays size={16} /> {lesson.startTime}–{lesson.endTime}</span>
-            {lesson.teacherName ? <span className="inline-flex items-center gap-2"><UserRound size={16} /> {lesson.teacherName}</span> : null}
-            {lesson.roomName ? <span className="inline-flex items-center gap-2"><MapPin size={16} /> {lesson.roomName}</span> : null}
+    <div className="flex min-h-14 min-w-0 items-center gap-2.5 rounded-2xl border border-stone-200 bg-white px-3 py-2 shadow-sm">
+      <Icon size={17} className="shrink-0 text-gold" />
+      <span className="min-w-0 text-xs text-stone-500">
+        <strong className="mr-1 text-base text-ink">{value}</strong>
+        <span className="break-words">{label}</span>
+      </span>
+    </div>
+  );
+}
+
+function NowHero({ hero }: { hero: StudentHomeHero }) {
+  const Icon = hero.kind === "school_lesson"
+    ? School
+    : hero.kind === "online_lesson"
+      ? MonitorPlay
+      : hero.kind === "plan"
+        ? Target
+        : BookOpenCheck;
+  const badgeClass = hero.badge?.tone === "danger"
+    ? "bg-red-500/20 text-red-100"
+    : hero.badge?.tone === "success"
+      ? "bg-emerald-400/20 text-emerald-100"
+      : "bg-gold/20 text-amber-100";
+
+  return (
+    <section className="overflow-hidden rounded-[28px] border border-white/10 bg-[#171813] p-5 text-white shadow-soft sm:p-7">
+      <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0 max-w-3xl">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="grid h-10 w-10 place-items-center rounded-xl bg-white/10 text-gold">
+              <Icon size={20} />
+            </span>
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-gold">{hero.eyebrow}</p>
           </div>
+          <h2 className="font-display mt-5 break-words text-3xl leading-tight sm:text-4xl">{hero.title}</h2>
+          {hero.badge ? (
+            <span className={`mt-4 inline-flex min-h-8 items-center rounded-lg px-3 text-xs font-black ${badgeClass}`}>
+              {hero.badge.label}
+            </span>
+          ) : null}
+          {hero.subtitle ? <p className="mt-4 break-words text-sm leading-6 text-white/70">{hero.subtitle}</p> : null}
+          {hero.detail ? (
+            <p className="mt-2 inline-flex items-start gap-2 text-sm leading-6 text-white/60">
+              <CalendarDays size={16} className="mt-0.5 shrink-0 text-gold" /> {hero.detail}
+            </p>
+          ) : null}
         </div>
-        <span className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-gold px-5 text-sm font-black text-ink transition group-hover:translate-x-1">
-          Детали урока <ChevronRight size={18} />
-        </span>
+        <Link
+          href={hero.href}
+          target={hero.external ? "_blank" : undefined}
+          rel={hero.external ? "noreferrer" : undefined}
+          className="inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-xl bg-gold px-5 text-sm font-black text-ink transition hover:bg-amber-400"
+        >
+          {hero.actionLabel} <ArrowRight size={17} />
+        </Link>
       </div>
-    </Link>
+    </section>
   );
 }
 
@@ -310,9 +400,30 @@ function ReviewLine({ homework, previous = false }: { homework: StudentHomeHomew
   );
 }
 
-function MonthlyPlanCard({ plan }: { plan: StudentHomeMonthlyPlan }) {
-  const currentMonth = currentAqtobeMonth();
-  const isFuture = plan.month > currentMonth;
+function aggregatePlanProgress(plans: StudentHomeMonthlyPlan[]): StudentMonthlyPlansResponse["aggregateProgress"] {
+  const completed = plans.reduce((total, plan) => total + plan.progress.completed, 0);
+  const itemTotal = plans.reduce((total, plan) => total + plan.progress.total, 0);
+  return {
+    completed,
+    total: itemTotal,
+    percent: itemTotal ? Math.round((completed / itemTotal) * 100) : 0,
+  };
+}
+
+function MonthlyPlanCard({
+  plans,
+  aggregateProgress,
+  hideCurrentFocus,
+}: {
+  plans: StudentHomeMonthlyPlan[];
+  aggregateProgress: StudentMonthlyPlansResponse["aggregateProgress"];
+  hideCurrentFocus: boolean;
+}) {
+  const first = plans[0];
+  const allItems = plans.flatMap((plan) => plan.items);
+  const nextItem = allItems.find((item) => item.status === "in_progress")
+    ?? allItems.find((item) => item.status === "planned")
+    ?? null;
 
   return (
     <section className="rounded-[28px] border border-stone-200 bg-white p-6 shadow-soft sm:p-7">
@@ -320,87 +431,37 @@ function MonthlyPlanCard({ plan }: { plan: StudentHomeMonthlyPlan }) {
         <span className="grid h-11 w-11 place-items-center rounded-2xl bg-amber-50 text-gold">
           <CircleDot size={22} />
         </span>
-        <span className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-black ${
-          isFuture ? "bg-violet-50 text-violet-900 border border-violet-200" : "bg-amber-50 text-amber-950"
-        }`}>
-          <Sparkles size={13} className={isFuture ? "text-violet-600" : "text-gold"} />
-          {isFuture ? "План на следующий месяц" : `${plan.progress.percent}% освоено`}
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3.5 py-1.5 text-xs font-black text-amber-950">
+          <Sparkles size={13} className="text-gold" />
+          {aggregateProgress.percent}% выполнено
         </span>
       </div>
 
       <p className="mt-5 text-xs font-black uppercase tracking-[0.2em] text-gold">
-        Учебный план · {monthTitle(plan.month)} {isFuture ? "(Старт скоро)" : ""}
+        План на {monthTitle(first.month)}
       </p>
       <h2 className="font-display mt-2 text-3xl leading-tight text-ink sm:text-4xl">
-        {plan.goal}
+        {plans.length === 1 ? first.goal : `${plans.length} учебных плана`}
       </h2>
-
-      {!isFuture ? (
-        <div className="mt-5">
-          <ProgressBar value={plan.progress.percent} />
-          <div className="mt-2.5 flex items-center justify-between text-xs font-semibold text-stone-500">
-            <span>{plan.progress.completed} из {plan.progress.total} тем освоено</span>
-            {plan.progress.inProgress ? (
-              <span className="text-amber-900 font-bold">{plan.progress.inProgress} в активной работе</span>
-            ) : null}
-          </div>
-        </div>
-      ) : (
-        <p className="mt-3 text-xs font-semibold text-violet-800">
-          Преподаватель заранее подготовил программу на {monthTitle(plan.month).toLowerCase()}. Всего в плане {plan.progress.total} тем.
+      <div className="mt-5">
+        <ProgressBar value={aggregateProgress.percent} />
+        <p className="mt-2.5 text-xs font-semibold text-stone-500">
+          {aggregateProgress.completed} из {aggregateProgress.total} тем выполнено
         </p>
-      )}
+      </div>
 
-      {plan.items.length ? (
-        <div className="mt-5 space-y-2">
-          <p className="text-[11px] font-black uppercase tracking-wider text-stone-400">Темы и произведения:</p>
-          <div className="grid gap-2">
-            {plan.items.map((item) => (
-              <div
-                key={item.id}
-                className={`flex items-center justify-between gap-3 rounded-2xl px-3.5 py-2.5 text-xs font-bold transition ${
-                  item.status === "completed"
-                    ? "border border-emerald-100 bg-emerald-50/70 text-emerald-900"
-                    : item.status === "in_progress"
-                    ? "border border-amber-200 bg-amber-50/70 text-amber-950"
-                    : "border border-stone-100 bg-stone-50 text-stone-600"
-                }`}
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[10px] font-black ${
-                    item.status === "completed"
-                      ? "bg-emerald-600 text-white"
-                      : item.status === "in_progress"
-                      ? "bg-amber-500 text-white"
-                      : "bg-stone-200 text-stone-600"
-                  }`}>
-                    {item.status === "completed" ? "✓" : item.status === "in_progress" ? "⏳" : "·"}
-                  </span>
-                  <span className="truncate">{item.title}</span>
-                </div>
-                <span className="shrink-0 text-[10px] font-extrabold uppercase">
-                  {item.status === "completed"
-                    ? "Освоено"
-                    : item.status === "in_progress"
-                    ? "В работе"
-                    : "Запланировано"}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
-
-      {plan.checkpoint ? (
-        <div className="mt-5 rounded-2xl border border-amber-100 bg-amber-50/50 p-4">
-          <p className="text-[10px] font-black uppercase tracking-wider text-amber-900">
-            🏁 Финал месяца (к чему идём):
-          </p>
-          <p className="mt-1 text-xs font-semibold leading-5 text-amber-950">
-            {plan.checkpoint}
+      {!hideCurrentFocus ? (
+        <div className="mt-5 border-y border-stone-100 py-4">
+          <p className="text-[11px] font-black uppercase tracking-wider text-stone-400">Сейчас в фокусе</p>
+          <p className="mt-2 text-sm font-bold leading-6 text-stone-800">
+            {nextItem?.title ?? "Все пункты текущего плана выполнены"}
           </p>
         </div>
       ) : null}
+
+      <Link href="/monthly-plan" className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl bg-ink px-4 text-sm font-bold text-white">
+        Открыть {plans.length === 1 ? "план" : "планы"} <ArrowRight size={16} />
+      </Link>
     </section>
   );
 }

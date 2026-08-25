@@ -111,6 +111,7 @@ export type TeacherOfflineAgenda = {
 };
 
 export type OfflineHomeworkReview = {
+  sourceCrmClassId?: string | null;
   status: "not_checked" | "completed" | "partial" | "not_completed" | "not_assigned";
   completionPercent?: number | null;
   difficulties?: string | null;
@@ -175,6 +176,14 @@ export type TeacherOfflineStudent = {
 export type TeacherOfflineClassStudents = {
   crmClassId: string;
   group: { crmGroupId: string; name: string } | null;
+  previousGroupHomework?: {
+    crmClassId: string;
+    date: string;
+    title: string;
+    topic?: string | null;
+    homework: string;
+    nextLessonFocus?: string | null;
+  } | null;
   students: TeacherOfflineStudent[];
 };
 

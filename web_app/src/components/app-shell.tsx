@@ -1,6 +1,6 @@
 "use client";
 
-import { BookMarked, CircleUserRound, ClipboardCheck, Gift, House, ListTodo, Megaphone, Menu, MessagesSquare, MonitorPlay, School, Trophy, X } from "lucide-react";
+import { BookMarked, CalendarRange, CircleUserRound, ClipboardCheck, Gift, House, ListTodo, Megaphone, Menu, MessagesSquare, MonitorPlay, School, Trophy, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
@@ -21,6 +21,7 @@ import { UserMenu } from "./user-menu";
 const navigation = [
   { href: "/dashboard", label: "Главная", icon: House },
   { href: "/tasks", label: "Задания", icon: ListTodo, studentOnly: true },
+  { href: "/monthly-plan", label: "План месяца", icon: CalendarRange, studentOnly: true },
   { href: "/courses", label: "Курсы", icon: BookMarked },
   { href: "/league", label: "Недельная лига", icon: Trophy, studentOnly: true },
   { href: "/school-lessons", label: "Уроки в школе", icon: School, studentOnly: true },
@@ -35,9 +36,9 @@ const navigation = [
 const studentMobileNavigation = [
   { href: "/dashboard", label: "Главная", icon: House },
   { href: "/tasks", label: "Задания", icon: ListTodo },
-  { href: "/courses", label: "Курсы", icon: BookMarked },
+  { href: "/monthly-plan", label: "План", icon: CalendarRange },
   { href: "/school-lessons", label: "Школа", icon: School },
-  { href: "/rewards", label: "Награды", icon: Gift },
+  { href: "/settings", label: "Профиль", icon: CircleUserRound },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -57,6 +58,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     [student, user?.id],
   );
   const taskActionCount = taskSummary.data?.data.counts.actionRequired ?? 0;
+  const schoolNavigationCount = schoolAlerts.reports
+    + schoolAlerts.todayLessons
+    + schoolAlerts.tomorrowLessons;
   const mobileNavigation = studentMobileNavigation;
 
   const sidebar = (
@@ -103,8 +107,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               {href === "/messages" && unreadMessages != null && unreadMessages > 0 ? (
                 <AdminPendingHomeworkBadge count={unreadMessages} />
               ) : null}
-              {href === "/school-lessons" && schoolAlerts.totalUnread > 0 ? (
-                <AdminPendingHomeworkBadge count={schoolAlerts.totalUnread} />
+              {href === "/school-lessons" && schoolNavigationCount > 0 ? (
+                <AdminPendingHomeworkBadge count={schoolNavigationCount} />
               ) : null}
               {href === "/tasks" && taskActionCount > 0 ? (
                 <AdminPendingHomeworkBadge count={taskActionCount} />
@@ -139,9 +143,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="lg:pl-[272px]">
         <header className="sticky top-0 z-30 flex h-[calc(68px+env(safe-area-inset-top,0px))] items-center gap-3 border-b border-stone-200/70 bg-cream/90 px-4 pt-[env(safe-area-inset-top,0px)] backdrop-blur-xl sm:px-8">
           {student ? (
-            <span className="lg:hidden">
+            <div className="flex items-center gap-2 lg:hidden">
               <Brand compact />
-            </span>
+              <button
+                type="button"
+                onClick={() => setOpen(true)}
+                className="grid h-10 w-10 place-items-center rounded-xl border border-stone-200/80 bg-white shadow-sm transition hover:border-gold/30"
+                aria-label="Открыть все разделы"
+                title="Все разделы"
+              >
+                <Menu size={19} />
+              </button>
+            </div>
           ) : (
             <button onClick={() => setOpen(true)} className="grid h-10 w-10 place-items-center rounded-xl border border-stone-200/80 bg-white shadow-sm transition hover:border-gold/30 lg:hidden" aria-label="Открыть меню"><Menu size={20} /></button>
           )}
@@ -163,19 +176,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
       {student ? (
         <nav
-          className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-6 border-t border-stone-200/90 bg-paper/95 px-2 pb-[env(safe-area-inset-bottom,0px)] shadow-[0_-12px_35px_rgba(37,33,25,0.08)] backdrop-blur-xl lg:hidden"
+          className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-stone-200/90 bg-paper/95 px-2 pb-[env(safe-area-inset-bottom,0px)] shadow-[0_-12px_35px_rgba(37,33,25,0.08)] backdrop-blur-xl lg:hidden"
           aria-label="Основная навигация"
         >
           {mobileNavigation.map(({ href, label, icon: Icon }) => {
             const active = pathname.startsWith(href);
-            const badge = href === "/online-lessons"
-              ? onlineUnread
-              : href === "/tasks"
-                ? taskActionCount
-              : href === "/messages"
-                ? unreadMessages
+            const badge = href === "/tasks"
+              ? taskActionCount
               : href === "/school-lessons"
-                ? schoolAlerts.totalUnread
+                ? schoolNavigationCount
                 : 0;
             return (
               <Link
@@ -192,7 +201,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   <Icon size={19} strokeWidth={2.15} />
                   {badge != null && badge > 0 ? (
                     <span className="absolute -right-0.5 -top-0.5 grid min-h-4 min-w-4 place-items-center rounded-full bg-gold px-1 text-[9px] font-black leading-none text-ink">
-                      {badge > 9 ? "9+" : badge}
+                      {badge > 99 ? "99+" : badge}
                     </span>
                   ) : null}
                 </span>
@@ -200,25 +209,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </Link>
             );
           })}
-          <button
-            type="button"
-            onClick={() => setOpen(true)}
-            className={`flex min-w-0 flex-col items-center justify-center gap-1 px-1 py-2 text-[10px] font-bold transition ${
-              open || pathname.startsWith("/board") || pathname.startsWith("/settings")
-                ? "text-ink"
-                : "text-stone-400"
-            }`}
-            aria-label="Открыть остальные разделы"
-          >
-            <span className={`grid h-9 w-11 place-items-center rounded-xl ${
-              open || pathname.startsWith("/board") || pathname.startsWith("/settings")
-                ? "bg-amber-50 text-gold"
-                : ""
-            }`}>
-              <Menu size={19} strokeWidth={2.15} />
-            </span>
-            <span>Ещё</span>
-          </button>
         </nav>
       ) : null}
       {student && user ? (

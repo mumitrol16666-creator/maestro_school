@@ -13,6 +13,7 @@ import {
   CircleSlash2,
   Clock3,
   LoaderCircle,
+  Minus,
   Play,
   RotateCcw,
   Save,
@@ -21,6 +22,7 @@ import {
   Star,
   Target,
   UserX,
+  UsersRound,
   XCircle,
 } from "lucide-react";
 import Link from "next/link";
@@ -41,6 +43,7 @@ import { MediaPicker } from "@/components/media-picker";
 import type { CmsMedia } from "@/types/cms";
 import type {
   OfflineHomeworkReview,
+  TeacherOfflineClassStudents,
   TeacherOfflineStudent,
   TrialLessonReport,
 } from "@/types/teacher-offline";
@@ -202,14 +205,87 @@ type StudentLessonCheckDraft = {
   planTopicUpdates: Array<{ itemId: string; status: "in_progress" | "completed" }>;
 };
 
-function studentLessonCheckDraft(student: TeacherOfflineStudent): StudentLessonCheckDraft {
+type PreviousHomeworkSource = NonNullable<TeacherOfflineClassStudents["previousGroupHomework"]>;
+
+function studentLessonCheckDraft(
+  student: TeacherOfflineStudent,
+  sourceOverride?: PreviousHomeworkSource | null,
+): StudentLessonCheckDraft {
+  const sourceLesson = sourceOverride === undefined ? previousHomeworkLesson(student) : sourceOverride;
+  const review = normalizeHomeworkReview(student.homeworkReview);
+  const isExactGroupSource = sourceOverride === undefined
+    || !sourceLesson
+    || review.sourceCrmClassId === sourceLesson.crmClassId;
   return {
     attendanceStatus: student.attendanceStatus ?? "unmarked",
     teacherNote: student.teacherNote ?? "",
-    homeworkReview: normalizeHomeworkReview(student.homeworkReview),
+    homeworkReview: {
+      ...review,
+      sourceCrmClassId: review.sourceCrmClassId ?? sourceLesson?.crmClassId ?? null,
+      status: sourceLesson
+        ? isExactGroupSource && review.status !== "not_assigned" ? review.status : "not_checked"
+        : "not_assigned",
+    },
     lessonPoints: student.lessonPoints ?? 100,
     monthlyPlanId: student.monthlyPlan?.id ?? student.monthlyPlanId ?? null,
     planTopicUpdates: student.planTopicUpdates ?? [],
+  };
+}
+
+function previousHomeworkLesson(student: TeacherOfflineStudent) {
+  return student.recentLessons?.find((lesson) => Boolean(lesson.homework?.trim())) ?? null;
+}
+
+function previousGroupHomeworkFromRoster(students: TeacherOfflineStudent[]): PreviousHomeworkSource | null {
+  const byClassId = new Map<string, PreviousHomeworkSource>();
+  for (const student of students) {
+    for (const lesson of student.recentLessons ?? []) {
+      const homework = lesson.homework?.trim();
+      if (!homework || byClassId.has(lesson.crmClassId)) continue;
+      byClassId.set(lesson.crmClassId, {
+        crmClassId: lesson.crmClassId,
+        date: lesson.date,
+        title: lesson.title,
+        topic: lesson.topic,
+        homework,
+        nextLessonFocus: lesson.nextLessonFocus,
+      });
+    }
+  }
+  return Array.from(byClassId.values()).sort((left, right) => (
+    new Date(right.date).getTime() - new Date(left.date).getTime()
+  ))[0] ?? null;
+}
+
+function alignDraftWithGroupHomework(
+  draft: StudentLessonCheckDraft,
+  source: PreviousHomeworkSource | null,
+): StudentLessonCheckDraft {
+  const review = normalizeHomeworkReview(draft.homeworkReview);
+  if (!source) {
+    return {
+      ...draft,
+      homeworkReview: {
+        ...review,
+        sourceCrmClassId: null,
+        status: "not_assigned",
+        completionPercent: null,
+        difficulties: "",
+        notCompletedReason: "",
+      },
+    };
+  }
+  const sameSource = review.sourceCrmClassId === source.crmClassId;
+  return {
+    ...draft,
+    homeworkReview: {
+      ...review,
+      sourceCrmClassId: source.crmClassId,
+      status: sameSource && review.status !== "not_assigned" ? review.status : "not_checked",
+      completionPercent: sameSource ? review.completionPercent : null,
+      difficulties: sameSource ? review.difficulties : "",
+      notCompletedReason: sameSource ? review.notCompletedReason : "",
+    },
   };
 }
 
@@ -380,15 +456,31 @@ export default function AdminOfflineLessonDetailPage() {
         || (!lesson?.group && students.length === 1)
       ),
   );
-  const draftFor = (student: TeacherOfflineStudent) =>
-    studentCheckDrafts[student.crmStudentId] ?? studentLessonCheckDraft(student);
+  const isCompactGroupLesson = Boolean(
+    !isTrialLesson
+      && !isIndividualLesson
+      && (lesson?.group || studentsResource.data?.group),
+  );
+  const previousGroupHomework = useMemo(
+    () => isCompactGroupLesson
+      ? studentsResource.data?.previousGroupHomework ?? previousGroupHomeworkFromRoster(students)
+      : null,
+    [isCompactGroupLesson, students, studentsResource.data?.previousGroupHomework],
+  );
+  const draftFor = (student: TeacherOfflineStudent) => {
+    const draft = studentCheckDrafts[student.crmStudentId]
+      ?? studentLessonCheckDraft(student, isCompactGroupLesson ? previousGroupHomework : undefined);
+    return isCompactGroupLesson ? alignDraftWithGroupHomework(draft, previousGroupHomework) : draft;
+  };
   const unmarkedCount = students.filter((student) => draftFor(student).attendanceStatus === "unmarked").length;
-  const homeworkReviewPendingCount = isIndividualLesson
-    ? students.filter((student) =>
-        ["present", "late"].includes(draftFor(student).attendanceStatus)
-          && draftFor(student).homeworkReview.status === "not_checked",
-      ).length
-    : 0;
+  const hasPreviousHomework = isCompactGroupLesson
+    ? Boolean(previousGroupHomework)
+    : students.some((student) => Boolean(previousHomeworkLesson(student)));
+  const homeworkReviewPendingCount = students.filter((student) =>
+    (isCompactGroupLesson ? Boolean(previousGroupHomework) : Boolean(previousHomeworkLesson(student)))
+      && ["present", "late"].includes(draftFor(student).attendanceStatus)
+      && draftFor(student).homeworkReview.status === "not_checked",
+  ).length;
   const allStudentsAbsent = students.length > 0 && students.every((student) => (
     ["excused_absence", "unexcused_absence", "emergency_freeze"].includes(draftFor(student).attendanceStatus)
   ));
@@ -446,11 +538,15 @@ export default function AdminOfflineLessonDetailPage() {
     setStudentCheckDrafts((current) => {
       const next: Record<string, StudentLessonCheckDraft> = {};
       for (const student of roster) {
-        next[student.crmStudentId] = current[student.crmStudentId] ?? studentLessonCheckDraft(student);
+        const draft = current[student.crmStudentId]
+          ?? studentLessonCheckDraft(student, isCompactGroupLesson ? previousGroupHomework : undefined);
+        next[student.crmStudentId] = isCompactGroupLesson
+          ? alignDraftWithGroupHomework(draft, previousGroupHomework)
+          : draft;
       }
       return next;
     });
-  }, [studentsResource.data, trialLeadFallback]);
+  }, [isCompactGroupLesson, previousGroupHomework, studentsResource.data, trialLeadFallback]);
 
   useEffect(() => {
     if (
@@ -493,14 +589,33 @@ export default function AdminOfflineLessonDetailPage() {
         for (const student of students) {
           const storedStudent = saved.studentCheckDrafts?.[student.crmStudentId];
           if (!storedStudent) continue;
-          next[student.crmStudentId] = {
-            ...studentLessonCheckDraft(student),
+          const baseline = studentLessonCheckDraft(
+            student,
+            isCompactGroupLesson ? previousGroupHomework : undefined,
+          );
+          const storedReview = normalizeHomeworkReview(storedStudent.homeworkReview);
+          const restoredSourceClassId = isCompactGroupLesson
+            ? storedReview.sourceCrmClassId ?? null
+            : storedReview.sourceCrmClassId ?? baseline.homeworkReview.sourceCrmClassId ?? null;
+          const restoredDraft: StudentLessonCheckDraft = {
+            ...baseline,
             ...storedStudent,
-            homeworkReview: normalizeHomeworkReview(storedStudent.homeworkReview),
+            homeworkReview: {
+              ...storedReview,
+              sourceCrmClassId: restoredSourceClassId,
+              status: restoredSourceClassId
+                && !storedReview.sourceCrmClassId
+                && storedReview.status === "not_assigned"
+                ? "not_checked"
+                : storedReview.status,
+            },
             planTopicUpdates: Array.isArray(storedStudent.planTopicUpdates)
               ? storedStudent.planTopicUpdates
               : [],
           };
+          next[student.crmStudentId] = isCompactGroupLesson
+            ? alignDraftWithGroupHomework(restoredDraft, previousGroupHomework)
+            : restoredDraft;
         }
         return next;
       });
@@ -526,7 +641,10 @@ export default function AdminOfflineLessonDetailPage() {
       setTrialReport(isTrialLesson ? mergeTrialReport(lesson.trialReport) : mergeTrialReport());
       setNotHeldReason("");
       setStudentCheckDrafts(Object.fromEntries(
-        students.map((student) => [student.crmStudentId, studentLessonCheckDraft(student)]),
+        students.map((student) => [
+          student.crmStudentId,
+          studentLessonCheckDraft(student, isCompactGroupLesson ? previousGroupHomework : undefined),
+        ]),
       ));
       lastSavedDraftForm.current = null;
       setDraftSaveStatus(null);
@@ -539,6 +657,8 @@ export default function AdminOfflineLessonDetailPage() {
     lesson,
     lessonDraftKey,
     isTrialLesson,
+    isCompactGroupLesson,
+    previousGroupHomework,
     students,
     studentsResource.loading,
     user?.id,
@@ -738,19 +858,17 @@ export default function AdminOfflineLessonDetailPage() {
       return "Укажите, как выполнено прошлое домашнее задание.";
     }
 
-    if (isIndividualLesson) {
-      for (const student of students) {
-        const draft = draftFor(student);
-        if (!["present", "late"].includes(draft.attendanceStatus)) continue;
-        if (draft.homeworkReview.status === "partial" && !draft.homeworkReview.difficulties?.trim()) {
-          return `Укажите для ${student.name}, что осталось доделать по домашнему заданию.`;
-        }
-        if (
-          draft.homeworkReview.status === "not_completed"
-          && !draft.homeworkReview.notCompletedReason?.trim()
-        ) {
-          return `Укажите причину невыполненного домашнего задания для ${student.name}.`;
-        }
+    for (const student of students) {
+      const draft = draftFor(student);
+      if (!["present", "late"].includes(draft.attendanceStatus)) continue;
+      if (draft.homeworkReview.status === "partial" && !draft.homeworkReview.difficulties?.trim()) {
+        return `Укажите для ${student.name}, что осталось доделать по домашнему заданию.`;
+      }
+      if (
+        draft.homeworkReview.status === "not_completed"
+        && !draft.homeworkReview.notCompletedReason?.trim()
+      ) {
+        return `Укажите причину невыполненного домашнего задания для ${student.name}.`;
       }
     }
 
@@ -771,7 +889,7 @@ export default function AdminOfflineLessonDetailPage() {
           studentId: student.crmStudentId,
           attendanceStatus: draft.attendanceStatus,
           teacherNote: draft.teacherNote.trim() || undefined,
-          homeworkReview: isIndividualLesson && attended ? draft.homeworkReview : undefined,
+          homeworkReview: !isTrialLesson && attended ? draft.homeworkReview : undefined,
           lessonPoints: attended ? draft.lessonPoints : 0,
           monthlyPlanId: attended ? draft.monthlyPlanId : null,
           planTopicUpdates: attended ? draft.planTopicUpdates : [],
@@ -799,7 +917,7 @@ export default function AdminOfflineLessonDetailPage() {
       const student = students[index];
       const draft = draftFor(student);
       const attended = ["present", "late"].includes(draft.attendanceStatus);
-      const homeworkReview = isIndividualLesson && attended ? draft.homeworkReview : undefined;
+      const homeworkReview = !isTrialLesson && attended ? draft.homeworkReview : undefined;
       const saveAttendance = () => adminOfflineApi.attendance(
             crmClassId,
             student.crmStudentId,
@@ -1038,11 +1156,13 @@ export default function AdminOfflineLessonDetailPage() {
       <div className="mb-7">
         <StudentRoster
           students={students}
+          compactGroup={isCompactGroupLesson}
+          previousGroupHomework={previousGroupHomework}
           canManageAttendance={canManageAttendance}
           canEdit={canEditReport}
-          showHomeworkReview={isIndividualLesson}
+          showHomeworkReview={hasPreviousHomework}
           showLearningResult={!isTrialLesson}
-          drafts={studentCheckDrafts}
+          drafts={Object.fromEntries(students.map((student) => [student.crmStudentId, draftFor(student)]))}
           studentsError={studentsResource.error}
           onRetryStudents={studentsResource.reload}
           onSelectTopic={(selected) => {
@@ -2005,6 +2125,8 @@ function TrialTextarea({
 
 function StudentRoster({
   students,
+  compactGroup,
+  previousGroupHomework,
   canManageAttendance,
   canEdit,
   showHomeworkReview,
@@ -2016,6 +2138,8 @@ function StudentRoster({
   onDraftChange,
 }: {
   students: TeacherOfflineStudent[];
+  compactGroup: boolean;
+  previousGroupHomework: PreviousHomeworkSource | null;
   canManageAttendance: boolean;
   canEdit: boolean;
   showHomeworkReview: boolean;
@@ -2030,16 +2154,22 @@ function StudentRoster({
     <div className="rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft">
       <div className="flex items-start gap-3">
         <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-emerald-50 text-emerald-700">
-          <CheckCircle2 size={20} />
+          {compactGroup ? <UsersRound size={20} /> : <CheckCircle2 size={20} />}
         </span>
         <div className="min-w-0">
-          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-700">По каждому ученику</p>
-          <h2 className="font-display mt-1 text-3xl">Посещаемость и результат</h2>
+          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-700">
+            {compactGroup ? "Групповой урок" : "По каждому ученику"}
+          </p>
+          <h2 className="font-display mt-1 text-3xl">
+            {compactGroup ? "Группа и проверка ДЗ" : "Посещаемость и результат"}
+          </h2>
         </div>
       </div>
       <p className="mt-2 text-sm text-stone-500">
         {canManageAttendance
-          ? "Отметьте посещаемость, проверку прошлого ДЗ и освоенные темы из плана месяца."
+          ? compactGroup
+            ? "Общее задание проверяется по каждому присутствующему ученику."
+            : "Отметьте посещаемость, проверку прошлого ДЗ и освоенные темы из плана месяца."
           : "Отметки доступны во время урока и сохраняются в его истории."}
       </p>
 
@@ -2054,6 +2184,16 @@ function StudentRoster({
             description="Ученики появятся после записи в группу или назначения индивидуального урока."
           />
         </div>
+      ) : compactGroup ? (
+        <GroupLessonRoster
+          students={students}
+          canEdit={canEdit && canManageAttendance}
+          showLearningResult={showLearningResult}
+          previousHomework={previousGroupHomework}
+          drafts={drafts}
+          onSelectTopic={onSelectTopic}
+          onDraftChange={onDraftChange}
+        />
       ) : (
         <div className="mt-6 space-y-4">
           {students.map((student) => (
@@ -2061,7 +2201,7 @@ function StudentRoster({
               key={student.crmStudentId}
               student={student}
               canEdit={canEdit && canManageAttendance}
-              showHomeworkReview={showHomeworkReview}
+              showHomeworkReview={showHomeworkReview && Boolean(previousHomeworkLesson(student))}
               showLearningResult={showLearningResult}
               draft={drafts[student.crmStudentId] ?? studentLessonCheckDraft(student)}
               onSelectTopic={onSelectTopic}
@@ -2070,6 +2210,412 @@ function StudentRoster({
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+const groupAttendanceExceptions = [
+  { value: "late", label: "Опоздал" },
+  { value: "excused_absence", label: "Пропуск с причиной" },
+  { value: "unexcused_absence", label: "Пропуск без причины" },
+] as const;
+
+const groupHomeworkOptions = [
+  { value: "completed", label: "Выполнено", icon: Check },
+  { value: "partial", label: "Частично", icon: Minus },
+  { value: "not_completed", label: "Нет", icon: XCircle },
+] as const;
+
+function draftWithHomeworkStatus(
+  draft: StudentLessonCheckDraft,
+  status: OfflineHomeworkReview["status"],
+  sourceCrmClassId?: string | null,
+): StudentLessonCheckDraft {
+  const homeworkReview = normalizeHomeworkReview(draft.homeworkReview);
+  return {
+    ...draft,
+    homeworkReview: {
+      ...homeworkReview,
+      sourceCrmClassId: sourceCrmClassId === undefined
+        ? homeworkReview.sourceCrmClassId
+        : sourceCrmClassId,
+      status,
+      completionPercent:
+        status === "completed"
+          ? 100
+          : status === "partial"
+            ? homeworkReview.completionPercent && homeworkReview.completionPercent < 100
+              ? homeworkReview.completionPercent
+              : 50
+            : status === "not_completed"
+              ? 0
+              : null,
+      difficulties: status === "partial" ? homeworkReview.difficulties : "",
+      notCompletedReason: status === "not_completed" ? homeworkReview.notCompletedReason : "",
+    },
+  };
+}
+
+function GroupLessonRoster({
+  students,
+  canEdit,
+  showLearningResult,
+  previousHomework,
+  drafts,
+  onSelectTopic,
+  onDraftChange,
+}: {
+  students: TeacherOfflineStudent[];
+  canEdit: boolean;
+  showLearningResult: boolean;
+  previousHomework: PreviousHomeworkSource | null;
+  drafts: Record<string, StudentLessonCheckDraft>;
+  onSelectTopic?: (topic: string) => void;
+  onDraftChange: (studentId: string, draft: StudentLessonCheckDraft) => void;
+}) {
+  const attendedStudents = students.filter((student) => (
+    ["present", "late"].includes(drafts[student.crmStudentId].attendanceStatus)
+  ));
+  const completedHomeworkCount = previousHomework
+    ? attendedStudents.filter((student) => drafts[student.crmStudentId].homeworkReview.status === "completed").length
+    : 0;
+  const pendingHomeworkCount = previousHomework
+    ? attendedStudents.filter((student) => drafts[student.crmStudentId].homeworkReview.status === "not_checked").length
+    : 0;
+  const attentionCount = previousHomework
+    ? attendedStudents.filter((student) => (
+      ["partial", "not_completed"].includes(drafts[student.crmStudentId].homeworkReview.status)
+    )).length
+    : 0;
+
+  function markEveryonePresent() {
+    for (const student of students) {
+      onDraftChange(student.crmStudentId, {
+        ...drafts[student.crmStudentId],
+        attendanceStatus: "present",
+      });
+    }
+  }
+
+  function markHomeworkCompleted() {
+    if (!previousHomework) return;
+    for (const student of attendedStudents) {
+      onDraftChange(
+        student.crmStudentId,
+        draftWithHomeworkStatus(
+          drafts[student.crmStudentId],
+          "completed",
+          previousHomework.crmClassId,
+        ),
+      );
+    }
+  }
+
+  const sourceTitle = previousHomework?.topic?.trim() || previousHomework?.title;
+
+  return (
+    <div className="mt-6 overflow-hidden rounded-2xl border border-stone-200 bg-white">
+      {previousHomework ? (
+        <div className="border-b border-amber-200 bg-amber-50/70 px-4 py-4 sm:px-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.14em] text-amber-800">
+                <BookCheck size={15} />
+                Общее ДЗ с прошлого группового урока
+              </p>
+              <p className="mt-1.5 text-sm font-black text-ink">{sourceTitle}</p>
+              <p className="mt-1 text-sm leading-6 text-stone-700">{previousHomework.homework}</p>
+              <p className="mt-1 text-xs font-semibold text-stone-500">
+                {new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" }).format(new Date(previousHomework.date))}
+              </p>
+            </div>
+            {onSelectTopic && sourceTitle ? (
+              <button
+                type="button"
+                onClick={() => onSelectTopic(sourceTitle)}
+                className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-amber-300 bg-white px-3 text-xs font-bold text-amber-950 transition hover:bg-amber-100"
+              >
+                <Music size={14} />
+                Продолжить тему
+              </button>
+            ) : null}
+          </div>
+        </div>
+      ) : (
+        <div className="border-b border-stone-200 bg-stone-50 px-4 py-3 text-sm font-semibold text-stone-600 sm:px-5">
+          На прошлых групповых уроках домашнее задание не найдено.
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-200 px-4 py-3 sm:px-5">
+        <p className="text-sm font-bold text-stone-700">
+          Присутствовали {attendedStudents.length}/{students.length}
+          {previousHomework && attendedStudents.length
+            ? ` · ДЗ выполнено ${completedHomeworkCount}/${attendedStudents.length}`
+            : ""}
+          {pendingHomeworkCount ? ` · не проверено ${pendingHomeworkCount}` : ""}
+          {attentionCount ? ` · требуют уточнения ${attentionCount}` : ""}
+        </p>
+        {canEdit ? (
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={markEveryonePresent}
+              className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 text-xs font-bold text-emerald-900 transition hover:bg-emerald-100"
+            >
+              <Check size={14} />
+              Все присутствуют
+            </button>
+            {previousHomework ? (
+              <button
+                type="button"
+                disabled={!attendedStudents.length}
+                onClick={markHomeworkCompleted}
+                className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 text-xs font-bold text-amber-950 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <BookCheck size={14} />
+                ДЗ выполнено у присутствующих
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+
+      <div className="hidden grid-cols-[minmax(190px,1fr)_190px_minmax(260px,360px)_44px] gap-3 border-b border-stone-200 bg-stone-50/80 px-5 py-2.5 text-[10px] font-black uppercase tracking-[0.12em] text-stone-500 lg:grid">
+        <span>Ученик</span>
+        <span>Исключение</span>
+        <span>{previousHomework ? "Проверка ДЗ" : "Домашнее задание"}</span>
+        <span className="sr-only">Детали</span>
+      </div>
+
+      <div className="divide-y divide-stone-200">
+        {students.map((student) => (
+          <GroupStudentRow
+            key={student.crmStudentId}
+            student={student}
+            canEdit={canEdit}
+            showLearningResult={showLearningResult}
+            previousHomework={previousHomework}
+            draft={drafts[student.crmStudentId]}
+            onSelectTopic={onSelectTopic}
+            onChange={(draft) => onDraftChange(student.crmStudentId, draft)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function GroupStudentRow({
+  student,
+  canEdit,
+  showLearningResult,
+  previousHomework,
+  draft,
+  onSelectTopic,
+  onChange,
+}: {
+  student: TeacherOfflineStudent;
+  canEdit: boolean;
+  showLearningResult: boolean;
+  previousHomework: PreviousHomeworkSource | null;
+  draft: StudentLessonCheckDraft;
+  onSelectTopic?: (topic: string) => void;
+  onChange: (draft: StudentLessonCheckDraft) => void;
+}) {
+  const [learningOpen, setLearningOpen] = useState(false);
+  const attended = ["present", "late"].includes(draft.attendanceStatus);
+  const exceptionStatus = groupAttendanceExceptions.some((item) => item.value === draft.attendanceStatus)
+    ? draft.attendanceStatus
+    : "";
+  const needsHomeworkDetails = attended
+    && ["partial", "not_completed"].includes(draft.homeworkReview.status);
+  const needsAbsenceNote = ["excused_absence", "unexcused_absence"].includes(draft.attendanceStatus);
+
+  return (
+    <div className="px-4 py-3.5 sm:px-5">
+      <div className="grid items-center gap-3 lg:grid-cols-[minmax(190px,1fr)_190px_minmax(260px,360px)_44px]">
+        <label className="flex min-w-0 cursor-pointer items-center gap-3">
+          <input
+            type="checkbox"
+            checked={attended}
+            disabled={!canEdit}
+            onChange={(event) => onChange({
+              ...draft,
+              attendanceStatus: event.target.checked ? "present" : "unmarked",
+            })}
+            className="h-5 w-5 shrink-0 accent-emerald-600"
+          />
+          <span className="min-w-0">
+            <span className="block truncate text-sm font-black text-ink">{student.name}</span>
+            <span className={`mt-0.5 block text-xs font-semibold ${
+              draft.attendanceStatus === "unmarked" ? "text-stone-400" : "text-stone-600"
+            }`}>
+              {attendanceLabels[draft.attendanceStatus] ?? attendanceLabels.unmarked}
+            </span>
+          </span>
+        </label>
+
+        <select
+          value={exceptionStatus}
+          disabled={!canEdit}
+          aria-label={`Особый статус посещаемости для ${student.name}`}
+          onChange={(event) => onChange({
+            ...draft,
+            attendanceStatus: event.target.value
+              ? event.target.value as StudentLessonCheckDraft["attendanceStatus"]
+              : attended ? "present" : "unmarked",
+          })}
+          className="h-10 min-w-0 rounded-xl border border-stone-200 bg-white px-3 text-xs font-bold text-stone-700 outline-none focus:border-amber-400"
+        >
+          <option value="">{attended ? "Без исключений" : "Другой статус"}</option>
+          {groupAttendanceExceptions.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
+
+        {previousHomework ? (
+          attended ? (
+            <div className="grid min-h-10 grid-cols-3 overflow-hidden rounded-xl border border-stone-200" role="group" aria-label={`Проверка ДЗ для ${student.name}`}>
+              {groupHomeworkOptions.map(({ value, label, icon: Icon }) => {
+                const selected = draft.homeworkReview.status === value;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    disabled={!canEdit}
+                    onClick={() => onChange(draftWithHomeworkStatus(draft, value, previousHomework.crmClassId))}
+                    className={`inline-flex min-h-10 items-center justify-center gap-1 border-r border-stone-200 px-1.5 text-xs font-bold transition last:border-r-0 disabled:cursor-not-allowed disabled:opacity-60 ${
+                      selected
+                        ? value === "completed"
+                          ? "bg-emerald-600 text-white"
+                          : value === "partial"
+                            ? "bg-amber-100 text-amber-950"
+                            : "bg-red-100 text-red-800"
+                        : "bg-white text-stone-600 hover:bg-stone-50"
+                    }`}
+                  >
+                    <Icon size={13} className="shrink-0" />
+                    <span>{label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <span className="text-xs font-semibold text-stone-400">После отметки присутствия</span>
+          )
+        ) : (
+          <span className="text-xs font-semibold text-stone-400">—</span>
+        )}
+
+        <button
+          type="button"
+          disabled={!attended || !showLearningResult}
+          onClick={() => setLearningOpen((current) => !current)}
+          aria-expanded={learningOpen}
+          aria-label={`Учебный результат: ${student.name}`}
+          title="Учебный результат"
+          className="grid h-10 w-10 place-items-center justify-self-end rounded-xl border border-stone-200 text-stone-600 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-35 lg:justify-self-auto"
+        >
+          {learningOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+        </button>
+      </div>
+
+      {needsHomeworkDetails ? (
+        <div className="mt-3 rounded-xl border border-stone-200 bg-stone-50 p-3.5 lg:ml-[202px]">
+          {draft.homeworkReview.status === "partial" ? (
+            <>
+              <div className="flex items-center justify-between gap-3">
+                <label htmlFor={`group-homework-percent-${student.crmStudentId}`} className="text-xs font-bold text-stone-700">
+                  Выполнено примерно
+                </label>
+                <strong className="text-sm font-black text-amber-900">{draft.homeworkReview.completionPercent ?? 50}%</strong>
+              </div>
+              <input
+                id={`group-homework-percent-${student.crmStudentId}`}
+                type="range"
+                min={10}
+                max={90}
+                step={10}
+                value={draft.homeworkReview.completionPercent ?? 50}
+                disabled={!canEdit}
+                onChange={(event) => onChange({
+                  ...draft,
+                  homeworkReview: {
+                    ...draft.homeworkReview,
+                    completionPercent: Number(event.target.value),
+                  },
+                })}
+                className="mt-2 w-full accent-amber-600"
+              />
+              <label className="mt-2 block text-xs font-bold text-stone-600">
+                Что осталось доделать
+                <textarea
+                  value={draft.homeworkReview.difficulties ?? ""}
+                  disabled={!canEdit}
+                  onChange={(event) => onChange({
+                    ...draft,
+                    homeworkReview: { ...draft.homeworkReview, difficulties: event.target.value },
+                  })}
+                  rows={2}
+                  className="mt-1.5 min-h-16 w-full rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs"
+                />
+              </label>
+            </>
+          ) : (
+            <label className="block text-xs font-bold text-red-700">
+              Причина невыполнения
+              <textarea
+                value={draft.homeworkReview.notCompletedReason ?? ""}
+                disabled={!canEdit}
+                onChange={(event) => onChange({
+                  ...draft,
+                  homeworkReview: { ...draft.homeworkReview, notCompletedReason: event.target.value },
+                })}
+                rows={2}
+                className="mt-1.5 min-h-16 w-full rounded-xl border border-red-200 bg-white px-3 py-2 text-xs text-stone-800"
+              />
+            </label>
+          )}
+        </div>
+      ) : null}
+
+      {needsAbsenceNote ? (
+        <label className="mt-3 block text-xs font-bold text-stone-600 lg:ml-[202px]">
+          Причина отсутствия
+          <textarea
+            value={draft.teacherNote}
+            disabled={!canEdit}
+            onChange={(event) => onChange({ ...draft, teacherNote: event.target.value })}
+            rows={1}
+            className="mt-1.5 min-h-12 w-full rounded-xl border border-stone-200 px-3 py-2 text-xs"
+            placeholder="Что произошло?"
+          />
+        </label>
+      ) : null}
+
+      {learningOpen && attended && showLearningResult ? (
+        <div className="mt-3 border-t border-stone-200 pt-3 lg:ml-[202px]">
+          <StudentLearningResultFields
+            student={student}
+            canEdit={canEdit}
+            draft={draft}
+            onSelectTopic={onSelectTopic}
+            onChange={onChange}
+          />
+          <label className="mt-3 block text-xs font-bold text-stone-600">
+            Заметка по ученику
+            <textarea
+              value={draft.teacherNote}
+              disabled={!canEdit}
+              onChange={(event) => onChange({ ...draft, teacherNote: event.target.value })}
+              rows={1}
+              className="mt-1.5 min-h-12 w-full rounded-xl border border-stone-200 px-3 py-2 text-xs"
+              placeholder="Индивидуальная заметка для себя или школы"
+            />
+          </label>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -2090,6 +2636,7 @@ const homeworkOptions = [
 
 function normalizeHomeworkReview(review?: OfflineHomeworkReview | null): OfflineHomeworkReview {
   return {
+    sourceCrmClassId: review?.sourceCrmClassId ?? null,
     status: review?.status ?? "not_checked",
     completionPercent: review?.completionPercent ?? null,
     difficulties: review?.difficulties ?? "",
@@ -2097,63 +2644,31 @@ function normalizeHomeworkReview(review?: OfflineHomeworkReview | null): Offline
   };
 }
 
-function StudentLessonCheckCard({
+function StudentLearningResultFields({
   student,
   canEdit,
-  showHomeworkReview,
-  showLearningResult,
   draft,
   onSelectTopic,
   onChange,
 }: {
   student: TeacherOfflineStudent;
   canEdit: boolean;
-  showHomeworkReview: boolean;
-  showLearningResult: boolean;
   draft: StudentLessonCheckDraft;
   onSelectTopic?: (topic: string) => void;
   onChange: (draft: StudentLessonCheckDraft) => void;
 }) {
-  const { attendanceStatus, teacherNote, homeworkReview, lessonPoints, planTopicUpdates } = draft;
-  const attended = ["present", "late"].includes(attendanceStatus);
-  const homeworkNeedsReason = homeworkReview.status === "not_completed";
-  const homeworkNeedsDifficulties = homeworkReview.status === "partial";
-  const disabled = !canEdit;
-  const planItems = (student.monthlyPlan?.items ?? []).filter((item) => item.status !== "moved");
-
   const [quickTopicTitle, setQuickTopicTitle] = useState("");
   const [addingQuickTopic, setAddingQuickTopic] = useState(false);
   const [quickTopicError, setQuickTopicError] = useState<string | null>(null);
+  const planItems = (student.monthlyPlan?.items ?? []).filter((item) => item.status !== "moved");
 
   function choosePlanTopicStatus(itemId: string, status: "in_progress" | "completed") {
-    const selected = planTopicUpdates.find((item) => item.itemId === itemId);
-    const next = planTopicUpdates.filter((item) => item.itemId !== itemId);
+    const selected = draft.planTopicUpdates.find((item) => item.itemId === itemId);
+    const next = draft.planTopicUpdates.filter((item) => item.itemId !== itemId);
     onChange({
       ...draft,
       monthlyPlanId: student.monthlyPlan?.id ?? draft.monthlyPlanId,
       planTopicUpdates: selected?.status === status ? next : [...next, { itemId, status }],
-    });
-  }
-
-  function chooseHomeworkStatus(status: OfflineHomeworkReview["status"]) {
-    onChange({
-      ...draft,
-      homeworkReview: {
-        ...homeworkReview,
-        status,
-        completionPercent:
-          status === "completed"
-            ? 100
-            : status === "partial"
-              ? homeworkReview.completionPercent && homeworkReview.completionPercent < 100
-                ? homeworkReview.completionPercent
-                : 50
-              : status === "not_completed"
-                ? 0
-                : null,
-        difficulties: status === "partial" ? homeworkReview.difficulties : "",
-        notCompletedReason: status === "not_completed" ? homeworkReview.notCompletedReason : "",
-      },
     });
   }
 
@@ -2193,13 +2708,195 @@ function StudentLessonCheckCard({
         })),
       };
       choosePlanTopicStatus(newItem.id, "in_progress");
-      if (onSelectTopic) onSelectTopic(newItem.title);
+      onSelectTopic?.(newItem.title);
       setQuickTopicTitle("");
     } catch {
       setQuickTopicError("Не удалось добавить тему в план. Проверьте интернет.");
     } finally {
       setAddingQuickTopic(false);
     }
+  }
+
+  return (
+    <div>
+      <div className="rounded-xl border border-violet-100 bg-violet-50/50 p-3.5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-violet-900">
+            <Target size={15} />
+            План на {student.monthlyPlan?.month || currentAqtobeMonth()}
+          </p>
+          {student.monthlyPlan?.goal ? (
+            <span className="text-xs font-semibold text-violet-800">Цель: {student.monthlyPlan.goal}</span>
+          ) : null}
+        </div>
+
+        {planItems.length ? (
+          <div className="mt-3 space-y-2">
+            {planItems.map((item) => {
+              const selectedStatus = draft.planTopicUpdates.find((update) => update.itemId === item.id)?.status;
+              const isDone = item.status === "completed" || selectedStatus === "completed";
+              const isInProgress = selectedStatus === "in_progress"
+                || (item.status === "in_progress" && !selectedStatus);
+              return (
+                <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-violet-100 bg-white p-2.5">
+                  <div className="flex min-w-0 flex-1 items-center gap-2">
+                    <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-lg text-xs font-bold ${
+                      isDone
+                        ? "bg-emerald-100 text-emerald-800"
+                        : isInProgress ? "bg-amber-100 text-amber-900" : "bg-stone-100 text-stone-500"
+                    }`}>
+                      {isDone ? <Check size={13} /> : <Clock3 size={13} />}
+                    </span>
+                    <p className="min-w-0 truncate text-sm font-bold text-ink">{item.title}</p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <button
+                      type="button"
+                      disabled={!canEdit}
+                      onClick={() => choosePlanTopicStatus(item.id, "in_progress")}
+                      className={`rounded-lg border px-2.5 py-1 text-xs font-bold transition ${
+                        selectedStatus === "in_progress"
+                          ? "border-amber-300 bg-amber-100 text-amber-900"
+                          : "border-stone-200 bg-stone-50 text-stone-600 hover:bg-stone-100"
+                      }`}
+                    >
+                      В работе
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!canEdit}
+                      onClick={() => choosePlanTopicStatus(item.id, "completed")}
+                      className={`rounded-lg border px-2.5 py-1 text-xs font-bold transition ${
+                        selectedStatus === "completed" || (item.status === "completed" && !selectedStatus)
+                          ? "border-emerald-600 bg-emerald-600 text-white"
+                          : "border-stone-200 bg-stone-50 text-stone-600 hover:bg-stone-100"
+                      }`}
+                    >
+                      Освоено
+                    </button>
+                    {onSelectTopic ? (
+                      <button
+                        type="button"
+                        onClick={() => onSelectTopic(item.title)}
+                        className="grid h-7 w-7 place-items-center rounded-lg border border-violet-200 bg-violet-50 text-violet-800 transition hover:bg-violet-100"
+                        title="Использовать тему в отчёте"
+                        aria-label={`Использовать тему «${item.title}» в отчёте`}
+                      >
+                        <Music size={13} />
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="mt-2 text-xs text-stone-500">В плане месяца пока нет тем.</p>
+        )}
+
+        {canEdit ? (
+          <div className="mt-3 border-t border-violet-100 pt-3">
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <input
+                value={quickTopicTitle}
+                onChange={(event) => setQuickTopicTitle(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void handleAddQuickTopic();
+                  }
+                }}
+                placeholder="Новая тема или песня в план"
+                className="h-10 min-w-0 flex-1 rounded-xl border border-violet-200 bg-white px-3 text-xs outline-none focus:ring-2 focus:ring-violet-200"
+              />
+              <button
+                type="button"
+                disabled={addingQuickTopic || !quickTopicTitle.trim()}
+                onClick={() => void handleAddQuickTopic()}
+                className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl bg-violet-700 px-3.5 text-xs font-bold text-white transition hover:bg-violet-800 disabled:opacity-50"
+              >
+                {addingQuickTopic ? <LoaderCircle size={14} className="animate-spin" /> : <Plus size={14} />}
+                Добавить
+              </button>
+            </div>
+            {quickTopicError ? <p className="mt-1.5 text-xs font-semibold text-red-600">{quickTopicError}</p> : null}
+          </div>
+        ) : null}
+      </div>
+
+      <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50/50 p-3.5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <span className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-amber-950">
+              <Star size={16} className="text-gold" />
+              Учебные баллы
+            </span>
+            <span className="mt-0.5 block text-[11px] text-amber-900/70">От 0 до 100 XP за работу на уроке</span>
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <div className="flex gap-1">
+              {[100, 80, 50, 0].map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  disabled={!canEdit}
+                  onClick={() => onChange({ ...draft, lessonPoints: value })}
+                  className={`rounded-lg px-2.5 py-1 text-xs font-bold transition ${
+                    draft.lessonPoints === value
+                      ? "bg-amber-600 text-white"
+                      : "border border-amber-200 bg-white text-amber-950 hover:bg-amber-100"
+                  }`}
+                >
+                  {value}
+                </button>
+              ))}
+            </div>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step={1}
+              inputMode="numeric"
+              value={draft.lessonPoints}
+              disabled={!canEdit}
+              onChange={(event) => onChange({
+                ...draft,
+                lessonPoints: Math.max(0, Math.min(100, Number(event.target.value) || 0)),
+              })}
+              className="h-10 w-20 rounded-xl border border-amber-300 bg-white px-2.5 text-center text-base font-black text-ink outline-none"
+              aria-label={`Учебные баллы для ${student.name}`}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StudentLessonCheckCard({
+  student,
+  canEdit,
+  showHomeworkReview,
+  showLearningResult,
+  draft,
+  onSelectTopic,
+  onChange,
+}: {
+  student: TeacherOfflineStudent;
+  canEdit: boolean;
+  showHomeworkReview: boolean;
+  showLearningResult: boolean;
+  draft: StudentLessonCheckDraft;
+  onSelectTopic?: (topic: string) => void;
+  onChange: (draft: StudentLessonCheckDraft) => void;
+}) {
+  const { attendanceStatus, teacherNote, homeworkReview } = draft;
+  const attended = ["present", "late"].includes(attendanceStatus);
+  const homeworkNeedsReason = homeworkReview.status === "not_completed";
+  const homeworkNeedsDifficulties = homeworkReview.status === "partial";
+  const disabled = !canEdit;
+  function chooseHomeworkStatus(status: OfflineHomeworkReview["status"]) {
+    onChange(draftWithHomeworkStatus(draft, status));
   }
 
   return (
@@ -2354,179 +3051,20 @@ function StudentLessonCheckCard({
         </fieldset>
       ) : null}
 
-      {/* Месячный план и Учебные баллы */}
       {showLearningResult && attended ? (
         <fieldset className="mt-4 border-t border-stone-100 pt-4">
           <legend className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.14em] text-violet-700">
             <Target size={15} />
             План месяца и учебные баллы
           </legend>
-
-          {/* Темы плана на месяц */}
-          <div className="mt-3 rounded-2xl border border-violet-100 bg-violet-50/50 p-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-xs font-black uppercase tracking-wider text-violet-900">
-                🎯 План на {student.monthlyPlan?.month || currentAqtobeMonth()}
-              </p>
-              {student.monthlyPlan?.goal ? (
-                <span className="text-xs font-semibold text-violet-800">
-                  Цель: {student.monthlyPlan.goal}
-                </span>
-              ) : null}
-            </div>
-
-            {planItems.length ? (
-              <div className="mt-3 space-y-2.5">
-                {planItems.map((item) => {
-                  const selectedStatus = planTopicUpdates.find((update) => update.itemId === item.id)?.status;
-                  const isDone = item.status === "completed" || selectedStatus === "completed";
-                  const isInProgress = selectedStatus === "in_progress" || (item.status === "in_progress" && !selectedStatus);
-
-                  return (
-                    <div
-                      key={item.id}
-                      className="flex flex-wrap items-center justify-between gap-2.5 rounded-xl border border-violet-100 bg-white p-3 shadow-xs"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-lg text-xs font-bold ${
-                            isDone
-                              ? "bg-emerald-100 text-emerald-800"
-                              : isInProgress
-                              ? "bg-amber-100 text-amber-900"
-                              : "bg-stone-100 text-stone-500"
-                          }`}>
-                            {isDone ? "✓" : "⏳"}
-                          </span>
-                          <p className="truncate text-sm font-bold text-ink">{item.title}</p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          disabled={disabled}
-                          onClick={() => choosePlanTopicStatus(item.id, "in_progress")}
-                          className={`rounded-lg px-2.5 py-1 text-xs font-bold transition ${
-                            selectedStatus === "in_progress"
-                              ? "bg-amber-100 text-amber-900 border border-amber-300 font-black"
-                              : "bg-stone-50 text-stone-600 hover:bg-stone-100 border border-stone-200"
-                          }`}
-                        >
-                          В работе
-                        </button>
-                        <button
-                          type="button"
-                          disabled={disabled}
-                          onClick={() => choosePlanTopicStatus(item.id, "completed")}
-                          className={`rounded-lg px-2.5 py-1 text-xs font-bold transition ${
-                            selectedStatus === "completed" || (item.status === "completed" && !selectedStatus)
-                              ? "bg-emerald-600 text-white font-black"
-                              : "bg-stone-50 text-stone-600 hover:bg-stone-100 border border-stone-200"
-                          }`}
-                        >
-                          Освоено
-                        </button>
-                        {onSelectTopic ? (
-                          <button
-                            type="button"
-                            onClick={() => onSelectTopic(item.title)}
-                            className="inline-flex items-center gap-1 rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-1 text-xs font-bold text-violet-800 transition hover:bg-violet-100"
-                            title="Использовать эту тему в отчёте урока"
-                          >
-                            <Music size={12} />
-                            В тему
-                          </button>
-                        ) : null}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <p className="mt-2 text-xs text-stone-500">В плане месяца пока нет тем.</p>
-            )}
-
-            {/* Быстрое добавление темы в план прямо на уроке */}
-            {canEdit ? (
-              <div className="mt-3.5 border-t border-violet-100/80 pt-3">
-                <div className="flex gap-2">
-                  <input
-                    value={quickTopicTitle}
-                    onChange={(e) => setQuickTopicTitle(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        void handleAddQuickTopic();
-                      }
-                    }}
-                    placeholder="+ Новая тема или песня в план (напр. Лесник)"
-                    className="h-10 flex-1 rounded-xl border border-violet-200 bg-white px-3 text-xs outline-none focus:ring-2 focus:ring-violet-200"
-                  />
-                  <button
-                    type="button"
-                    disabled={addingQuickTopic || !quickTopicTitle.trim()}
-                    onClick={() => void handleAddQuickTopic()}
-                    className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-violet-700 px-3.5 text-xs font-bold text-white transition hover:bg-violet-800 disabled:opacity-50"
-                  >
-                    {addingQuickTopic ? <LoaderCircle size={14} className="animate-spin" /> : <Plus size={14} />}
-                    Добавить
-                  </button>
-                </div>
-                {quickTopicError ? (
-                  <p className="mt-1.5 text-xs font-semibold text-red-600">{quickTopicError}</p>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
-
-          {/* Учебные баллы за урок */}
-          <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50/50 p-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <span className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-amber-950">
-                  <Star size={16} className="text-gold" />
-                  Учебные баллы за занятие
-                </span>
-                <span className="mt-0.5 block text-[11px] text-amber-900/70">
-                  Выставите оценку за работу на уроке (от 0 до 100 XP)
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="flex gap-1">
-                  {[100, 80, 50, 0].map((val) => (
-                    <button
-                      key={val}
-                      type="button"
-                      disabled={disabled}
-                      onClick={() => onChange({ ...draft, lessonPoints: val })}
-                      className={`rounded-lg px-2.5 py-1 text-xs font-bold transition ${
-                        lessonPoints === val
-                          ? "bg-amber-600 text-white font-black"
-                          : "border border-amber-200 bg-white text-amber-950 hover:bg-amber-100"
-                      }`}
-                    >
-                      {val}
-                    </button>
-                  ))}
-                </div>
-                <input
-                  type="number"
-                  min={0}
-                  max={100}
-                  step={1}
-                  inputMode="numeric"
-                  value={lessonPoints}
-                  disabled={disabled}
-                  onChange={(event) => onChange({
-                    ...draft,
-                    lessonPoints: Math.max(0, Math.min(100, Number(event.target.value) || 0)),
-                  })}
-                  className="h-10 w-20 rounded-xl border border-amber-300 bg-white px-2.5 text-center text-base font-black text-ink outline-none"
-                  aria-label={`Учебные баллы для ${student.name}`}
-                />
-              </div>
-            </div>
+          <div className="mt-3">
+            <StudentLearningResultFields
+              student={student}
+              canEdit={canEdit}
+              draft={draft}
+              onSelectTopic={onSelectTopic}
+              onChange={onChange}
+            />
           </div>
         </fieldset>
       ) : null}

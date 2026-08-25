@@ -14,9 +14,9 @@ import Link from "next/link";
 import type { UnifiedTask, UnifiedTaskSource, UnifiedTaskStatus } from "@/types/unified-tasks";
 
 const sourceUi: Record<UnifiedTaskSource, { label: string; icon: typeof School; className: string }> = {
-  course: { label: "Курс", icon: BookOpenCheck, className: "bg-violet-50 text-violet-800" },
-  offline: { label: "В школе", icon: School, className: "bg-amber-50 text-amber-900" },
-  online: { label: "Онлайн", icon: MonitorPlay, className: "bg-blue-50 text-blue-800" },
+  course: { label: "Самостоятельный курс", icon: BookOpenCheck, className: "bg-violet-50 text-violet-800" },
+  offline: { label: "Урок в школе", icon: School, className: "bg-amber-50 text-amber-900" },
+  online: { label: "Онлайн с преподавателем", icon: MonitorPlay, className: "bg-blue-50 text-blue-800" },
 };
 
 const statusUi: Record<UnifiedTaskStatus, { label: string; icon: typeof Clock3; className: string }> = {
