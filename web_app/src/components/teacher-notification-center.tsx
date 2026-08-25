@@ -35,7 +35,8 @@ export function NotificationCenter({
       setItems(notifications);
       const newestUnread = notifications.find((item) => !item.readAt);
       if (
-        newestUnread
+        audience !== "student"
+        && newestUnread
         && !window.sessionStorage.getItem(seenKey(userId, newestUnread.id))
       ) {
         window.sessionStorage.setItem(seenKey(userId, newestUnread.id), "1");
@@ -46,7 +47,7 @@ export function NotificationCenter({
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, [audience, userId]);
 
   useEffect(() => {
     if (unreadCount == null) return;

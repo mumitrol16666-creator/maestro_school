@@ -114,13 +114,13 @@ export default function DashboardPage() {
 
   return (
     <div className="mx-auto max-w-[1400px]">
-      <header className="mb-5 flex flex-wrap items-center justify-between gap-4">
+      <header className="mb-4 flex flex-wrap items-center justify-between gap-3 sm:mb-5 sm:gap-4">
         <div>
-          <p className="text-xs font-black uppercase tracking-[0.2em] text-gold">Твоя учебная неделя</p>
-          <h1 className="font-display mt-2 text-4xl leading-tight">
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gold sm:text-xs">Твоя учебная неделя</p>
+          <h1 className="font-display mt-1.5 text-[32px] leading-tight sm:mt-2 sm:text-4xl">
             Привет, {user?.firstName || "ученик"}!
           </h1>
-          <p className="mt-2 text-sm text-stone-500">Здесь только то, что важно сейчас.</p>
+          <p className="mt-1 text-[13px] text-stone-500 sm:mt-2 sm:text-sm">Здесь только то, что важно сейчас.</p>
         </div>
         <div className="grid w-full grid-cols-3 gap-2 sm:w-auto">
           <MetricChip icon={Star} value={data.dashboard.points.toLocaleString("ru-RU")} label="баллов" />
@@ -135,7 +135,7 @@ export default function DashboardPage() {
 
       <div className={`mt-5 grid items-start gap-5 ${showTaskPanel ? "xl:grid-cols-[minmax(0,1.8fr)_minmax(300px,0.72fr)]" : ""}`}>
         {showTaskPanel ? (
-          <div className="space-y-5">
+          <div className="order-2 space-y-5 xl:order-1">
             {taskResource.data ? (
               <DashboardTasks
                 tasks={visibleTasks}
@@ -148,7 +148,9 @@ export default function DashboardPage() {
             ) : null}
           </div>
         ) : null}
-        <LeagueMiniWidget />
+        <div className="order-1 xl:order-2">
+          <LeagueMiniWidget />
+        </div>
       </div>
 
       {(plans.length || visibleUpcoming.length) ? (
@@ -263,7 +265,7 @@ function MetricChip({
 }) {
   return (
     <div
-      className="flex min-h-14 min-w-0 items-center justify-center gap-2 rounded-2xl border border-stone-200 bg-white px-2 py-2 shadow-sm sm:justify-start sm:px-3"
+      className="flex min-h-12 min-w-0 items-center justify-center gap-2 rounded-xl border border-stone-200 bg-white px-2 py-2 shadow-sm sm:min-h-14 sm:justify-start sm:rounded-2xl sm:px-3"
       aria-label={`${value} ${label}`}
       title={`${value} ${label}`}
     >
@@ -292,24 +294,24 @@ function NowHero({ hero }: { hero: StudentHomeHero }) {
   const DetailIcon = hero.badge?.tone === "danger" ? RotateCcw : CalendarDays;
 
   return (
-    <section className="overflow-hidden rounded-[24px] border border-white/10 bg-[#171813] p-4 text-white shadow-soft sm:p-5">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <section className="overflow-hidden rounded-[20px] border border-white/10 bg-[#171813] p-3.5 text-white shadow-soft sm:rounded-[24px] sm:p-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <div className="min-w-0 max-w-3xl">
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="grid h-9 w-9 place-items-center rounded-xl bg-white/10 text-gold">
-              <Icon size={18} />
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <span className="grid h-8 w-8 place-items-center rounded-lg bg-white/10 text-gold sm:h-9 sm:w-9 sm:rounded-xl">
+              <Icon size={17} />
             </span>
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-gold">{hero.eyebrow}</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-gold sm:text-xs">{hero.eyebrow}</p>
           </div>
-          <h2 className="font-display mt-3 break-words text-2xl leading-tight sm:text-3xl">{hero.title}</h2>
+          <h2 className="font-display mt-2 break-words text-2xl leading-tight sm:mt-3 sm:text-3xl">{hero.title}</h2>
           {hero.badge ? (
-            <span className={`mt-3 inline-flex min-h-7 items-center rounded-lg px-3 text-xs font-black ${badgeClass}`}>
+            <span className={`mt-2 inline-flex min-h-6 items-center rounded-md px-2.5 text-[11px] font-black sm:mt-3 sm:min-h-7 sm:rounded-lg sm:px-3 sm:text-xs ${badgeClass}`}>
               {hero.badge.label}
             </span>
           ) : null}
-          {hero.subtitle ? <p className="mt-3 break-words text-sm leading-6 text-white/70">{hero.subtitle}</p> : null}
+          {hero.subtitle ? <p className="mt-2 line-clamp-1 break-words text-xs leading-5 text-white/70 sm:mt-3 sm:line-clamp-none sm:text-sm sm:leading-6">{hero.subtitle}</p> : null}
           {hero.detail ? (
-            <p className={`mt-2 inline-flex items-start gap-2 text-sm leading-6 ${hero.badge?.tone === "danger" ? "rounded-xl border border-red-400/20 bg-red-500/10 p-3 text-red-50" : "text-white/60"}`}>
+            <p className={`mt-2 inline-flex items-start gap-2 text-[13px] leading-5 sm:text-sm sm:leading-6 ${hero.badge?.tone === "danger" ? "rounded-xl border border-red-400/20 bg-red-500/10 p-2.5 text-red-50 sm:p-3" : "text-white/60"}`}>
               <DetailIcon size={16} className="mt-0.5 shrink-0 text-gold" /> {hero.detail}
             </p>
           ) : null}
@@ -318,7 +320,7 @@ function NowHero({ hero }: { hero: StudentHomeHero }) {
           href={hero.href}
           target={hero.external ? "_blank" : undefined}
           rel={hero.external ? "noreferrer" : undefined}
-          className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-gold px-4 text-sm font-black text-ink transition hover:bg-amber-400"
+          className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-gold px-4 text-sm font-black text-ink transition hover:bg-amber-400 sm:min-h-11"
         >
           {hero.actionLabel} <ArrowRight size={17} />
         </Link>
@@ -337,15 +339,15 @@ function LeagueMiniWidget() {
   const medals = ["🥇", "🥈", "🥉"];
 
   return (
-    <section className="rounded-[28px] border border-stone-200 bg-[#171813] p-6 text-white shadow-soft">
+    <section className="rounded-[20px] border border-stone-200 bg-[#171813] p-4 text-white shadow-soft sm:rounded-[28px] sm:p-6">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
-          <span className="grid h-10 w-10 place-items-center rounded-xl bg-gold/15 text-gold">
-            <Trophy size={20} />
+          <span className="grid h-9 w-9 place-items-center rounded-xl bg-gold/15 text-gold sm:h-10 sm:w-10">
+            <Trophy size={18} />
           </span>
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-gold">Недельная лига</p>
-            <h3 className="font-display text-lg">Лидеры недели</h3>
+            <h3 className="font-display text-base sm:text-lg">Лидеры недели</h3>
           </div>
         </div>
         <Link
@@ -359,7 +361,7 @@ function LeagueMiniWidget() {
       </div>
 
       {top3.length > 0 ? (
-        <div className="mt-4 space-y-2">
+        <div className="mt-4 hidden space-y-2 sm:block">
           {top3.map((item, idx) => (
             <div
               key={item.displayName}
@@ -376,10 +378,10 @@ function LeagueMiniWidget() {
           ))}
         </div>
       ) : (
-        <p className="mt-4 text-xs text-white/50">Неделя только началась. Сделай первое действие!</p>
+        <p className="mt-4 hidden text-xs text-white/50 sm:block">Неделя только началась. Сделай первое действие!</p>
       )}
 
-      <div className="mt-4 border-t border-white/10 pt-3">
+      <div className="mt-3 border-t border-white/10 pt-3 sm:mt-4">
         <div className="flex items-center justify-between text-xs text-white/60">
           <span>{me?.position ? `Твоё место: #${me.position}` : "Цель на неделю"}</span>
           <span className="font-bold text-white">{me?.xp ?? 0} / {me?.goalXp ?? 80} XP</span>
