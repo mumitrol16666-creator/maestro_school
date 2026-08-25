@@ -88,8 +88,8 @@ export default function DashboardPage() {
     dashboard: data.dashboard,
   });
   const visibleTasks = hero?.kind === "task"
-    ? actionTasks.filter((task) => task.id !== hero.id).slice(0, 3)
-    : actionTasks.slice(0, 3);
+    ? actionTasks.filter((task) => task.id !== hero.id).slice(0, 2)
+    : actionTasks.slice(0, 2);
   const taskActionCount = taskResource.data?.data.counts.actionRequired ?? 0;
   const showTaskPanel = Boolean(
     (taskResource.data && (taskActionCount === 0 || visibleTasks.length > 0))
@@ -245,10 +245,10 @@ function DashboardTasks({
         </Link>
       </div>
       <div className={wide
-        ? `grid gap-3 ${tasks.length > 1 ? "md:grid-cols-2" : ""} ${tasks.length > 2 ? "xl:grid-cols-3" : ""}`
+        ? `grid gap-3 ${tasks.length > 1 ? "md:grid-cols-2" : ""}`
         : "space-y-3"}
       >
-        {tasks.slice(0, 3).map((task) => <UnifiedTaskCard key={task.id} task={task} compact />)}
+        {tasks.slice(0, 2).map((task) => <UnifiedTaskCard key={task.id} task={task} compact />)}
       </div>
     </section>
   );
