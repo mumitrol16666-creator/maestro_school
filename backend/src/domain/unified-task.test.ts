@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   descriptionPreview,
   sortUnifiedTasks,
+  taskActionLabel,
   unifiedTaskCounts,
   withTaskState,
   type UnifiedTask,
@@ -72,5 +73,12 @@ describe("unified task domain", () => {
       completed: 1,
       bySource: { course: 1, offline: 1, online: 1 },
     });
+  });
+
+  it("uses an actionable revision label for digital work and a review label for school work", () => {
+    assert.equal(taskActionLabel("needs_revision", "course"), "Исправить работу");
+    assert.equal(taskActionLabel("needs_revision", "online"), "Исправить работу");
+    assert.equal(taskActionLabel("needs_revision", "offline"), "Посмотреть замечания");
+    assert.equal(taskActionLabel("needs_revision", "course", "test"), "Повторить тест");
   });
 });

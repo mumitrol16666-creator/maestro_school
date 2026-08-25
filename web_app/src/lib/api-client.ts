@@ -16,6 +16,7 @@ import type {
   StartLessonResponse,
   StudentAchievementItem,
   StudentAchievementsMeta,
+  StudentMonthlyPlansResponse,
   TrialBookingInput,
   TrialBookingResponse,
 } from "@/types/api";
@@ -194,6 +195,9 @@ export const api = {
     }>(`/lessons/${lessonId}/signup`, { method: "POST" }),
   dashboard: () => apiRequest<ApiDashboard>("/students/me/dashboard"),
   studentHome: () => apiRequest<ApiStudentHome>("/students/me/home"),
+  studentMonthlyPlans: (month?: string) => apiRequest<StudentMonthlyPlansResponse>(
+    `/students/me/monthly-plans${month ? `?month=${encodeURIComponent(month)}` : ""}`,
+  ),
   studentTasks: (filters: UnifiedTaskFilters = {}) => {
     const query = new URLSearchParams();
     if (filters.scope) query.set("scope", filters.scope);

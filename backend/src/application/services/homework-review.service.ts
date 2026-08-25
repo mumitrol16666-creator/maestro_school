@@ -98,7 +98,7 @@ export async function reviewHomeworkSubmission(params: {
 
   return {
     submission: updatedSubmission,
-    lessonStatus: "available" as const,
+    lessonStatus: "in_progress" as const,
     pointsAwarded: false,
   };
 }

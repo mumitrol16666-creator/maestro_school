@@ -10,6 +10,7 @@ import {
   Link2,
   LoaderCircle,
   Play,
+  RotateCcw,
   Sparkles,
   Trophy,
 } from "lucide-react";
@@ -83,8 +84,18 @@ export default function LessonPage() {
   const [showStartPrompt, setShowStartPrompt] = useState(false);
 
   useEffect(() => {
-    setShowStartPrompt(resource.data?.lesson.status === "available");
-  }, [resource.data?.lesson.id, resource.data?.lesson.status]);
+    const attempts = resource.data?.attempts ?? [];
+    const latest = attempts.length ? attempts[attempts.length - 1] : null;
+    setShowStartPrompt(resource.data?.lesson.status === "available" && latest?.status !== "rejected");
+  }, [resource.data?.lesson.id, resource.data?.lesson.status, resource.data?.attempts]);
+
+  useEffect(() => {
+    if (!resource.data || window.location.hash !== "#homework-revision") return;
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById("homework-revision")?.scrollIntoView({ block: "start" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [resource.data]);
 
   if (resource.loading) return <LoadingState label="Открываем урок" />;
   if (resource.error) return <ErrorState message={resource.error} retry={resource.reload} />;
@@ -95,9 +106,9 @@ export default function LessonPage() {
   const testQuestions = detail.homework?.testQuestions ?? [];
   const passingScore = detail.homework?.passingScore ?? 70;
   const locked = lesson.status === "locked";
-  const lessonStarted = !locked && lesson.status !== "available";
   const latestAttempt = attempts.length ? attempts[attempts.length - 1] : null;
-  const latestReview = [...attempts].reverse().find((attempt) => attempt.reviewComment && (!isTestHomework || attempt.status !== "rejected"));
+  const needsRevision = latestAttempt?.status === "rejected";
+  const lessonStarted = !locked && (lesson.status !== "available" || needsRevision);
   const statusHints = isTestHomework ? testLessonStatusHints : lessonStatusHints;
 
   async function handleStart() {
@@ -313,6 +324,37 @@ export default function LessonPage() {
 
           {lessonStarted && lesson.homeworkId && lesson.homeworkDescription && (
             <>
+              {needsRevision && (
+                <section id="homework-revision" className="mt-9 scroll-mt-24 rounded-[28px] border border-red-100 bg-red-50 p-5 sm:p-6">
+                  <p className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-wider text-red-700">
+                    <RotateCcw size={15} /> Нужна доработка
+                  </p>
+                  <h2 className="font-display mt-2 text-2xl text-red-950">
+                    {isTestHomework ? "Повторите тест" : "Исправьте работу и отправьте снова"}
+                  </h2>
+                  {latestAttempt.reviewComment ? (
+                    <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-red-900">
+                      {latestAttempt.reviewComment}
+                    </p>
+                  ) : (
+                    <p className="mt-3 text-sm leading-7 text-red-900">
+                      Откройте предыдущую попытку ниже, внесите исправления и отправьте работу повторно.
+                    </p>
+                  )}
+                  {lesson.status === "available" ? (
+                    <button
+                      type="button"
+                      onClick={() => void handleStart()}
+                      disabled={starting}
+                      className="mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-red-800 px-4 text-sm font-bold text-white disabled:opacity-60"
+                    >
+                      {starting ? <LoaderCircle size={16} className="animate-spin" /> : <Play size={16} />}
+                      Продолжить доработку
+                    </button>
+                  ) : null}
+                </section>
+              )}
+
               {isTestHomework ? (
                 testQuestions.length ? (
                   <>
@@ -347,20 +389,15 @@ export default function LessonPage() {
                 )
               ) : (
                 <HomeworkSubmissionForm
+                  key={`${lesson.id}:${latestAttempt?.id ?? "new"}`}
                   homeworkDescription={lesson.homeworkDescription}
+                  revision={needsRevision}
+                  initialSubmission={needsRevision ? latestAttempt : null}
                   disabled={!canSubmitHomework(lesson)}
                   disabledReason={submitDisabledReason(lesson, false)}
                   submitting={submitting}
                   onSubmit={handleSubmit}
                 />
-              )}
-
-              {latestReview && (lesson.status === "available" || lesson.status === "in_progress") && (
-                <div className="mt-6 rounded-[24px] border border-amber-100 bg-amber-50 p-5">
-                  <p className="text-xs font-bold uppercase tracking-wider text-amber-700">Комментарий преподавателя</p>
-                  <p className="mt-2 text-sm leading-7 text-amber-900">{latestReview.reviewComment}</p>
-                  <p className="mt-2 text-xs text-amber-700">Исправьте работу и отправьте новую попытку.</p>
-                </div>
               )}
 
               <HomeworkAttemptHistory attempts={attempts} isTest={isTestHomework} />

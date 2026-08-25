@@ -40,10 +40,13 @@ describe("lesson progress state machine", () => {
     assert.equal(canSystemTransition("reviewed", "completed"), true);
   });
 
-  it("allows revision paths to available", () => {
+  it("allows revision paths directly to in progress", () => {
+    assert.equal(canSystemTransition("submitted", "in_progress"), true);
+    assert.equal(canSystemTransition("reviewed", "in_progress"), true);
     assert.equal(canSystemTransition("submitted", "available"), true);
     assert.equal(canSystemTransition("reviewed", "available"), true);
     assert.equal(canSystemTransition("completed", "available"), false);
+    assert.equal(canSystemTransition("completed", "in_progress"), false);
   });
 
   it("completed is terminal", () => {

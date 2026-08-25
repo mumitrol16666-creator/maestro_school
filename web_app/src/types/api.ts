@@ -219,16 +219,22 @@ export interface StudentHomeHomework {
 
 export interface StudentHomeMonthlyPlan {
   id: string;
-  scope: "student" | "group";
-  targetId: string;
   month: string;
   teacher: { name: string };
   goal: string;
-  expectedResult: string;
-  checkpoint: string;
   items: Array<{ id: string; title: string; status: "planned" | "in_progress" | "completed" }>;
   progress: { completed: number; inProgress: number; total: number; percent: number };
   publishedAt: string;
+}
+
+export interface StudentMonthlyPlansResponse {
+  month: string;
+  plans: StudentHomeMonthlyPlan[];
+  aggregateProgress: {
+    completed: number;
+    total: number;
+    percent: number;
+  };
 }
 
 export interface ApiStudentHome {

@@ -69,8 +69,8 @@ export function mapCourseTask(row: CourseTaskRow, now = new Date()): UnifiedTask
       coins: null,
     },
     target: {
-      href: `/lessons/${row.lessonId}`,
-      actionLabel: taskActionLabel(status, "course"),
+      href: `/lessons/${row.lessonId}${status === "needs_revision" ? "#homework-revision" : ""}`,
+      actionLabel: taskActionLabel(status, "course", row.homeworkType),
     },
     updatedAt: updatedAt.toISOString(),
   }, now);

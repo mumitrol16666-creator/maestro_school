@@ -22,6 +22,7 @@ import {
   History,
   MapPin,
   RefreshCw,
+  RotateCcw,
   Sparkles,
   Target,
   UserRound,
@@ -599,6 +600,11 @@ function HomeworkCard({ lesson, defaultOpen = false }: { lesson: SchoolOfflineLe
   const resultStyle = lesson.homeworkResult
     ? homeworkResultStyles[lesson.homeworkResult.status]
     : null;
+  const needsRevision = lesson.homeworkResult?.status === "partial"
+    || lesson.homeworkResult?.status === "not_completed";
+  const revisionComment = lesson.homeworkReview?.difficulties?.trim()
+    || lesson.homeworkReview?.notCompletedReason?.trim()
+    || null;
 
   return (
     <article
@@ -670,6 +676,17 @@ function HomeworkCard({ lesson, defaultOpen = false }: { lesson: SchoolOfflineLe
               </p>
             )}
           </div>
+
+          {needsRevision ? (
+            <div className="rounded-2xl border border-red-100 bg-red-50 p-4">
+              <p className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-wider text-red-700">
+                <RotateCcw size={14} /> Что повторить к следующему уроку
+              </p>
+              <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-red-950">
+                {revisionComment || "Повторите домашнее задание с учётом результата проверки преподавателя."}
+              </p>
+            </div>
+          ) : null}
 
           <div className="rounded-2xl border border-amber-100 bg-amber-50/60 p-4">
             <p className="text-xs font-bold uppercase tracking-wider text-amber-800">Домашнее задание</p>

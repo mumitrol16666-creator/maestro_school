@@ -64,7 +64,7 @@ export function mapOnlineTask(row: OnlineTaskRow, now = new Date()): UnifiedTask
       coins: row.submission?.reviewCoins ?? null,
     },
     target: {
-      href: `/online-lessons/${row.requestId}`,
+      href: `/online-lessons/${row.requestId}${status === "needs_revision" ? "#assignment-revision" : ""}`,
       actionLabel: taskActionLabel(status, "online"),
     },
     updatedAt: (row.submission?.updatedAt ?? row.updatedAt).toISOString(),

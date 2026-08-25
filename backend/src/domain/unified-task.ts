@@ -55,8 +55,15 @@ export function descriptionPreview(value: string | null | undefined, limit = 240
   return `${characters.slice(0, Math.max(0, limit - 1)).join("").trimEnd()}…`;
 }
 
-export function taskActionLabel(status: UnifiedTaskStatus, source: UnifiedTaskSource) {
-  if (status === "needs_revision") return "Доработать";
+export function taskActionLabel(
+  status: UnifiedTaskStatus,
+  source: UnifiedTaskSource,
+  kind: UnifiedTask["kind"] = "assignment",
+) {
+  if (status === "needs_revision") {
+    if (kind === "test") return "Повторить тест";
+    return source === "offline" ? "Посмотреть замечания" : "Исправить работу";
+  }
   if (status === "waiting_review") return "Открыть";
   if (status === "completed") return "Посмотреть результат";
   return source === "offline" ? "Посмотреть" : "Выполнить";

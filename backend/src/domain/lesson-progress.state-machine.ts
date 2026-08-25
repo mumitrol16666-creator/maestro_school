@@ -22,8 +22,8 @@ const STUDENT_TRANSITIONS: Partial<Record<LessonProgressState, LessonProgressSta
 /** System-initiated transitions (unlock, review outcomes) */
 const SYSTEM_TRANSITIONS: Partial<Record<LessonProgressState, LessonProgressState[]>> = {
   locked: ["available"],
-  submitted: ["reviewed", "completed", "available"],
-  reviewed: ["completed", "available"],
+  submitted: ["reviewed", "completed", "available", "in_progress"],
+  reviewed: ["completed", "available", "in_progress"],
 };
 
 export function isLessonCompleted(status: LessonProgressState): boolean {
@@ -84,13 +84,13 @@ export function assertSystemTransition(
  * IN_PROGRESS ──(homework sent)──► SUBMITTED
  * SUBMITTED ──(admin reviews)──► REVIEWED
  * REVIEWED ──(approved)──► COMPLETED
- * SUBMITTED|REVIEWED ──(revision)──► AVAILABLE
+ * SUBMITTED|REVIEWED ──(revision)──► IN_PROGRESS
  */
 export const LESSON_STATE_MACHINE = {
   locked: { next: ["available"], actor: "system" },
   available: { next: ["in_progress"], actor: "student" },
   in_progress: { next: ["submitted"], actor: "student" },
-  submitted: { next: ["reviewed", "completed", "available"], actor: "admin|system" },
-  reviewed: { next: ["completed", "available"], actor: "admin" },
+  submitted: { next: ["reviewed", "completed", "available", "in_progress"], actor: "admin|system" },
+  reviewed: { next: ["completed", "available", "in_progress"], actor: "admin" },
   completed: { next: [], actor: "terminal" },
 } as const;

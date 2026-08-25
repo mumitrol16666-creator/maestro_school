@@ -254,17 +254,17 @@ export async function completeLessonWithoutHomework(studentId: string, lessonId:
   };
 }
 
-/** Admin sends for revision → AVAILABLE */
+/** Admin sends for revision → IN_PROGRESS so the student can resubmit immediately. */
 export async function reopenLessonForRevision(studentId: string, lessonId: string) {
   const progress = await getLessonProgressRecord(studentId, lessonId);
   if (!progress) throw new NotFoundError("Lesson progress");
 
-  if (progress.status === "available") return progress;
+  if (progress.status === "in_progress") return progress;
 
-  assertSystemTransition(progress.status, "available");
+  assertSystemTransition(progress.status, "in_progress");
 
   return upsertLessonProgress(studentId, lessonId, {
-    status: "available",
+    status: "in_progress",
     completedAt: null,
   });
 }

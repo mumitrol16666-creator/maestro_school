@@ -3,8 +3,10 @@
 import { CheckCircle2, LoaderCircle, Plus, Save, Send, Trash2, Target, Flag } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useApiResource } from "@/hooks/use-api-resource";
+import { ApiError } from "@/lib/api-client";
 import { teacherStudentsApi } from "@/lib/teacher-students-api";
 import { currentAqtobeMonth } from "@/lib/aqtobe-month";
+import { ProgressBar } from "@/components/progress-bar";
 import type {
   MonthlyPlanItemStatus,
   StudentMonthlyPlan,
@@ -31,6 +33,17 @@ function emptyPlan(month: string): StudentMonthlyPlan {
   };
 }
 
+function publishedDate(value?: string | null) {
+  if (!value) return null;
+  return new Intl.DateTimeFormat("ru-RU", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Asia/Aqtobe",
+  }).format(new Date(value));
+}
+
 export function StudentMonthlyPlanEditor({
   crmStudentId,
 }: {
@@ -46,6 +59,7 @@ export function StudentMonthlyPlanEditor({
   const [publishing, setPublishing] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [staleDraft, setStaleDraft] = useState(false);
 
   useEffect(() => {
     if (resource.data) {
@@ -60,6 +74,7 @@ export function StudentMonthlyPlanEditor({
   ) {
     setDraft((current) => ({ ...current, [key]: value }));
     setSaved(false);
+    setStaleDraft(false);
   }
 
   function addItem() {
@@ -71,11 +86,13 @@ export function StudentMonthlyPlanEditor({
       ],
     }));
     setSaved(false);
+    setStaleDraft(false);
   }
 
   async function save() {
     setSaving(true);
     setError(null);
+    setStaleDraft(false);
     try {
       const plan = await teacherStudentsApi.saveMonthlyPlan(crmStudentId, {
         ...draft,
@@ -95,8 +112,13 @@ export function StudentMonthlyPlanEditor({
   }
 
   async function publish() {
+    if (saving || publishing) return;
+    if (!draft.publication?.isPublished && !window.confirm("Ученик увидит цель и все пункты плана. Опубликовать?")) {
+      return;
+    }
     setPublishing(true);
     setError(null);
+    setStaleDraft(false);
     try {
       const savedPlan = await save();
       if (!savedPlan) return;
@@ -108,8 +130,13 @@ export function StudentMonthlyPlanEditor({
       setDraft(plan);
       setSaved(true);
       await resource.reload();
-    } catch {
-      setError("Не удалось опубликовать план ученику. Проверьте цель и темы.");
+    } catch (reason) {
+      if (reason instanceof ApiError && reason.code === "MONTHLY_PLAN_STALE_DRAFT") {
+        setError("План уже изменился в другой вкладке. Обновите данные перед публикацией.");
+        setStaleDraft(true);
+      } else {
+        setError("Не удалось опубликовать план ученику. Проверьте цель и темы.");
+      }
     } finally {
       setPublishing(false);
     }
@@ -119,6 +146,18 @@ export function StudentMonthlyPlanEditor({
     return <p className="py-6 text-sm text-stone-500">Загружаем учебный план…</p>;
   }
 
+  const activeItems = draft.items.filter((item) => item.title.trim());
+  const completedItems = activeItems.filter((item) => item.status === "completed").length;
+  const progressPercent = activeItems.length
+    ? Math.round((completedItems / activeItems.length) * 100)
+    : 0;
+  const hasUnpublishedChanges = Boolean(!saved || draft.publication?.hasUnpublishedChanges);
+  const publicationLabel = !draft.publication?.isPublished
+    ? "Черновик"
+    : hasUnpublishedChanges
+      ? "Есть неопубликованные изменения"
+      : `Опубликовано ученику · ${publishedDate(draft.publication.publishedAt)}`;
+
   return (
     <section className="mt-5 rounded-[24px] border border-amber-200 bg-amber-50/40 p-5 sm:p-6 shadow-soft">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-amber-200/60 pb-4">
@@ -126,12 +165,23 @@ export function StudentMonthlyPlanEditor({
           <p className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-800">Учебная программа</p>
           <h3 className="mt-0.5 font-display text-2xl text-ink">План на месяц</h3>
         </div>
-        <input
-          type="month"
-          value={month}
-          onChange={(event) => setMonth(event.target.value)}
-          className="h-11 rounded-xl border border-amber-200 bg-white px-3 text-sm font-bold shadow-xs outline-none"
-        />
+        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+          <span className={`rounded-full px-3 py-1.5 text-[11px] font-black ${
+            draft.publication?.isPublished && !hasUnpublishedChanges
+              ? "bg-emerald-100 text-emerald-800"
+              : hasUnpublishedChanges && draft.publication?.isPublished
+                ? "bg-amber-200 text-amber-950"
+                : "bg-stone-100 text-stone-600"
+          }`}>
+            {publicationLabel}
+          </span>
+          <input
+            type="month"
+            value={month}
+            onChange={(event) => setMonth(event.target.value)}
+            className="h-11 rounded-xl border border-amber-200 bg-white px-3 text-sm font-bold shadow-xs outline-none"
+          />
+        </div>
       </div>
 
       {resource.error ? (
@@ -187,6 +237,7 @@ export function StudentMonthlyPlanEditor({
                     items: current.items.map((entry, itemIndex) => itemIndex === index ? { ...entry, title } : entry),
                   }));
                   setSaved(false);
+                  setStaleDraft(false);
                 }}
                 placeholder="Песня или навык (напр. Кукла колдуна)"
                 className="h-10 rounded-xl bg-stone-50 px-3 text-sm font-semibold outline-none focus:ring-2 focus:ring-amber-200"
@@ -200,6 +251,7 @@ export function StudentMonthlyPlanEditor({
                     items: current.items.map((entry, itemIndex) => itemIndex === index ? { ...entry, status } : entry),
                   }));
                   setSaved(false);
+                  setStaleDraft(false);
                 }}
                 className={"h-10 rounded-xl border px-2.5 text-xs font-bold " + (
                   item.status === "completed"
@@ -219,6 +271,7 @@ export function StudentMonthlyPlanEditor({
                 onClick={() => {
                   setDraft((current) => ({ ...current, items: current.items.filter((_, itemIndex) => itemIndex !== index) }));
                   setSaved(false);
+                  setStaleDraft(false);
                 }}
                 className="grid h-10 w-10 place-items-center rounded-xl text-stone-400 hover:bg-red-50 hover:text-red-700 transition"
               >
@@ -234,11 +287,19 @@ export function StudentMonthlyPlanEditor({
         </div>
       </div>
 
-      {/* 3. Финальный результат месяца (Контрольная точка) */}
+      <div className="mt-5 border-y border-amber-200/60 py-4">
+        <div className="flex items-center justify-between gap-3 text-sm font-bold text-stone-700">
+          <span>Выполнено {completedItems} из {activeItems.length}</span>
+          <strong className="text-amber-900">{progressPercent}%</strong>
+        </div>
+        <div className="mt-3"><ProgressBar value={progressPercent} /></div>
+      </div>
+
+      {/* 3. Teacher-only checkpoint */}
       <div className="mt-6">
         <label className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-stone-800">
           <Flag size={15} className="text-amber-700" />
-          3. Финальный результат месяца (Контрольная точка)
+          3. Контрольная точка (скрыта от ученика)
         </label>
         <p className="mt-1 text-[11px] text-stone-500">
           Как поймём в конце месяца, что цель достигнута?
@@ -266,7 +327,16 @@ export function StudentMonthlyPlanEditor({
         </label>
       </div>
 
-      {error ? <p className="mt-3 text-sm font-semibold text-red-700">{error}</p> : null}
+      {error ? (
+        <div className="mt-3 flex flex-wrap items-center gap-3 text-sm font-semibold text-red-700">
+          <p>{error}</p>
+          {staleDraft ? (
+            <button type="button" onClick={() => void resource.reload()} className="underline">
+              Обновить данные
+            </button>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="mt-6 flex flex-wrap gap-3">
         <button
@@ -285,13 +355,13 @@ export function StudentMonthlyPlanEditor({
           className="inline-flex min-h-12 items-center gap-2 rounded-2xl bg-ink px-6 text-sm font-bold text-white shadow-soft transition hover:bg-stone-800 disabled:opacity-50"
         >
           {publishing ? <LoaderCircle size={16} className="animate-spin" /> : <Send size={16} />}
-          {publishing ? "Публикуем…" : draft.publication?.isPublished ? "Обновить у ученика" : "Опубликовать ученику"}
+          {publishing ? "Публикуем…" : draft.publication?.isPublished ? "Обновить план ученику" : "Опубликовать ученику"}
         </button>
       </div>
 
       {draft.publication?.isPublished ? (
         <p className="mt-3 text-xs font-semibold text-emerald-700">
-          ✓ План опубликован и виден на главной странице ученика{draft.publication.hasUnpublishedChanges ? " (есть неопубликованные правки)" : ""}.
+          План опубликован и доступен ученику{hasUnpublishedChanges ? ", но последние правки ещё не опубликованы" : ""}.
         </p>
       ) : null}
     </section>

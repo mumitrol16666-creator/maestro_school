@@ -24,6 +24,8 @@ describe("unified task adapters", () => {
     const approved = mapCourseTask({ ...base, submission: { status: "approved", testScore: 85, reviewComment: null, createdAt: now, updatedAt: now } }, now);
     assert.equal(rejected?.status, "needs_revision");
     assert.equal(rejected?.actionRequired, true);
+    assert.equal(rejected?.target.actionLabel, "Повторить тест");
+    assert.equal(rejected?.target.href, "/lessons/lesson#homework-revision");
     assert.equal(approved?.status, "completed");
     assert.equal(approved?.result.scorePercent, 85);
   });
@@ -45,8 +47,9 @@ describe("unified task adapters", () => {
       submission: { status: "returned", reviewComment: "Медленнее", reviewPoints: null, reviewCoins: 0, createdAt: now, updatedAt: now },
     }, now);
     assert.equal(mapped.status, "needs_revision");
+    assert.equal(mapped.target.actionLabel, "Исправить работу");
     assert.equal(mapped.timing.overdue, true);
-    assert.equal(mapped.target.href, "/online-lessons/r");
+    assert.equal(mapped.target.href, "/online-lessons/r#assignment-revision");
   });
 
   it("maps offline partial review and next lesson without false overdue", () => {
@@ -59,6 +62,7 @@ describe("unified task adapters", () => {
       status: "scheduled", crmTeacherId: "teacher", teacherName: "Иван", homework: null,
     }], now);
     assert.equal(mapped?.status, "needs_revision");
+    assert.equal(mapped?.target.actionLabel, "Посмотреть замечания");
     assert.equal(mapped?.result.completionPercent, 60);
     assert.equal(mapped?.timing.dueKind, "next_lesson");
     assert.equal(mapped?.timing.overdue, false);

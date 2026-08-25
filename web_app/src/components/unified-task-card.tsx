@@ -49,6 +49,7 @@ export function UnifiedTaskCard({ task, compact = false }: { task: UnifiedTask; 
   const safeHomeworkPercent = homeworkPercent == null
     ? null
     : Math.min(100, Math.max(0, Math.round(homeworkPercent)));
+  const ActionIcon = task.status === "needs_revision" ? RotateCcw : ArrowRight;
 
   return (
     <article className={`rounded-[24px] border bg-white shadow-soft ${
@@ -79,6 +80,21 @@ export function UnifiedTaskCard({ task, compact = false }: { task: UnifiedTask; 
         <p className={`mt-2 text-sm leading-6 text-stone-600 ${compact ? "line-clamp-2" : "line-clamp-2"}`}>
           {task.descriptionPreview}
         </p>
+      ) : null}
+
+      {task.status === "needs_revision" ? (
+        <div className="mt-4 rounded-2xl border border-red-100 bg-red-50 p-4 text-sm text-red-950">
+          <p className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-wider text-red-700">
+            <RotateCcw size={14} /> Что исправить
+          </p>
+          <p className="mt-2 leading-6">
+            {task.result.reviewComment || (
+              task.source === "offline"
+                ? "Посмотрите результат проверки и подготовьте задание к следующему уроку."
+                : "Преподаватель вернул работу. Откройте задание, внесите исправления и отправьте новую попытку."
+            )}
+          </p>
+        </div>
       ) : null}
 
       <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-xs font-semibold text-stone-500">
@@ -125,7 +141,7 @@ export function UnifiedTaskCard({ task, compact = false }: { task: UnifiedTask; 
             {task.result.scorePercent != null ? <span>Результат теста: {task.result.scorePercent}%</span> : null}
             {task.result.points != null ? <span className={`inline-flex items-center gap-1 ${task.source === "offline" ? "mt-2" : ""}`}><Star size={13} className="text-gold" /> {task.result.points} баллов</span> : null}
           </div>
-          {task.result.reviewComment ? <p className="mt-1 leading-5">{task.result.reviewComment}</p> : null}
+          {task.result.reviewComment && task.status !== "needs_revision" ? <p className="mt-1 leading-5">{task.result.reviewComment}</p> : null}
         </div>
       ) : null}
 
@@ -135,7 +151,7 @@ export function UnifiedTaskCard({ task, compact = false }: { task: UnifiedTask; 
           task.actionRequired ? "bg-ink text-white hover:bg-stone-800" : "border border-stone-300 text-stone-700 hover:bg-stone-50"
         }`}
       >
-        {task.target.actionLabel} <ArrowRight size={15} />
+        {task.target.actionLabel} <ActionIcon size={15} />
       </Link>
     </article>
   );

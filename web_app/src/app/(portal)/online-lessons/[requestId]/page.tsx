@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, ExternalLink, LoaderCircle, Send } from "lucide-react";
+import { ArrowLeft, ExternalLink, LoaderCircle, RotateCcw, Send } from "lucide-react";
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
@@ -21,6 +21,7 @@ export default function OnlineLessonDetailPage() {
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const currentSubmission = resource.data?.assignment?.submissions[0] ?? null;
 
   useEffect(() => {
     void Promise.all([
@@ -34,6 +35,20 @@ export default function OnlineLessonDetailPage() {
       .catch(() => undefined);
   }, [requestId]);
 
+  useEffect(() => {
+    if (currentSubmission?.status !== "returned") return;
+    setComment(currentSubmission.comment ?? "");
+    setAttachmentUrl(currentSubmission.attachmentUrl ?? "");
+  }, [currentSubmission?.id, currentSubmission?.status]);
+
+  useEffect(() => {
+    if (!resource.data || window.location.hash !== "#assignment-revision") return;
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById("assignment-revision")?.scrollIntoView({ block: "start" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [resource.data]);
+
   if (resource.loading) return <LoadingState label="Открываем заявку" />;
   if (resource.error) return <ErrorState message={resource.error} retry={resource.reload} />;
   if (!resource.data) return <EmptyState title="Заявка не найдена" description="Возможно, она была удалена." />;
@@ -41,6 +56,7 @@ export default function OnlineLessonDetailPage() {
   const item = resource.data;
   const assignment = item.assignment;
   const latestSubmission = assignment?.submissions[0] ?? null;
+  const needsRevision = latestSubmission?.status === "returned";
   const canSubmit = item.status === "completed"
     && assignment
     && (!latestSubmission || latestSubmission.status === "returned");
@@ -57,7 +73,7 @@ export default function OnlineLessonDetailPage() {
         attachmentUrl: assignment.submissionFormat === "text" ? undefined : attachmentUrl.trim() || undefined,
         attachmentType: assignment.submissionFormat,
       });
-      setMessage("Задание отправлено на проверку.");
+      setMessage(needsRevision ? "Исправленная работа отправлена на проверку." : "Задание отправлено на проверку.");
       setComment("");
       setAttachmentUrl("");
       await resource.reload();
@@ -145,15 +161,41 @@ export default function OnlineLessonDetailPage() {
             </div>
           )}
 
-          {latestSubmission && latestSubmission.status !== "returned" && (
-            <div className="mt-6 rounded-2xl border border-stone-200 bg-stone-50 p-4 text-sm">
-              <p className="font-bold">Статус сдачи: {
-                latestSubmission.status === "submitted" ? "На проверке"
-                  : latestSubmission.status === "approved" ? "Принято"
-                    : latestSubmission.status === "approved_with_remarks" ? "Принято с замечаниями"
-                      : "Возвращено"
-              }</p>
-              {latestSubmission.reviewComment && <p className="mt-2 text-stone-600">{latestSubmission.reviewComment}</p>}
+          {latestSubmission && (
+            <div id={needsRevision ? "assignment-revision" : undefined} className={`mt-6 scroll-mt-24 rounded-2xl border p-4 text-sm ${
+              needsRevision ? "border-red-100 bg-red-50 text-red-950" : "border-stone-200 bg-stone-50"
+            }`}>
+              <p className={`inline-flex items-center gap-2 font-bold ${needsRevision ? "text-red-800" : ""}`}>
+                {needsRevision ? <RotateCcw size={16} /> : null}
+                {needsRevision ? "Нужно исправить работу" : "Статус сдачи"}: {
+                  latestSubmission.status === "submitted" ? "На проверке"
+                    : latestSubmission.status === "approved" ? "Принято"
+                      : latestSubmission.status === "approved_with_remarks" ? "Принято с замечаниями"
+                        : "Возвращено преподавателем"
+                }
+              </p>
+              {latestSubmission.reviewComment && (
+                <div className={`mt-3 rounded-xl p-3 ${needsRevision ? "bg-white/70" : "bg-white"}`}>
+                  <p className="text-[10px] font-black uppercase tracking-wider text-stone-400">Комментарий преподавателя</p>
+                  <p className="mt-1 whitespace-pre-wrap leading-6">{latestSubmission.reviewComment}</p>
+                </div>
+              )}
+              {needsRevision && latestSubmission.comment ? (
+                <div className="mt-3">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-red-700/70">Предыдущий ответ</p>
+                  <p className="mt-1 whitespace-pre-wrap leading-6 text-red-900/80">{latestSubmission.comment}</p>
+                </div>
+              ) : null}
+              {needsRevision && latestSubmission.attachmentUrl ? (
+                <a
+                  href={latestSubmission.attachmentUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-3 inline-flex items-center gap-1.5 font-bold text-red-800 underline underline-offset-4"
+                >
+                  Предыдущий материал <ExternalLink size={13} />
+                </a>
+              ) : null}
               {latestSubmission.reviewPoints != null && (
                 <p className="mt-2 font-semibold">Баллы: {latestSubmission.reviewPoints}{latestSubmission.reviewCoins ? ` · Coins: ${latestSubmission.reviewCoins}` : ""}</p>
               )}
@@ -165,7 +207,7 @@ export default function OnlineLessonDetailPage() {
               {message && <p className="rounded-2xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-800">{message}</p>}
               {error && <p className="rounded-2xl bg-red-50 p-4 text-sm font-semibold text-red-700">{error}</p>}
               <p className="text-xs font-bold uppercase tracking-wider text-stone-400">
-                Формат: {attachmentTypeLabels[assignment.submissionFormat as HomeworkAttachmentType]}
+                {needsRevision ? "Исправленная работа" : "Новая работа"} · формат: {attachmentTypeLabels[assignment.submissionFormat as HomeworkAttachmentType]}
               </p>
               <textarea
                 value={comment}
@@ -186,7 +228,7 @@ export default function OnlineLessonDetailPage() {
               )}
               <button disabled={submitting} className="inline-flex items-center gap-2 rounded-2xl bg-ink px-5 py-3 text-sm font-bold text-white disabled:opacity-50">
                 {submitting ? <LoaderCircle className="animate-spin" size={16} /> : <Send size={16} />}
-                Сдать задание
+                {needsRevision ? "Отправить исправленную работу" : "Сдать задание"}
               </button>
             </form>
           )}

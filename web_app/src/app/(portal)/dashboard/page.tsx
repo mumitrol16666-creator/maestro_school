@@ -93,6 +93,11 @@ export default function DashboardPage() {
     .filter((lesson) => hero?.kind !== "school_lesson" || lesson.crmClassId !== hero.id)
     .slice(0, 3);
   const earnedAchievements = achievementsResource.data?.meta?.earnedCount;
+  const currentCourseLessonHref = data.dashboard.nextAvailableLesson
+    ? `/lessons/${data.dashboard.nextAvailableLesson.id}`
+    : null;
+  const hideCurrentCourse = hero?.kind === "course"
+    || (hero?.kind === "task" && currentCourseLessonHref && hero.href.startsWith(currentCourseLessonHref));
   const hasLearningData = Boolean(
     hero
     || data.currentHomework
@@ -111,7 +116,7 @@ export default function DashboardPage() {
           </h1>
           <p className="mt-2 text-sm text-stone-500">Здесь только то, что важно сейчас.</p>
         </div>
-        <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:grid-cols-3">
+        <div className="grid w-full grid-cols-3 gap-2 sm:w-auto">
           <MetricChip icon={Star} value={data.dashboard.points.toLocaleString("ru-RU")} label="баллов" />
           <MetricChip icon={Coins} value={(user?.coins ?? 0).toLocaleString("ru-RU")} label="Coins" />
           {earnedAchievements != null ? (
@@ -147,7 +152,7 @@ export default function DashboardPage() {
 
       {visibleUpcoming.length ? <UpcomingLessons lessons={visibleUpcoming} /> : null}
 
-      {data.dashboard.currentCourse && hero?.kind !== "course" ? (
+      {data.dashboard.currentCourse && !hideCurrentCourse ? (
         <section className="mt-6 rounded-[26px] border border-stone-200 bg-white p-5 shadow-soft sm:p-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -219,7 +224,14 @@ function DashboardTasks({
             {hiddenInHero ? "Ещё нужно сделать" : "Нужно сделать"} · {visibleActionCount}
           </h2>
         </div>
-        <Link href="/tasks" className="text-xs font-black text-stone-500">Все задания →</Link>
+        <Link
+          href="/tasks"
+          aria-label="Открыть все задания"
+          title="Все задания"
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-stone-200 bg-white text-stone-500 transition hover:border-gold/40 hover:text-gold"
+        >
+          <ChevronRight size={18} />
+        </Link>
       </div>
       <div className="space-y-3">
         {tasks.slice(0, 3).map((task) => <UnifiedTaskCard key={task.id} task={task} compact />)}
@@ -238,11 +250,15 @@ function MetricChip({
   label: string;
 }) {
   return (
-    <div className="flex min-h-14 min-w-0 items-center gap-2.5 rounded-2xl border border-stone-200 bg-white px-3 py-2 shadow-sm">
+    <div
+      className="flex min-h-14 min-w-0 items-center justify-center gap-2 rounded-2xl border border-stone-200 bg-white px-2 py-2 shadow-sm sm:justify-start sm:px-3"
+      aria-label={`${value} ${label}`}
+      title={`${value} ${label}`}
+    >
       <Icon size={17} className="shrink-0 text-gold" />
       <span className="min-w-0 text-xs text-stone-500">
-        <strong className="mr-1 text-base text-ink">{value}</strong>
-        <span className="break-words">{label}</span>
+        <strong className="text-base text-ink sm:mr-1">{value}</strong>
+        <span className="hidden break-words sm:inline">{label}</span>
       </span>
     </div>
   );
@@ -321,9 +337,11 @@ function LeagueMiniWidget() {
         </div>
         <Link
           href="/league"
-          className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-bold text-white/80 transition hover:bg-white/10 hover:text-white"
+          aria-label="Открыть таблицу недельной лиги"
+          title="Таблица лиги"
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/5 text-white/80 transition hover:bg-white/10 hover:text-white"
         >
-          Таблица →
+          <ChevronRight size={18} />
         </Link>
       </div>
 
@@ -474,7 +492,14 @@ function UpcomingLessons({ lessons }: { lessons: SchoolOfflineLesson[] }) {
           <p className="text-xs font-black uppercase tracking-[0.18em] text-stone-400">Дальше по расписанию</p>
           <h2 className="font-display mt-1 text-3xl">Ближайшие уроки</h2>
         </div>
-        <Link href="/school-lessons?tab=schedule" className="text-sm font-bold text-gold">Все уроки</Link>
+        <Link
+          href="/school-lessons?tab=schedule"
+          aria-label="Открыть все уроки"
+          title="Все уроки"
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-stone-200 text-stone-500 transition hover:border-gold/40 hover:text-gold"
+        >
+          <ChevronRight size={18} />
+        </Link>
       </div>
       <div className="mt-5 divide-y divide-stone-100">
         {lessons.map((lesson) => (

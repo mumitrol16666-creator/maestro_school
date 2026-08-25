@@ -58,7 +58,7 @@ export function StudentEntryAlerts({
           icon: BookOpen,
           title: `Новых домашних заданий: ${counts.homework}`,
           text: "Преподаватель добавил задания после проведённых уроков.",
-          href: "/school-lessons?tab=homework",
+          href: "/tasks?source=offline",
         }
       : null,
     counts.reports > 0

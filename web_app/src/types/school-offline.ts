@@ -16,6 +16,7 @@ export type SchoolOfflineLesson = {
   lessonSummary: string | null;
   homework: string | null;
   homeworkReview?: {
+    sourceCrmClassId?: string | null;
     status: "not_checked" | "completed" | "partial" | "not_completed" | "not_assigned";
     completionPercent?: number | null;
     difficulties?: string | null;
@@ -31,6 +32,7 @@ export type SchoolOfflineLesson = {
     status: "completed" | "partial" | "not_completed";
     completionPercent: number | null;
     reviewedAt: string | null;
+    reviewConfidence: "exact" | "legacy_derived";
   } | null;
   planTopicResults?: Array<{
     itemId: string;

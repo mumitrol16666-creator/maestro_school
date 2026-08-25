@@ -669,7 +669,7 @@ export async function submitOnlineLessonAssignment(params: {
   if (latest && latest.status === "submitted") {
     throw new BadRequestError("Задание уже отправлено на проверку");
   }
-  if (latest && latest.status === "approved") {
+  if (latest && ["approved", "approved_with_remarks"].includes(latest.status)) {
     throw new BadRequestError("Задание уже принято");
   }
 

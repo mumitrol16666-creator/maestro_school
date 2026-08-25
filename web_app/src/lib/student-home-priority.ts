@@ -57,6 +57,11 @@ function sourceLabel(task: UnifiedTask) {
 }
 
 function taskDetail(task: UnifiedTask) {
+  if (task.status === "needs_revision") {
+    return task.result.reviewComment
+      ? `Что исправить: ${task.result.reviewComment}`
+      : "Откройте замечания преподавателя и исправьте работу";
+  }
   if (!task.timing.dueAt) return null;
   const due = formatDateTime(new Date(task.timing.dueAt));
   if (task.timing.dueKind === "next_lesson") return `К следующему уроку: ${due}`;

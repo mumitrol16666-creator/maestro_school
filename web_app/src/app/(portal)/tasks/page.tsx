@@ -81,22 +81,20 @@ function TasksContent() {
         description="Всё, что нужно сделать по курсам и занятиям с преподавателем."
       />
 
-      <section className="mb-6 rounded-[26px] border border-stone-200 bg-white p-4 shadow-soft sm:p-5">
-        <div className="grid gap-3 sm:grid-cols-3">
-          <Summary label="Требуют действия" value={data.counts.actionRequired} accent="text-red-700" />
-          <Summary label="На проверке" value={data.counts.waitingReview} accent="text-blue-700" />
-          <Summary label="Выполнено" value={data.counts.completed} accent="text-emerald-700" />
-        </div>
+      <section className="mb-5 grid grid-cols-3 gap-2 sm:gap-3">
+        <Summary label="Требуют действия" value={data.counts.actionRequired} accent="text-red-700" />
+        <Summary label="На проверке" value={data.counts.waitingReview} accent="text-blue-700" />
+        <Summary label="Выполнено" value={data.counts.completed} accent="text-emerald-700" />
       </section>
 
       <div className="mb-5 space-y-3">
-        <div className="flex gap-2 overflow-x-auto pb-1">
+        <div className="grid grid-cols-3 gap-2">
           {views.map(({ key, label, icon: Icon }) => (
             <button
               key={key}
               type="button"
               onClick={() => setFilters({ view: key })}
-              className={`inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-4 text-sm font-bold transition ${
+              className={`inline-flex min-h-11 min-w-0 items-center justify-center gap-1.5 rounded-xl px-2 text-xs font-bold transition sm:gap-2 sm:px-4 sm:text-sm ${
                 view === key ? "bg-ink text-white" : "border border-stone-200 bg-white text-stone-600"
               }`}
             >
@@ -152,9 +150,9 @@ function TasksContent() {
 
 function Summary({ label, value, accent }: { label: string; value: number; accent: string }) {
   return (
-    <div className="rounded-2xl bg-stone-50 p-4">
-      <p className="text-[10px] font-black uppercase tracking-[0.16em] text-stone-400">{label}</p>
-      <p className={`font-display mt-1 text-3xl ${accent}`}>{value}</p>
+    <div className="min-w-0 rounded-2xl border border-stone-200 bg-white p-3 shadow-sm sm:p-4">
+      <p className="text-[9px] font-black uppercase leading-4 tracking-[0.12em] text-stone-400 sm:text-[10px] sm:tracking-[0.16em]">{label}</p>
+      <p className={`font-display mt-1 text-2xl sm:text-3xl ${accent}`}>{value}</p>
     </div>
   );
 }

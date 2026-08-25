@@ -17,6 +17,12 @@ const placeholders: Record<HomeworkAttachmentType, string> = {
 
 interface HomeworkSubmissionFormProps {
   homeworkDescription: string;
+  revision?: boolean;
+  initialSubmission?: {
+    comment: string | null;
+    attachmentUrl: string | null;
+    attachmentType: HomeworkAttachmentType | null;
+  } | null;
   disabled: boolean;
   disabledReason?: string;
   submitting: boolean;
@@ -29,14 +35,16 @@ interface HomeworkSubmissionFormProps {
 
 export function HomeworkSubmissionForm({
   homeworkDescription,
+  revision = false,
+  initialSubmission,
   disabled,
   disabledReason,
   submitting,
   onSubmit,
 }: HomeworkSubmissionFormProps) {
-  const [comment, setComment] = useState("");
-  const [attachmentUrl, setAttachmentUrl] = useState("");
-  const [attachmentType, setAttachmentType] = useState<HomeworkAttachmentType>("text");
+  const [comment, setComment] = useState(initialSubmission?.comment ?? "");
+  const [attachmentUrl, setAttachmentUrl] = useState(initialSubmission?.attachmentUrl ?? "");
+  const [attachmentType, setAttachmentType] = useState<HomeworkAttachmentType>(initialSubmission?.attachmentType ?? "text");
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -51,8 +59,12 @@ export function HomeworkSubmissionForm({
 
   return (
     <form onSubmit={handleSubmit} className="mt-9 rounded-[30px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
-      <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">Домашнее задание</p>
-      <h2 className="font-display mt-3 text-3xl">Задание к уроку</h2>
+      <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">
+        {revision ? "Доработка" : "Домашнее задание"}
+      </p>
+      <h2 className="font-display mt-3 text-3xl">
+        {revision ? "Исправьте работу" : "Задание к уроку"}
+      </h2>
       <MarkdownContent className="mt-4">{homeworkDescription}</MarkdownContent>
 
       {disabled && disabledReason && (
@@ -116,7 +128,11 @@ export function HomeworkSubmissionForm({
         className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-ink px-5 py-4 text-sm font-bold text-white disabled:opacity-50"
       >
         {submitting ? <LoaderCircle className="animate-spin" size={16} /> : <Send size={16} />}
-        {disabled ? "Отправка недоступна" : "Отправить на проверку"}
+        {disabled
+          ? "Отправка недоступна"
+          : revision
+            ? "Отправить исправленную работу"
+            : "Отправить на проверку"}
       </button>
     </form>
   );
