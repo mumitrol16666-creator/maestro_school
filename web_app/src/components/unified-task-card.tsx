@@ -39,6 +39,21 @@ function dueLabel(task: UnifiedTask) {
   return `Сдать до ${formatted}`;
 }
 
+function revisionFeedback(task: UnifiedTask) {
+  const comment = task.result.reviewComment?.trim();
+  if (comment) return { label: "Что исправить", text: comment };
+  if (task.source === "offline" && task.result.completionPercent != null) {
+    return {
+      label: "Результат проверки",
+      text: `Преподаватель отметил ${Math.round(task.result.completionPercent)}% выполнения, но не оставил текстового комментария. Повторите задание к следующему уроку.`,
+    };
+  }
+  return {
+    label: "Результат проверки",
+    text: "Работа возвращена на доработку без текстового комментария преподавателя.",
+  };
+}
+
 export function UnifiedTaskCard({ task, compact = false }: { task: UnifiedTask; compact?: boolean }) {
   const source = sourceUi[task.source];
   const status = statusUi[task.status];
@@ -50,6 +65,7 @@ export function UnifiedTaskCard({ task, compact = false }: { task: UnifiedTask; 
     ? null
     : Math.min(100, Math.max(0, Math.round(homeworkPercent)));
   const ActionIcon = task.status === "needs_revision" ? RotateCcw : ArrowRight;
+  const revision = task.status === "needs_revision" ? revisionFeedback(task) : null;
 
   return (
     <article className={`rounded-[24px] border bg-white shadow-soft ${
@@ -82,18 +98,12 @@ export function UnifiedTaskCard({ task, compact = false }: { task: UnifiedTask; 
         </p>
       ) : null}
 
-      {task.status === "needs_revision" ? (
+      {revision ? (
         <div className="mt-4 rounded-2xl border border-red-100 bg-red-50 p-4 text-sm text-red-950">
           <p className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-wider text-red-700">
-            <RotateCcw size={14} /> Что исправить
+            <RotateCcw size={14} /> {revision.label}
           </p>
-          <p className="mt-2 leading-6">
-            {task.result.reviewComment || (
-              task.source === "offline"
-                ? "Посмотрите результат проверки и подготовьте задание к следующему уроку."
-                : "Преподаватель вернул работу. Откройте задание, внесите исправления и отправьте новую попытку."
-            )}
-          </p>
+          <p className="mt-2 leading-6">{revision.text}</p>
         </div>
       ) : null}
 

@@ -58,9 +58,11 @@ function sourceLabel(task: UnifiedTask) {
 
 function taskDetail(task: UnifiedTask) {
   if (task.status === "needs_revision") {
-    return task.result.reviewComment
-      ? `Что исправить: ${task.result.reviewComment}`
-      : "Откройте замечания преподавателя и исправьте работу";
+    if (task.result.reviewComment?.trim()) return task.result.reviewComment.trim();
+    if (task.source === "offline" && task.result.completionPercent != null) {
+      return `Выполнено на ${Math.round(task.result.completionPercent)}%. Текстового комментария преподаватель не оставил.`;
+    }
+    return "Работа возвращена без текстового комментария преподавателя.";
   }
   if (!task.timing.dueAt) return null;
   const due = formatDateTime(new Date(task.timing.dueAt));

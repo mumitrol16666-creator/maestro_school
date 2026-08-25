@@ -605,6 +605,8 @@ function HomeworkCard({ lesson, defaultOpen = false }: { lesson: SchoolOfflineLe
   const revisionComment = lesson.homeworkReview?.difficulties?.trim()
     || lesson.homeworkReview?.notCompletedReason?.trim()
     || null;
+  const displayTitle = lesson.topic?.trim() || lesson.title;
+  const lessonContext = lesson.topic?.trim() ? lesson.title : null;
 
   return (
     <article
@@ -612,15 +614,16 @@ function HomeworkCard({ lesson, defaultOpen = false }: { lesson: SchoolOfflineLe
       className="rounded-[24px] border border-amber-100 bg-white shadow-soft cursor-pointer transition-all hover:border-amber-200"
       onClick={() => setOpen(!open)}
     >
-      <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <BookOpen size={16} className="text-amber-600 shrink-0" />
-            <h3 className="font-display text-xl truncate">{lesson.title}</h3>
+            <h3 className="font-display line-clamp-2 text-xl">{displayTitle}</h3>
           </div>
-          <p className="mt-2 flex items-center gap-2 text-sm text-stone-500">
+          <p className="mt-2 flex flex-wrap items-center gap-2 text-sm text-stone-500">
             <CalendarDays size={13} className="text-gold" />
             {formatLessonDate(lesson.date)}
+            {lessonContext ? <span className="text-stone-400">· {lessonContext}</span> : null}
             {lesson.teacherName && (
               <span className="text-stone-400">· {lesson.teacherName}</span>
             )}
@@ -642,7 +645,7 @@ function HomeworkCard({ lesson, defaultOpen = false }: { lesson: SchoolOfflineLe
       </div>
 
       {open && (
-        <div className="border-t border-amber-100 px-5 pb-5 pt-4 space-y-3">
+        <div className="grid gap-3 border-t border-amber-100 p-4 lg:grid-cols-2">
           <div className={`rounded-2xl border p-4 ${
             resultStyle?.panel ?? "border-stone-200 bg-stone-50"
           }`}>
@@ -693,15 +696,8 @@ function HomeworkCard({ lesson, defaultOpen = false }: { lesson: SchoolOfflineLe
             <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-amber-950">{lesson.homework}</p>
           </div>
 
-          {lesson.topic ? (
-            <div className="rounded-2xl bg-stone-50 p-4">
-              <p className="text-xs font-bold uppercase tracking-wider text-stone-400">Тема урока</p>
-              <p className="mt-2 text-sm leading-6 text-stone-700">{lesson.topic}</p>
-            </div>
-          ) : null}
-
           {lesson.materials.length > 0 ? (
-            <div className="rounded-2xl border border-stone-200 bg-white p-4">
+            <div className="rounded-2xl border border-stone-200 bg-white p-4 lg:col-span-2">
               <p className="text-xs font-bold uppercase tracking-wider text-stone-400">Материалы</p>
               <div className="mt-2 flex flex-wrap gap-2">
                 {lesson.materials.map((material, index) =>

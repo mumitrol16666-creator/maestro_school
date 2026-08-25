@@ -11,6 +11,7 @@ import {
   Coins,
   ListTodo,
   MonitorPlay,
+  RotateCcw,
   School,
   Sparkles,
   Star,
@@ -107,11 +108,11 @@ export default function DashboardPage() {
   );
 
   return (
-    <div className="mx-auto max-w-6xl">
-      <header className="mb-7 flex flex-wrap items-end justify-between gap-4">
+    <div className="mx-auto max-w-[1400px]">
+      <header className="mb-5 flex flex-wrap items-center justify-between gap-4">
         <div>
           <p className="text-xs font-black uppercase tracking-[0.2em] text-gold">Твоя учебная неделя</p>
-          <h1 className="font-display mt-2 text-4xl leading-tight sm:text-5xl">
+          <h1 className="font-display mt-2 text-4xl leading-tight">
             Привет, {user?.firstName || "ученик"}!
           </h1>
           <p className="mt-2 text-sm text-stone-500">Здесь только то, что важно сейчас.</p>
@@ -128,7 +129,7 @@ export default function DashboardPage() {
       {hero ? <NowHero hero={hero} /> : null}
 
       {(plans.length || taskResource.data || data.currentHomework) ? (
-        <div className="mt-5 grid items-start gap-5 lg:grid-cols-2">
+        <div className={`mt-5 grid items-start gap-5 ${plans.length ? "lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]" : ""}`}>
           {plans.length ? (
             <MonthlyPlanCard
               plans={plans}
@@ -142,6 +143,7 @@ export default function DashboardPage() {
                 tasks={visibleTasks}
                 actionCount={taskResource.data.data.counts.actionRequired}
                 hiddenInHero={hero?.kind === "task" ? 1 : 0}
+                wide={!plans.length}
               />
             ) : data.currentHomework ? (
               <HomeworkCard homework={data.currentHomework} lastReview={data.lastHomeworkReview} />
@@ -174,7 +176,7 @@ export default function DashboardPage() {
         </section>
       ) : null}
 
-      <div className="mt-6 max-w-xl">
+      <div className="mt-6">
         <LeagueMiniWidget />
       </div>
 
@@ -195,10 +197,12 @@ function DashboardTasks({
   tasks,
   actionCount,
   hiddenInHero,
+  wide,
 }: {
   tasks: Awaited<ReturnType<typeof api.studentTasks>>["data"]["items"];
   actionCount: number;
   hiddenInHero: number;
+  wide: boolean;
 }) {
   if (actionCount === 0) {
     return (
@@ -226,14 +230,16 @@ function DashboardTasks({
         </div>
         <Link
           href="/tasks"
-          aria-label="Открыть все задания"
-          title="Все задания"
-          className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-stone-200 bg-white text-stone-500 transition hover:border-gold/40 hover:text-gold"
+          className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 text-xs font-bold text-stone-600 transition hover:border-gold/40 hover:text-gold"
         >
+          Все задания
           <ChevronRight size={18} />
         </Link>
       </div>
-      <div className="space-y-3">
+      <div className={wide
+        ? `grid gap-3 ${tasks.length > 1 ? "md:grid-cols-2" : ""} ${tasks.length > 2 ? "xl:grid-cols-3" : ""}`
+        : "space-y-3"}
+      >
         {tasks.slice(0, 3).map((task) => <UnifiedTaskCard key={task.id} task={task} compact />)}
       </div>
     </section>
@@ -277,27 +283,28 @@ function NowHero({ hero }: { hero: StudentHomeHero }) {
     : hero.badge?.tone === "success"
       ? "bg-emerald-400/20 text-emerald-100"
       : "bg-gold/20 text-amber-100";
+  const DetailIcon = hero.badge?.tone === "danger" ? RotateCcw : CalendarDays;
 
   return (
-    <section className="overflow-hidden rounded-[28px] border border-white/10 bg-[#171813] p-5 text-white shadow-soft sm:p-7">
-      <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
+    <section className="overflow-hidden rounded-[24px] border border-white/10 bg-[#171813] p-4 text-white shadow-soft sm:p-5">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0 max-w-3xl">
           <div className="flex flex-wrap items-center gap-3">
-            <span className="grid h-10 w-10 place-items-center rounded-xl bg-white/10 text-gold">
-              <Icon size={20} />
+            <span className="grid h-9 w-9 place-items-center rounded-xl bg-white/10 text-gold">
+              <Icon size={18} />
             </span>
             <p className="text-xs font-black uppercase tracking-[0.18em] text-gold">{hero.eyebrow}</p>
           </div>
-          <h2 className="font-display mt-5 break-words text-3xl leading-tight sm:text-4xl">{hero.title}</h2>
+          <h2 className="font-display mt-3 break-words text-2xl leading-tight sm:text-3xl">{hero.title}</h2>
           {hero.badge ? (
-            <span className={`mt-4 inline-flex min-h-8 items-center rounded-lg px-3 text-xs font-black ${badgeClass}`}>
+            <span className={`mt-3 inline-flex min-h-7 items-center rounded-lg px-3 text-xs font-black ${badgeClass}`}>
               {hero.badge.label}
             </span>
           ) : null}
-          {hero.subtitle ? <p className="mt-4 break-words text-sm leading-6 text-white/70">{hero.subtitle}</p> : null}
+          {hero.subtitle ? <p className="mt-3 break-words text-sm leading-6 text-white/70">{hero.subtitle}</p> : null}
           {hero.detail ? (
-            <p className="mt-2 inline-flex items-start gap-2 text-sm leading-6 text-white/60">
-              <CalendarDays size={16} className="mt-0.5 shrink-0 text-gold" /> {hero.detail}
+            <p className={`mt-2 inline-flex items-start gap-2 text-sm leading-6 ${hero.badge?.tone === "danger" ? "rounded-xl border border-red-400/20 bg-red-500/10 p-3 text-red-50" : "text-white/60"}`}>
+              <DetailIcon size={16} className="mt-0.5 shrink-0 text-gold" /> {hero.detail}
             </p>
           ) : null}
         </div>
@@ -305,7 +312,7 @@ function NowHero({ hero }: { hero: StudentHomeHero }) {
           href={hero.href}
           target={hero.external ? "_blank" : undefined}
           rel={hero.external ? "noreferrer" : undefined}
-          className="inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-xl bg-gold px-5 text-sm font-black text-ink transition hover:bg-amber-400"
+          className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-gold px-4 text-sm font-black text-ink transition hover:bg-amber-400"
         >
           {hero.actionLabel} <ArrowRight size={17} />
         </Link>
