@@ -90,6 +90,11 @@ export default function DashboardPage() {
   const visibleTasks = hero?.kind === "task"
     ? actionTasks.filter((task) => task.id !== hero.id).slice(0, 3)
     : actionTasks.slice(0, 3);
+  const taskActionCount = taskResource.data?.data.counts.actionRequired ?? 0;
+  const showTaskPanel = Boolean(
+    (taskResource.data && (taskActionCount === 0 || visibleTasks.length > 0))
+    || (!taskResource.data && data.currentHomework),
+  );
   const visibleUpcoming = upcoming
     .filter((lesson) => hero?.kind !== "school_lesson" || lesson.crmClassId !== hero.id)
     .slice(0, 3);
@@ -128,8 +133,26 @@ export default function DashboardPage() {
 
       {hero ? <NowHero hero={hero} /> : null}
 
-      {(plans.length || taskResource.data || data.currentHomework) ? (
-        <div className={`mt-5 grid items-start gap-5 ${plans.length ? "lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]" : ""}`}>
+      <div className={`mt-5 grid items-start gap-5 ${showTaskPanel ? "xl:grid-cols-[minmax(0,1.8fr)_minmax(300px,0.72fr)]" : ""}`}>
+        {showTaskPanel ? (
+          <div className="space-y-5">
+            {taskResource.data ? (
+              <DashboardTasks
+                tasks={visibleTasks}
+                actionCount={taskActionCount}
+                hiddenInHero={hero?.kind === "task" ? 1 : 0}
+                wide
+              />
+            ) : data.currentHomework ? (
+              <HomeworkCard homework={data.currentHomework} lastReview={data.lastHomeworkReview} />
+            ) : null}
+          </div>
+        ) : null}
+        <LeagueMiniWidget />
+      </div>
+
+      {(plans.length || visibleUpcoming.length) ? (
+        <div className={`mt-5 grid items-start gap-5 ${plans.length && visibleUpcoming.length ? "lg:grid-cols-2" : ""}`}>
           {plans.length ? (
             <MonthlyPlanCard
               plans={plans}
@@ -137,22 +160,9 @@ export default function DashboardPage() {
               hideCurrentFocus={hero?.kind === "plan"}
             />
           ) : null}
-          <div className="space-y-5">
-            {taskResource.data ? (
-              <DashboardTasks
-                tasks={visibleTasks}
-                actionCount={taskResource.data.data.counts.actionRequired}
-                hiddenInHero={hero?.kind === "task" ? 1 : 0}
-                wide={!plans.length}
-              />
-            ) : data.currentHomework ? (
-              <HomeworkCard homework={data.currentHomework} lastReview={data.lastHomeworkReview} />
-            ) : null}
-          </div>
+          {visibleUpcoming.length ? <UpcomingLessons lessons={visibleUpcoming} /> : null}
         </div>
       ) : null}
-
-      {visibleUpcoming.length ? <UpcomingLessons lessons={visibleUpcoming} /> : null}
 
       {data.dashboard.currentCourse && !hideCurrentCourse ? (
         <section className="mt-6 rounded-[26px] border border-stone-200 bg-white p-5 shadow-soft sm:p-6">
@@ -175,10 +185,6 @@ export default function DashboardPage() {
           <ProgressBar value={data.dashboard.progressPercent} />
         </section>
       ) : null}
-
-      <div className="mt-6">
-        <LeagueMiniWidget />
-      </div>
 
       {!hasLearningData ? (
         <section className="mt-8 rounded-[28px] border border-dashed border-stone-300 bg-white p-8 text-center">
@@ -493,7 +499,7 @@ function MonthlyPlanCard({
 
 function UpcomingLessons({ lessons }: { lessons: SchoolOfflineLesson[] }) {
   return (
-    <section className="mt-6 rounded-[28px] border border-stone-200 bg-white p-6 shadow-soft">
+    <section className="rounded-[28px] border border-stone-200 bg-white p-6 shadow-soft">
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-xs font-black uppercase tracking-[0.18em] text-stone-400">Дальше по расписанию</p>
