@@ -20,6 +20,7 @@ export type OfflineHomeworkStatus =
   | "not_assigned";
 
 export type OfflineHomeworkReviewInput = {
+  sourceCrmClassId?: string | null;
   status: OfflineHomeworkStatus;
   completionPercent?: number | null;
   difficulties?: string | null;
@@ -54,6 +55,7 @@ export async function saveOfflineLessonStudentCheck(params: {
           homeworkCompletionPercent: homework.completionPercent ?? null,
           homeworkDifficulties: homework.difficulties?.trim() || null,
           homeworkNotCompletedReason: homework.notCompletedReason?.trim() || null,
+          reviewedHomeworkCrmClassId: homework.sourceCrmClassId?.trim() || null,
         }
       : {}),
   };
@@ -75,6 +77,7 @@ export async function saveOfflineLessonStudentCheck(params: {
       homeworkCompletionPercent: homework?.completionPercent ?? null,
       homeworkDifficulties: homework?.difficulties?.trim() || null,
       homeworkNotCompletedReason: homework?.notCompletedReason?.trim() || null,
+      reviewedHomeworkCrmClassId: homework?.sourceCrmClassId?.trim() || null,
       lessonPoints: params.lessonPoints ?? 0,
       monthlyPlanId: params.monthlyPlanId ?? null,
       planTopicUpdates: (params.planTopicUpdates ?? []) as Prisma.InputJsonValue,
@@ -131,6 +134,7 @@ export async function mergeOfflineLessonStudentChecks<T extends {
                 completionPercent: check.homeworkCompletionPercent,
                 difficulties: check.homeworkDifficulties,
                 notCompletedReason: check.homeworkNotCompletedReason,
+                sourceCrmClassId: check.reviewedHomeworkCrmClassId,
               },
               lessonPoints: check.lessonPoints,
               monthlyPlanId: check.monthlyPlanId,

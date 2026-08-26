@@ -37,15 +37,9 @@ function normalized(value?: string | null) {
 }
 
 function sameLearningStream(left: OfflineLesson, right: OfflineLesson) {
-  if (left.crmGroupId || right.crmGroupId) {
-    return Boolean(left.crmGroupId && left.crmGroupId === right.crmGroupId);
-  }
-  if (left.crmTeacherId || right.crmTeacherId) {
-    return Boolean(left.crmTeacherId && left.crmTeacherId === right.crmTeacherId);
-  }
-  if (left.groupName || right.groupName) {
-    return Boolean(normalized(left.groupName) && normalized(left.groupName) === normalized(right.groupName));
-  }
+  if (left.crmGroupId && right.crmGroupId) return left.crmGroupId === right.crmGroupId;
+  if (left.groupName && right.groupName) return normalized(left.groupName) === normalized(right.groupName);
+  if (left.crmTeacherId && right.crmTeacherId) return left.crmTeacherId === right.crmTeacherId;
   return Boolean(normalized(left.teacherName) && normalized(left.teacherName) === normalized(right.teacherName));
 }
 

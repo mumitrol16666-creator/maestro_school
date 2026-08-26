@@ -16,6 +16,10 @@ import { useEffect, useState } from "react";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { familyApi } from "@/lib/family-api";
+import {
+  schoolHomeworkReviewState,
+  type SchoolHomeworkReviewState,
+} from "@/lib/school-homework-state";
 import type {
   FamilyChild,
   FamilySchoolLesson,
@@ -250,7 +254,13 @@ function ChildOverview({ child }: { child: FamilyChild }) {
         </div>
         {homeworks.length ? (
           <div className="mt-6 grid gap-4 lg:grid-cols-2">
-            {homeworks.map((lesson) => <HomeworkCard key={lesson.crmClassId} lesson={lesson} />)}
+            {homeworks.map((lesson) => (
+              <HomeworkCard
+                key={lesson.crmClassId}
+                lesson={lesson}
+                reviewState={schoolHomeworkReviewState(lesson, summary.lessonHistory)}
+              />
+            ))}
           </div>
         ) : (
           <p className="mt-5 rounded-2xl bg-stone-50 p-5 text-sm text-stone-500">
@@ -336,12 +346,22 @@ function MonthlyPlanCard({ plan }: { plan: FamilySchoolSummary["monthlyPlan"] })
   );
 }
 
-function HomeworkCard({ lesson }: { lesson: FamilySchoolLesson }) {
+function HomeworkCard({
+  lesson,
+  reviewState,
+}: {
+  lesson: FamilySchoolLesson;
+  reviewState: SchoolHomeworkReviewState;
+}) {
   const result = lesson.homeworkResult;
   const percent = result?.completionPercent ?? (
     result?.status === "completed" ? 100 : result?.status === "not_completed" ? 0 : null
   );
-  const status = result ? homeworkLabels[result.status] : "Ожидает проверки";
+  const status = result
+    ? homeworkLabels[result.status]
+    : reviewState === "missing_review"
+      ? "Результат не отмечен"
+      : "Проверка на следующем уроке";
 
   return (
     <article className="rounded-2xl border border-stone-200 bg-white p-5">
@@ -358,7 +378,9 @@ function HomeworkCard({ lesson }: { lesson: FamilySchoolLesson }) {
             ? "bg-emerald-50 text-emerald-800"
             : result?.status === "not_completed"
               ? "bg-red-50 text-red-700"
-              : "bg-amber-50 text-amber-900"
+              : reviewState === "missing_review"
+                ? "bg-red-50 text-red-700"
+                : "bg-amber-50 text-amber-900"
         }`}>
           {percent != null ? `${percent}% · ` : ""}{status}
         </span>

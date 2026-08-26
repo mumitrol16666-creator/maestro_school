@@ -437,6 +437,7 @@ model OfflineLessonStudentCheck {
   homeworkCompletionPercent  Int?     @map("homework_completion_percent")
   homeworkDifficulties       String?  @map("homework_difficulties") @db.Text
   homeworkNotCompletedReason String?  @map("homework_not_completed_reason") @db.Text
+  reviewedHomeworkCrmClassId String?  @map("reviewed_homework_crm_class_id") @db.VarChar(128)
   teacherNote                String?  @map("teacher_note") @db.Text
   lessonPoints               Int      @default(0) @map("lesson_points")
   monthlyPlanId              String?  @map("monthly_plan_id") @db.Uuid
@@ -451,6 +452,7 @@ model OfflineLessonStudentCheck {
   @@unique([crmClassId, crmStudentId])
   @@index([teacherUserId])
   @@index([crmClassId])
+  @@index([reviewedHomeworkCrmClassId])
   @@map("offline_lesson_student_checks")
 }
 

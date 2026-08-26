@@ -31,6 +31,7 @@ import { flattenCourseLessons, normalizeLessonStatus, toLesson } from "@/lib/ada
 import { ApiError, api } from "@/lib/api-client";
 import { lessonStatusHints, testLessonStatusHints } from "@/lib/homework-ui";
 import { lessonStatusLabels } from "@/lib/ui";
+import { triggerFileDownload } from "@/lib/file-download";
 import type { HomeworkAttachmentType } from "@/types/homework";
 import type { Lesson } from "@/types";
 
@@ -272,13 +273,17 @@ export default function LessonPage() {
             ) : lesson.materials.length ? (
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 {lesson.materials.map((material) => (
-                  <a
-                    href={material.downloadUrl ?? material.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    download={material.downloadUrl ? material.title : undefined}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (material.type === "link") {
+                        window.open(material.url ?? material.downloadUrl, "_blank", "noopener,noreferrer");
+                        return;
+                      }
+                      void triggerFileDownload(material.downloadUrl ?? material.url, material.title);
+                    }}
                     key={material.id}
-                    className="card-hover rounded-2xl border border-stone-200 bg-paper p-4 text-left shadow-soft"
+                    className="card-hover w-full rounded-2xl border border-stone-200 bg-paper p-4 text-left shadow-soft"
                   >
                     {material.previewUrl ? (
                       <span className="mb-4 block overflow-hidden rounded-xl border border-stone-100 bg-stone-50">
@@ -291,11 +296,13 @@ export default function LessonPage() {
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-bold">{material.title}</span>
-                        <span className="mt-1 block text-xs text-stone-400">{material.type.toUpperCase()} · Скачать</span>
+                        <span className="mt-1 block text-xs text-stone-400">
+                          {material.type.toUpperCase()} · {material.type === "link" ? "Открыть" : "Скачать"}
+                        </span>
                       </span>
                       <Download size={16} className="shrink-0 text-stone-400" />
                     </span>
-                  </a>
+                  </button>
                 ))}
               </div>
             ) : (

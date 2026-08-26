@@ -1,3 +1,4 @@
+import { formatDownloadUrl } from "./file-download";
 import type { BoardPost, Course, Lesson, LessonStatus } from "@/types";
 import type {
   ApiCourseDetail,
@@ -95,7 +96,7 @@ export function toLesson(detail: ApiLessonDetail, status?: string): Lesson {
       type: material.type,
       meta: material.type.toUpperCase(),
       url: material.url,
-      downloadUrl: material.media?.url ? `${material.media.url}?download=1` : material.url,
+      downloadUrl: formatDownloadUrl(material.media?.url ?? material.url, material.title),
       mimeType: material.media?.mimeType,
       previewUrl: material.type === "image" ? material.media?.url ?? material.url : undefined,
     })),

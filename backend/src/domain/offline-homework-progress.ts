@@ -10,12 +10,15 @@ export type OfflineHomeworkLessonRef = {
   date: string;
   startTime?: string | null;
   homework?: string | null;
+  crmGroupId?: string | null;
+  crmTeacherId?: string | null;
   groupName?: string | null;
   teacherName?: string | null;
 };
 
 export type OfflineHomeworkReviewRef = {
   crmClassId: string;
+  sourceCrmClassId?: string | null;
   status: string;
   completionPercent?: number | null;
   reviewedAt?: Date | null;
@@ -25,6 +28,7 @@ export type OfflineHomeworkResult = {
   status: Exclude<OfflineHomeworkStatus, "not_checked" | "not_assigned">;
   completionPercent: number | null;
   reviewedAt: string | null;
+  reviewConfidence: "exact" | "legacy_derived";
 };
 
 function lessonOrder(lesson: OfflineHomeworkLessonRef) {
@@ -39,9 +43,16 @@ function isSameLearningTrack(
   assignedLesson: OfflineHomeworkLessonRef,
   reviewLesson: OfflineHomeworkLessonRef,
 ) {
+  if (assignedLesson.crmGroupId && reviewLesson.crmGroupId) {
+    return assignedLesson.crmGroupId === reviewLesson.crmGroupId;
+  }
   const assignedGroup = normalized(assignedLesson.groupName);
   const reviewGroup = normalized(reviewLesson.groupName);
   if (assignedGroup && reviewGroup) return assignedGroup === reviewGroup;
+
+  if (assignedLesson.crmTeacherId && reviewLesson.crmTeacherId) {
+    return assignedLesson.crmTeacherId === reviewLesson.crmTeacherId;
+  }
 
   const assignedTeacher = normalized(assignedLesson.teacherName);
   const reviewTeacher = normalized(reviewLesson.teacherName);
@@ -50,7 +61,10 @@ function isSameLearningTrack(
   return true;
 }
 
-function normalizeReview(review: OfflineHomeworkReviewRef): OfflineHomeworkResult | null {
+function normalizeReview(
+  review: OfflineHomeworkReviewRef,
+  reviewConfidence: OfflineHomeworkResult["reviewConfidence"],
+): OfflineHomeworkResult | null {
   if (!["completed", "partial", "not_completed"].includes(review.status)) return null;
 
   const status = review.status as OfflineHomeworkResult["status"];
@@ -64,6 +78,7 @@ function normalizeReview(review: OfflineHomeworkReviewRef): OfflineHomeworkResul
     status,
     completionPercent,
     reviewedAt: review.reviewedAt?.toISOString() ?? null,
+    reviewConfidence,
   };
 }
 
@@ -84,7 +99,7 @@ export function linkOfflineHomeworkResults(
     .map((review) => ({
       review,
       lesson: lessonsByClassId.get(review.crmClassId),
-      normalized: normalizeReview(review),
+      normalized: normalizeReview(review, review.sourceCrmClassId ? "exact" : "legacy_derived"),
     }))
     .filter((item): item is typeof item & {
       lesson: OfflineHomeworkLessonRef;
@@ -92,7 +107,18 @@ export function linkOfflineHomeworkResults(
     } => Boolean(item.lesson && item.normalized))
     .sort((left, right) => lessonOrder(left.lesson).localeCompare(lessonOrder(right.lesson)));
 
-  for (const item of orderedReviews) {
+  for (const item of orderedReviews.filter(({ review }) => Boolean(review.sourceCrmClassId))) {
+    const assignedLesson = lessonsByClassId.get(item.review.sourceCrmClassId as string);
+    if (
+      assignedLesson
+      && lessonOrder(assignedLesson) < lessonOrder(item.lesson)
+      && Boolean(assignedLesson.homework?.trim())
+    ) {
+      resultByAssignedClassId.set(assignedLesson.crmClassId, item.normalized);
+    }
+  }
+
+  for (const item of orderedReviews.filter(({ review }) => !review.sourceCrmClassId)) {
     const reviewOrder = lessonOrder(item.lesson);
     const assignedLesson = [...chronological]
       .reverse()

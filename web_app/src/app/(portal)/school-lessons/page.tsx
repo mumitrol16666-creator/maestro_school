@@ -39,6 +39,10 @@ import { api } from "@/lib/api-client";
 import { currentAqtobeMonth } from "@/lib/aqtobe-month";
 import { parseVideoUrl } from "@/lib/parse-video-url";
 import {
+  schoolHomeworkReviewState,
+  type SchoolHomeworkReviewState,
+} from "@/lib/school-homework-state";
+import {
   getSchoolAlertCounts,
   markSchoolAlertsSeen,
   type SchoolAlertCounts,
@@ -46,6 +50,7 @@ import {
 import type { SchoolOfflineLesson, StudentOfflineSummary } from "@/types/school-offline";
 import { MonthlyReportModal } from "@/components/monthly-report-modal";
 import { downloadMonthlyReportExcel } from "@/lib/monthly-report-excel";
+import { isManagedMediaUrl, triggerFileDownload } from "@/lib/file-download";
 
 /* ─── label maps ────────────────────────────────────────────────────── */
 
@@ -104,9 +109,51 @@ function MaterialPreview({ material }: { material: SchoolOfflineLesson["material
     return <img src={material.url} alt={material.title || "Материал урока"} className="mb-3 max-h-72 w-full rounded-xl object-contain" loading="lazy" onClick={(event) => event.stopPropagation()} />;
   }
   if (material.type === "pdf" || material.mimeType === "application/pdf" || /\.pdf(\?|$)/i.test(material.url)) {
-    return <iframe title={material.title || "PDF к уроку"} src={material.url} className="mb-3 h-80 w-full rounded-xl border border-stone-200 bg-white" onClick={(event) => event.stopPropagation()} />;
+    return <iframe title={material.title || "PDF к уроку"} src={material.url} className="mb-3 h-40 w-full rounded-xl border border-stone-200 bg-white sm:h-80" onClick={(event) => event.stopPropagation()} />;
   }
   return null;
+}
+
+function LessonMaterialItems({ materials }: { materials: SchoolOfflineLesson["materials"] }) {
+  return (
+    <div className="mt-3 space-y-2.5">
+      {materials.map((material, index) => {
+        if (!material.url) return null;
+        const isFile = isManagedMediaUrl(material.url)
+          || ["file", "pdf", "image", "audio"].includes(material.type ?? "")
+          || Boolean(material.mimeType && !material.mimeType.startsWith("video/"));
+        const title = material.title || `Материал ${index + 1}`;
+
+        return (
+          <div
+            key={`${material.url}-${index}`}
+            className="flex flex-col gap-3 rounded-2xl border border-stone-200 bg-stone-50/80 p-3.5 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <div className="min-w-0 flex-1">
+              <MaterialPreview material={material} />
+              <p className="truncate text-sm font-bold text-ink">{title}</p>
+              {material.description ? <p className="mt-1 line-clamp-2 text-xs text-stone-500">{material.description}</p> : null}
+            </div>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                if (isFile) {
+                  void triggerFileDownload(material.url, title);
+                  return;
+                }
+                window.open(material.url, "_blank", "noopener,noreferrer");
+              }}
+              className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-stone-200 bg-white px-4 py-2 text-xs font-bold text-ink shadow-xs transition hover:border-amber-300 hover:bg-amber-50"
+            >
+              <Download size={14} className="text-gold" />
+              <span>{isFile ? "Скачать файл" : "Открыть материал"}</span>
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 /* ─── tab types ─────────────────────────────────────────────────────── */
@@ -274,24 +321,7 @@ function LessonCard({
           {lesson.materials.length > 0 ? (
             <div className="rounded-2xl border border-stone-200 bg-white p-4">
               <p className="text-xs font-bold uppercase tracking-wider text-stone-400">Материалы урока</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {lesson.materials.map((material, index) =>
-                  material.url ? (
-                    <a
-                      key={`${material.url}-${index}`}
-                      href={material.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="block rounded-2xl bg-stone-100 p-3 text-xs font-semibold text-stone-700 hover:bg-stone-200 transition"
-                    >
-                      <MaterialPreview material={material} />
-                      {material.description ? <span className="mb-2 block max-w-xl text-left text-xs leading-5 text-stone-500">{material.description}</span> : null}
-                      {material.title || `Материал ${index + 1}`}
-                    </a>
-                  ) : null,
-                )}
-              </div>
+              <LessonMaterialItems materials={lesson.materials} />
             </div>
           ) : null}
         </div>
@@ -501,6 +531,7 @@ function HomeworkFolder({ lessons, requestedLessonId }: { lessons: SchoolOffline
         <HomeworkCard
           key={lesson.crmClassId}
           lesson={lesson}
+          reviewState={schoolHomeworkReviewState(lesson, lessons)}
           defaultOpen={lesson.crmClassId === requestedLessonId}
         />
       ))}
@@ -534,14 +565,23 @@ const homeworkResultStyles = {
 
 function HomeworkProgress({
   result,
+  reviewState,
 }: {
   result: SchoolOfflineLesson["homeworkResult"];
+  reviewState: SchoolHomeworkReviewState;
 }) {
   if (!result) {
+    const isMissing = reviewState === "missing_review";
     return (
-      <span className="rounded-2xl border border-stone-200 bg-stone-50 px-3 py-2 text-center">
-        <span className="block text-[10px] font-bold uppercase tracking-wide text-stone-400">Проверка</span>
-        <span className="mt-0.5 block text-xs font-bold text-stone-600">Ожидается</span>
+      <span className={`rounded-2xl border px-3 py-2 text-center ${
+        isMissing ? "border-red-100 bg-red-50" : "border-stone-200 bg-stone-50"
+      }`}>
+        <span className={`block text-[10px] font-bold uppercase tracking-wide ${
+          isMissing ? "text-red-500" : "text-stone-400"
+        }`}>{isMissing ? "Результат" : "Проверка"}</span>
+        <span className={`mt-0.5 block text-xs font-bold ${
+          isMissing ? "text-red-700" : "text-stone-600"
+        }`}>{isMissing ? "Не отмечен" : "На следующем уроке"}</span>
       </span>
     );
   }
@@ -595,7 +635,15 @@ function HomeworkPoints({ lesson }: { lesson: SchoolOfflineLesson }) {
   );
 }
 
-function HomeworkCard({ lesson, defaultOpen = false }: { lesson: SchoolOfflineLesson; defaultOpen?: boolean }) {
+function HomeworkCard({
+  lesson,
+  reviewState,
+  defaultOpen = false,
+}: {
+  lesson: SchoolOfflineLesson;
+  reviewState: SchoolHomeworkReviewState;
+  defaultOpen?: boolean;
+}) {
   const [open, setOpen] = useState(defaultOpen);
   const resultStyle = lesson.homeworkResult
     ? homeworkResultStyles[lesson.homeworkResult.status]
@@ -611,7 +659,11 @@ function HomeworkCard({ lesson, defaultOpen = false }: { lesson: SchoolOfflineLe
   return (
     <article
       id={`homework-${lesson.crmClassId}`}
-      className="rounded-[24px] border border-amber-100 bg-white shadow-soft cursor-pointer transition-all hover:border-amber-200"
+      className={`rounded-[24px] border bg-white shadow-soft cursor-pointer transition-all ${
+        reviewState === "missing_review"
+          ? "border-red-100 hover:border-red-200"
+          : "border-amber-100 hover:border-amber-200"
+      }`}
       onClick={() => setOpen(!open)}
     >
       <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
@@ -633,7 +685,7 @@ function HomeworkCard({ lesson, defaultOpen = false }: { lesson: SchoolOfflineLe
           )}
         </div>
         <div className="flex shrink-0 items-center gap-2 self-stretch sm:self-start">
-          <HomeworkProgress result={lesson.homeworkResult} />
+          <HomeworkProgress result={lesson.homeworkResult} reviewState={reviewState} />
           <HomeworkPoints lesson={lesson} />
           <ChevronDown
             size={18}
@@ -675,7 +727,9 @@ function HomeworkCard({ lesson, defaultOpen = false }: { lesson: SchoolOfflineLe
               </>
             ) : (
               <p className="mt-2 text-sm leading-6 text-stone-500">
-                Преподаватель отметит результат на следующем занятии.
+                {reviewState === "missing_review"
+                  ? "Следующее занятие уже прошло, но результат не отметили. Преподаватель или администратор может исправить его в карточке проведённого урока."
+                  : "Преподаватель отметит результат на следующем занятии."}
               </p>
             )}
           </div>
@@ -699,24 +753,7 @@ function HomeworkCard({ lesson, defaultOpen = false }: { lesson: SchoolOfflineLe
           {lesson.materials.length > 0 ? (
             <div className="rounded-2xl border border-stone-200 bg-white p-4 lg:col-span-2">
               <p className="text-xs font-bold uppercase tracking-wider text-stone-400">Материалы</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {lesson.materials.map((material, index) =>
-                  material.url ? (
-                    <a
-                      key={`${material.url}-${index}`}
-                      href={material.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="block rounded-2xl bg-stone-100 p-3 text-xs font-semibold text-stone-700 hover:bg-stone-200 transition"
-                    >
-                      <MaterialPreview material={material} />
-                      {material.description ? <span className="mb-2 block max-w-xl text-left text-xs leading-5 text-stone-500">{material.description}</span> : null}
-                      {material.title || `Материал ${index + 1}`}
-                    </a>
-                  ) : null,
-                )}
-              </div>
+              <LessonMaterialItems materials={lesson.materials} />
             </div>
           ) : null}
         </div>

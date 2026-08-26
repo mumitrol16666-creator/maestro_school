@@ -18,6 +18,7 @@ export const offlineLessonStudentCheckSchema = z.object({
     status: z.enum(["in_progress", "completed"]),
   })).max(50).optional(),
   homeworkReview: z.object({
+    sourceCrmClassId: z.string().min(1).max(128).nullable().optional(),
     status: z.enum(["not_checked", "completed", "partial", "not_completed", "not_assigned"]),
     completionPercent: z.number().int().min(0).max(100).nullable().optional(),
     difficulties: z.string().max(3000).nullable().optional(),

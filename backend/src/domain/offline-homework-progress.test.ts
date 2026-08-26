@@ -24,6 +24,7 @@ describe("offline homework progress", () => {
       [
         {
           crmClassId: "lesson-2",
+          sourceCrmClassId: "lesson-1",
           status: "partial",
           completionPercent: 75,
           reviewedAt: new Date("2026-07-08T13:00:00.000Z"),
@@ -35,6 +36,7 @@ describe("offline homework progress", () => {
       status: "partial",
       completionPercent: 75,
       reviewedAt: "2026-07-08T13:00:00.000Z",
+      reviewConfidence: "exact",
     });
     assert.equal(results.has("lesson-2"), false);
   });
@@ -89,5 +91,60 @@ describe("offline homework progress", () => {
     );
 
     assert.equal(results.size, 0);
+  });
+
+  it("links a legacy review to the latest unmatched homework in the same stream", () => {
+    const results = linkOfflineHomeworkResults(
+      [
+        { crmClassId: "lesson-1", date: "2026-07-01", homework: "Задание 1", groupName: "Гитара" },
+        { crmClassId: "lesson-2", date: "2026-07-08", homework: "Задание 2", groupName: "Гитара" },
+        { crmClassId: "lesson-3", date: "2026-07-15", homework: null, groupName: "Гитара" },
+      ],
+      [{ crmClassId: "lesson-3", status: "completed" }],
+    );
+
+    assert.equal(results.has("lesson-1"), false);
+    assert.equal(results.get("lesson-2")?.reviewConfidence, "legacy_derived");
+  });
+
+  it("uses the exact source id even when several previous homeworks exist", () => {
+    const results = linkOfflineHomeworkResults(
+      [
+        { crmClassId: "lesson-1", date: "2026-07-01", homework: "Задание 1", groupName: "Гитара" },
+        { crmClassId: "lesson-2", date: "2026-07-08", homework: "Задание 2", groupName: "Гитара" },
+        { crmClassId: "lesson-3", date: "2026-07-15", homework: null, groupName: "Гитара" },
+      ],
+      [{
+        crmClassId: "lesson-3",
+        sourceCrmClassId: "lesson-2",
+        status: "completed",
+      }],
+    );
+
+    assert.equal(results.has("lesson-1"), false);
+    assert.equal(results.get("lesson-2")?.reviewConfidence, "exact");
+  });
+
+  it("keeps an individual learning stream when a substitute teacher conducts the next lesson", () => {
+    const results = linkOfflineHomeworkResults(
+      [
+        {
+          crmClassId: "lesson-1",
+          date: "2026-07-01",
+          homework: "Задание",
+          groupName: "Ученик Иванов",
+          crmTeacherId: "teacher-a",
+        },
+        {
+          crmClassId: "lesson-2",
+          date: "2026-07-08",
+          groupName: "Ученик Иванов",
+          crmTeacherId: "teacher-b",
+        },
+      ],
+      [{ crmClassId: "lesson-2", status: "partial", completionPercent: 80 }],
+    );
+
+    assert.equal(results.get("lesson-1")?.completionPercent, 80);
   });
 });

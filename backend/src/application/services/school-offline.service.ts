@@ -9,10 +9,36 @@ type OfflineSummaryLesson = {
   date?: string;
   startTime?: string | null;
   homework?: string | null;
+  crmGroupId?: string | null;
+  crmTeacherId?: string | null;
   groupName?: string | null;
   teacherName?: string | null;
+  homeworkReview?: {
+    sourceCrmClassId?: string | null;
+    status?: string | null;
+    completionPercent?: number | null;
+    reviewedAt?: string | Date | null;
+  } | null;
   [key: string]: unknown;
 };
+
+type OfflineSummaryReview = {
+  crmClassId: string;
+  sourceCrmClassId?: string | null;
+  status: string;
+  completionPercent?: number | null;
+  reviewedAt?: Date | null;
+};
+
+function reviewDate(value?: string | Date | null) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function hasHomeworkResult(status?: string | null) {
+  return ["completed", "partial", "not_completed"].includes(status ?? "");
+}
 
 type OfflinePlanItem = {
   id: string;
@@ -79,6 +105,29 @@ export async function getStudentSchoolOfflineSummary(appUserId: string) {
     ]),
   );
   const checksByClassId = new Map(checks.map((check) => [check.crmClassId, check]));
+  const reviewsByClassId = new Map<string, OfflineSummaryReview>();
+  for (const lesson of lessonHistory) {
+    const review = lesson.homeworkReview;
+    if (!lesson.crmClassId || !review?.status) continue;
+    reviewsByClassId.set(lesson.crmClassId, {
+      crmClassId: lesson.crmClassId,
+      sourceCrmClassId: review.sourceCrmClassId,
+      status: review.status,
+      completionPercent: review.completionPercent,
+      reviewedAt: reviewDate(review.reviewedAt),
+    });
+  }
+  for (const check of checks) {
+    const remote = reviewsByClassId.get(check.crmClassId);
+    if (!hasHomeworkResult(check.homeworkStatus) && remote && hasHomeworkResult(remote.status)) continue;
+    reviewsByClassId.set(check.crmClassId, {
+      crmClassId: check.crmClassId,
+      sourceCrmClassId: check.reviewedHomeworkCrmClassId ?? remote?.sourceCrmClassId,
+      status: check.homeworkStatus,
+      completionPercent: check.homeworkCompletionPercent,
+      reviewedAt: check.markedAt,
+    });
+  }
   const homeworkResultsByClassId = linkOfflineHomeworkResults(
     lessonHistory
       .filter((lesson): lesson is OfflineSummaryLesson & { crmClassId: string; date: string } =>
@@ -88,15 +137,12 @@ export async function getStudentSchoolOfflineSummary(appUserId: string) {
         date: lesson.date,
         startTime: lesson.startTime,
         homework: lesson.homework,
+        crmGroupId: lesson.crmGroupId,
+        crmTeacherId: lesson.crmTeacherId,
         groupName: lesson.groupName,
         teacherName: lesson.teacherName,
       })),
-    checks.map((check) => ({
-      crmClassId: check.crmClassId,
-      status: check.homeworkStatus,
-      completionPercent: check.homeworkCompletionPercent,
-      reviewedAt: check.markedAt,
-    })),
+    Array.from(reviewsByClassId.values()),
   );
   const mergedLessonHistory = lessonHistory.map((lesson) => {
     const check = lesson.crmClassId ? checksByClassId.get(lesson.crmClassId) : null;
