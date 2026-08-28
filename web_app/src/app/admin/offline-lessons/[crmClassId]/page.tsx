@@ -1159,6 +1159,7 @@ export default function AdminOfflineLessonDetailPage() {
           compactGroup={isCompactGroupLesson}
           previousGroupHomework={previousGroupHomework}
           canManageAttendance={canManageAttendance}
+          canSetExcusedAbsence={isAdmin}
           canEdit={canEditReport}
           showHomeworkReview={hasPreviousHomework}
           showLearningResult={!isTrialLesson}
@@ -1560,9 +1561,9 @@ export default function AdminOfflineLessonDetailPage() {
       {canEditTeacherReport ? (
         <section className="mt-8 flex flex-col gap-4 border-t border-stone-200 pt-7 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-sm font-bold text-stone-700">Урок не проводился?</p>
+            <p className="text-sm font-bold text-stone-700">Урок не проводился по причине школы или преподавателя?</p>
             <p className="mt-1 text-sm text-stone-500">
-              Используйте это действие только если занятие действительно не состоялось.
+              Если ученик не пришёл, отметьте «Не пришёл» в посещаемости. Это действие для других причин отмены.
             </p>
           </div>
           <button
@@ -1815,9 +1816,9 @@ function NotHeldConfirmation({
         <span className="grid h-12 w-12 place-items-center rounded-2xl bg-red-50 text-red-700">
           <XCircle size={22} />
         </span>
-        <h2 id="not-held-title" className="font-display mt-5 text-3xl">Урок не состоялся?</h2>
+        <h2 id="not-held-title" className="font-display mt-5 text-3xl">Урок не проводился?</h2>
         <p className="mt-3 text-sm leading-6 text-stone-600">
-          Отметка останется в истории. Занятие не будет отправлено как проведённое.
+          Это действие не списывает занятие ученику и не начисляет ставку преподавателю. Если ученик не пришёл, закройте окно и выберите «Не пришёл» в посещаемости.
         </p>
         <p className="mt-4 text-sm font-bold text-ink">{lesson.title}</p>
         <p className="mt-1 text-sm text-stone-500">
@@ -1832,7 +1833,7 @@ function NotHeldConfirmation({
             disabled={busy}
             onChange={(event) => onReasonChange(event.target.value)}
             className="mt-2 min-h-24 w-full rounded-xl border border-stone-200 px-3 py-3 text-sm normal-case tracking-normal"
-            placeholder="Например: ученик предупредил об отсутствии"
+            placeholder="Например: преподаватель заболел или школа отменила занятие"
           />
         </label>
         <div className="mt-6 grid grid-cols-2 gap-3">
@@ -2128,6 +2129,7 @@ function StudentRoster({
   compactGroup,
   previousGroupHomework,
   canManageAttendance,
+  canSetExcusedAbsence,
   canEdit,
   showHomeworkReview,
   showLearningResult,
@@ -2141,6 +2143,7 @@ function StudentRoster({
   compactGroup: boolean;
   previousGroupHomework: PreviousHomeworkSource | null;
   canManageAttendance: boolean;
+  canSetExcusedAbsence: boolean;
   canEdit: boolean;
   showHomeworkReview: boolean;
   showLearningResult: boolean;
@@ -2188,6 +2191,7 @@ function StudentRoster({
         <GroupLessonRoster
           students={students}
           canEdit={canEdit && canManageAttendance}
+          canSetExcusedAbsence={canSetExcusedAbsence}
           showLearningResult={showLearningResult}
           previousHomework={previousGroupHomework}
           drafts={drafts}
@@ -2201,6 +2205,7 @@ function StudentRoster({
               key={student.crmStudentId}
               student={student}
               canEdit={canEdit && canManageAttendance}
+              canSetExcusedAbsence={canSetExcusedAbsence}
               showHomeworkReview={showHomeworkReview && Boolean(previousHomeworkLesson(student))}
               showLearningResult={showLearningResult}
               draft={drafts[student.crmStudentId] ?? studentLessonCheckDraft(student)}
@@ -2214,10 +2219,15 @@ function StudentRoster({
   );
 }
 
-const groupAttendanceExceptions = [
+const teacherGroupAttendanceExceptions = [
   { value: "late", label: "Опоздал" },
-  { value: "excused_absence", label: "Пропуск с причиной" },
-  { value: "unexcused_absence", label: "Пропуск без причины" },
+  { value: "unexcused_absence", label: "Не пришёл" },
+] as const;
+
+const adminGroupAttendanceExceptions = [
+  { value: "late", label: "Опоздал" },
+  { value: "excused_absence", label: "Уважительная — без списания" },
+  { value: "unexcused_absence", label: "Неуважительная — списать" },
 ] as const;
 
 const groupHomeworkOptions = [
@@ -2259,6 +2269,7 @@ function draftWithHomeworkStatus(
 function GroupLessonRoster({
   students,
   canEdit,
+  canSetExcusedAbsence,
   showLearningResult,
   previousHomework,
   drafts,
@@ -2267,6 +2278,7 @@ function GroupLessonRoster({
 }: {
   students: TeacherOfflineStudent[];
   canEdit: boolean;
+  canSetExcusedAbsence: boolean;
   showLearningResult: boolean;
   previousHomework: PreviousHomeworkSource | null;
   drafts: Record<string, StudentLessonCheckDraft>;
@@ -2394,6 +2406,7 @@ function GroupLessonRoster({
             key={student.crmStudentId}
             student={student}
             canEdit={canEdit}
+            canSetExcusedAbsence={canSetExcusedAbsence}
             showLearningResult={showLearningResult}
             previousHomework={previousHomework}
             draft={drafts[student.crmStudentId]}
@@ -2409,6 +2422,7 @@ function GroupLessonRoster({
 function GroupStudentRow({
   student,
   canEdit,
+  canSetExcusedAbsence,
   showLearningResult,
   previousHomework,
   draft,
@@ -2417,6 +2431,7 @@ function GroupStudentRow({
 }: {
   student: TeacherOfflineStudent;
   canEdit: boolean;
+  canSetExcusedAbsence: boolean;
   showLearningResult: boolean;
   previousHomework: PreviousHomeworkSource | null;
   draft: StudentLessonCheckDraft;
@@ -2425,7 +2440,10 @@ function GroupStudentRow({
 }) {
   const [learningOpen, setLearningOpen] = useState(false);
   const attended = ["present", "late"].includes(draft.attendanceStatus);
-  const exceptionStatus = groupAttendanceExceptions.some((item) => item.value === draft.attendanceStatus)
+  const attendanceExceptions = canSetExcusedAbsence
+    ? adminGroupAttendanceExceptions
+    : teacherGroupAttendanceExceptions;
+  const exceptionStatus = attendanceExceptions.some((item) => item.value === draft.attendanceStatus)
     ? draft.attendanceStatus
     : "";
   const needsHomeworkDetails = attended
@@ -2469,7 +2487,7 @@ function GroupStudentRow({
           className="h-10 min-w-0 rounded-xl border border-stone-200 bg-white px-3 text-xs font-bold text-stone-700 outline-none focus:border-amber-400"
         >
           <option value="">{attended ? "Без исключений" : "Другой статус"}</option>
-          {groupAttendanceExceptions.map((option) => (
+          {attendanceExceptions.map((option) => (
             <option key={option.value} value={option.value}>{option.label}</option>
           ))}
         </select>
@@ -2620,11 +2638,17 @@ function GroupStudentRow({
   );
 }
 
-const attendanceOptions = [
+const teacherAttendanceOptions = [
   { value: "present", label: "Присутствовал", icon: Check, active: "border-emerald-500 bg-emerald-50 text-emerald-800" },
   { value: "late", label: "Опоздал", icon: Clock3, active: "border-amber-500 bg-amber-50 text-amber-900" },
-  { value: "excused_absence", label: "Пропуск с причиной", icon: UserX, active: "border-sky-500 bg-sky-50 text-sky-900" },
-  { value: "unexcused_absence", label: "Пропуск без причины", icon: CircleSlash2, active: "border-red-500 bg-red-50 text-red-800" },
+  { value: "unexcused_absence", label: "Не пришёл", icon: CircleSlash2, active: "border-red-500 bg-red-50 text-red-800" },
+] as const;
+
+const adminAttendanceOptions = [
+  { value: "present", label: "Присутствовал", icon: Check, active: "border-emerald-500 bg-emerald-50 text-emerald-800" },
+  { value: "late", label: "Опоздал", icon: Clock3, active: "border-amber-500 bg-amber-50 text-amber-900" },
+  { value: "excused_absence", label: "Уважительная", icon: UserX, active: "border-sky-500 bg-sky-50 text-sky-900" },
+  { value: "unexcused_absence", label: "Неуважительная", icon: CircleSlash2, active: "border-red-500 bg-red-50 text-red-800" },
 ] as const;
 
 const homeworkOptions = [
@@ -2876,6 +2900,7 @@ function StudentLearningResultFields({
 function StudentLessonCheckCard({
   student,
   canEdit,
+  canSetExcusedAbsence,
   showHomeworkReview,
   showLearningResult,
   draft,
@@ -2884,6 +2909,7 @@ function StudentLessonCheckCard({
 }: {
   student: TeacherOfflineStudent;
   canEdit: boolean;
+  canSetExcusedAbsence: boolean;
   showHomeworkReview: boolean;
   showLearningResult: boolean;
   draft: StudentLessonCheckDraft;
@@ -2895,6 +2921,9 @@ function StudentLessonCheckCard({
   const homeworkNeedsReason = homeworkReview.status === "not_completed";
   const homeworkNeedsDifficulties = homeworkReview.status === "partial";
   const disabled = !canEdit;
+  const availableAttendanceOptions = canSetExcusedAbsence
+    ? adminAttendanceOptions
+    : teacherAttendanceOptions;
   function chooseHomeworkStatus(status: OfflineHomeworkReview["status"]) {
     onChange(draftWithHomeworkStatus(draft, status));
   }
@@ -2926,7 +2955,7 @@ function StudentLessonCheckCard({
           Посещаемость
         </legend>
         <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {attendanceOptions.map(({ value, label, icon: Icon, active }) => {
+          {availableAttendanceOptions.map(({ value, label, icon: Icon, active }) => {
             const selected = attendanceStatus === value;
             return (
               <button
@@ -2944,6 +2973,11 @@ function StudentLessonCheckCard({
             );
           })}
         </div>
+        {!canSetExcusedAbsence && canEdit ? (
+          <p className="mt-2 text-xs font-semibold text-stone-500">
+            «Не пришёл» — неуважительный пропуск: занятие списывается ученику, преподавателю начисляется ставка.
+          </p>
+        ) : null}
       </fieldset>
 
       {/* Проверка прошлого ДЗ */}

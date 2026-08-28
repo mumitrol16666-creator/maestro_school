@@ -19,6 +19,7 @@ import {
 } from "./offline-lesson-student-check.service.js";
 import { validateOfflineLessonSubmission } from "./offline-lesson-submission-policy.js";
 import { aqtobeMonthKey } from "../../lib/aqtobe-month.js";
+import { normalizeTeacherAttendanceStatus } from "./teacher-attendance-policy.js";
 
 function lessonMonth(lesson: Record<string, unknown>) {
   const date = typeof lesson.date === "string" ? new Date(lesson.date) : null;
@@ -191,19 +192,20 @@ export async function teacherOfflineSetAttendance(
 ) {
   await getTeacherOfflineClass(appUserId, crmClassId);
   const crmTeacherId = await requireCrmTeacherId(appUserId);
+  const normalizedAttendanceStatus = normalizeTeacherAttendanceStatus(attendanceStatus);
   const crmResult = await postTeacherAttendance(crmClassId, {
     crmTeacherId,
     studentId,
-    attendanceStatus,
+    attendanceStatus: normalizedAttendanceStatus,
     teacherNote,
     homeworkReview,
-    attended: ["present", "late"].includes(attendanceStatus),
+    attended: ["present", "late"].includes(normalizedAttendanceStatus),
   });
   const lessonCheck = await saveOfflineLessonStudentCheck({
     crmClassId,
     crmStudentId: studentId,
     teacherUserId: appUserId,
-    attendanceStatus,
+    attendanceStatus: normalizedAttendanceStatus,
     teacherNote,
     homeworkReview,
     lessonPoints,
@@ -231,19 +233,20 @@ export async function teacherOfflineSetAttendanceBatch(
   const results = [];
 
   for (const check of checks) {
+    const normalizedAttendanceStatus = normalizeTeacherAttendanceStatus(check.attendanceStatus);
     const crmResult = await postTeacherAttendance(crmClassId, {
       crmTeacherId,
       studentId: check.studentId,
-      attendanceStatus: check.attendanceStatus,
+      attendanceStatus: normalizedAttendanceStatus,
       teacherNote: check.teacherNote,
       homeworkReview: check.homeworkReview,
-      attended: ["present", "late"].includes(check.attendanceStatus),
+      attended: ["present", "late"].includes(normalizedAttendanceStatus),
     });
     const lessonCheck = await saveOfflineLessonStudentCheck({
       crmClassId,
       crmStudentId: check.studentId,
       teacherUserId: appUserId,
-      attendanceStatus: check.attendanceStatus,
+      attendanceStatus: normalizedAttendanceStatus,
       teacherNote: check.teacherNote,
       homeworkReview: check.homeworkReview,
       lessonPoints: check.lessonPoints,
