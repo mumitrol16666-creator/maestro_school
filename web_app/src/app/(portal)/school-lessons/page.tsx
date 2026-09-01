@@ -1193,7 +1193,7 @@ export default function SchoolLessonsPage() {
               </section>
               {lessonHistory.some((lesson) => Boolean(lesson.homework)) ? (
                 <section>
-                  <p className="mb-3 text-[10px] font-black uppercase tracking-[0.18em] text-stone-400">История до 7 сентября</p>
+                  <p className="mb-3 text-[10px] font-black uppercase tracking-[0.18em] text-stone-400">Предыдущие задания</p>
                   <HomeworkFolder lessons={lessonHistory} requestedLessonId={requestedLessonId} />
                 </section>
               ) : null}
