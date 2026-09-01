@@ -39,6 +39,7 @@ test("reward economy v2 requires both the flag and an event after cutover", () =
   assert.equal(rewardEconomyV2AppliesToEvent(new Date("2026-09-07T00:00:00Z"), disabled), false);
 
   const enabled = loadProductFeatureConfig({ FEATURE_REWARD_ECONOMY_V2: "true" });
-  assert.equal(rewardEconomyV2AppliesToEvent(new Date("2026-09-06T18:59:59.999Z"), enabled), false);
+  const beforeCutover = new Date(Date.parse(DEFAULT_PRODUCT_CUTOVER_AT) - 1);
+  assert.equal(rewardEconomyV2AppliesToEvent(beforeCutover, enabled), false);
   assert.equal(rewardEconomyV2AppliesToEvent(new Date(DEFAULT_PRODUCT_CUTOVER_AT), enabled), true);
 });

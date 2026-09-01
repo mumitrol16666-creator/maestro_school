@@ -36,7 +36,7 @@ services:
       INTEGRATION_SSO_SECRET: local-maestro-sso-secret
       RELEASE_SHA: unknown
       RELEASE_BUILT_AT: unknown
-      PRODUCT_V2_CUTOVER_AT: "2026-09-06T19:00:00.000Z"
+      PRODUCT_V2_CUTOVER_AT: "2026-09-01T09:29:00.000Z"
       FEATURE_LEARNING_TOPICS_V2: "false"
       FEATURE_STUDENT_WORKSPACE_V2: "false"
       FEATURE_HOMEWORK_FLOW_V2: "false"
