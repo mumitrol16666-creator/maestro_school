@@ -105,7 +105,10 @@ if (fileFeaturesEnabled) {
   if (process.env.MALWARE_SCANNER_DRIVER !== "clamav") {
     failures.push("MALWARE_SCANNER_DRIVER must be clamav when homework or dialogs V2 is enabled");
   }
-  parsedUrl("S3_ENDPOINT", ["https:"]);
+  const s3Url = parsedUrl("S3_ENDPOINT", ["http:", "https:"]);
+  if (s3Url?.protocol === "http:" && !["127.0.0.1", "localhost"].includes(s3Url.hostname)) {
+    failures.push("S3_ENDPOINT may use http only for private loopback storage");
+  }
   required("S3_REGION");
   required("S3_BUCKET");
   secureSecret("S3_ACCESS_KEY_ID", 16);
