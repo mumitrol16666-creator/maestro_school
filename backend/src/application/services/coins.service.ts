@@ -3,7 +3,10 @@ import { prisma } from "../../infrastructure/database/prisma.js";
 import { BadRequestError, ConflictError } from "../../domain/errors.js";
 import { rewardEconomyV2AppliesToEvent } from "../../config/product-features.js";
 import { deliverUserNotification } from "./notification.service.js";
-import { requireActiveEconomicEpochForEvent } from "./economic-epoch.service.js";
+import {
+  ensureActiveEconomicEpochParticipant,
+  requireActiveEconomicEpochForEvent,
+} from "./economic-epoch.service.js";
 
 export async function creditMaestroCoinsInTransaction(
   tx: Prisma.TransactionClient,
@@ -78,7 +81,10 @@ export async function creditMaestroCoinsInTransaction(
   };
 }
 
-export async function getStudentCoins(studentId: string) {
+export async function getStudentCoins(studentId: string, now = new Date()) {
+  if (rewardEconomyV2AppliesToEvent(now)) {
+    await ensureActiveEconomicEpochParticipant(studentId, now);
+  }
   const balance = await prisma.studentCoinBalance.findUnique({
     where: { studentId },
     select: { balance: true },

@@ -4,9 +4,12 @@ import { loadProductFeatureConfig } from "../src/config/product-features.js";
 import {
   applyEconomicEpochCutover,
   ECONOMY_V2_OPENING_COINS,
+  ensureActiveEconomicEpochParticipant,
   previewEconomicEpochCutover,
 } from "../src/application/services/economic-epoch.service.js";
 import { prisma } from "../src/infrastructure/database/prisma.js";
+import { getStudentCoins } from "../src/application/services/coins.service.js";
+import { getStudentPointsReadModel } from "../src/application/services/points.service.js";
 import { assertLocalE2eDatabase } from "./qa-database-guard.js";
 
 const EPOCH_CODE = "e2e-economy-v2-cutover";
@@ -36,13 +39,17 @@ async function main() {
   const startsAt = loadProductFeatureConfig().cutoverAt;
   await removeTestEpoch();
 
-  const [originalBalances, originalActiveEpochs] = await Promise.all([
+  const [originalBalances, originalActiveEpochs, originalInactiveStudent] = await Promise.all([
     prisma.studentCoinBalance.findMany({
       select: { studentId: true, balance: true, economicEpochId: true },
     }),
     prisma.economicEpoch.findMany({
       where: { status: EconomicEpochStatus.active },
       select: { id: true },
+    }),
+    prisma.user.findUniqueOrThrow({
+      where: { id: INACTIVE_STUDENT_ID },
+      select: { isActive: true, deletedAt: true },
     }),
   ]);
   try {
@@ -85,6 +92,22 @@ async function main() {
     assert.equal(epoch.participants.length, activeStudents.length);
     assert.equal(epoch.participants.some((participant) => participant.studentId === INACTIVE_STUDENT_ID), false);
 
+    await prisma.user.update({
+      where: { id: INACTIVE_STUDENT_ID },
+      data: { isActive: true, deletedAt: null },
+    });
+    const lateStudentEventAt = new Date(startsAt.getTime() + 1);
+    const lateEnrollment = await ensureActiveEconomicEpochParticipant(
+      INACTIVE_STUDENT_ID,
+      lateStudentEventAt,
+    );
+    assert.equal(lateEnrollment?.created, true);
+    assert.equal((await getStudentPointsReadModel(INACTIVE_STUDENT_ID, lateStudentEventAt)).level?.level.level, 1);
+    assert.equal(await getStudentCoins(INACTIVE_STUDENT_ID, lateStudentEventAt), 200);
+    assert.equal(await prisma.economicEpochParticipant.count({
+      where: { epochId: epoch.id, studentId: INACTIVE_STUDENT_ID },
+    }), 1);
+
     const legacyParticipant = epoch.participants.find(
       (participant) => participant.studentId === LEGACY_STUDENT_ID,
     );
@@ -106,7 +129,7 @@ async function main() {
     const openingTransactions = await prisma.maestroCoinTransaction.findMany({
       where: { economicEpochId: epoch.id },
     });
-    assert.equal(openingTransactions.length, activeStudents.length);
+    assert.equal(openingTransactions.length, activeStudents.length + 1);
     assert.ok(openingTransactions.every((transaction) => (
       transaction.amount === 200
       && transaction.balanceBefore === 0
@@ -129,14 +152,14 @@ async function main() {
     }).then((balance) => balance.balance), 137);
     assert.equal(await prisma.maestroCoinTransaction.count({
       where: { economicEpochId: epoch.id },
-    }), activeStudents.length);
+    }), activeStudents.length + 1);
     assert.equal(await prisma.auditLog.count({
       where: { entityType: "economic_epoch", entityId: epoch.id },
     }), 1);
 
     const after = await previewEconomicEpochCutover({ code: EPOCH_CODE, startsAt });
     assert.equal(after.state, "applied");
-    assert.equal(after.alreadyEnrolled, activeStudents.length);
+    assert.equal(after.alreadyEnrolled, activeStudents.length + 1);
     const mismatchedStart = new Date(startsAt.getTime() + 60_000);
     const mismatchedPreview = await previewEconomicEpochCutover({
       code: EPOCH_CODE,
@@ -167,6 +190,10 @@ async function main() {
     console.log("Economy V2 cutover E2E passed.");
   } finally {
     await removeTestEpoch();
+    await prisma.user.updateMany({
+      where: { id: INACTIVE_STUDENT_ID },
+      data: originalInactiveStudent,
+    });
     await prisma.$transaction(async (tx) => {
       for (const balance of originalBalances) {
         await tx.studentCoinBalance.updateMany({

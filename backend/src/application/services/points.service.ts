@@ -3,7 +3,10 @@ import { ConflictError } from "../../domain/errors.js";
 import { rewardEconomyV2AppliesToEvent } from "../../config/product-features.js";
 import { getProductLevel, rankProductPoints } from "../../domain/product-economy-v2.js";
 import { deliverUserNotification } from "./notification.service.js";
-import { requireActiveEconomicEpochForEvent } from "./economic-epoch.service.js";
+import {
+  ensureActiveEconomicEpochParticipant,
+  requireActiveEconomicEpochForEvent,
+} from "./economic-epoch.service.js";
 import { privateLeagueName } from "./weekly-league-policy.js";
 
 async function notifyPointsAwarded(params: {
@@ -48,22 +51,14 @@ export async function getStudentPointsReadModel(
     };
   }
 
-  const economicEpoch = await requireActiveEconomicEpochForEvent(now);
-  const participant = await prisma.economicEpochParticipant.findUnique({
-    where: {
-      epochId_studentId: {
-        epochId: economicEpoch.id,
-        studentId,
-      },
-    },
-    select: { openingPoints: true },
-  });
-  if (!participant) {
+  const enrollment = await ensureActiveEconomicEpochParticipant(studentId, now);
+  if (!enrollment) {
     throw new ConflictError(
       "Баланс ученика не открыт в текущей экономической эпохе",
       "ECONOMIC_EPOCH_PARTICIPANT_MISSING",
     );
   }
+  const { epoch: economicEpoch, participant } = enrollment;
   const result = await prisma.pointsTransaction.aggregate({
     where: { studentId, economicEpochId: economicEpoch.id },
     _sum: { amount: true },

@@ -3,7 +3,7 @@ import { ConflictError } from "../../domain/errors.js";
 import { prisma } from "../../infrastructure/database/prisma.js";
 import { getAqtobeWeekRange } from "./weekly-league-policy.js";
 
-export const ECONOMY_V2_EPOCH_CODE = "economy-v2-2026-09-07";
+export const ECONOMY_V2_EPOCH_CODE = "economy-v2-2026-09-01";
 export const ECONOMY_V2_EPOCH_NAME = "Maestro Economy V2";
 export const ECONOMY_V2_OPENING_POINTS = 0;
 export const ECONOMY_V2_OPENING_WEEKLY_XP = 0;
@@ -60,9 +60,15 @@ async function loadActiveStudentSnapshots(client: DbClient, startsAt: Date): Pro
     select: { id: true },
     orderBy: { id: "asc" },
   });
-  if (students.length === 0) return [];
+  return loadStudentSnapshots(client, students.map((student) => student.id), startsAt);
+}
 
-  const studentIds = students.map((student) => student.id);
+async function loadStudentSnapshots(
+  client: DbClient,
+  studentIds: string[],
+  startsAt: Date,
+): Promise<StudentSnapshot[]> {
+  if (studentIds.length === 0) return [];
   const week = getAqtobeWeekRange(startsAt);
   const [points, weeklyXp, coinBalances] = await Promise.all([
     client.pointsTransaction.groupBy({
@@ -93,11 +99,11 @@ async function loadActiveStudentSnapshots(client: DbClient, startsAt: Date): Pro
   const xpByStudent = new Map(weeklyXp.map((entry) => [entry.studentId, entry._sum?.amount ?? 0]));
   const coinsByStudent = new Map(coinBalances.map((entry) => [entry.studentId, entry.balance]));
 
-  return students.map((student) => ({
-    studentId: student.id,
-    legacyPoints: pointsByStudent.get(student.id) ?? 0,
-    legacyWeeklyXp: xpByStudent.get(student.id) ?? 0,
-    legacyCoins: coinsByStudent.get(student.id) ?? 0,
+  return studentIds.map((studentId) => ({
+    studentId,
+    legacyPoints: pointsByStudent.get(studentId) ?? 0,
+    legacyWeeklyXp: xpByStudent.get(studentId) ?? 0,
+    legacyCoins: coinsByStudent.get(studentId) ?? 0,
   }));
 }
 
@@ -317,6 +323,86 @@ export async function applyEconomicEpochCutover(params: {
       participants: snapshots.length,
       idempotent: false,
     };
+  }, { timeout: 30_000 });
+}
+
+export async function ensureActiveEconomicEpochParticipant(
+  studentId: string,
+  eventAt = new Date(),
+) {
+  const epoch = await requireActiveEconomicEpochForEvent(eventAt);
+  const existing = await prisma.economicEpochParticipant.findUnique({
+    where: { epochId_studentId: { epochId: epoch.id, studentId } },
+    select: { id: true, openingPoints: true },
+  });
+  if (existing) return { epoch, participant: existing, created: false as const };
+
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`economic-epoch-participant:${epoch.id}:${studentId}`}))`;
+    const participant = await tx.economicEpochParticipant.findUnique({
+      where: { epochId_studentId: { epochId: epoch.id, studentId } },
+      select: { id: true, openingPoints: true },
+    });
+    if (participant) return { epoch, participant, created: false as const };
+
+    const eligibleStudent = await tx.user.findFirst({
+      where: {
+        id: studentId,
+        role: { slug: "student" },
+        isActive: true,
+        deletedAt: null,
+      },
+      select: { id: true },
+    });
+    if (!eligibleStudent) return null;
+
+    const [snapshot] = await loadStudentSnapshots(tx, [studentId], epoch.startsAt);
+    const activatedAt = new Date();
+    const createdParticipant = await tx.economicEpochParticipant.create({
+      data: {
+        epochId: epoch.id,
+        studentId,
+        openingPoints: epoch.openingPoints,
+        openingWeeklyXp: epoch.openingWeeklyXp,
+        openingCoins: epoch.openingCoins,
+        openingLevel: 1,
+        legacyPointsSnapshot: snapshot?.legacyPoints ?? 0,
+        legacyWeeklyXpSnapshot: snapshot?.legacyWeeklyXp ?? 0,
+        legacyCoinsSnapshot: snapshot?.legacyCoins ?? 0,
+        sourceKey: participantSourceKey(epoch.code, studentId),
+        activatedAt,
+      },
+      select: { id: true, openingPoints: true },
+    });
+    await tx.studentCoinBalance.upsert({
+      where: { studentId },
+      update: { balance: epoch.openingCoins, economicEpochId: epoch.id },
+      create: { studentId, balance: epoch.openingCoins, economicEpochId: epoch.id },
+    });
+    await tx.maestroCoinTransaction.create({
+      data: {
+        economicEpochId: epoch.id,
+        studentId,
+        amount: epoch.openingCoins,
+        transactionType: "adjustment",
+        reason: "Стартовый баланс новой экономики Maestro",
+        sourceType: "economic_epoch",
+        sourceKey: openingCoinsSourceKey(epoch.code, studentId),
+        createdById: null,
+        balanceBefore: 0,
+        balanceAfter: epoch.openingCoins,
+        createdAt: activatedAt,
+      },
+    });
+    await tx.auditLog.create({
+      data: {
+        entityType: "economic_epoch_participant",
+        entityId: createdParticipant.id,
+        action: "create",
+        payload: { epochCode: epoch.code, studentId, openingCoins: epoch.openingCoins },
+      },
+    });
+    return { epoch, participant: createdParticipant, created: true as const };
   }, { timeout: 30_000 });
 }
 
