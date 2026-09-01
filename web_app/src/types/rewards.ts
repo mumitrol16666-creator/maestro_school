@@ -1,4 +1,4 @@
-import type { StudentRankOverview } from "./api";
+import type { ProductLevelProgress, StudentRankOverview } from "./api";
 
 export type RewardRedemptionStatus = "requested" | "approved" | "fulfilled" | "rejected";
 
@@ -46,6 +46,7 @@ export interface StudentRewardsOverview {
   points: number;
   coins: number;
   rank: StudentRankOverview;
+  level: ProductLevelProgress | null;
   catalog: RewardCatalogItem[];
   redemptions: RewardRedemption[];
 }

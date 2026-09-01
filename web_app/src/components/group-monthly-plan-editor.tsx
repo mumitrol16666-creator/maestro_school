@@ -11,12 +11,19 @@ import {
   Trash2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { LearningTopicProgressEditor } from "@/components/learning-topic-progress-editor";
+import { PlanMonthField } from "@/components/plan-month-field";
+import { LearningHomeworkAssignmentComposer } from "@/components/learning-homework-assignment-composer";
 import { useApiResource } from "@/hooks/use-api-resource";
+import { ApiError } from "@/lib/api-client";
+import { learningHomeworkApi } from "@/lib/learning-homework-api";
 import { teacherStudentsApi } from "@/lib/teacher-students-api";
 import { currentAqtobeMonth } from "@/lib/aqtobe-month";
 import type {
   GroupMonthlyPlan,
+  LearningPlanMode,
   MonthlyPlanItemStatus,
+  TeacherCrmDirection,
 } from "@/types/teacher-students";
 
 function emptyPlan(month: string): GroupMonthlyPlan {
@@ -48,22 +55,65 @@ function materialHref(value: string) {
   }
 }
 
-export function GroupMonthlyPlanEditor({ crmGroupId }: { crmGroupId: string }) {
-  const [month, setMonth] = useState(currentAqtobeMonth);
-  const resource = useApiResource(
-    () => teacherStudentsApi.groupMonthlyPlan(crmGroupId, month),
-    [crmGroupId, month],
+export function GroupMonthlyPlanEditor({
+  crmGroupId,
+  directionTitle,
+}: {
+  crmGroupId: string;
+  directionTitle: string;
+}) {
+  const modeResource = useApiResource(() => teacherStudentsApi.learningPlanMode(), []);
+
+  if (modeResource.loading) {
+    return <p className="py-6 text-sm text-stone-500">Загружаем направления…</p>;
+  }
+  if (modeResource.error || !modeResource.data) {
+    return <p className="mt-5 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700">{modeResource.error ?? "Не удалось загрузить направления"}</p>;
+  }
+  const directions = modeResource.data.mode === "v2"
+    ? modeResource.data.directions.filter((direction) => direction.title === directionTitle)
+    : [];
+  if (modeResource.data.mode === "v2" && !directions.length) {
+    return <p className="mt-5 rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-900">Для группы не выбрано направление обучения.</p>;
+  }
+
+  return (
+    <GroupMonthlyPlanEditorContent
+      crmGroupId={crmGroupId}
+      mode={modeResource.data}
+      directions={directions}
+    />
   );
+}
+
+function GroupMonthlyPlanEditorContent({
+  crmGroupId,
+  mode,
+  directions,
+}: {
+  crmGroupId: string;
+  mode: LearningPlanMode;
+  directions: TeacherCrmDirection[];
+}) {
+  const [month, setMonth] = useState(currentAqtobeMonth);
+  const [crmDirectionId, setCrmDirectionId] = useState(() => directions[0]?.crmDirectionId ?? "");
+  const resource = useApiResource(
+    () => teacherStudentsApi.groupMonthlyPlan(crmGroupId, month, crmDirectionId || undefined),
+    [crmGroupId, month, crmDirectionId],
+  );
+  const homeworkFlowResource = useApiResource(() => learningHomeworkApi.teacherAvailability(), []);
   const [draft, setDraft] = useState<GroupMonthlyPlan>(() => emptyPlan(month));
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [staleDraft, setStaleDraft] = useState(false);
 
   useEffect(() => {
     setDraft(resource.data?.plan ?? emptyPlan(month));
     setSaved(false);
     setError(null);
+    setStaleDraft(false);
   }, [month, resource.data]);
 
   function setField(field: keyof GroupMonthlyPlan, value: string) {
@@ -100,21 +150,30 @@ export function GroupMonthlyPlanEditor({ crmGroupId }: { crmGroupId: string }) {
     }
     setSaving(true);
     setError(null);
+    setStaleDraft(false);
     try {
       const plan = await teacherStudentsApi.saveGroupMonthlyPlan(crmGroupId, {
         ...draft,
         month,
+        expectedVersion: mode.mode === "v2" ? draft.version ?? 0 : undefined,
         items: draft.items.filter((item) => item.title.trim()),
         materials: draft.materials.filter((material) => (
           material.title.trim() || material.url.trim() || material.note.trim()
         )),
-      });
+      }, crmDirectionId || undefined);
       setDraft(plan);
       setSaved(true);
       await resource.reload();
       return plan;
-    } catch {
-      setError("Не удалось сохранить план группы. Проверьте интернет и повторите.");
+    } catch (reason) {
+      if (reason instanceof ApiError && reason.code === "MONTHLY_PLAN_STALE_DRAFT") {
+        setError("План группы уже изменился. Обновите данные перед сохранением.");
+        setStaleDraft(true);
+      } else if (reason instanceof ApiError) {
+        setError(reason.message);
+      } else {
+        setError("Не удалось сохранить план группы. Проверьте интернет и повторите.");
+      }
       return null;
     } finally {
       setSaving(false);
@@ -124,19 +183,28 @@ export function GroupMonthlyPlanEditor({ crmGroupId }: { crmGroupId: string }) {
   async function publish() {
     setPublishing(true);
     setError(null);
+    setStaleDraft(false);
     try {
       const savedPlan = await save();
       if (!savedPlan) return;
       const plan = await teacherStudentsApi.publishGroupMonthlyPlan(
         crmGroupId,
         month,
-        savedPlan.publication?.draftRevision,
+        savedPlan.version ?? savedPlan.publication?.draftRevision,
+        crmDirectionId || undefined,
       );
       setDraft(plan);
       setSaved(true);
       await resource.reload();
-    } catch {
-      setError("Не удалось опубликовать план группы. Проверьте фокус и темы.");
+    } catch (reason) {
+      if (reason instanceof ApiError && reason.code === "MONTHLY_PLAN_STALE_DRAFT") {
+        setError("План группы уже изменился. Обновите данные перед публикацией.");
+        setStaleDraft(true);
+      } else if (reason instanceof ApiError) {
+        setError(reason.message);
+      } else {
+        setError("Не удалось опубликовать план группы. Проверьте фокус и темы.");
+      }
     } finally {
       setPublishing(false);
     }
@@ -148,19 +216,34 @@ export function GroupMonthlyPlanEditor({ crmGroupId }: { crmGroupId: string }) {
 
   return (
     <section className="mt-5 rounded-[22px] border border-amber-200 bg-amber-50/40 p-4 sm:p-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="border-b border-amber-200/60 pb-4">
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-800">
             Учебный маршрут группы
           </p>
           <h3 className="mt-1 font-display text-xl">План и материалы</h3>
         </div>
-        <input
-          type="month"
-          value={month}
-          onChange={(event) => setMonth(event.target.value)}
-          className="h-11 rounded-xl border border-amber-200 bg-white px-3 text-sm font-bold"
-        />
+        <div className={`mt-4 grid min-w-0 gap-3 ${
+          mode.mode === "v2"
+            ? "sm:grid-cols-2"
+            : "sm:ml-auto sm:max-w-[260px]"
+        }`}>
+          {mode.mode === "v2" ? (
+            <label className="block min-w-0 text-[10px] font-black uppercase tracking-wider text-stone-500">
+              Направление
+              <select
+                value={crmDirectionId}
+                onChange={(event) => setCrmDirectionId(event.target.value)}
+                className="mt-1 h-11 w-full rounded-xl border border-amber-200 bg-white px-3 text-sm font-bold normal-case tracking-normal text-ink"
+              >
+                {directions.map((direction) => (
+                  <option key={direction.crmDirectionId} value={direction.crmDirectionId}>{direction.title}</option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          <PlanMonthField value={month} onChange={setMonth} />
+        </div>
       </div>
 
       {resource.error ? (
@@ -190,40 +273,73 @@ export function GroupMonthlyPlanEditor({ crmGroupId }: { crmGroupId: string }) {
         </div>
         <div className="mt-3 space-y-2">
           {draft.items.map((item, index) => (
-            <div key={item.id} className="grid gap-2 rounded-2xl border border-stone-200 bg-white p-3 sm:grid-cols-[1fr_150px_40px]">
-              <input
-                value={item.title}
-                onChange={(event) => {
-                  const title = event.target.value;
-                  setDraft((current) => ({
-                    ...current,
-                    items: current.items.map((entry, itemIndex) => (
-                      itemIndex === index ? { ...entry, title } : entry
-                    )),
-                  }));
-                  setSaved(false);
-                }}
-                placeholder={`Тема ${index + 1}`}
-                className="h-10 rounded-xl bg-stone-50 px-3 text-sm outline-none focus:ring-2 focus:ring-amber-200"
-              />
-              <select
-                value={item.status}
-                onChange={(event) => {
-                  const status = event.target.value as MonthlyPlanItemStatus;
-                  setDraft((current) => ({
-                    ...current,
-                    items: current.items.map((entry, itemIndex) => (
-                      itemIndex === index ? { ...entry, status } : entry
-                    )),
-                  }));
-                  setSaved(false);
-                }}
-                className="h-10 rounded-xl border border-stone-200 bg-white px-2 text-xs font-bold"
-              >
-                {itemStatuses.map((status) => (
-                  <option key={status.value} value={status.value}>{status.label}</option>
-                ))}
-              </select>
+            <div key={item.id} className="grid gap-2 rounded-2xl border border-stone-200 bg-white p-3 sm:grid-cols-[minmax(0,1fr)_180px_40px]">
+              <div className="min-w-0 space-y-2">
+                <input
+                  value={item.title}
+                  onChange={(event) => {
+                    const title = event.target.value;
+                    setDraft((current) => ({
+                      ...current,
+                      items: current.items.map((entry, itemIndex) => (
+                        itemIndex === index ? { ...entry, title } : entry
+                      )),
+                    }));
+                    setSaved(false);
+                  }}
+                  placeholder={`Тема ${index + 1}`}
+                  className="h-10 w-full rounded-xl bg-stone-50 px-3 text-sm outline-none focus:ring-2 focus:ring-amber-200"
+                />
+                {mode.mode === "v2" ? (
+                  <input
+                    value={item.masteryCriteria ?? ""}
+                    onChange={(event) => {
+                      const masteryCriteria = event.target.value;
+                      setDraft((current) => ({
+                        ...current,
+                        items: current.items.map((entry, itemIndex) => (
+                          itemIndex === index ? { ...entry, masteryCriteria } : entry
+                        )),
+                      }));
+                      setSaved(false);
+                    }}
+                    placeholder="Критерий освоения"
+                    className="h-9 w-full rounded-xl bg-stone-50 px-3 text-xs outline-none focus:ring-2 focus:ring-amber-200"
+                  />
+                ) : null}
+              </div>
+              {mode.mode === "v2" ? (
+                <LearningTopicProgressEditor
+                  topicId={item.id}
+                  progressPercent={item.progressPercent}
+                  onSaved={(result) => {
+                    setDraft((current) => ({
+                      ...current,
+                      items: current.items.map((entry) => entry.id === item.id ? { ...entry, ...result } : entry),
+                    }));
+                    void resource.reload();
+                  }}
+                />
+              ) : (
+                <select
+                  value={item.status}
+                  onChange={(event) => {
+                    const status = event.target.value as MonthlyPlanItemStatus;
+                    setDraft((current) => ({
+                      ...current,
+                      items: current.items.map((entry, itemIndex) => (
+                        itemIndex === index ? { ...entry, status } : entry
+                      )),
+                    }));
+                    setSaved(false);
+                  }}
+                  className="h-10 rounded-xl border border-stone-200 bg-white px-2 text-xs font-bold"
+                >
+                  {itemStatuses.map((status) => (
+                    <option key={status.value} value={status.value}>{status.label}</option>
+                  ))}
+                </select>
+              )}
               <button
                 type="button"
                 aria-label="Удалить тему"
@@ -238,6 +354,11 @@ export function GroupMonthlyPlanEditor({ crmGroupId }: { crmGroupId: string }) {
               >
                 <Trash2 size={16} />
               </button>
+              {mode.mode === "v2" && homeworkFlowResource.data && item.progressPercent !== undefined && item.title.trim() ? (
+                <div className="min-w-0 sm:col-span-3">
+                  <LearningHomeworkAssignmentComposer topicId={item.id} topicTitle={item.title} />
+                </div>
+              ) : null}
             </div>
           ))}
           {!draft.items.length ? (
@@ -361,13 +482,22 @@ export function GroupMonthlyPlanEditor({ crmGroupId }: { crmGroupId: string }) {
         />
       </label>
 
-      {error ? <p className="mt-3 text-sm font-semibold text-red-700">{error}</p> : null}
-      <div className="mt-5 flex flex-wrap gap-3">
+      {error ? (
+        <div className="mt-3 flex flex-wrap items-center gap-3 text-sm font-semibold text-red-700">
+          <p>{error}</p>
+          {staleDraft ? (
+            <button type="button" onClick={() => void resource.reload()} className="underline">
+              Обновить данные
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      <div className="sticky bottom-[72px] z-20 -mx-4 mt-5 flex flex-col gap-2 border-y border-amber-200/70 bg-amber-50/95 px-4 py-3 shadow-[0_-12px_30px_rgba(41,37,36,0.08)] backdrop-blur sm:bottom-4 sm:mx-0 sm:flex-row sm:rounded-2xl sm:border">
         <button
           type="button"
           disabled={saving || publishing}
           onClick={() => void save()}
-          className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-stone-300 bg-white px-5 text-sm font-bold text-ink disabled:opacity-60"
+          className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-stone-300 bg-white px-5 text-sm font-bold text-ink disabled:opacity-60 sm:w-auto"
         >
           {saving ? <LoaderCircle size={16} className="animate-spin" /> : saved ? <CheckCircle2 size={16} /> : <Save size={16} />}
           {saving ? "Сохраняем…" : "Сохранить черновик"}
@@ -376,7 +506,7 @@ export function GroupMonthlyPlanEditor({ crmGroupId }: { crmGroupId: string }) {
           type="button"
           disabled={saving || publishing || !draft.goal.trim() || !draft.items.some((item) => item.title.trim())}
           onClick={() => void publish()}
-          className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-ink px-5 text-sm font-bold text-white disabled:opacity-50"
+          className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-ink px-5 text-sm font-bold text-white disabled:opacity-50 sm:w-auto"
         >
           {publishing ? <LoaderCircle size={16} className="animate-spin" /> : <Send size={16} />}
           {publishing ? "Публикуем…" : draft.publication?.isPublished ? "Обновить у учеников" : "Опубликовать группе"}

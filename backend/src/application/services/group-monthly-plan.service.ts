@@ -22,20 +22,37 @@ export type GroupMonthlyPlanInput = MonthlyPlanInput & {
   materials: GroupPlanMaterial[];
 };
 
-function planDto<T extends {
+type GroupMonthlyPlanRecord = {
+  id: string;
+  month: string;
+  goal: string;
+  expectedResult: string;
+  skills: string;
+  checkpoint: string;
+  note: string;
   items: Prisma.JsonValue;
   materials: Prisma.JsonValue;
   publishedSnapshot: Prisma.JsonValue | null;
   publishedAt: Date | null;
   draftRevision: number;
   publishedRevision: number;
-}>(plan: T) {
+  updatedAt: Date;
+};
+
+function planDto(plan: GroupMonthlyPlanRecord) {
   const items = normalizeMonthlyPlanItems(plan.items);
   return {
-    ...plan,
+    id: plan.id,
+    month: plan.month,
+    goal: plan.goal,
+    expectedResult: plan.expectedResult,
+    skills: plan.skills,
+    checkpoint: plan.checkpoint,
+    note: plan.note,
     items,
     materials: Array.isArray(plan.materials) ? plan.materials as GroupPlanMaterial[] : [],
     progress: calculateMonthlyPlanProgress(items),
+    updatedAt: plan.updatedAt,
     publication: {
       isPublished: Boolean(plan.publishedAt && plan.publishedSnapshot),
       publishedAt: plan.publishedAt,
@@ -115,7 +132,7 @@ export async function saveGroupMonthlyPlan(
     && existing.note === normalized.note
     && JSON.stringify(normalizeMonthlyPlanItems(existing.items)) === JSON.stringify(items)
     && JSON.stringify(existing.materials) === JSON.stringify(materials);
-  if (unchanged) return planDto(existing);
+  if (unchanged) return { ...planDto(existing), idempotent: true };
 
   const data = {
     ...normalized,
@@ -133,7 +150,7 @@ export async function saveGroupMonthlyPlan(
     },
     update: { ...data, draftRevision: { increment: 1 } },
   });
-  return planDto(plan);
+  return { ...planDto(plan), idempotent: false };
 }
 
 export async function publishGroupMonthlyPlan(
@@ -152,7 +169,10 @@ export async function publishGroupMonthlyPlan(
   const snapshot = buildMonthlyPlanSnapshot(plan);
   if (!snapshot.goal) throw new BadRequestError("Заполните фокус месяца", "MONTHLY_PLAN_GOAL_REQUIRED");
   if (!snapshot.items.length) throw new BadRequestError("Добавьте хотя бы одну тему", "MONTHLY_PLAN_ITEMS_REQUIRED");
-  if (plan.publishedRevision === plan.draftRevision && plan.publishedSnapshot) return planDto(plan);
+  if (plan.publishedRevision === plan.draftRevision && plan.publishedSnapshot) {
+    return { ...planDto(plan), idempotent: true, publicationEvent: null };
+  }
+  const wasPublished = Boolean(plan.publishedAt && plan.publishedSnapshot);
   const updated = await prisma.groupMonthlyPlan.update({
     where,
     data: {
@@ -161,7 +181,11 @@ export async function publishGroupMonthlyPlan(
       publishedRevision: plan.draftRevision,
     },
   });
-  return planDto(updated);
+  return {
+    ...planDto(updated),
+    idempotent: false,
+    publicationEvent: wasPublished ? "monthly_plan_republished" : "monthly_plan_published",
+  };
 }
 
 export async function listPublishedGroupMonthlyPlans(crmGroupIds: string[], month: string) {
@@ -178,7 +202,10 @@ export async function listPublishedGroupMonthlyPlans(crmGroupIds: string[], mont
   });
   return plans.flatMap((plan) => {
     const snapshot = parseMonthlyPlanSnapshot(plan.publishedSnapshot);
-    if (!snapshot) return [];
+    if (!snapshot) {
+      console.warn("[monthly-plan] skipped invalid group snapshot", { planId: plan.id, month });
+      return [];
+    }
     return [{
       id: plan.id,
       scope: "group" as const,

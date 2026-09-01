@@ -163,7 +163,7 @@ export function LessonMaterialsPanel({
         </div>
 
         <div className="mt-4 rounded-2xl border border-stone-200 bg-white p-4">
-          <p className="text-xs font-bold uppercase tracking-wider text-stone-400">Источник</p>
+          <p className="text-xs font-bold uppercase tracking-wider text-stone-400">Добавить материал</p>
           <div className="mt-3 flex flex-wrap gap-2">
             <button type="button" onClick={onOpenMediaPicker} className={secondaryButton}>
               <FolderOpen size={14} /> Из медиатеки

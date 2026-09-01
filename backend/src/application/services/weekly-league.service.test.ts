@@ -4,12 +4,19 @@ import {
   calculateLeagueRankDelta,
   courseHomeworkLeagueXp,
   getAqtobeWeekRange,
+  lessonAttendanceXpForWeek,
+  nextWeeklyStreak,
   privateLeagueName,
   onlineAssignmentLeagueXp,
   preparedTestLeagueXp,
   rankLeagueEvents,
+  weeklyLeagueFinalizesAt,
+  weeklyLeaguePhase,
   WEEKLY_LEAGUE_GOAL_XP,
+  WEEKLY_LEAGUE_GOAL_COINS,
   WEEKLY_LEAGUE_PRIZES,
+  WEEKLY_LESSON_ATTENDANCE_COINS,
+  weeklyStreakMilestone,
 } from "./weekly-league-policy.js";
 
 describe("weekly Maestro league", () => {
@@ -46,16 +53,72 @@ describe("weekly Maestro league", () => {
 
   it("has fixed weekly goal and podium prizes", () => {
     assert.equal(WEEKLY_LEAGUE_GOAL_XP, 80);
-    assert.deepEqual(WEEKLY_LEAGUE_PRIZES.map((item) => item.coins), [15, 10, 7]);
+    assert.equal(WEEKLY_LEAGUE_GOAL_COINS, 25);
+    assert.equal(WEEKLY_LESSON_ATTENDANCE_COINS, 50);
+    assert.deepEqual(WEEKLY_LEAGUE_PRIZES.map((item) => item.coins), [150, 100, 50]);
   });
 
-  it("reduces XP for revisions, lateness and repeated test attempts", () => {
+  it("reduces XP only after a homework revision or a repeated test attempt", () => {
     assert.equal(courseHomeworkLeagueXp(1), 15);
     assert.equal(courseHomeworkLeagueXp(2), 10);
-    assert.equal(onlineAssignmentLeagueXp({ late: false, withRemarks: false }), 15);
-    assert.equal(onlineAssignmentLeagueXp({ late: false, withRemarks: true }), 10);
-    assert.equal(onlineAssignmentLeagueXp({ late: true, withRemarks: false }), 5);
+    assert.equal(onlineAssignmentLeagueXp(1), 15);
+    assert.equal(onlineAssignmentLeagueXp(2), 10);
+    assert.equal(onlineAssignmentLeagueXp(4), 10);
     assert.equal(preparedTestLeagueXp(1), 20);
     assert.equal(preparedTestLeagueXp(3), 10);
+  });
+
+  it("keeps an ended week in finalizing state until an immutable snapshot exists", () => {
+    const range = getAqtobeWeekRange(new Date("2026-08-23T12:00:00.000Z"));
+    assert.equal(weeklyLeagueFinalizesAt(range).toISOString(), "2026-08-24T07:00:00.000Z");
+    assert.equal(weeklyLeaguePhase({
+      range,
+      now: new Date("2026-08-24T06:59:59.000Z"),
+      hasSnapshot: false,
+    }), "finalizing");
+    assert.equal(weeklyLeaguePhase({
+      range,
+      now: new Date("2026-08-24T08:00:00.000Z"),
+      hasSnapshot: false,
+    }), "finalizing");
+    assert.equal(weeklyLeaguePhase({
+      range,
+      now: new Date("2026-08-24T08:00:00.000Z"),
+      hasSnapshot: true,
+    }), "finalized");
+  });
+
+  it("awards attendance XP only for the first two confirmed lessons of a week", () => {
+    assert.equal(lessonAttendanceXpForWeek(0), 20);
+    assert.equal(lessonAttendanceXpForWeek(1), 20);
+    assert.equal(lessonAttendanceXpForWeek(2), 0);
+    assert.equal(lessonAttendanceXpForWeek(8), 0);
+  });
+
+  it("extends, freezes, and breaks a weekly streak without changing the best result", () => {
+    assert.deepEqual(nextWeeklyStreak({
+      currentWeeks: 3,
+      bestWeeks: 5,
+      hasActivity: true,
+      frozen: false,
+    }), { eventType: "extended", currentWeeks: 4, bestWeeks: 5 });
+    assert.deepEqual(nextWeeklyStreak({
+      currentWeeks: 4,
+      bestWeeks: 5,
+      hasActivity: false,
+      frozen: true,
+    }), { eventType: "frozen", currentWeeks: 4, bestWeeks: 5 });
+    assert.deepEqual(nextWeeklyStreak({
+      currentWeeks: 4,
+      bestWeeks: 5,
+      hasActivity: false,
+      frozen: false,
+    }), { eventType: "broken", currentWeeks: 0, bestWeeks: 5 });
+    assert.deepEqual(weeklyStreakMilestone(4), {
+      weeks: 4,
+      coins: 50,
+      title: "Серия 4 недели",
+    });
+    assert.equal(weeklyStreakMilestone(5), null);
   });
 });

@@ -1,5 +1,5 @@
 import { prisma } from "../../infrastructure/database/prisma.js";
-import { BadRequestError } from "../../domain/errors.js";
+import { AppError, BadRequestError } from "../../domain/errors.js";
 import {
   fetchClassCard,
   fetchClassStudents,
@@ -20,6 +20,29 @@ import {
 import { validateOfflineLessonSubmission } from "./offline-lesson-submission-policy.js";
 import { aqtobeMonthKey } from "../../lib/aqtobe-month.js";
 import { normalizeTeacherAttendanceStatus } from "./teacher-attendance-policy.js";
+import { getLearningLessonV2Context } from "./learning-lesson-v2.service.js";
+import { productFeatureConfig } from "../../config/product-features.js";
+import {
+  fetchOfflineLessonWithProjection,
+  fetchOfflineRosterWithProjection,
+  getOfflineLessonSyncSummary,
+  projectOfflineAgenda,
+  updateProjectedOfflineLesson,
+  withOfflineLessonSync,
+} from "./offline-lesson-projection.service.js";
+import {
+  enqueueCrmOutboxEvent,
+  flushCrmOutboxForLesson,
+  processCrmOutboxEvent,
+} from "./crm-outbox.service.js";
+import {
+  submitOfflineLessonReportVersion,
+  withdrawOfflineLessonReport,
+} from "./offline-lesson-report.service.js";
+
+function lessonSyncV2Enabled() {
+  return productFeatureConfig.flags.lessonSyncV2;
+}
 
 function lessonMonth(lesson: Record<string, unknown>) {
   const date = typeof lesson.date === "string" ? new Date(lesson.date) : null;
@@ -98,7 +121,23 @@ export async function getTeacherOfflineAgenda(
   const agenda = await fetchTeacherOfflineClasses(crmTeacherId, {
     from: params?.from ?? fallback.from,
     to: params?.to ?? fallback.to,
+  }).catch(async (error) => {
+    if (!lessonSyncV2Enabled() || !(error instanceof AppError) || error.statusCode < 500) throw error;
+    const projections = await prisma.offlineLessonProjection.findMany({
+      where: { crmTeacherId },
+      orderBy: { lastSyncedAt: "desc" },
+    });
+    return {
+      crmTeacherId,
+      from: params?.from ?? fallback.from,
+      to: params?.to ?? fallback.to,
+      classes: projections.map((item) => item.lessonPayload as Record<string, unknown>),
+      integration: { state: "pending_sync", source: "projection" },
+    };
   });
+  if (lessonSyncV2Enabled() && Array.isArray(agenda.classes)) {
+    await projectOfflineAgenda(agenda.classes);
+  }
   return {
     ...agenda,
     classes: Array.isArray(agenda.classes) ? dedupeOfflineClasses(agenda.classes) : [],
@@ -107,7 +146,10 @@ export async function getTeacherOfflineAgenda(
 
 export async function getTeacherOfflineClass(appUserId: string, crmClassId: string) {
   const crmTeacherId = await requireCrmTeacherId(appUserId);
-  const lesson = await fetchClassCard(crmClassId) as {
+  const projected = lessonSyncV2Enabled()
+    ? await fetchOfflineLessonWithProjection(crmClassId)
+    : { lesson: await fetchClassCard(crmClassId) as Record<string, unknown>, source: "crm" as const };
+  const lesson = projected.lesson as {
     teacher?: { crmTeacherId?: string } | null;
     classType?: string | null;
     group?: unknown;
@@ -115,21 +157,48 @@ export async function getTeacherOfflineClass(appUserId: string, crmClassId: stri
   if (lesson.teacher?.crmTeacherId !== crmTeacherId) {
     throw new BadRequestError("Этот урок назначен другому преподавателю", "LESSON_NOT_ASSIGNED");
   }
-  return lesson;
+  return lessonSyncV2Enabled()
+    ? withOfflineLessonSync(crmClassId, lesson as Record<string, unknown>, projected.source)
+    : lesson;
 }
 
 export async function getTeacherOfflineClassStudents(appUserId: string, crmClassId: string) {
   const lesson = await getTeacherOfflineClass(appUserId, crmClassId) as Record<string, unknown>;
-  const roster = await fetchClassStudents(crmClassId);
-  return mergeOfflineLessonStudentChecks(crmClassId, roster, {
+  const projectedRoster = lessonSyncV2Enabled()
+    ? await fetchOfflineRosterWithProjection(crmClassId, lesson)
+    : { roster: await fetchClassStudents(crmClassId) as Record<string, unknown>, source: "crm" as const };
+  const roster = projectedRoster.roster as { students: Array<Record<string, unknown>> };
+  const merged = await mergeOfflineLessonStudentChecks(crmClassId, roster, {
     teacherUserId: appUserId,
     month: lessonMonth(lesson),
   });
+  const learningV2 = await getLearningLessonV2Context(appUserId, crmClassId);
+  return {
+    ...merged,
+    ...(learningV2 ? { learningV2 } : {}),
+    ...(lessonSyncV2Enabled()
+      ? { integration: await getOfflineLessonSyncSummary(crmClassId, projectedRoster.source) }
+      : {}),
+  };
 }
 
 export async function teacherOfflineStart(appUserId: string, crmClassId: string) {
   const crmTeacherId = await requireCrmTeacherId(appUserId);
-  return postTeacherStart(crmClassId, crmTeacherId);
+  try {
+    const result = await postTeacherStart(crmClassId, crmTeacherId);
+    if (lessonSyncV2Enabled() && result.class && typeof result.class === "object") {
+      await projectOfflineAgenda([result.class as Record<string, unknown>]);
+    }
+    return result;
+  } catch (error) {
+    if (!lessonSyncV2Enabled() || !(error instanceof AppError) || error.statusCode < 500) throw error;
+    await getTeacherOfflineClass(appUserId, crmClassId);
+    await updateProjectedOfflineLesson(crmClassId, {
+      status: "started",
+      startedAt: new Date().toISOString(),
+    });
+    return { crmClassId, status: "started", syncState: "pending_sync" };
+  }
 }
 
 export async function teacherOfflineFinish(
@@ -138,7 +207,22 @@ export async function teacherOfflineFinish(
   comment?: string,
 ) {
   const crmTeacherId = await requireCrmTeacherId(appUserId);
-  return postTeacherFinish(crmClassId, { crmTeacherId, comment });
+  try {
+    const result = await postTeacherFinish(crmClassId, { crmTeacherId, comment });
+    if (lessonSyncV2Enabled() && result.class && typeof result.class === "object") {
+      await projectOfflineAgenda([result.class as Record<string, unknown>]);
+    }
+    return result;
+  } catch (error) {
+    if (!lessonSyncV2Enabled() || !(error instanceof AppError) || error.statusCode < 500) throw error;
+    await getTeacherOfflineClass(appUserId, crmClassId);
+    await updateProjectedOfflineLesson(crmClassId, {
+      status: "started",
+      finishedAt: new Date().toISOString(),
+      ...(comment ? { teacherComment: comment } : {}),
+    });
+    return { crmClassId, status: "started", syncState: "pending_sync" };
+  }
 }
 
 export async function teacherOfflineSubmit(
@@ -148,9 +232,20 @@ export async function teacherOfflineSubmit(
 ) {
   const crmTeacherId = await requireCrmTeacherId(appUserId);
   const lesson = await getTeacherOfflineClass(appUserId, crmClassId);
-  const roster = await mergeOfflineLessonStudentChecks(crmClassId, await fetchClassStudents(crmClassId));
+  const projectedRoster = lessonSyncV2Enabled()
+    ? await fetchOfflineRosterWithProjection(crmClassId, lesson as Record<string, unknown>)
+    : { roster: await fetchClassStudents(crmClassId) as Record<string, unknown> };
+  const roster = await mergeOfflineLessonStudentChecks(
+    crmClassId,
+    projectedRoster.roster as { students: Array<Record<string, unknown>> },
+  );
   const validation = validateOfflineLessonSubmission({
-    lesson,
+    lesson: {
+      classType: typeof (lesson as Record<string, unknown>).classType === "string"
+        ? (lesson as Record<string, unknown>).classType as string
+        : null,
+      group: (lesson as Record<string, unknown>).group,
+    },
     students: roster.students,
     payload,
   });
@@ -158,11 +253,19 @@ export async function teacherOfflineSubmit(
     throw new BadRequestError(validation.message, validation.code);
   }
 
-  return postTeacherSubmit(crmClassId, {
+  const fullPayload = {
     ...payload,
     teacherOutcomeHint: validation.outcome,
-    crmTeacherId,
-  });
+  };
+  if (lessonSyncV2Enabled()) {
+    return submitOfflineLessonReportVersion({
+      crmClassId,
+      authorUserId: appUserId,
+      crmTeacherId,
+      payload: fullPayload,
+    });
+  }
+  return postTeacherSubmit(crmClassId, { ...fullPayload, crmTeacherId });
 }
 
 export async function teacherOfflineMarkNotHeld(
@@ -171,11 +274,29 @@ export async function teacherOfflineMarkNotHeld(
   comment: string,
 ) {
   const crmTeacherId = await requireCrmTeacherId(appUserId);
+  if (lessonSyncV2Enabled()) {
+    await getTeacherOfflineClass(appUserId, crmClassId);
+    return submitOfflineLessonReportVersion({
+      crmClassId,
+      authorUserId: appUserId,
+      crmTeacherId,
+      payload: { comment, teacherOutcomeHint: "not_held" },
+      eventType: "teacher_not_held",
+    });
+  }
   return postTeacherMarkNotHeld(crmClassId, { crmTeacherId, comment });
 }
 
 export async function teacherOfflineWithdraw(appUserId: string, crmClassId: string, reason?: string) {
   const crmTeacherId = await requireCrmTeacherId(appUserId);
+  if (lessonSyncV2Enabled()) {
+    return withdrawOfflineLessonReport({
+      crmClassId,
+      actorUserId: appUserId,
+      crmTeacherId,
+      reason: reason ?? "Преподаватель отозвал урок для исправления",
+    });
+  }
   return postTeacherWithdraw(crmClassId, { crmTeacherId, reason });
 }
 
@@ -193,14 +314,49 @@ export async function teacherOfflineSetAttendance(
   await getTeacherOfflineClass(appUserId, crmClassId);
   const crmTeacherId = await requireCrmTeacherId(appUserId);
   const normalizedAttendanceStatus = normalizeTeacherAttendanceStatus(attendanceStatus);
-  const crmResult = await postTeacherAttendance(crmClassId, {
+  const attendancePayload = {
     crmTeacherId,
     studentId,
     attendanceStatus: normalizedAttendanceStatus,
     teacherNote,
     homeworkReview,
     attended: ["present", "late"].includes(normalizedAttendanceStatus),
-  });
+  };
+  if (lessonSyncV2Enabled()) {
+    const queued = await prisma.$transaction(async (tx) => {
+      const lessonCheck = await saveOfflineLessonStudentCheck({
+        crmClassId,
+        crmStudentId: studentId,
+        teacherUserId: appUserId,
+        attendanceStatus: normalizedAttendanceStatus,
+        teacherNote,
+        homeworkReview,
+        lessonPoints,
+        monthlyPlanId,
+        planTopicUpdates,
+        syncPending: true,
+      }, tx);
+      const event = await enqueueCrmOutboxEvent({
+        aggregateId: crmClassId,
+        eventType: "teacher_attendance",
+        payload: {
+          crmClassId,
+          body: attendancePayload,
+          studentCheckId: lessonCheck.id,
+          studentId,
+          syncRevision: lessonCheck.syncRevision,
+        },
+        idempotencyKey: `lesson-attendance:${crmClassId}:${studentId}:r${lessonCheck.syncRevision}`,
+      }, tx);
+      return { lessonCheck, event };
+    });
+    const crmResult = await processCrmOutboxEvent(queued.event.id);
+    const lessonCheck = await prisma.offlineLessonStudentCheck.findUniqueOrThrow({
+      where: { id: queued.lessonCheck.id },
+    });
+    return { crmResult, lessonCheck };
+  }
+  const crmResult = await postTeacherAttendance(crmClassId, attendancePayload);
   const lessonCheck = await saveOfflineLessonStudentCheck({
     crmClassId,
     crmStudentId: studentId,
@@ -234,14 +390,46 @@ export async function teacherOfflineSetAttendanceBatch(
 
   for (const check of checks) {
     const normalizedAttendanceStatus = normalizeTeacherAttendanceStatus(check.attendanceStatus);
-    const crmResult = await postTeacherAttendance(crmClassId, {
+    const attendancePayload = {
       crmTeacherId,
       studentId: check.studentId,
       attendanceStatus: normalizedAttendanceStatus,
       teacherNote: check.teacherNote,
       homeworkReview: check.homeworkReview,
       attended: ["present", "late"].includes(normalizedAttendanceStatus),
-    });
+    };
+    if (lessonSyncV2Enabled()) {
+      const queued = await prisma.$transaction(async (tx) => {
+        const lessonCheck = await saveOfflineLessonStudentCheck({
+          crmClassId,
+          crmStudentId: check.studentId,
+          teacherUserId: appUserId,
+          attendanceStatus: normalizedAttendanceStatus,
+          teacherNote: check.teacherNote,
+          homeworkReview: check.homeworkReview,
+          lessonPoints: check.lessonPoints,
+          monthlyPlanId: check.monthlyPlanId,
+          planTopicUpdates: check.planTopicUpdates,
+          syncPending: true,
+        }, tx);
+        const event = await enqueueCrmOutboxEvent({
+          aggregateId: crmClassId,
+          eventType: "teacher_attendance",
+          payload: {
+            crmClassId,
+            body: attendancePayload,
+            studentCheckId: lessonCheck.id,
+            studentId: check.studentId,
+            syncRevision: lessonCheck.syncRevision,
+          },
+          idempotencyKey: `lesson-attendance:${crmClassId}:${check.studentId}:r${lessonCheck.syncRevision}`,
+        }, tx);
+        return { lessonCheck, event };
+      });
+      results.push({ studentId: check.studentId, crmResult: queued.event, lessonCheck: queued.lessonCheck });
+      continue;
+    }
+    const crmResult = await postTeacherAttendance(crmClassId, attendancePayload);
     const lessonCheck = await saveOfflineLessonStudentCheck({
       crmClassId,
       crmStudentId: check.studentId,
@@ -254,6 +442,10 @@ export async function teacherOfflineSetAttendanceBatch(
       planTopicUpdates: check.planTopicUpdates,
     });
     results.push({ studentId: check.studentId, crmResult, lessonCheck });
+  }
+
+  if (lessonSyncV2Enabled()) {
+    await flushCrmOutboxForLesson(crmClassId);
   }
 
   return {

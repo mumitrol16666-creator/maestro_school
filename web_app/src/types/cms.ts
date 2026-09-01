@@ -7,6 +7,10 @@ export interface CmsMeta {
 
 export interface CmsDirection {
   id: string;
+  crmDirectionId?: string | null;
+  crmIsActive?: boolean | null;
+  crmUpdatedAt?: string | null;
+  crmSyncedAt?: string | null;
   title: string;
   slug: string;
   description: string | null;
@@ -103,6 +107,8 @@ export interface CmsNews {
   title: string;
   content: string;
   isPublished: boolean;
+  showToStudents: boolean;
+  showToParents: boolean;
   publishedAt: string | null;
   deletedAt: string | null;
   author: { firstName: string; lastName: string };

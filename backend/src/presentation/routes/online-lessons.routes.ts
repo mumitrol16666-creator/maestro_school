@@ -30,6 +30,9 @@ const manageGuards = () => [
   requirePermission("online_lessons.manage"),
 ];
 
+const legacyOnlineRequestCreationEnabled =
+  process.env.ENABLE_LEGACY_ONLINE_REQUEST_CREATION === "true";
+
 const materialSchema = z.object({
   type: z.enum(["youtube", "link", "text", "pdf", "image", "file"]),
   title: z.string().trim().min(1).max(255),
@@ -76,6 +79,13 @@ export async function onlineLessonsRoutes(app: FastifyInstance) {
     "/online-lessons/requests",
     { preHandler: [authenticate, requireStudent, requirePermission("online_lessons.request")] },
     async (request, reply) => {
+      if (!legacyOnlineRequestCreationEnabled) {
+        return reply.status(409).send({
+          error: "ONLINE_LESSONS_MANAGED_IN_CRM",
+          message: "Новые онлайн-уроки создаются в общем расписании и появляются здесь автоматически.",
+        });
+      }
+
       const body = z.object({
         requestType: z.enum(["trial", "online_lesson"]).default("online_lesson"),
         directionId: z.string().uuid().nullable().optional(),

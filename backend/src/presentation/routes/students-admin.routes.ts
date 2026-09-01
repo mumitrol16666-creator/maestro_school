@@ -10,11 +10,22 @@ import {
   resetLinkedParentPassword,
   revokeParentLink,
 } from "../../application/services/family.service.js";
+import {
+  decideParentVisibilityRequest,
+  getParentVisibilityWorkspace,
+  updateParentVisibility,
+} from "../../application/services/parent-visibility.service.js";
 import { authenticate, requirePermission } from "../guards/auth.guards.js";
 
 export async function studentsAdminRoutes(app: FastifyInstance) {
   const guards = [authenticate, requirePermission("users.manage")];
   const relationship = z.enum(["mother", "father", "guardian", "other"]);
+  const visibility = z.object({
+    showSchedule: z.boolean(),
+    showBalance: z.boolean(),
+    showPlanProgress: z.boolean(),
+    showAchievements: z.boolean(),
+  });
 
   app.get("/admin/students", { preHandler: guards }, async (request) => {
     const query = z.object({
@@ -39,6 +50,51 @@ export async function studentsAdminRoutes(app: FastifyInstance) {
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
     return { data: await getAdminStudent(id) };
   });
+
+  app.get("/admin/students/:id/parent-visibility", { preHandler: guards }, async (request) => {
+    const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+    return { data: await getParentVisibilityWorkspace(id) };
+  });
+
+  app.patch("/admin/students/:id/parent-visibility", { preHandler: guards }, async (request) => {
+    const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+    const body = z.object({
+      visibility,
+      reason: z.string().trim().min(3).max(1000),
+    }).parse(request.body);
+    return {
+      data: await updateParentVisibility({
+        studentId: id,
+        actorId: request.user!.id,
+        visibility: body.visibility,
+        reason: body.reason,
+      }),
+    };
+  });
+
+  app.post(
+    "/admin/students/:id/parent-visibility-requests/:requestId/decision",
+    { preHandler: guards },
+    async (request) => {
+      const { id, requestId } = z.object({
+        id: z.string().uuid(),
+        requestId: z.string().uuid(),
+      }).parse(request.params);
+      const body = z.object({
+        decision: z.enum(["approved", "rejected"]),
+        note: z.string().trim().min(3).max(1000),
+      }).parse(request.body);
+      return {
+        data: await decideParentVisibilityRequest({
+          studentId: id,
+          requestId,
+          actorId: request.user!.id,
+          decision: body.decision,
+          note: body.note,
+        }),
+      };
+    },
+  );
 
   app.post("/admin/students/:id/parents", { preHandler: guards }, async (request, reply) => {
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
@@ -99,7 +155,11 @@ export async function studentsAdminRoutes(app: FastifyInstance) {
         linkId: z.string().uuid(),
       }).parse(request.params);
       return {
-        data: await revokeParentLink({ studentId: id, linkId }),
+        data: await revokeParentLink({
+          studentId: id,
+          linkId,
+          actorId: request.user!.id,
+        }),
       };
     },
   );

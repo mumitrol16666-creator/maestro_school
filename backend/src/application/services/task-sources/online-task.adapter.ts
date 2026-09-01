@@ -18,12 +18,9 @@ type OnlineTaskRow = {
   dueAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
-  pointsReward: number;
   submission: {
     status: OnlineLessonAssignmentSubmissionStatus;
     reviewComment: string | null;
-    reviewPoints: number | null;
-    reviewCoins: number;
     createdAt: Date;
     updatedAt: Date;
   } | null;
@@ -60,8 +57,8 @@ export function mapOnlineTask(row: OnlineTaskRow, now = new Date()): UnifiedTask
       completionPercent: status === "completed" ? 100 : null,
       scorePercent: null,
       reviewComment: row.submission?.reviewComment ?? null,
-      points: row.submission?.reviewPoints ?? (status === "completed" ? row.pointsReward : null),
-      coins: row.submission?.reviewCoins ?? null,
+      points: null,
+      coins: null,
     },
     target: {
       href: `/online-lessons/${row.requestId}${status === "needs_revision" ? "#assignment-revision" : ""}`,
@@ -82,7 +79,6 @@ export async function loadOnlineTasks(studentId: string, now = new Date()) {
       title: true,
       description: true,
       dueAt: true,
-      pointsReward: true,
       createdAt: true,
       updatedAt: true,
       request: {
@@ -98,8 +94,6 @@ export async function loadOnlineTasks(studentId: string, now = new Date()) {
         select: {
           status: true,
           reviewComment: true,
-          reviewPoints: true,
-          reviewCoins: true,
           createdAt: true,
           updatedAt: true,
         },
@@ -120,7 +114,6 @@ export async function loadOnlineTasks(studentId: string, now = new Date()) {
     dueAt: assignment.dueAt,
     createdAt: assignment.createdAt,
     updatedAt: assignment.updatedAt,
-    pointsReward: assignment.pointsReward,
     submission: assignment.submissions[0] ?? null,
   }, now));
 }

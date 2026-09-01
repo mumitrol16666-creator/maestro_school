@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, BookMarked, ChevronRight, ClipboardCheck, ClipboardPenLine, FolderKanban, Gift, LayoutDashboard, LibraryBig, LogOut, Megaphone, Menu, MessagesSquare, MonitorPlay, Presentation, Settings, Trophy, UserCog, UsersRound, X } from "lucide-react";
+import { ArrowRight, BookMarked, ChevronRight, ClipboardCheck, ClipboardPenLine, FolderKanban, Gift, LayoutDashboard, LibraryBig, ListChecks, LogOut, Megaphone, Menu, MessagesSquare, Presentation, Settings, Trophy, UserCog, UsersRound, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -8,11 +8,11 @@ import { formatFio, initialsFromName } from "@/lib/name";
 import { isContentAdminRole, roleLabel } from "@/lib/role-labels";
 import { usePendingHomeworkCount } from "@/hooks/use-pending-homework-count";
 import { usePendingLessonQuestionsCount } from "@/hooks/use-pending-lesson-questions-count";
-import { usePendingOnlineLessonsCount } from "@/hooks/use-pending-online-lessons-count";
 import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
 import { useMessageMailboxStatus } from "@/hooks/use-message-mailbox-status";
 import { teacherStudentsApi } from "@/lib/teacher-students-api";
 import { AdminPendingHomeworkBadge } from "./admin-pending-homework-badge";
+import { adminWorkspaceSections, isAdminWorkspaceSectionActive } from "./admin-workspace";
 import { useAuth } from "./auth-provider";
 import { Brand } from "./brand";
 import { NotificationCenter } from "./teacher-notification-center";
@@ -35,8 +35,7 @@ const accessNavigation = [
 ];
 
 const lessonNavigation = [
-  { href: "/admin/offline-lessons", label: "Офлайн-уроки", icon: Presentation },
-  { href: "/admin/online-lessons", label: "Онлайн-уроки", icon: MonitorPlay },
+  { href: "/admin/offline-lessons", label: "Уроки", icon: Presentation },
 ];
 
 const teacherNavigation = [
@@ -58,14 +57,27 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
   const [open, setOpen] = useState(false);
   const isContentAdmin = isContentAdminRole(user?.role);
-  const { count: pendingHomeworkCount, reload: reloadPendingHomeworkCount } = usePendingHomeworkCount(60_000, isContentAdmin);
+  const { count: pendingHomeworkCount, reload: reloadPendingHomeworkCount } = usePendingHomeworkCount(
+    60_000,
+    isContentAdmin || user?.role === "teacher",
+  );
   const { count: pendingQuestionsCount, reload: reloadPendingQuestionsCount } = usePendingLessonQuestionsCount(60_000, isContentAdmin);
-  const { count: pendingOnlineLessonsCount, reload: reloadPendingOnlineLessonsCount } = usePendingOnlineLessonsCount(60_000, user?.role === "teacher");
   const { count: unreadNotifications, reload: reloadUnreadNotifications } = useUnreadNotifications();
-  const { count: unreadMessages } = useMessageMailboxStatus(user?.role === "teacher");
+  const learningDialogsV2 = Boolean(user?.productFeatures?.learningDialogsV2);
+  const { count: unreadMessages } = useMessageMailboxStatus(
+    user?.role === "teacher" || (isContentAdmin && learningDialogsV2),
+    30_000,
+    learningDialogsV2,
+  );
   const [teacherDirections, setTeacherDirections] = useState<string[]>([]);
+  const workspaceNavigationEnabled = isContentAdmin && !!user?.productFeatures?.curatorWorkspaceV2;
+  const journalNavigation = user?.productFeatures?.curatorWorkspaceV2
+    ? [{ href: "/admin/journal", label: "Журнал", icon: ListChecks }]
+    : [];
   const navigation = isContentAdmin
-    ? [...cmsNavigation, ...accessNavigation, ...teachingNavigation]
+    ? workspaceNavigationEnabled
+      ? adminWorkspaceSections
+      : [cmsNavigation[0], ...journalNavigation, ...cmsNavigation.slice(1), ...accessNavigation, ...teachingNavigation]
     : user?.role === "teacher"
       ? teacherNavigation
       : lessonNavigation;
@@ -116,10 +128,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     if (pathname.startsWith("/admin/lesson-questions")) {
       void reloadPendingQuestionsCount();
     }
-    if (pathname.startsWith("/admin/online-lessons")) {
-      void reloadPendingOnlineLessonsCount();
-    }
-  }, [pathname, reloadPendingHomeworkCount, reloadPendingQuestionsCount, reloadPendingOnlineLessonsCount]);
+  }, [pathname, reloadPendingHomeworkCount, reloadPendingQuestionsCount]);
 
   const sidebar = (
     <aside className="flex h-full flex-col overflow-y-auto border-r border-white/10 bg-[#151613] px-4 py-5 text-white sm:px-5 sm:py-6">
@@ -142,17 +151,30 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         </span>
       </div>
 
-      <nav className="mt-4 space-y-1.5">{navigation.map(({ href, label, icon: Icon }) => {
-        const active = href === "/admin" ? pathname === href : pathname.startsWith(href);
-        const pending = href === "/admin/homework-review"
+      <nav
+        className="mt-4 space-y-1.5"
+        aria-label={workspaceNavigationEnabled ? "Основная навигация администратора" : undefined}
+        data-testid={workspaceNavigationEnabled ? "admin-workspace-navigation" : undefined}
+      >{navigation.map(({ href, label, icon: Icon }) => {
+        const workspaceSection = workspaceNavigationEnabled
+          ? adminWorkspaceSections.find((section) => section.href === href)
+          : null;
+        const active = workspaceSection
+          ? isAdminWorkspaceSectionActive(workspaceSection, pathname)
+          : href === "/admin"
+            ? pathname === href
+            : pathname.startsWith(href);
+        const pending = workspaceSection?.id === "learning"
           ? pendingHomeworkCount
-          : href === "/admin/lesson-questions"
-            ? pendingQuestionsCount
-            : href === "/admin/online-lessons"
-              ? pendingOnlineLessonsCount
-              : href === "/admin/messages"
-                ? unreadMessages
-              : null;
+          : workspaceSection?.id === "communications"
+            ? learningDialogsV2 ? unreadMessages : pendingQuestionsCount
+            : href === "/admin/homework-review"
+              ? pendingHomeworkCount
+              : href === "/admin/lesson-questions"
+                ? pendingQuestionsCount
+                : href === "/admin/messages"
+                    ? unreadMessages
+                    : null;
         return (
           <Link
             key={href}
@@ -171,7 +193,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             }`}>
               <Icon size={17} strokeWidth={2.2} />
             </span>
-            <span className="min-w-0 flex-1 truncate">{label}</span>
+            <span className="min-w-0 flex-1 leading-4">{label}</span>
             {pending != null && pending > 0 && <AdminPendingHomeworkBadge count={pending} />}
             <ChevronRight size={15} className={`shrink-0 transition ${active ? "text-gold" : "text-white/20 group-hover:translate-x-0.5 group-hover:text-white/50"}`} />
           </Link>
@@ -231,7 +253,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         ) : (
           <button onClick={() => setOpen(true)} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-stone-200/80 bg-white shadow-sm transition hover:border-gold/30 lg:hidden" aria-label="Открыть меню"><Menu size={20} /></button>
         )}
-        <div className="min-w-0">
+        <div className={`min-w-0 ${isContentAdmin ? "hidden sm:block" : ""}`}>
           <p className="truncate text-[10px] font-bold uppercase tracking-[0.16em] text-gold sm:text-xs sm:tracking-[0.18em]">{headerTitle}</p>
           <p className="truncate text-xs font-semibold text-stone-500 sm:text-sm">{headerSubtitle}</p>
           {pendingHomeworkCount != null && pendingHomeworkCount > 0 && (
@@ -276,14 +298,13 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     </div>
     {teacherMobileNavigation.length ? (
       <nav
-        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-stone-200/90 bg-paper/95 px-2 pb-[env(safe-area-inset-bottom,0px)] shadow-[0_-12px_35px_rgba(37,33,25,0.08)] backdrop-blur-xl lg:hidden"
+        data-mobile-app-navigation
+        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-stone-200/90 bg-paper/95 px-2 pb-[env(safe-area-inset-bottom,0px)] shadow-[0_-12px_35px_rgba(37,33,25,0.08)] backdrop-blur-xl lg:hidden"
         aria-label="Навигация преподавателя"
       >
         {teacherMobileNavigation.map(({ href, label, icon: Icon }) => {
           const active = href === "/admin" ? pathname === href : pathname.startsWith(href);
-          const pending = href === "/admin/online-lessons"
-            ? pendingOnlineLessonsCount
-            : href === "/admin/messages"
+          const pending = href === "/admin/messages"
               ? unreadMessages
               : null;
           return (

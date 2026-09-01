@@ -42,7 +42,13 @@ export interface PreparedTestsResponse {
   tests: PreparedTestProgressItem[];
   total: number;
   completedCount: number;
-  totalRewardPoints: number;
+  xpRules: PreparedTestXpRules;
+}
+
+export interface PreparedTestXpRules {
+  firstAttempt: number;
+  retry: number;
+  weeklyLimit: number;
 }
 
 export interface PreparedTestDetail {
@@ -54,7 +60,8 @@ export interface PreparedTestDetail {
   questionCount: number;
   passingScore: number;
   maxAttempts: number | null;
-  rewardPoints: number;
+  xpRules: PreparedTestXpRules;
+  earnedXp: number;
   questions: PreparedTestQuestion[];
   passed: boolean;
   exhausted: boolean;
@@ -89,7 +96,8 @@ export interface PreparedTestAttemptResponse {
   passed: boolean;
   passingScore: number;
   attemptsRemaining: number | null;
-  rewardPointsAwarded: number;
+  xpAwarded: number;
+  xpStatus: "awarded" | "already_awarded" | "weekly_limit" | "not_eligible" | "not_passed";
   review: PreparedTestReviewItem[];
   topicsToRepeat: string[];
   nextTest: { id: string; title: string } | null;
@@ -134,6 +142,6 @@ export interface PreparedTestAdminPreview {
   totalTests: number;
   passingScore: number;
   maxAttempts: number | null;
-  rewardPoints: number;
+  xpRules: PreparedTestXpRules;
   questions: Required<PreparedTestQuestion>[];
 }

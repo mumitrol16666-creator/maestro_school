@@ -1,8 +1,10 @@
 "use client";
 
 import { ArrowRight, CheckCircle2, MessageCircleQuestion, Search } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AdminPendingHomeworkBadge } from "@/components/admin-pending-homework-badge";
+import { useAuth } from "@/components/auth-provider";
 import { PageControls, secondaryButton } from "@/components/admin-ui";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
 import { PageHeader } from "@/components/page-header";
@@ -18,6 +20,24 @@ const filters = [
 ] as const;
 
 export default function LessonQuestionsPage() {
+  const router = useRouter();
+  const { loading, user } = useAuth();
+  const learningDialogsV2 = Boolean(user?.productFeatures?.learningDialogsV2);
+
+  useEffect(() => {
+    if (learningDialogsV2) {
+      router.replace("/admin/communications");
+    }
+  }, [learningDialogsV2, router]);
+
+  if (loading || learningDialogsV2) {
+    return <LoadingState label="Открываем диалоги" />;
+  }
+
+  return <LegacyLessonQuestionsPage />;
+}
+
+function LegacyLessonQuestionsPage() {
   const [status, setStatus] = useState<"" | "pending" | "answered">("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);

@@ -3,7 +3,10 @@ import type {
   TeacherOfflineClass,
   TeacherOfflineClassStudents,
   OfflineHomeworkReview,
+  LearningLessonV2ResultsInput,
   TrialLessonReport,
+  OfflineLessonServerDraft,
+  OfflineLessonReportHistory,
 } from "@/types/teacher-offline";
 
 export type PendingReviewAgenda = {
@@ -17,7 +20,45 @@ export type ApproveOfflineLessonResult = {
   deductions: Array<{ studentId: string; deducted?: boolean }>;
 };
 
+export type CrmSyncJournal = {
+  events: Array<{
+    id: string;
+    eventType: string;
+    status: string;
+    attempts: number;
+    lastError: string | null;
+    createdAt: string;
+    updatedAt: string;
+  }>;
+  conflicts: Array<{
+    id: string;
+    outboxEventId: string | null;
+    kind: string;
+    status: string;
+    errorMessage: string;
+    createdAt: string;
+  }>;
+};
+
 export const adminOfflineApi = {
+  syncJournal: (crmClassId?: string) => {
+    const query = crmClassId ? `?crmClassId=${encodeURIComponent(crmClassId)}` : "";
+    return apiRequest<CrmSyncJournal>(`/admin/crm-sync-journal${query}`);
+  },
+  retrySyncEvent: (eventId: string) =>
+    apiRequest<Record<string, unknown>>(
+      `/admin/crm-sync-journal/events/${encodeURIComponent(eventId)}/retry`,
+      { method: "POST", body: JSON.stringify({}) },
+    ),
+  resolveSyncConflict: (
+    conflictId: string,
+    resolution: "accept_crm" | "retry_local",
+    reason: string,
+  ) =>
+    apiRequest<Record<string, unknown>>(
+      `/admin/crm-sync-journal/conflicts/${encodeURIComponent(conflictId)}/resolve`,
+      { method: "POST", body: JSON.stringify({ resolution, reason }) },
+    ),
   agenda: () =>
     apiRequest<{ from: string; to: string; classes: TeacherOfflineClass[] }>("/admin/offline-lessons"),
   pendingReview: () =>
@@ -27,6 +68,24 @@ export const adminOfflineApi = {
   students: (crmClassId: string) =>
     apiRequest<TeacherOfflineClassStudents>(
       `/admin/offline-lessons/${encodeURIComponent(crmClassId)}/students`,
+    ),
+  draft: (crmClassId: string) =>
+    apiRequest<OfflineLessonServerDraft | null>(
+      `/admin/offline-lessons/${encodeURIComponent(crmClassId)}/draft`,
+    ),
+  saveDraft: (crmClassId: string, expectedRevision: number, payload: Record<string, unknown>) =>
+    apiRequest<OfflineLessonServerDraft>(
+      `/admin/offline-lessons/${encodeURIComponent(crmClassId)}/draft`,
+      { method: "PUT", body: JSON.stringify({ expectedRevision, payload }) },
+    ),
+  deleteDraft: (crmClassId: string) =>
+    apiRequest<{ deleted: number }>(
+      `/admin/offline-lessons/${encodeURIComponent(crmClassId)}/draft`,
+      { method: "DELETE" },
+    ),
+  reportVersions: (crmClassId: string) =>
+    apiRequest<OfflineLessonReportHistory | null>(
+      `/admin/offline-lessons/${encodeURIComponent(crmClassId)}/report-versions`,
     ),
   startForTeacher: (crmClassId: string) =>
     apiRequest(`/admin/offline-lessons/${encodeURIComponent(crmClassId)}/start-for-teacher`, {
@@ -79,6 +138,11 @@ export const adminOfflineApi = {
           ...learning,
         }),
       },
+    ),
+  learningResults: (crmClassId: string, body: LearningLessonV2ResultsInput) =>
+    apiRequest<Record<string, unknown>>(
+      `/admin/offline-lessons/${encodeURIComponent(crmClassId)}/learning-results`,
+      { method: "POST", body: JSON.stringify(body) },
     ),
   approve: (
     crmClassId: string,

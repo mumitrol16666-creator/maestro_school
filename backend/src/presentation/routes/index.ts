@@ -25,6 +25,13 @@ import { rewardsRoutes } from "./rewards.routes.js";
 import { weeklyLeagueRoutes } from "./weekly-league.routes.js";
 import { familyRoutes } from "./family.routes.js";
 import { studentTasksRoutes } from "./student-tasks.routes.js";
+import { learningHomeworkRoutes } from "./learning-homework.routes.js";
+import { adminJournalRoutes } from "./admin-journal.routes.js";
+import { learningDialogRoutes } from "./learning-dialog.routes.js";
+import { improvementSuggestionRoutes } from "./improvement-suggestions.routes.js";
+import { appUsageRoutes } from "./app-usage.routes.js";
+import { appAnalyticsRoutes } from "./app-analytics.routes.js";
+import { homeworkStatisticsRoutes } from "./homework-statistics.routes.js";
 
 export async function registerRoutes(app: FastifyInstance) {
   await app.register(async (api) => {
@@ -53,6 +60,13 @@ export async function registerRoutes(app: FastifyInstance) {
     await api.register(weeklyLeagueRoutes);
     await api.register(familyRoutes);
     await api.register(studentTasksRoutes);
+    await api.register(learningHomeworkRoutes);
+    await api.register(adminJournalRoutes);
+    await api.register(learningDialogRoutes);
+    await api.register(improvementSuggestionRoutes);
+    await api.register(appUsageRoutes);
+    await api.register(appAnalyticsRoutes);
+    await api.register(homeworkStatisticsRoutes);
     await api.register(publicTrialRoutes);
   }, { prefix: "/api/v1" });
 }

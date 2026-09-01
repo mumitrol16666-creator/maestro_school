@@ -7,7 +7,7 @@ log() { echo "[setup] $*"; }
 log "Updating packages..."
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
-apt-get install -y curl git ca-certificates gnupg
+apt-get install -y age ca-certificates curl git gnupg postgresql-client rsync
 
 if ! command -v docker >/dev/null 2>&1; then
   log "Installing Docker..."
@@ -26,10 +26,10 @@ npm install -g pm2
 
 mkdir -p /var/www/maestro_school
 
-log "Opening app ports in UFW (if active)..."
+log "Keeping application ports private behind Nginx..."
 if command -v ufw >/dev/null 2>&1 && ufw status | grep -q "Status: active"; then
-  ufw allow 3001/tcp
-  ufw allow 4000/tcp
+  ufw --force delete allow 3001/tcp >/dev/null 2>&1 || true
+  ufw --force delete allow 4000/tcp >/dev/null 2>&1 || true
 fi
 
 log "Server ready. Next steps:"

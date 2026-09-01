@@ -51,7 +51,7 @@ const tabs: Array<{ id: LessonWorkspaceTab; label: string; hint: string; icon: t
   { id: "content", label: "Обзор", hint: "Что видит ученик", icon: BookOpen },
   { id: "materials", label: "Материалы", hint: "Файлы к уроку", icon: FileStack },
   { id: "homework", label: "Задание и тест", hint: "Сдача урока", icon: ClipboardList },
-  { id: "settings", label: "Настройки", hint: "Название, видео, баллы", icon: Settings2 },
+  { id: "settings", label: "Настройки", hint: "Название, видео, порядок", icon: Settings2 },
 ];
 
 export function LessonWorkspace({
@@ -97,9 +97,7 @@ export function LessonWorkspace({
             <h2 className="font-display text-4xl">{lesson.title}</h2>
             <PublishBadge published={lesson.isPublished} />
           </div>
-          <p className="mt-3 text-sm text-stone-500">
-            {lesson.pointsReward} баллов · порядок {lesson.sortOrder}
-          </p>
+          <p className="mt-3 text-sm text-stone-500">Порядок в модуле: {lesson.sortOrder}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button onClick={onTogglePublish} className={primaryButton}>

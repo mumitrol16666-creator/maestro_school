@@ -37,6 +37,39 @@ function safeNextPath(next: string | null, role?: string | null) {
 const TRIAL_LANDING_URL =
   process.env.NEXT_PUBLIC_TRIAL_LANDING_URL ?? "https://app-maestro-school.duckdns.org/trial.html";
 
+const LOGIN_COPY = {
+  student: {
+    heading: "Вход ученика",
+    description: "Откройте задания, материалы, расписание и свой учебный прогресс.",
+    mobileIntro: "Уроки, домашние задания, онлайн-занятия и прогресс в одном личном кабинете Maestro.",
+    identityLabel: "Логин, email или телефон",
+    placeholder: "s_77001234567",
+    helper: "Войдите по своему логину, email или номеру телефона.",
+    audienceTitle: "Кабинет ученика",
+    audienceDescription: "Здесь находятся занятия, домашние задания, учебный план, баллы и награды.",
+  },
+  parent: {
+    heading: "Вход родителя",
+    description: "Следите за расписанием, оплатой и прогрессом ребёнка в семейном кабинете.",
+    mobileIntro: "Расписание, баланс, учебный план и достижения ребёнка в одном кабинете Maestro.",
+    identityLabel: "Телефон, email или логин родителя",
+    placeholder: "Телефон или логин родителя",
+    helper: "Выберите профиль родителя. Его пароль может отличаться от пароля ученика.",
+    audienceTitle: "Семейный кабинет",
+    audienceDescription: "Родитель видит только те учебные данные, к которым открыт доступ ученика.",
+  },
+  staff: {
+    heading: "Вход сотрудника",
+    description: "Откройте расписание, отчёты, проверки и рабочие разделы школы.",
+    mobileIntro: "Уроки, ученики, отчёты и учебный контроль в рабочем кабинете Maestro.",
+    identityLabel: "Логин сотрудника",
+    placeholder: "Логин сотрудника",
+    helper: "Используйте учётную запись, выданную администратором школы.",
+    audienceTitle: "Рабочий кабинет Maestro",
+    audienceDescription: "Набор разделов зависит от роли преподавателя или администратора.",
+  },
+} as const;
+
 export default function LoginPage() {
   const router = useRouter();
   const { login, loginWithSso, user, loading: authLoading } = useAuth();
@@ -101,26 +134,27 @@ export default function LoginPage() {
   }
 
   const busy = submitting || ssoPending;
+  const selectedCopy = LOGIN_COPY[profile];
 
   return (
     <main className="grid min-h-screen bg-paper lg:grid-cols-[1.05fr_0.95fr]">
-      <AuthHeroPanel />
+      <AuthHeroPanel profile={profile} />
 
       <section className="flex items-center justify-center p-6 sm:p-12">
         <div className="w-full max-w-md">
           <div className="mb-8 lg:hidden">
             <Brand />
             <p className="mt-5 text-sm leading-6 text-stone-500">
-              Уроки, домашние задания, онлайн-занятия и прогресс — в одном личном кабинете Maestro.
+              {selectedCopy.mobileIntro}
             </p>
           </div>
 
           <p className="text-xs font-bold uppercase tracking-[0.22em] text-gold">Личный кабинет</p>
-          <h2 className="font-display mt-3 text-5xl">Вход в личный кабинет</h2>
+          <h2 className="font-display mt-3 text-5xl">{selectedCopy.heading}</h2>
           <p className="mt-4 text-sm leading-6 text-stone-500">
             {ssoPending
               ? "Открываем ваш кабинет..."
-              : "Продолжайте обучение, смотрите задания, материалы и прогресс."}
+              : selectedCopy.description}
           </p>
 
           <form onSubmit={handleSubmit} className="mt-10 space-y-5">
@@ -158,18 +192,18 @@ export default function LoginPage() {
               </div>
             </fieldset>
             <label className="block">
-              <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-stone-500">Логин, email или телефон</span>
+              <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-stone-500">{selectedCopy.identityLabel}</span>
               <input
                 type="text"
                 required
                 autoComplete="username"
                 value={phone}
                 onChange={(event) => setPhone(event.target.value)}
-                placeholder="s_77001234567"
+                placeholder={selectedCopy.placeholder}
                 className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-4 text-sm outline-none transition focus:border-gold"
               />
               <span className="mt-2 block text-xs leading-5 text-stone-500">
-                Один номер можно использовать для профилей ученика и родителя. Пароли у них разные.
+                {selectedCopy.helper}
               </span>
             </label>
             <label className="block">
@@ -215,24 +249,33 @@ export default function LoginPage() {
           <AndroidAppDownloadLink />
 
           <div className="mt-8 rounded-2xl border border-gold/20 bg-gold/5 px-4 py-4 text-center">
-            <p className="text-sm font-bold text-ink">Платформа Maestro — для учеников и их родителей</p>
+            <p className="text-sm font-bold text-ink">{selectedCopy.audienceTitle}</p>
             <p className="mt-2 text-sm leading-6 text-stone-500">
-              Ученик занимается и сдаёт задания. Родитель видит только результаты, расписание и абонемент.
+              {selectedCopy.audienceDescription}
             </p>
           </div>
 
-          <div className="mt-8 rounded-2xl border border-stone-200 bg-white p-5">
-            <p className="text-sm font-bold text-ink">Хотите стать учеником Maestro?</p>
-            <p className="mt-2 text-sm leading-6 text-stone-500">
-              Запишитесь на пробный урок на сайте. Администратор свяжется с вами и подберёт удобное время.
-            </p>
-            <a
-              href={TRIAL_LANDING_URL}
-              className="mt-4 inline-flex items-center gap-2 text-sm font-bold text-gold transition hover:text-ink"
-            >
-              Записаться на пробный урок <ArrowRight size={15} />
-            </a>
-          </div>
+          {profile === "staff" ? (
+            <div className="mt-8 rounded-2xl border border-stone-200 bg-white p-5">
+              <p className="text-sm font-bold text-ink">Нет доступа к рабочему кабинету?</p>
+              <p className="mt-2 text-sm leading-6 text-stone-500">
+                Обратитесь к администратору школы, чтобы проверить учётную запись и назначенную роль.
+              </p>
+            </div>
+          ) : (
+            <div className="mt-8 rounded-2xl border border-stone-200 bg-white p-5">
+              <p className="text-sm font-bold text-ink">Хотите стать учеником Maestro?</p>
+              <p className="mt-2 text-sm leading-6 text-stone-500">
+                Запишитесь на пробный урок на сайте. Администратор свяжется с вами и подберёт удобное время.
+              </p>
+              <a
+                href={TRIAL_LANDING_URL}
+                className="mt-4 inline-flex items-center gap-2 text-sm font-bold text-gold transition hover:text-ink"
+              >
+                Записаться на пробный урок <ArrowRight size={15} />
+              </a>
+            </div>
+          )}
         </div>
       </section>
     </main>

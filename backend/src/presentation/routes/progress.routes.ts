@@ -4,13 +4,30 @@ import {
   getStudentProgress,
   getStudentEnrollments,
 } from "../../application/repositories/progress.repository.js";
-import { calculateStudentPoints, getStudentPointsHistory } from "../../application/services/points.service.js";
+import { getStudentPointsHistory, getStudentPointsReadModel } from "../../application/services/points.service.js";
 import { calculateCourseProgressPercent } from "../../application/services/course-progress.service.js";
 import { syncLessonAvailability } from "../../application/services/lesson-unlock.service.js";
 import { requireCourseEnrollment } from "../../application/services/enrollment.service.js";
-import { authenticate, requirePermission } from "../guards/auth.guards.js";
+import { authenticate, requirePermission, requireStudent } from "../guards/auth.guards.js";
+import { getStudentEconomyProfile } from "../../application/services/student-economy-profile.service.js";
 
 export async function progressRoutes(app: FastifyInstance) {
+  app.get(
+    "/students/me/level",
+    { preHandler: [authenticate, requireStudent] },
+    async (request) => ({
+      data: await getStudentPointsReadModel(request.user!.id),
+    }),
+  );
+
+  app.get(
+    "/students/me/economy-profile",
+    { preHandler: [authenticate, requireStudent] },
+    async (request) => ({
+      data: await getStudentEconomyProfile(request.user!.id),
+    }),
+  );
+
   app.get(
     "/students/me/progress",
     { preHandler: [authenticate, requirePermission("progress.read")] },
@@ -32,9 +49,9 @@ export async function progressRoutes(app: FastifyInstance) {
         }
       }
 
-      const [progress, points, history] = await Promise.all([
+      const [progress, pointsOverview, history] = await Promise.all([
         getStudentProgress(studentId, query.courseId),
-        calculateStudentPoints(studentId),
+        getStudentPointsReadModel(studentId),
         getStudentPointsHistory(studentId, 20),
       ]);
 
@@ -45,7 +62,8 @@ export async function progressRoutes(app: FastifyInstance) {
 
       return {
         data: {
-          points,
+          points: pointsOverview.points,
+          level: pointsOverview.level,
           courseProgressPercent,
           enrollments,
           lessons: progress.map((p) => ({

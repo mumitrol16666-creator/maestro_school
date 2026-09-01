@@ -13,24 +13,40 @@ import {
   teacherOfflineSetAttendanceBatch,
 } from "../../application/services/teacher-offline.service.js";
 import { listTeacherStudents } from "../../application/services/teacher-students.service.js";
+import { openTeacherStudentDialog } from "../../application/services/learning-dialog-membership.service.js";
 import { listTeacherGroups } from "../../application/services/teacher-groups.service.js";
 import {
   completeTeacherStaffTaskFromApp,
   listTeacherStaffTasks,
 } from "../../application/services/teacher-staff-tasks.service.js";
 import { authenticate, requirePermission, requireTeacher } from "../guards/auth.guards.js";
-import { offlineLessonStudentCheckSchema } from "./offline-lesson.schemas.js";
 import {
-  getStudentMonthlyPlan,
-  publishStudentMonthlyPlan,
-  saveStudentMonthlyPlan,
-} from "../../application/services/student-monthly-plan.service.js";
+  learningLessonResultsSchema,
+  offlineLessonStudentCheckSchema,
+} from "./offline-lesson.schemas.js";
 import {
-  getGroupMonthlyPlan,
-  publishGroupMonthlyPlan,
-  saveGroupMonthlyPlan,
-} from "../../application/services/group-monthly-plan.service.js";
+  getGroupMonthlyPlanAdapted,
+  getStudentMonthlyPlanAdapted,
+  learningTopicsV2Enabled,
+  publishGroupMonthlyPlanAdapted,
+  publishStudentMonthlyPlanAdapted,
+  saveGroupMonthlyPlanAdapted,
+  saveStudentMonthlyPlanAdapted,
+} from "../../application/services/monthly-plan-adapter.service.js";
+import {
+  getLearningTopicV2,
+  updateLearningTopicProgressV2,
+} from "../../application/services/learning-plan-v2.service.js";
+import { listTeacherCrmDirections } from "../../application/services/crm-direction-projection.service.js";
 import { isSupportedMaterialUrl } from "../../domain/group-material.js";
+import { writeAuditLog } from "../../application/services/audit.service.js";
+import { applyLearningLessonV2Results } from "../../application/services/learning-lesson-v2.service.js";
+import {
+  deleteOfflineLessonDraft,
+  getOfflineLessonDraft,
+  listOfflineLessonReportVersions,
+  saveOfflineLessonDraft,
+} from "../../application/services/offline-lesson-report.service.js";
 
 const readGuards = [authenticate, requirePermission("offline_school.read")];
 const writeGuards = [authenticate, requirePermission("offline_school.write")];
@@ -57,6 +73,18 @@ export async function teacherOfflineRoutes(app: FastifyInstance) {
     async (request) => ({ data: await listTeacherStudents(request.user!.id) }),
   );
 
+  app.post(
+    "/teachers/me/students/:studentUserId/dialog",
+    { preHandler: [authenticate, requireTeacher, requirePermission("offline_school.read")] },
+    async (request) => {
+      const { studentUserId } = z.object({ studentUserId: z.string().uuid() }).parse(request.params);
+      const { recipient } = z.object({ recipient: z.enum(["student", "parent"]) }).parse(request.body ?? {});
+      return {
+        data: await openTeacherStudentDialog(request.user!.id, studentUserId, recipient),
+      };
+    },
+  );
+
   app.get(
     "/teachers/me/groups",
     { preHandler: [authenticate, requireTeacher, requirePermission("offline_school.read")] },
@@ -68,6 +96,7 @@ export async function teacherOfflineRoutes(app: FastifyInstance) {
     id: z.string().min(1).max(100),
     title: z.string().trim().min(1).max(1000),
     status: z.enum(["planned", "in_progress", "completed"]),
+    masteryCriteria: z.string().max(5000).optional(),
   });
 
   app.get(
@@ -75,8 +104,18 @@ export async function teacherOfflineRoutes(app: FastifyInstance) {
     { preHandler: [authenticate, requireTeacher, requirePermission("offline_school.read")] },
     async (request) => {
       const { crmStudentId } = z.object({ crmStudentId: z.string().min(1).max(128) }).parse(request.params);
-      const { month } = z.object({ month: monthSchema }).parse(request.query);
-      return { data: await getStudentMonthlyPlan(request.user!.id, crmStudentId, month) };
+      const { month, crmDirectionId } = z.object({
+        month: monthSchema,
+        crmDirectionId: z.string().min(1).max(128).optional(),
+      }).parse(request.query);
+      return {
+        data: await getStudentMonthlyPlanAdapted(
+          request.user!.id,
+          crmStudentId,
+          month,
+          crmDirectionId,
+        ),
+      };
     },
   );
 
@@ -93,14 +132,33 @@ export async function teacherOfflineRoutes(app: FastifyInstance) {
         checkpoint: z.string().max(5000).default(""),
         note: z.string().max(5000).default(""),
         items: z.array(monthlyPlanItemSchema).max(50).default([]),
+        crmDirectionId: z.string().min(1).max(128).optional(),
+        expectedVersion: z.number().int().nonnegative().optional(),
       }).parse(request.body ?? {});
+      const plan = await saveStudentMonthlyPlanAdapted(
+        request.user!.id,
+        crmStudentId,
+        body.month,
+        body,
+        body.crmDirectionId,
+      );
+      if (!plan.idempotent) {
+        await writeAuditLog({
+          entityType: "student_monthly_plan",
+          entityId: plan.id,
+          action: "update",
+          actorId: request.user!.id,
+          payload: {
+            event: "monthly_plan_draft_saved",
+            month: plan.month,
+            itemCount: plan.items.length,
+            draftRevision: plan.publication.draftRevision,
+            progressPercent: plan.progress.percent,
+          },
+        });
+      }
       return {
-        data: await saveStudentMonthlyPlan(
-          request.user!.id,
-          crmStudentId,
-          body.month,
-          body,
-        ),
+        data: plan,
       };
     },
   );
@@ -113,14 +171,32 @@ export async function teacherOfflineRoutes(app: FastifyInstance) {
       const body = z.object({
         month: monthSchema,
         expectedDraftRevision: z.number().int().positive().optional(),
+        crmDirectionId: z.string().min(1).max(128).optional(),
       }).parse(request.body ?? {});
+      const plan = await publishStudentMonthlyPlanAdapted(
+        request.user!.id,
+        crmStudentId,
+        body.month,
+        body.expectedDraftRevision,
+        body.crmDirectionId,
+      );
+      if (!plan.idempotent && plan.publicationEvent) {
+        await writeAuditLog({
+          entityType: "student_monthly_plan",
+          entityId: plan.id,
+          action: "publish",
+          actorId: request.user!.id,
+          payload: {
+            event: plan.publicationEvent,
+            month: plan.month,
+            itemCount: plan.items.length,
+            publishedRevision: plan.publication.publishedRevision,
+            progressPercent: plan.progress.percent,
+          },
+        });
+      }
       return {
-        data: await publishStudentMonthlyPlan(
-          request.user!.id,
-          crmStudentId,
-          body.month,
-          body.expectedDraftRevision,
-        ),
+        data: plan,
       };
     },
   );
@@ -142,8 +218,18 @@ export async function teacherOfflineRoutes(app: FastifyInstance) {
     { preHandler: [authenticate, requireTeacher, requirePermission("offline_school.read")] },
     async (request) => {
       const { crmGroupId } = z.object({ crmGroupId: z.string().min(1).max(128) }).parse(request.params);
-      const { month } = z.object({ month: monthSchema }).parse(request.query);
-      return { data: await getGroupMonthlyPlan(request.user!.id, crmGroupId, month) };
+      const { month, crmDirectionId } = z.object({
+        month: monthSchema,
+        crmDirectionId: z.string().min(1).max(128).optional(),
+      }).parse(request.query);
+      return {
+        data: await getGroupMonthlyPlanAdapted(
+          request.user!.id,
+          crmGroupId,
+          month,
+          crmDirectionId,
+        ),
+      };
     },
   );
 
@@ -161,14 +247,33 @@ export async function teacherOfflineRoutes(app: FastifyInstance) {
         note: z.string().max(5000).default(""),
         items: z.array(monthlyPlanItemSchema).max(50).default([]),
         materials: z.array(groupPlanMaterialSchema).max(50).default([]),
+        crmDirectionId: z.string().min(1).max(128).optional(),
+        expectedVersion: z.number().int().nonnegative().optional(),
       }).parse(request.body ?? {});
+      const plan = await saveGroupMonthlyPlanAdapted(
+        request.user!.id,
+        crmGroupId,
+        body.month,
+        body,
+        body.crmDirectionId,
+      );
+      if (!plan.idempotent) {
+        await writeAuditLog({
+          entityType: "group_monthly_plan",
+          entityId: plan.id,
+          action: "update",
+          actorId: request.user!.id,
+          payload: {
+            event: "monthly_plan_draft_saved",
+            month: plan.month,
+            itemCount: plan.items.length,
+            draftRevision: plan.publication.draftRevision,
+            progressPercent: plan.progress.percent,
+          },
+        });
+      }
       return {
-        data: await saveGroupMonthlyPlan(
-          request.user!.id,
-          crmGroupId,
-          body.month,
-          body,
-        ),
+        data: plan,
       };
     },
   );
@@ -181,17 +286,85 @@ export async function teacherOfflineRoutes(app: FastifyInstance) {
       const body = z.object({
         month: monthSchema,
         expectedDraftRevision: z.number().int().positive().optional(),
+        crmDirectionId: z.string().min(1).max(128).optional(),
       }).parse(request.body ?? {});
+      const plan = await publishGroupMonthlyPlanAdapted(
+        request.user!.id,
+        crmGroupId,
+        body.month,
+        body.expectedDraftRevision,
+        body.crmDirectionId,
+      );
+      if (!plan.idempotent && plan.publicationEvent) {
+        await writeAuditLog({
+          entityType: "group_monthly_plan",
+          entityId: plan.id,
+          action: "publish",
+          actorId: request.user!.id,
+          payload: {
+            event: plan.publicationEvent,
+            month: plan.month,
+            itemCount: plan.items.length,
+            publishedRevision: plan.publication.publishedRevision,
+            progressPercent: plan.progress.percent,
+          },
+        });
+      }
       return {
-        data: await publishGroupMonthlyPlan(
-          request.user!.id,
-          crmGroupId,
-          body.month,
-          body.expectedDraftRevision,
-        ),
+        data: plan,
       };
     },
   );
+
+  if (learningTopicsV2Enabled()) {
+    app.get(
+      "/teachers/me/crm-directions",
+      { preHandler: [authenticate, requireTeacher, requirePermission("offline_school.read")] },
+      async (request) => ({ data: await listTeacherCrmDirections(request.user!.id) }),
+    );
+
+    app.get(
+      "/teachers/me/learning-topics/:topicId",
+      { preHandler: [authenticate, requireTeacher, requirePermission("offline_school.read")] },
+      async (request) => {
+        const { topicId } = z.object({ topicId: z.string().uuid() }).parse(request.params);
+        return { data: await getLearningTopicV2(request.user!.id, topicId) };
+      },
+    );
+
+    app.patch(
+      "/teachers/me/learning-topics/:topicId/progress",
+      { preHandler: [authenticate, requireTeacher, requirePermission("offline_school.write")] },
+      async (request) => {
+        const { topicId } = z.object({ topicId: z.string().uuid() }).parse(request.params);
+        const body = z.object({
+          toPercent: z.number().int().min(0).max(100),
+          expectedPercent: z.number().int().min(0).max(100).nullable(),
+          sourceKey: z.string().trim().min(1).max(255),
+          comment: z.string().max(5000).optional(),
+        }).parse(request.body ?? {});
+        const topic = await updateLearningTopicProgressV2(
+          request.user!.id,
+          topicId,
+          body,
+        );
+        if (!topic.idempotent) {
+          await writeAuditLog({
+            entityType: "learning_topic",
+            entityId: topic.id,
+            action: "update",
+            actorId: request.user!.id,
+            payload: {
+              event: "learning_topic_progress_changed",
+              toPercent: topic.progressPercent,
+              sourceKey: body.sourceKey,
+            },
+          });
+        }
+        return { data: topic };
+      },
+    );
+  }
 
   app.get(
     "/teachers/me/offline-lessons",
@@ -220,6 +393,57 @@ export async function teacherOfflineRoutes(app: FastifyInstance) {
     async (request) => {
       const { crmClassId } = z.object({ crmClassId: z.string().min(1) }).parse(request.params);
       return { data: await getTeacherOfflineClassStudents(request.user!.id, crmClassId) };
+    },
+  );
+
+  app.get(
+    "/teachers/me/offline-lessons/:crmClassId/draft",
+    { preHandler: readGuards },
+    async (request) => {
+      const { crmClassId } = z.object({ crmClassId: z.string().min(1) }).parse(request.params);
+      await getTeacherOfflineClass(request.user!.id, crmClassId);
+      return { data: await getOfflineLessonDraft(crmClassId, request.user!.id) };
+    },
+  );
+
+  app.put(
+    "/teachers/me/offline-lessons/:crmClassId/draft",
+    { preHandler: writeGuards },
+    async (request) => {
+      const { crmClassId } = z.object({ crmClassId: z.string().min(1) }).parse(request.params);
+      await getTeacherOfflineClass(request.user!.id, crmClassId);
+      const body = z.object({
+        expectedRevision: z.number().int().nonnegative(),
+        payload: z.record(z.string(), z.unknown()),
+      }).parse(request.body ?? {});
+      return {
+        data: await saveOfflineLessonDraft({
+          crmClassId,
+          ownerUserId: request.user!.id,
+          payload: body.payload,
+          expectedRevision: body.expectedRevision,
+        }),
+      };
+    },
+  );
+
+  app.delete(
+    "/teachers/me/offline-lessons/:crmClassId/draft",
+    { preHandler: writeGuards },
+    async (request) => {
+      const { crmClassId } = z.object({ crmClassId: z.string().min(1) }).parse(request.params);
+      await getTeacherOfflineClass(request.user!.id, crmClassId);
+      return { data: await deleteOfflineLessonDraft(crmClassId, request.user!.id) };
+    },
+  );
+
+  app.get(
+    "/teachers/me/offline-lessons/:crmClassId/report-versions",
+    { preHandler: readGuards },
+    async (request) => {
+      const { crmClassId } = z.object({ crmClassId: z.string().min(1) }).parse(request.params);
+      await getTeacherOfflineClass(request.user!.id, crmClassId);
+      return { data: await listOfflineLessonReportVersions(crmClassId) };
     },
   );
 
@@ -269,6 +493,33 @@ export async function teacherOfflineRoutes(app: FastifyInstance) {
           body.checks,
         ),
       };
+    },
+  );
+
+  app.post(
+    "/teachers/me/offline-lessons/:crmClassId/learning-results",
+    { preHandler: writeGuards },
+    async (request) => {
+      const { crmClassId } = z.object({ crmClassId: z.string().min(1) }).parse(request.params);
+      await getTeacherOfflineClass(request.user!.id, crmClassId);
+      const body = learningLessonResultsSchema.parse(request.body ?? {});
+      const result = await applyLearningLessonV2Results(
+        request.user!.id,
+        crmClassId,
+        body,
+      );
+      await writeAuditLog({
+        entityType: "offline_lesson",
+        entityId: crmClassId,
+        action: "update",
+        actorId: request.user!.id,
+        payload: {
+          event: "learning_lesson_results_applied",
+          homeworkDecisionCount: body.homeworkDecisions.length,
+          topicUpdateCount: body.topicUpdates.length,
+        },
+      });
+      return { data: result };
     },
   );
 

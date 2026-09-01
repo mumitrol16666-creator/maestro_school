@@ -6,6 +6,8 @@ export type SchoolOfflineLesson = {
   endTime: string;
   status: string;
   classType?: string;
+  deliveryFormat?: "offline" | "online";
+  meetingUrl?: string | null;
   crmGroupId?: string | null;
   crmTeacherId?: string | null;
   groupName: string | null;

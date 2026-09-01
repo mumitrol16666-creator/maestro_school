@@ -139,10 +139,16 @@ async function wipeDatabase() {
     await tx.lessonQuestion.deleteMany();
     await tx.lessonProgress.deleteMany();
     await tx.pointsTransaction.deleteMany();
+    await tx.weeklyLeagueSnapshotEntry.deleteMany();
+    await tx.weeklyLeagueSnapshot.deleteMany();
+    await tx.weeklyLeagueAward.deleteMany();
+    await tx.leagueXpEvent.deleteMany();
     await tx.studentAchievement.deleteMany();
     await tx.studentCourse.deleteMany();
     await tx.maestroCoinTransaction.deleteMany();
     await tx.studentCoinBalance.deleteMany();
+    await tx.economicEpochParticipant.deleteMany();
+    await tx.economicEpoch.deleteMany();
 
     await tx.userNotification.deleteMany();
     await tx.pushSubscription.deleteMany();

@@ -14,9 +14,9 @@ import {
 } from "../repositories/learning.repository.js";
 import { syncLessonAvailability } from "./lesson-unlock.service.js";
 import { requireCourseEnrollment } from "./enrollment.service.js";
-import { isCourseCompleted, syncCourseCompletionStatus } from "./course-progress.service.js";
+import { syncCourseCompletionStatus } from "./course-progress.service.js";
 import { evaluateAchievements } from "./achievement.service.js";
-import { courseHomeworkLeagueXp } from "./weekly-league-policy.js";
+import { rewardEconomyV2AppliesToEvent } from "../../config/product-features.js";
 
 async function runLessonCompletionSideEffects(params: {
   studentId: string;
@@ -26,19 +26,23 @@ async function runLessonCompletionSideEffects(params: {
   pointsReward: number;
   lessonTitle: string;
   awardHomeworkLeagueXp?: boolean;
+  eventAt?: Date;
 }) {
   const { unlockNextLesson } = await import("./lesson-unlock.service.js");
   const { awardLessonPoints } = await import("./points.service.js");
   const { awardCourseCompletionCoins } = await import("./coins.service.js");
 
   const nextLessonId = await unlockNextLesson(params.studentId, params.courseId, params.lessonId);
-  await awardLessonPoints({
-    studentId: params.studentId,
-    lessonId: params.lessonId,
-    amount: params.pointsReward,
-    reason: `Урок «${params.lessonTitle}»`,
-    awardedBy: params.actorId,
-  });
+  const eventAt = params.eventAt ?? new Date();
+  if (!rewardEconomyV2AppliesToEvent(eventAt)) {
+    await awardLessonPoints({
+      studentId: params.studentId,
+      lessonId: params.lessonId,
+      amount: params.pointsReward,
+      reason: `Урок «${params.lessonTitle}»`,
+      awardedBy: params.actorId,
+    });
+  }
 
   if (params.awardHomeworkLeagueXp) {
     const submissionAttempts = await prisma.homeworkSubmission.count({
@@ -47,16 +51,22 @@ async function runLessonCompletionSideEffects(params: {
         homework: { lessonId: params.lessonId },
       },
     });
-    const { awardLeagueXp } = await import("./weekly-league.service.js");
-    await awardLeagueXp({
+    const course = await prisma.course.findUnique({
+      where: { id: params.courseId },
+      select: { directionId: true },
+    });
+    const { awardHomeworkAcceptedXp } = await import("./weekly-league.service.js");
+    await awardHomeworkAcceptedXp({
       studentId: params.studentId,
-      amount: courseHomeworkLeagueXp(submissionAttempts),
+      directionId: course?.directionId,
       sourceType: "course_homework",
       sourceKey: `course-homework:${params.studentId}:${params.lessonId}`,
+      attemptNumber: submissionAttempts,
       description: submissionAttempts > 1
         ? `ДЗ к уроку «${params.lessonTitle}» принято после доработки`
         : `ДЗ к уроку «${params.lessonTitle}» принято`,
       awardedById: params.actorId,
+      eventAt: params.eventAt,
     });
   }
 
@@ -141,6 +151,16 @@ export async function completeLesson(params: {
   if (!progress) throw new NotFoundError("Lesson progress");
 
   if (progress.status === "completed") {
+    await runLessonCompletionSideEffects({
+      studentId: params.studentId,
+      lessonId: params.lessonId,
+      courseId: params.courseId,
+      actorId: params.reviewerId,
+      pointsReward: params.pointsReward,
+      lessonTitle: params.lessonTitle,
+      awardHomeworkLeagueXp: true,
+      eventAt: progress.completedAt ?? new Date(),
+    });
     return { alreadyCompleted: true, progress };
   }
 
@@ -177,6 +197,7 @@ export async function completeLesson(params: {
     pointsReward: params.pointsReward,
     lessonTitle: params.lessonTitle,
     awardHomeworkLeagueXp: true,
+    eventAt: completedAt,
   });
 
   return { alreadyCompleted: false, progress: updated };
@@ -195,13 +216,21 @@ export async function completeLessonWithoutHomework(studentId: string, lessonId:
     throw new BadRequestError("Lesson progress not initialized. Start the lesson first.");
   }
   if (progress.status === "completed") {
+    const completion = await runLessonCompletionSideEffects({
+      studentId,
+      lessonId,
+      courseId,
+      actorId: studentId,
+      pointsReward: lesson.pointsReward,
+      lessonTitle: lesson.title,
+      eventAt: progress.completedAt ?? new Date(),
+    });
     return {
       lessonId,
       courseId,
       status: progress.status,
       alreadyCompleted: true,
-      nextLessonId: null,
-      courseCompleted: await isCourseCompleted(studentId, courseId),
+      ...completion,
     };
   }
   if (lesson.homeworks.length > 0) {
@@ -221,13 +250,21 @@ export async function completeLessonWithoutHomework(studentId: string, lessonId:
   if (update.count === 0) {
     const current = await getLessonProgressRecord(studentId, lessonId);
     if (current?.status === "completed") {
+      const completion = await runLessonCompletionSideEffects({
+        studentId,
+        lessonId,
+        courseId,
+        actorId: studentId,
+        pointsReward: lesson.pointsReward,
+        lessonTitle: lesson.title,
+        eventAt: current.completedAt ?? new Date(),
+      });
       return {
         lessonId,
         courseId,
         status: current.status,
         alreadyCompleted: true,
-        nextLessonId: null,
-        courseCompleted: await isCourseCompleted(studentId, courseId),
+        ...completion,
       };
     }
     throw new ConflictError(

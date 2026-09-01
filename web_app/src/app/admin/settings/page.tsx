@@ -1,6 +1,7 @@
 "use client";
 
-import { KeyRound, LogOut, Mail, Phone, Shield, UserRound } from "lucide-react";
+import { CalendarDays, ClipboardCheck, KeyRound, LogOut, Mail, Phone, Shield, UserRound, UsersRound } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { ChangePasswordForm } from "@/components/change-password-form";
@@ -8,6 +9,7 @@ import { ErrorState, LoadingState } from "@/components/data-states";
 import { PageHeader } from "@/components/page-header";
 import { PushNotificationsCard } from "@/components/push-notifications-card";
 import { AndroidAppDownloadCard } from "@/components/android-app-download";
+import { ImprovementSuggestionCard } from "@/components/improvement-suggestion-card";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { api, storeSession, getAccessToken } from "@/lib/api-client";
 import { formatFio, initialsFromName } from "@/lib/name";
@@ -33,6 +35,8 @@ export default function AdminSettingsPage() {
   const fullName = formatFio(profile) || profile.email || "Администратор";
   const initials = initialsFromName(profile);
   const permissions = profile.permissions ?? [];
+  const isTeacher = profile.role === "teacher";
+  const visibleEmail = profile.email && !profile.email.endsWith("@maestro.local") ? profile.email : null;
 
   async function savePhone(event: React.FormEvent) {
     event.preventDefault();
@@ -76,15 +80,38 @@ export default function AdminSettingsPage() {
               <UserRound size={16} className="text-gold" />
               Логин: {profile.login ?? "—"}
             </div>
-            <div className="flex items-center gap-3 text-white/60">
-              <Mail size={16} className="text-gold" />
-              {profile.email}
-            </div>
+            {visibleEmail ? (
+              <div className="flex items-center gap-3 text-white/60">
+                <Mail size={16} className="text-gold" />
+                {visibleEmail}
+              </div>
+            ) : null}
             <div className="flex items-center gap-3 text-white/60">
               <Phone size={16} className="text-gold" />
               {profile.phone && profile.phone !== "00000000000" ? profile.phone : "Телефон не указан"}
             </div>
           </div>
+          {isTeacher ? (
+            <div className="mt-7 border-t border-white/10 pt-6">
+              <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold">Рабочий день</p>
+              <div className="mt-4 grid gap-2 sm:grid-cols-3 xl:grid-cols-1">
+                {[
+                  { href: "/admin/offline-lessons", label: "Мои уроки", icon: CalendarDays },
+                  { href: "/admin/homework-review", label: "Проверить ДЗ", icon: ClipboardCheck },
+                  { href: "/admin/my-students", label: "Мои ученики", icon: UsersRound },
+                ].map(({ href, label, icon: Icon }) => (
+                  <Link
+                    key={href}
+                    href={href}
+                    className="flex min-h-11 items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-bold text-white/80 transition hover:border-gold/40 hover:bg-white/10 hover:text-white"
+                  >
+                    <Icon size={17} className="text-gold" aria-hidden="true" />
+                    {label}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          ) : null}
           <button
             type="button"
             onClick={logout}
@@ -146,7 +173,7 @@ export default function AdminSettingsPage() {
               </div>
             </div>
             <div className="mt-5 rounded-2xl bg-stone-50 p-4 text-sm text-stone-600">
-              <p><span className="font-bold text-ink">Ваш уровень доступа:</span> {roleLabel(profile.role)}</p>
+              <p><span className="font-bold text-ink">Ваша роль:</span> {roleLabel(profile.role)}</p>
             </div>
             {permissions.length ? (
               <ul className="mt-4 grid gap-2 sm:grid-cols-2">
@@ -158,6 +185,8 @@ export default function AdminSettingsPage() {
               </ul>
             ) : null}
           </div>
+
+          <ImprovementSuggestionCard />
         </section>
       </div>
     </>

@@ -1,0 +1,4 @@
+services:
+  backend:
+    environment:
+      DATABASE_URL: postgresql://maestro:maestro@postgres:5432/maestro_regression?schema=public

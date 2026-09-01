@@ -46,6 +46,17 @@ export type TeacherStudent = {
     completedAt: string | null;
     createdAt: string;
   }>;
+  appActivity: {
+    lastActiveAt: string | null;
+    lastLoginAt: string | null;
+  };
+  family: {
+    parents: Array<{
+      id: string;
+      name: string;
+      relationship: string;
+    }>;
+  };
   learningSummary: {
     attendanceRate: number | null;
     homeworkCompletionRate: number | null;
@@ -111,11 +122,36 @@ export type MonthlyPlanItem = {
   id: string;
   title: string;
   status: MonthlyPlanItemStatus;
+  masteryCriteria?: string;
+  progressPercent?: number | null;
+  state?: "active" | "moved";
+};
+
+export type TeacherCrmDirection = {
+  id: string;
+  crmDirectionId: string;
+  title: string;
+  isActive: boolean | null;
+  updatedAt: string | null;
+  syncedAt: string | null;
+};
+
+export type LearningPlanMode = {
+  mode: "legacy" | "v2";
+  directions: TeacherCrmDirection[];
 };
 
 export type StudentMonthlyPlan = {
   id?: string;
+  model?: "learning_topics_v2";
   month: string;
+  direction?: {
+    id: string;
+    crmDirectionId: string | null;
+    title: string;
+    isActive: boolean | null;
+    syncedAt: string | null;
+  };
   goal: string;
   expectedResult: string;
   skills: string;
@@ -130,11 +166,22 @@ export type StudentMonthlyPlan = {
     publishedRevision: number;
     hasUnpublishedChanges: boolean;
   };
+  version?: number;
+  expectedVersion?: number;
+  versions?: Array<{
+    version: number;
+    createdAt: string;
+    publishedAt: string | null;
+    itemCount: number;
+    author: string;
+  }>;
+  teacher?: { name: string };
   updatedAt?: string;
 };
 
 export type StudentMonthlyPlanResponse = {
   student: { crmStudentId: string; name: string };
+  direction?: { crmDirectionId: string; title: string };
   month: string;
   plan: StudentMonthlyPlan | null;
 };
@@ -152,6 +199,30 @@ export type GroupMonthlyPlan = StudentMonthlyPlan & {
 
 export type GroupMonthlyPlanResponse = {
   group: { crmGroupId: string; name: string };
+  direction?: { crmDirectionId: string; title: string };
   month: string;
   plan: GroupMonthlyPlan | null;
+};
+
+export type LearningTopicDetail = {
+  id: string;
+  crmStudentId: string | null;
+  crmGroupId: string | null;
+  direction: { crmDirectionId: string; title: string };
+  title: string;
+  masteryCriteria: string;
+  progressPercent: number | null;
+  status: Exclude<MonthlyPlanItemStatus, "moved">;
+  masteredAt: string | null;
+  history: Array<{
+    id: string;
+    fromPercent: number | null;
+    toPercent: number;
+    source: string;
+    sourceKey: string;
+    comment: string | null;
+    changedById: string | null;
+    occurredAt: string;
+  }>;
+  idempotent?: boolean;
 };

@@ -1,0 +1,106 @@
+name: maestro-learning-qa
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: maestro_qa
+      POSTGRES_PASSWORD: maestro_qa_password
+      POSTGRES_DB: maestro_regression
+    ports:
+      - "127.0.0.1:55435:5432"
+    volumes:
+      - maestro_learning_qa_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U maestro_qa -d maestro_regression"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+  backend:
+    image: maestro-learning-qa-backend:local
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.local
+    environment:
+      NODE_ENV: production
+      TZ: Asia/Aqtobe
+      DATABASE_URL: postgresql://maestro_qa:maestro_qa_password@postgres:5432/maestro_regression?schema=public
+      JWT_SECRET: local-maestro-learning-qa-jwt-secret
+      PORT: 4000
+      HOST: 0.0.0.0
+      CORS_ORIGIN: http://127.0.0.1:3321,http://localhost:3321,http://macbook-air-vladislav.local:3321
+      UPLOAD_DIR: /app/uploads
+      CRM_API_URL: http://host.docker.internal:5002
+      INTEGRATION_SERVICE_SECRET: local-maestro-integration-secret
+      INTEGRATION_SSO_SECRET: local-maestro-qa-sso-secret
+      RELEASE_SHA: unknown
+      RELEASE_BUILT_AT: "2026-08-29T00:00:00.000Z"
+      PRODUCT_V2_CUTOVER_AT: "2026-01-01T00:00:00.000Z"
+      FEATURE_LEARNING_TOPICS_V2: "true"
+      FEATURE_STUDENT_WORKSPACE_V2: "true"
+      FEATURE_HOMEWORK_FLOW_V2: "true"
+      FEATURE_UNIFIED_LESSON_V2: "true"
+      FEATURE_LESSON_SYNC_V2: "true"
+      FEATURE_REWARD_ECONOMY_V2: "true"
+      FEATURE_CURATOR_WORKSPACE_V2: "true"
+      FEATURE_LEARNING_DIALOGS_V2: "true"
+      FEATURE_ROLE_NAVIGATION_V2: "true"
+      MAESTRO_QA_LOCAL: "true"
+      MAESTRO_QA_DB_MARKER: maestro-learning-regression
+      ADMIN_EMAIL: qa_bootstrap@maestro.local
+      ADMIN_PASSWORD: QaMaestro2026!
+      ADMIN_FIRST_NAME: QA
+      ADMIN_LAST_NAME: Admin
+      AUTH_LOGIN_RATE_LIMIT_MAX: "200"
+    ports:
+      - "127.0.0.1:4001:4000"
+    volumes:
+      - maestro_learning_qa_uploads:/app/uploads
+      - ./backend/scripts:/app/scripts:ro
+      - ./backend/prisma:/app/prisma:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:4000/health >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  web:
+    image: maestro-learning-qa-web:local
+    build:
+      context: ./web_app
+      dockerfile: Dockerfile.local
+      args:
+        NEXT_PUBLIC_API_URL: /api/v1
+        API_PROXY_TARGET: http://backend:4000
+        NEXT_PUBLIC_RELEASE_SHA: qa-local
+        NEXT_PUBLIC_RELEASE_BUILT_AT: local
+    environment:
+      NODE_ENV: production
+      TZ: Asia/Aqtobe
+      NEXT_PUBLIC_API_URL: /api/v1
+      API_PROXY_TARGET: http://backend:4000
+      NEXT_PUBLIC_RELEASE_SHA: qa-local
+      NEXT_PUBLIC_RELEASE_BUILT_AT: local
+    ports:
+      - "0.0.0.0:3321:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/login >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+volumes:
+  maestro_learning_qa_pg_data:
+  maestro_learning_qa_uploads:

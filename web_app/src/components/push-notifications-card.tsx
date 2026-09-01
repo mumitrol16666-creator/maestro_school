@@ -92,7 +92,7 @@ export function PushNotificationsCard({
       <div className="rounded-[30px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
         <div className="flex items-center gap-3 text-sm text-stone-500">
           <LoaderCircle size={16} className="animate-spin" />
-          Загружаем настройки...
+          Загружаем настройки…
         </div>
       </div>
     );
@@ -126,9 +126,9 @@ export function PushNotificationsCard({
           </span>
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold">Уведомления</p>
-            <h3 className="font-display mt-2 text-3xl">Скоро будут доступны</h3>
+            <h3 className="font-display mt-2 text-3xl">Уведомления внутри кабинета</h3>
             <p className="mt-3 text-sm leading-6 text-stone-500">
-              Мы подключаем уведомления на сервере. Зайдите в профиль чуть позже и включите их здесь.
+              Новые события уже появляются по значку колокольчика. Уведомления на экран телефона пока недоступны.
             </p>
           </div>
         </div>
@@ -155,7 +155,7 @@ export function PushNotificationsCard({
           <ul className="mt-4 space-y-2 text-sm leading-6 text-stone-500">
             {audience === "parent" ? (
               <>
-                <li>✓ Напоминания перед офлайн-уроком</li>
+                <li>✓ Напоминания перед уроком с преподавателем</li>
                 <li>✓ Переносы, отмены и пропуски</li>
                 <li>✓ Итог урока и проверка ДЗ</li>
                 <li>✓ Низкий остаток занятий или сумма к оплате</li>

@@ -27,7 +27,7 @@ self.addEventListener("fetch", (event) => {
 
 self.addEventListener("push", (event) => {
   let payload = {
-    title: "Maestro",
+    title: "Новое уведомление",
     body: "У вас новое уведомление",
     url: "/dashboard",
     tag: "maestro",

@@ -4,10 +4,12 @@ import {
   ArrowRight,
   Award,
   BookOpenCheck,
+  CalendarClock,
   CalendarDays,
   CheckCircle2,
   ChevronRight,
   CircleDot,
+  Clock3,
   Coins,
   ListTodo,
   MonitorPlay,
@@ -17,19 +19,21 @@ import {
   Star,
   Target,
   Trophy,
+  UserRound,
 } from "lucide-react";
 import Link from "next/link";
+import { useState, type ReactNode } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { ErrorState, LoadingState } from "@/components/data-states";
+import { LevelBadge, LevelProgressDialog } from "@/components/level-summary";
 import { ProgressBar } from "@/components/progress-bar";
-import { UnifiedTaskCard } from "@/components/unified-task-card";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { api } from "@/lib/api-client";
-import { onlineLessonsApi } from "@/lib/online-lessons-api";
 import { selectStudentHomeHero, type StudentHomeHero } from "@/lib/student-home-priority";
 import { weeklyLeagueApi } from "@/lib/weekly-league-api";
 import type { SchoolOfflineLesson } from "@/types/school-offline";
 import type { StudentHomeHomework, StudentHomeMonthlyPlan, StudentMonthlyPlansResponse } from "@/types/api";
+import type { UnifiedTask } from "@/types/unified-tasks";
 
 const monthNames = [
   "январь", "февраль", "март", "апрель", "май", "июнь",
@@ -61,12 +65,12 @@ function homeworkStatus(homework: StudentHomeHomework) {
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const [levelDialogOpen, setLevelDialogOpen] = useState(false);
   const resource = useApiResource(() => api.studentHome(), []);
   const taskResource = useApiResource(() => api.studentTasks({ scope: "active", limit: 4 }), []);
   const planResource = useApiResource(() => api.studentMonthlyPlans(), []);
-  const onlineLessonResource = useApiResource(() => onlineLessonsApi.myRequests(), []);
   const achievementsResource = useApiResource(() => api.achievements(), []);
-  if (resource.loading || taskResource.loading || planResource.loading || onlineLessonResource.loading) {
+  if (resource.loading || taskResource.loading || planResource.loading) {
     return <LoadingState label="Собираем вашу учебную главную" />;
   }
   if (resource.error || !resource.data) {
@@ -79,24 +83,22 @@ export default function DashboardPage() {
   const plans = planResource.data?.plans ?? data.monthlyPlans;
   const planProgress = planResource.data?.aggregateProgress ?? aggregatePlanProgress(plans);
   const actionTasks = taskResource.data?.data.items.filter((task) => task.actionRequired) ?? [];
-  const onlineLessons = onlineLessonResource.data ?? [];
   const hero = selectStudentHomeHero({
     tasks: actionTasks,
     schoolLessons: upcoming,
-    onlineLessons,
     plans,
     dashboard: data.dashboard,
   });
   const visibleTasks = hero?.kind === "task"
-    ? actionTasks.filter((task) => task.id !== hero.id).slice(0, 2)
-    : actionTasks.slice(0, 2);
+    ? actionTasks.filter((task) => task.id !== hero.id).slice(0, 3)
+    : actionTasks.slice(0, 3);
   const taskActionCount = taskResource.data?.data.counts.actionRequired ?? 0;
   const showTaskPanel = Boolean(
     (taskResource.data && (taskActionCount === 0 || visibleTasks.length > 0))
     || (!taskResource.data && data.currentHomework),
   );
   const visibleUpcoming = upcoming
-    .filter((lesson) => hero?.kind !== "school_lesson" || lesson.crmClassId !== hero.id)
+    .filter((lesson) => !["school_lesson", "online_lesson"].includes(hero?.kind ?? "") || lesson.crmClassId !== hero?.id)
     .slice(0, 3);
   const earnedAchievements = achievementsResource.data?.meta?.earnedCount;
   const currentCourseLessonHref = data.dashboard.nextAvailableLesson
@@ -122,35 +124,44 @@ export default function DashboardPage() {
           </h1>
           <p className="mt-1 text-[13px] text-stone-500 sm:mt-2 sm:text-sm">Здесь только то, что важно сейчас.</p>
         </div>
-        <div className="grid w-full grid-cols-3 gap-2 sm:w-auto">
-          <MetricChip icon={Star} value={data.dashboard.points.toLocaleString("ru-RU")} label="баллов" />
-          <MetricChip icon={Coins} value={(user?.coins ?? 0).toLocaleString("ru-RU")} label="Coins" />
+        <div className={`grid w-full gap-2 sm:w-auto ${data.dashboard.level ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"}`}>
+          {data.dashboard.level ? (
+            <MetricChip
+              leading={<LevelBadge level={data.dashboard.level.level} size="small" />}
+              value={data.dashboard.level.level.title}
+              label=""
+              onClick={() => setLevelDialogOpen(true)}
+              testId="dashboard-level-chip"
+            />
+          ) : null}
+          <MetricChip icon={Star} value={data.dashboard.points.toLocaleString("ru-RU")} label="баллов" onClick={data.dashboard.level ? () => setLevelDialogOpen(true) : undefined} testId="dashboard-points-chip" />
+          <MetricChip icon={Coins} value={(user?.coins ?? 0).toLocaleString("ru-RU")} label="Coins" href="/rewards" testId="dashboard-coins-chip" />
           {earnedAchievements != null ? (
-            <MetricChip icon={Award} value={earnedAchievements.toLocaleString("ru-RU")} label="достижений" />
+            <MetricChip icon={Award} value={earnedAchievements.toLocaleString("ru-RU")} label="достижений" href="/settings#achievements" testId="dashboard-achievements-chip" />
           ) : null}
         </div>
       </header>
 
-      {hero ? <NowHero hero={hero} /> : null}
+      {levelDialogOpen && data.dashboard.level ? (
+        <LevelProgressDialog progress={data.dashboard.level} onClose={() => setLevelDialogOpen(false)} />
+      ) : null}
 
-      <div className={`mt-5 grid items-start gap-5 ${showTaskPanel ? "xl:grid-cols-[minmax(0,1.8fr)_minmax(300px,0.72fr)]" : ""}`}>
+      <div className={`grid items-stretch gap-5 ${hero ? "xl:grid-cols-[minmax(0,1.75fr)_minmax(280px,0.65fr)]" : ""}`}>
+        {hero ? <div className="order-1"><NowHero hero={hero} /></div> : null}
+        <div className="order-3 xl:order-2"><LeagueMiniWidget /></div>
         {showTaskPanel ? (
-          <div className="order-2 space-y-5 xl:order-1">
+          <div className={`order-2 space-y-5 xl:order-3 ${hero ? "xl:col-span-2" : ""}`}>
             {taskResource.data ? (
               <DashboardTasks
                 tasks={visibleTasks}
                 actionCount={taskActionCount}
                 hiddenInHero={hero?.kind === "task" ? 1 : 0}
-                wide
               />
             ) : data.currentHomework ? (
               <HomeworkCard homework={data.currentHomework} lastReview={data.lastHomeworkReview} />
             ) : null}
           </div>
         ) : null}
-        <div className="order-1 xl:order-2">
-          <LeagueMiniWidget />
-        </div>
       </div>
 
       {(plans.length || visibleUpcoming.length) ? (
@@ -205,12 +216,10 @@ function DashboardTasks({
   tasks,
   actionCount,
   hiddenInHero,
-  wide,
 }: {
   tasks: Awaited<ReturnType<typeof api.studentTasks>>["data"]["items"];
   actionCount: number;
   hiddenInHero: number;
-  wide: boolean;
 }) {
   if (actionCount === 0) {
     return (
@@ -244,38 +253,122 @@ function DashboardTasks({
           <ChevronRight size={18} />
         </Link>
       </div>
-      <div className={wide
-        ? `grid gap-3 ${tasks.length > 1 ? "md:grid-cols-2" : ""}`
-        : "space-y-3"}
-      >
-        {tasks.slice(0, 2).map((task) => <UnifiedTaskCard key={task.id} task={task} compact />)}
+      <div className="overflow-hidden rounded-[20px] border border-stone-200 bg-white shadow-soft">
+        {tasks.slice(0, 3).map((task) => <DashboardTaskRow key={task.id} task={task} />)}
       </div>
     </section>
   );
 }
 
+function dashboardTaskDue(task: UnifiedTask) {
+  if (!task.timing.dueAt) return null;
+  const value = new Intl.DateTimeFormat("ru-RU", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Asia/Aqtobe",
+  }).format(new Date(task.timing.dueAt));
+  if (task.timing.overdue) return `Срок прошёл · ${value}`;
+  if (task.timing.dueKind === "next_lesson") return `К уроку · ${value}`;
+  return `До ${value}`;
+}
+
+function DashboardTaskRow({ task }: { task: UnifiedTask }) {
+  const isRevision = task.status === "needs_revision";
+  const due = dashboardTaskDue(task);
+  const sourceLabel = task.source === "offline"
+    ? "Урок с преподавателем"
+    : task.source === "online"
+      ? "Онлайн-урок"
+      : "Самостоятельно";
+  const statusLabel = isRevision ? "Нужна доработка" : "Нужно сделать";
+  const StatusIcon = isRevision ? RotateCcw : Clock3;
+  const completion = task.source === "offline" && task.result.completionPercent != null
+    ? Math.min(100, Math.max(0, Math.round(task.result.completionPercent)))
+    : null;
+
+  return (
+    <Link
+      href={task.target.href}
+      className="group grid min-w-0 gap-3 border-b border-stone-100 p-4 transition last:border-b-0 hover:bg-stone-50 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-5"
+    >
+      <span className="min-w-0">
+        <span className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase text-amber-900">
+            <School size={13} /> {sourceLabel}
+          </span>
+          <span className={`inline-flex items-center gap-1.5 text-[10px] font-black uppercase ${isRevision ? "text-red-700" : "text-stone-500"}`}>
+            <StatusIcon size={13} /> {statusLabel}
+          </span>
+          {isRevision && completion != null ? (
+            <span className="text-[10px] font-black uppercase text-red-700">Проверено на {completion}%</span>
+          ) : null}
+        </span>
+        <strong className="mt-2 block break-words font-display text-lg leading-tight text-ink sm:text-xl">
+          {task.title}
+        </strong>
+        {task.descriptionPreview ? (
+          <span className="mt-1.5 block line-clamp-1 break-words text-sm text-stone-600">{task.descriptionPreview}</span>
+        ) : null}
+        <span className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs font-semibold text-stone-500">
+          {task.context.teacherName ? (
+            <span className="inline-flex items-center gap-1.5"><UserRound size={13} /> {task.context.teacherName}</span>
+          ) : null}
+          {due ? (
+            <span className={`inline-flex items-center gap-1.5 ${task.timing.overdue ? "text-red-700" : ""}`}>
+              <CalendarClock size={13} /> {due}
+            </span>
+          ) : null}
+        </span>
+      </span>
+      <span className="inline-flex min-h-10 items-center justify-between gap-3 justify-self-stretch text-sm font-bold text-ink sm:justify-self-end">
+        <span>{task.target.actionLabel}</span>
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-ink text-white transition group-hover:bg-gold group-hover:text-ink">
+          <ArrowRight size={16} />
+        </span>
+      </span>
+    </Link>
+  );
+}
+
 function MetricChip({
   icon: Icon,
+  leading,
   value,
   label,
+  href,
+  onClick,
+  testId,
 }: {
-  icon: typeof Star;
+  icon?: typeof Star;
+  leading?: ReactNode;
   value: string | number;
   label: string;
+  href?: string;
+  onClick?: () => void;
+  testId?: string;
 }) {
-  return (
-    <div
-      className="flex min-h-12 min-w-0 items-center justify-center gap-2 rounded-xl border border-stone-200 bg-white px-2 py-2 shadow-sm sm:min-h-14 sm:justify-start sm:rounded-2xl sm:px-3"
-      aria-label={`${value} ${label}`}
-      title={`${value} ${label}`}
-    >
-      <Icon size={17} className="shrink-0 text-gold" />
-      <span className="min-w-0 text-xs text-stone-500">
-        <strong className="text-base text-ink sm:mr-1">{value}</strong>
-        <span className="hidden break-words sm:inline">{label}</span>
+  const interactive = Boolean(href || onClick);
+  const accessibleLabel = `${value} ${label}`.trim();
+  const className = `group flex min-h-12 min-w-0 items-center justify-center gap-2 rounded-xl border border-stone-200 bg-white px-2 py-2 shadow-sm transition sm:min-h-14 sm:justify-start sm:rounded-2xl sm:px-3 ${interactive ? "cursor-pointer hover:-translate-y-0.5 hover:border-gold/50 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold" : ""}`;
+  const content = (
+    <>
+      {leading ?? (Icon ? <Icon size={17} className="shrink-0 text-gold" /> : null)}
+      <span className="min-w-0 text-[10px] text-stone-500 sm:text-xs">
+        <strong className="mr-1 text-sm text-ink sm:text-base">{value}</strong>
+        <span className="break-words">{label}</span>
       </span>
-    </div>
+      {interactive ? <ChevronRight size={14} className="hidden shrink-0 text-stone-300 transition group-hover:text-gold sm:block" /> : null}
+    </>
   );
+  if (href) {
+    return <Link href={href} className={className} aria-label={accessibleLabel} title={accessibleLabel} data-testid={testId}>{content}</Link>;
+  }
+  if (onClick) {
+    return <button type="button" onClick={onClick} className={className} aria-label={accessibleLabel} title={accessibleLabel} data-testid={testId}>{content}</button>;
+  }
+  return <div className={className} aria-label={accessibleLabel} title={accessibleLabel} data-testid={testId}>{content}</div>;
 }
 
 function NowHero({ hero }: { hero: StudentHomeHero }) {
@@ -294,24 +387,24 @@ function NowHero({ hero }: { hero: StudentHomeHero }) {
   const DetailIcon = hero.badge?.tone === "danger" ? RotateCcw : CalendarDays;
 
   return (
-    <section className="overflow-hidden rounded-[20px] border border-white/10 bg-[#171813] p-3.5 text-white shadow-soft sm:rounded-[24px] sm:p-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+    <section className="h-full overflow-hidden rounded-[20px] border border-white/10 bg-[#171813] p-4 text-white shadow-soft sm:p-5">
+      <div className="flex h-full flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0 max-w-3xl">
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-            <span className="grid h-8 w-8 place-items-center rounded-lg bg-white/10 text-gold sm:h-9 sm:w-9 sm:rounded-xl">
+            <span className="grid h-8 w-8 place-items-center rounded-lg bg-white/10 text-gold">
               <Icon size={17} />
             </span>
             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-gold sm:text-xs">{hero.eyebrow}</p>
+            {hero.badge ? (
+              <span className={`inline-flex min-h-6 items-center rounded-md px-2.5 text-[10px] font-black ${badgeClass}`}>
+                {hero.badge.label}
+              </span>
+            ) : null}
           </div>
-          <h2 className="font-display mt-2 break-words text-2xl leading-tight sm:mt-3 sm:text-3xl">{hero.title}</h2>
-          {hero.badge ? (
-            <span className={`mt-2 inline-flex min-h-6 items-center rounded-md px-2.5 text-[11px] font-black sm:mt-3 sm:min-h-7 sm:rounded-lg sm:px-3 sm:text-xs ${badgeClass}`}>
-              {hero.badge.label}
-            </span>
-          ) : null}
-          {hero.subtitle ? <p className="mt-2 line-clamp-1 break-words text-xs leading-5 text-white/70 sm:mt-3 sm:line-clamp-none sm:text-sm sm:leading-6">{hero.subtitle}</p> : null}
+          <h2 className="font-display mt-3 break-words text-2xl leading-tight sm:text-[28px]">{hero.title}</h2>
+          {hero.subtitle ? <p className="mt-2 line-clamp-1 break-words text-xs leading-5 text-white/70 sm:text-sm">{hero.subtitle}</p> : null}
           {hero.detail ? (
-            <p className={`mt-2 inline-flex items-start gap-2 text-[13px] leading-5 sm:text-sm sm:leading-6 ${hero.badge?.tone === "danger" ? "rounded-xl border border-red-400/20 bg-red-500/10 p-2.5 text-red-50 sm:p-3" : "text-white/60"}`}>
+            <p className={`mt-2 inline-flex items-start gap-2 text-xs leading-5 sm:text-[13px] ${hero.badge?.tone === "danger" ? "rounded-xl border border-red-400/20 bg-red-500/10 p-2.5 text-red-50" : "text-white/60"}`}>
               <DetailIcon size={16} className="mt-0.5 shrink-0 text-gold" /> {hero.detail}
             </p>
           ) : null}
@@ -339,7 +432,7 @@ function LeagueMiniWidget() {
   const medals = ["🥇", "🥈", "🥉"];
 
   return (
-    <section className="rounded-[20px] border border-stone-200 bg-[#171813] p-4 text-white shadow-soft sm:rounded-[28px] sm:p-6">
+    <section className="h-full rounded-[20px] border border-stone-200 bg-[#171813] p-4 text-white shadow-soft sm:p-6">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
           <span className="grid h-9 w-9 place-items-center rounded-xl bg-gold/15 text-gold sm:h-10 sm:w-10">
@@ -518,11 +611,13 @@ function UpcomingLessons({ lessons }: { lessons: SchoolOfflineLesson[] }) {
       </div>
       <div className="mt-5 divide-y divide-stone-100">
         {lessons.map((lesson) => (
-          <Link key={lesson.crmClassId} href="/school-lessons?tab=schedule" className="flex items-center gap-4 py-4 first:pt-0 last:pb-0">
-            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-stone-100 text-stone-600"><School size={19} /></span>
+          <Link key={lesson.crmClassId} href={`/school-lessons?tab=schedule${lesson.deliveryFormat === "online" ? "&format=online" : ""}`} className="flex items-center gap-4 py-4 first:pt-0 last:pb-0">
+            <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl ${lesson.deliveryFormat === "online" ? "bg-sky-50 text-sky-700" : "bg-stone-100 text-stone-600"}`}>
+              {lesson.deliveryFormat === "online" ? <MonitorPlay size={19} /> : <School size={19} />}
+            </span>
             <span className="min-w-0 flex-1">
               <strong className="block truncate text-sm text-stone-800">{lesson.title}</strong>
-              <span className="mt-1 block text-xs text-stone-500">{formatLessonDate(lesson.date)} · {lesson.startTime}{lesson.teacherName ? ` · ${lesson.teacherName}` : ""}</span>
+              <span className="mt-1 block text-xs text-stone-500">{formatLessonDate(lesson.date)} · {lesson.startTime}{lesson.deliveryFormat === "online" ? " · Онлайн" : ""}{lesson.teacherName ? ` · ${lesson.teacherName}` : ""}</span>
             </span>
             <ChevronRight size={18} className="text-stone-300" />
           </Link>

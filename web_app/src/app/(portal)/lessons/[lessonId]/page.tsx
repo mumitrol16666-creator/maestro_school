@@ -12,7 +12,6 @@ import {
   Play,
   RotateCcw,
   Sparkles,
-  Trophy,
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -202,7 +201,7 @@ export default function LessonPage() {
             </div>
 
             <div className="rounded-[24px] border border-amber-100 bg-amber-50 p-5 text-sm leading-6 text-amber-900">
-              Нажмите «Начать урок», чтобы открыть видео, материалы и домашнее задание. Так система поймёт, что ученик действительно приступил к этому уроку.
+              Нажмите «Начать урок», чтобы открыть видео, материалы и домашнее задание.
             </div>
 
             {actionError && (
@@ -460,20 +459,6 @@ export default function LessonPage() {
               {actionError}
             </div>
           )}
-
-          <div className="overflow-hidden rounded-[28px] bg-ink p-6 text-white shadow-soft">
-            <Trophy size={22} className="text-gold" />
-            <p className="font-display mt-8 text-4xl">+{lesson.pointsReward}</p>
-            <p className="mt-1 text-sm text-white/50">баллов за урок</p>
-            <div className="mt-6 flex items-center gap-2 text-xs text-white/50">
-              <CheckCircle2 size={15} />
-              {lesson.status === "completed"
-                ? "Баллы начислены"
-                : isTestHomework
-                  ? "Начислятся после прохождения теста"
-                  : "Начислятся после проверки"}
-            </div>
-          </div>
 
           {nextLesson && lesson.status === "completed" && (
             <Link

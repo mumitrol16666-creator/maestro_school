@@ -13,6 +13,11 @@ body {
   overflow-x: clip;
 }
 
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -37,6 +42,62 @@ input,
 select,
 textarea {
   max-width: 100%;
+}
+
+@media (max-width: 639px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 767px) {
+  .learning-dialog-mailbox:not(.learning-dialog-mailbox--active) {
+    position: fixed;
+    top: calc(68px + env(safe-area-inset-top, 0px));
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 20;
+    height: auto;
+    min-height: 0;
+    border-right: 0;
+    border-left: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .learning-dialog-mailbox--with-mobile-navigation:not(.learning-dialog-mailbox--active) {
+    bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  body.maestro-dialog-active {
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  body.maestro-dialog-active [data-mobile-app-navigation] {
+    display: none;
+  }
+
+  .learning-dialog-mailbox--active {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 80;
+    width: var(--maestro-dialog-viewport-width, 100vw);
+    height: var(--maestro-dialog-viewport-height, 100dvh);
+    min-height: 0;
+    border-right: 0;
+    border-left: 0;
+    border-radius: 0;
+    transform: translate3d(
+      var(--maestro-dialog-viewport-left, 0),
+      var(--maestro-dialog-viewport-top, 0),
+      0
+    );
+  }
 }
 
 .mobile-safe,

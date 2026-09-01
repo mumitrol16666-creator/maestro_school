@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, ArrowRight, Check, ChevronLeft, Eye, Medal } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, ChevronLeft, Eye, Flame } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
@@ -55,8 +55,10 @@ export default function AdminTestPreviewPage() {
           <p className="mt-1 font-display text-2xl">{test.maxAttempts ?? "Без лимита"}</p>
         </div>
         <div className="rounded-2xl border border-stone-200 bg-paper p-4">
-          <p className="text-xs text-stone-500">Награда за первое прохождение</p>
-          <p className="mt-1 flex items-center gap-2 font-display text-2xl"><Medal size={18} className="text-gold" /> +{test.rewardPoints}</p>
+          <p className="text-xs text-stone-500">Недельный XP за успех</p>
+          <p className="mt-1 flex items-center gap-2 font-display text-2xl">
+            <Flame size={18} className="text-gold" /> +{test.xpRules.firstAttempt} / +{test.xpRules.retry}
+          </p>
         </div>
       </div>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { BookMarked, CalendarRange, CircleUserRound, ClipboardCheck, Gift, House, ListTodo, Megaphone, Menu, MessagesSquare, MonitorPlay, School, Trophy, X } from "lucide-react";
+import { BookMarked, CalendarRange, CircleUserRound, ClipboardCheck, Gift, House, ListTodo, Megaphone, Menu, MessagesSquare, School, Trophy, X, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
@@ -13,31 +13,40 @@ import { isStaffRole, isStudentRole, roleLabel, settingsPathForRole } from "@/li
 import { useAuth } from "./auth-provider";
 import { AdminPendingHomeworkBadge } from "./admin-pending-homework-badge";
 import { Brand } from "./brand";
-import { StudentEntryAlerts } from "./student-entry-alerts";
 import { NotificationCenter } from "./teacher-notification-center";
 import { PushNotificationPrompt } from "./push-notification-prompt";
+import { pathMatchesAny, StudentWorkspaceContextNavigation, studentWorkspaceNavigation } from "./student-workspace-navigation";
 import { UserMenu } from "./user-menu";
+import { StudentUsageTracker } from "./student-usage-tracker";
 
-const navigation = [
+type ShellNavigationItem = {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  pathPrefixes?: readonly string[];
+  studentOnly?: boolean;
+  messagesOnly?: boolean;
+};
+
+const navigation: ShellNavigationItem[] = [
   { href: "/dashboard", label: "Главная", icon: House },
   { href: "/tasks", label: "Задания", icon: ListTodo, studentOnly: true },
   { href: "/monthly-plan", label: "План месяца", icon: CalendarRange, studentOnly: true },
   { href: "/courses", label: "Курсы", icon: BookMarked },
   { href: "/league", label: "Недельная лига", icon: Trophy, studentOnly: true },
-  { href: "/school-lessons", label: "Уроки в школе", icon: School, studentOnly: true },
+  { href: "/school-lessons", label: "Уроки", icon: School, studentOnly: true },
   { href: "/tests", label: "Тесты", icon: ClipboardCheck, studentOnly: true },
   { href: "/rewards", label: "Награды", icon: Gift, studentOnly: true },
-  { href: "/messages", label: "Обращения", icon: MessagesSquare, studentOnly: true, messagesOnly: true },
-  { href: "/online-lessons", label: "Онлайн-уроки", icon: MonitorPlay },
+  { href: "/messages", label: "Сообщения", icon: MessagesSquare, studentOnly: true, messagesOnly: true },
   { href: "/board", label: "Доска Maestro", icon: Megaphone },
   { href: "/settings", label: "Профиль", icon: CircleUserRound },
 ];
 
-const studentMobileNavigation = [
+const studentMobileNavigation: ShellNavigationItem[] = [
   { href: "/dashboard", label: "Главная", icon: House },
   { href: "/tasks", label: "Задания", icon: ListTodo },
   { href: "/monthly-plan", label: "План", icon: CalendarRange },
-  { href: "/school-lessons", label: "Школа", icon: School },
+  { href: "/school-lessons", label: "Уроки", icon: School },
   { href: "/settings", label: "Профиль", icon: CircleUserRound },
 ];
 
@@ -47,11 +56,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const student = isStudentRole(user?.role);
   const staff = isStaffRole(user?.role);
+  const roleNavigationV2 = student && Boolean(user?.productFeatures?.roleNavigationV2);
   const points = user?.points ?? 0;
   const coins = user?.coins ?? 0;
-  const { count: unreadNotifications, reload: reloadUnreadNotifications } = useUnreadNotifications(60_000);
-  const { count: onlineUnread } = useUnreadNotifications(60_000, "online_lesson_scheduled");
-  const { count: unreadMessages, hasAccess: hasMessageAccess } = useMessageMailboxStatus(student);
+  const { count: unreadNotifications, reload: reloadUnreadNotifications } = useUnreadNotifications(30_000);
+  const learningDialogsV2 = Boolean(user?.productFeatures?.learningDialogsV2);
+  const { count: unreadMessages, hasAccess: hasMessageAccess } = useMessageMailboxStatus(student, 30_000, learningDialogsV2);
   const { counts: schoolAlerts } = useStudentSchoolAlerts(student ? user?.id : undefined);
   const taskSummary = useApiResource(
     () => student ? api.studentTasks({ scope: "active", limit: 1 }) : Promise.resolve(null),
@@ -61,7 +71,26 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const schoolNavigationCount = schoolAlerts.reports
     + schoolAlerts.todayLessons
     + schoolAlerts.tomorrowLessons;
-  const mobileNavigation = studentMobileNavigation;
+  const primaryNavigation: ShellNavigationItem[] = roleNavigationV2
+    ? studentWorkspaceNavigation
+    : navigation;
+  const mobileNavigation: ShellNavigationItem[] = roleNavigationV2
+    ? studentWorkspaceNavigation
+    : studentMobileNavigation;
+  const messagesAvailable = roleNavigationV2 || hasMessageAccess;
+
+  function activeNavigationItem(item: ShellNavigationItem) {
+    return item.pathPrefixes
+      ? pathMatchesAny(pathname, item.pathPrefixes)
+      : pathname === item.href || pathname.startsWith(`${item.href}/`);
+  }
+
+  function navigationBadge(item: ShellNavigationItem) {
+    if (item.href === "/messages") return unreadMessages ?? 0;
+    if (item.href === "/school-lessons") return schoolNavigationCount;
+    if (item.href === "/tasks" || item.href === "/learning") return taskActionCount;
+    return 0;
+  }
 
   const sidebar = (
     <aside className="flex h-full flex-col overflow-y-auto border-r border-white/10 bg-[#151613] px-4 py-5 text-white sm:px-5 sm:py-6">
@@ -76,12 +105,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <X size={19} />
         </button>
       </div>
-      <nav className="mt-7 space-y-1.5">
-        {navigation.filter((item) => (
+      <nav
+        className="mt-7 space-y-1.5"
+        aria-label={student ? "Основная навигация ученика" : "Основная навигация"}
+        data-testid={student ? "student-primary-navigation" : undefined}
+      >
+        {primaryNavigation.filter((item) => (
           (!item.studentOnly || (!staff && student))
-          && (!item.messagesOnly || hasMessageAccess)
+          && (!item.messagesOnly || messagesAvailable)
         )).map(({ href, label, icon: Icon }) => {
-          const active = pathname.startsWith(href);
+          const item = primaryNavigation.find((candidate) => candidate.href === href)!;
+          const active = activeNavigationItem(item);
+          const badge = navigationBadge(item);
           return (
             <Link
               key={href}
@@ -101,37 +136,30 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <Icon size={18} strokeWidth={2.15} />
               </span>
               <span className="min-w-0 flex-1 truncate">{label}</span>
-              {href === "/online-lessons" && onlineUnread != null && onlineUnread > 0 ? (
-                <AdminPendingHomeworkBadge count={onlineUnread} />
-              ) : null}
-              {href === "/messages" && unreadMessages != null && unreadMessages > 0 ? (
-                <AdminPendingHomeworkBadge count={unreadMessages} />
-              ) : null}
-              {href === "/school-lessons" && schoolNavigationCount > 0 ? (
-                <AdminPendingHomeworkBadge count={schoolNavigationCount} />
-              ) : null}
-              {href === "/tasks" && taskActionCount > 0 ? (
-                <AdminPendingHomeworkBadge count={taskActionCount} />
+              {badge > 0 ? (
+                <AdminPendingHomeworkBadge count={badge} />
               ) : null}
             </Link>
           );
         })}
       </nav>
-      <Link
-        href={settingsPathForRole(user?.role)}
-        onClick={() => setOpen(false)}
-        className="mt-auto rounded-[22px] border border-white/10 bg-white/[0.045] p-4 transition hover:border-gold/25 hover:bg-white/[0.075]"
-      >
-        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gold">{roleLabel(user?.role)}</p>
-        {student ? (
-          <p className="mt-2 text-sm font-semibold">
-            {points.toLocaleString("ru-RU")} баллов · {coins.toLocaleString("ru-RU")} Coins
-          </p>
-        ) : (
-          <p className="mt-2 text-sm font-semibold">{user?.email}</p>
-        )}
-        <p className="mt-2 text-xs text-white/40">Открыть профиль</p>
-      </Link>
+      {!roleNavigationV2 ? (
+        <Link
+          href={settingsPathForRole(user?.role)}
+          onClick={() => setOpen(false)}
+          className="mt-auto rounded-[22px] border border-white/10 bg-white/[0.045] p-4 transition hover:border-gold/25 hover:bg-white/[0.075]"
+        >
+          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gold">{roleLabel(user?.role)}</p>
+          {student ? (
+            <p className="mt-2 text-sm font-semibold">
+              {points.toLocaleString("ru-RU")} баллов · {coins.toLocaleString("ru-RU")} Coins
+            </p>
+          ) : (
+            <p className="mt-2 text-sm font-semibold">{user?.email}</p>
+          )}
+          <p className="mt-2 text-xs text-white/40">Открыть профиль</p>
+        </Link>
+      ) : null}
     </aside>
   );
 
@@ -172,20 +200,26 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </header>
         <main className={`mobile-safe mx-auto max-w-[1500px] p-4 sm:p-8 lg:p-10 ${
           student ? "pb-[calc(6.75rem+env(safe-area-inset-bottom,0px))] sm:pb-[calc(6.75rem+env(safe-area-inset-bottom,0px))] lg:pb-10" : ""
-        }`}>{children}</main>
+        }`}>
+          {roleNavigationV2 ? (
+            <div className={student && pathname.startsWith("/messages") ? "hidden md:block" : ""}>
+              <StudentWorkspaceContextNavigation />
+            </div>
+          ) : null}
+          {children}
+        </main>
       </div>
       {student ? (
         <nav
+          data-testid="student-mobile-navigation"
+          data-mobile-app-navigation
           className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-stone-200/90 bg-paper/95 px-2 pb-[env(safe-area-inset-bottom,0px)] shadow-[0_-12px_35px_rgba(37,33,25,0.08)] backdrop-blur-xl lg:hidden"
           aria-label="Основная навигация"
         >
-          {mobileNavigation.map(({ href, label, icon: Icon }) => {
-            const active = pathname.startsWith(href);
-            const badge = href === "/tasks"
-              ? taskActionCount
-              : href === "/school-lessons"
-                ? schoolNavigationCount
-                : 0;
+          {mobileNavigation.filter((item) => !item.messagesOnly || messagesAvailable).map(({ href, label, icon: Icon }) => {
+            const item = mobileNavigation.find((candidate) => candidate.href === href)!;
+            const active = activeNavigationItem(item);
+            const badge = navigationBadge(item);
             return (
               <Link
                 key={href}
@@ -213,13 +247,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       ) : null}
       {student && user ? (
         <>
+          <StudentUsageTracker />
           <PushNotificationPrompt userId={user.id} audience="student" />
-          <StudentEntryAlerts
-            userId={user.id}
-            counts={schoolAlerts}
-            onlineUnread={onlineUnread ?? 0}
-            messagesUnread={unreadMessages ?? 0}
-          />
         </>
       ) : null}
     </div>

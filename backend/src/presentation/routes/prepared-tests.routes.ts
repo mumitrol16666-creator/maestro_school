@@ -1,8 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { awardSystemPoints } from "../../application/services/points.service.js";
-import { awardLeagueXp } from "../../application/services/weekly-league.service.js";
-import { preparedTestLeagueXp } from "../../application/services/weekly-league-policy.js";
+import { awardPreparedTestXp } from "../../application/services/weekly-league.service.js";
+import {
+  WEEKLY_PREPARED_TEST_FIRST_ATTEMPT_XP,
+  WEEKLY_PREPARED_TEST_LIMIT,
+  WEEKLY_PREPARED_TEST_RETRY_XP,
+} from "../../application/services/weekly-league-policy.js";
 import { evaluateAchievements } from "../../application/services/achievement.service.js";
 import { BadRequestError, ForbiddenError, NotFoundError } from "../../domain/errors.js";
 import {
@@ -18,7 +21,6 @@ import {
   isPreparedTestUnlocked,
   PREPARED_TEST_MAX_ATTEMPTS,
   PREPARED_TEST_PASSING_SCORE,
-  PREPARED_TEST_REWARD_POINTS,
   shufflePreparedTestOptions,
   validatePreparedTestDraft,
 } from "../../domain/prepared-test-progress.js";
@@ -127,7 +129,11 @@ export async function preparedTestsRoutes(app: FastifyInstance) {
           tests,
           total: tests.length,
           completedCount: tests.filter((test) => test.passed).length,
-          totalRewardPoints: tests.filter((test) => test.passed).length * PREPARED_TEST_REWARD_POINTS,
+          xpRules: {
+            firstAttempt: WEEKLY_PREPARED_TEST_FIRST_ATTEMPT_XP,
+            retry: WEEKLY_PREPARED_TEST_RETRY_XP,
+            weeklyLimit: WEEKLY_PREPARED_TEST_LIMIT,
+          },
         },
       };
     },
@@ -140,9 +146,13 @@ export async function preparedTestsRoutes(app: FastifyInstance) {
       const { testId } = testIdSchema.parse(request.params);
       const template = getTemplate(testId);
       const studentId = request.user!.id;
-      const [attempts, draft] = await Promise.all([
+      const [attempts, draft, xpEvent] = await Promise.all([
         listAttempts(studentId),
         prisma.preparedTestDraft.findUnique({ where: { studentId_testId: { studentId, testId } } }),
+        prisma.leagueXpEvent.findUnique({
+          where: { sourceKey: `prepared-test:${studentId}:${testId}` },
+          select: { amount: true },
+        }),
       ]);
       const index = assertTestAccess(testId, attempts);
       const latest = latestAttempt(attempts, testId);
@@ -160,7 +170,12 @@ export async function preparedTestsRoutes(app: FastifyInstance) {
           questionCount: template.questions.length,
           passingScore: PREPARED_TEST_PASSING_SCORE,
           maxAttempts: PREPARED_TEST_MAX_ATTEMPTS,
-          rewardPoints: PREPARED_TEST_REWARD_POINTS,
+          xpRules: {
+            firstAttempt: WEEKLY_PREPARED_TEST_FIRST_ATTEMPT_XP,
+            retry: WEEKLY_PREPARED_TEST_RETRY_XP,
+            weeklyLimit: WEEKLY_PREPARED_TEST_LIMIT,
+          },
+          earnedXp: xpEvent?.amount ?? 0,
           questions: shufflePreparedTestOptions(
             publicHomeworkTestQuestions(template.questions),
             `${studentId}:${testId}:${attemptsForTest(attempts, testId).length + 1}`,
@@ -271,23 +286,14 @@ export async function preparedTestsRoutes(app: FastifyInstance) {
         prisma.preparedTestDraft.deleteMany({ where: { studentId, testId } }),
       ]);
 
-      const reward = passed
-        ? await awardSystemPoints({
-            studentId,
-            amount: PREPARED_TEST_REWARD_POINTS,
-            reason: `Тест «${template.title}» пройден`,
-            sourceKey: `prepared-test:${studentId}:${testId}`,
-          })
-        : { awarded: false };
+      let xpResult: Awaited<ReturnType<typeof awardPreparedTestXp>> | null = null;
       if (passed) {
-        await awardLeagueXp({
+        xpResult = await awardPreparedTestXp({
           studentId,
-          amount: preparedTestLeagueXp(attemptNumber),
-          sourceType: "prepared_test",
-          sourceKey: `prepared-test:${studentId}:${testId}`,
-          description: attemptNumber === 1
-            ? `Тест «${template.title}» пройден с первой попытки`
-            : `Тест «${template.title}» пройден с ${attemptNumber}-й попытки`,
+          testId,
+          attemptNumber,
+          testTitle: template.title,
+          eventAt: attempt.createdAt,
         });
         await evaluateAchievements(studentId);
       }
@@ -306,7 +312,8 @@ export async function preparedTestsRoutes(app: FastifyInstance) {
           passed,
           passingScore: PREPARED_TEST_PASSING_SCORE,
           attemptsRemaining: remaining,
-          rewardPointsAwarded: reward.awarded ? PREPARED_TEST_REWARD_POINTS : 0,
+          xpAwarded: xpResult?.awarded ? xpResult.amount : 0,
+          xpStatus: xpResult?.status ?? "not_passed",
           review: buildPreparedTestReview(
             template.questions,
             body.answers as HomeworkTestAnswerMap,
@@ -418,7 +425,11 @@ export async function preparedTestsRoutes(app: FastifyInstance) {
           totalTests: listPreparedTestTemplates().length,
           passingScore: PREPARED_TEST_PASSING_SCORE,
           maxAttempts: PREPARED_TEST_MAX_ATTEMPTS,
-          rewardPoints: PREPARED_TEST_REWARD_POINTS,
+          xpRules: {
+            firstAttempt: WEEKLY_PREPARED_TEST_FIRST_ATTEMPT_XP,
+            retry: WEEKLY_PREPARED_TEST_RETRY_XP,
+            weeklyLimit: WEEKLY_PREPARED_TEST_LIMIT,
+          },
           questions: template.questions,
         },
       };

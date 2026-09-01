@@ -26,6 +26,17 @@ export interface ApiAuthUser {
   phone?: string | null;
   role: string;
   permissions?: string[];
+  productFeatures?: {
+    learningTopicsV2: boolean;
+    studentWorkspaceV2: boolean;
+    homeworkFlowV2: boolean;
+    unifiedLessonV2: boolean;
+    lessonSyncV2: boolean;
+    rewardEconomyV2: boolean;
+    curatorWorkspaceV2: boolean;
+    learningDialogsV2: boolean;
+    roleNavigationV2: boolean;
+  };
   points?: number;
   coins?: number;
 }
@@ -186,6 +197,7 @@ export interface ApiDashboard {
   totalLessonsCount: number;
   points: number;
   rank: StudentRankOverview;
+  level: ProductLevelProgress | null;
   nextAvailableLesson: {
     id: string;
     title: string;
@@ -219,10 +231,31 @@ export interface StudentHomeHomework {
 
 export interface StudentHomeMonthlyPlan {
   id: string;
+  scope: "student" | "group";
+  targetId: string;
   month: string;
+  direction?: {
+    id: string;
+    crmDirectionId: string | null;
+    title: string;
+    isActive: boolean | null;
+    syncedAt: string | null;
+  };
   teacher: { name: string };
   goal: string;
-  items: Array<{ id: string; title: string; status: "planned" | "in_progress" | "completed" }>;
+  expectedResult?: string;
+  skills?: string;
+  checkpoint?: string;
+  note?: string;
+  materials?: Array<{ id: string; title: string; url: string; note: string }>;
+  items: Array<{
+    id: string;
+    title: string;
+    masteryCriteria?: string;
+    status: "planned" | "in_progress" | "completed" | "moved";
+    progressPercent?: number | null;
+    state?: "active" | "moved";
+  }>;
   progress: { completed: number; inProgress: number; total: number; percent: number };
   publishedAt: string;
 }
@@ -264,6 +297,76 @@ export interface StudentRankOverview {
   isMaxRank: boolean;
 }
 
+export type ProductLevelTone =
+  | "graphite"
+  | "silver"
+  | "green"
+  | "emerald"
+  | "gold"
+  | "amber"
+  | "orange"
+  | "fire_orange"
+  | "crimson"
+  | "red";
+
+export type ProductLevelEmblem =
+  | "disc"
+  | "square"
+  | "diamond"
+  | "hexagon"
+  | "pentagon"
+  | "shield"
+  | "octagon"
+  | "notched"
+  | "crest"
+  | "crown";
+
+export interface ProductLevelItem {
+  level: number;
+  code: string;
+  title: string;
+  minPoints: number;
+  tone: ProductLevelTone;
+  emblem: ProductLevelEmblem;
+}
+
+export interface ProductLevelProgress {
+  level: ProductLevelItem;
+  next: ProductLevelItem | null;
+  levels?: ProductLevelItem[];
+  points: number;
+  pointsToNext: number;
+  earnedWithinLevel: number;
+  requiredWithinLevel: number;
+  progressPercent: number;
+  isMaxLevel: boolean;
+}
+
+export interface StudentPointsReadModel {
+  mode: "legacy" | "level";
+  economicEpoch: { id: string; code: string; startsAt: string } | null;
+  points: number;
+  level: ProductLevelProgress | null;
+}
+
+export interface StudentEconomyProfile {
+  economyV2Enabled: boolean;
+  points: number;
+  level: ProductLevelProgress | null;
+  coins: number;
+  streak: {
+    currentWeeks: number;
+    bestWeeks: number;
+  } | null;
+  milestones: Array<{
+    weeks: number;
+    coins: number;
+    title: string;
+    earned: boolean;
+    earnedAt: string | null;
+  }>;
+}
+
 export interface ApiEnrollment {
   id: string;
   courseId: string;
@@ -300,6 +403,7 @@ export interface ApiPointsHistory {
 
 export interface ApiProgress {
   points: number;
+  level: ProductLevelProgress | null;
   courseProgressPercent?: number;
   enrollments: ApiEnrollment[];
   lessons: ApiLessonProgress[];

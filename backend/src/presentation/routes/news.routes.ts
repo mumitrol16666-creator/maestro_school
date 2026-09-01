@@ -5,7 +5,7 @@ import { listPublishedNews } from "../../application/repositories/news.repositor
 export async function newsRoutes(app: FastifyInstance) {
   app.get("/news", async (request) => {
     const query = z.object({ limit: z.coerce.number().min(1).max(50).default(20) }).parse(request.query);
-    const posts = await listPublishedNews(query.limit);
+    const posts = await listPublishedNews(query.limit, "student");
 
     return {
       data: posts.map((post) => ({

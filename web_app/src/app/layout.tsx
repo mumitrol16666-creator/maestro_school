@@ -1,11 +1,12 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { AuthProvider } from "@/components/auth-provider";
+import { ClientRuntimeRecovery } from "@/components/client-runtime-recovery";
 import { PwaProvider } from "@/components/pwa-provider";
 import { APP_CACHE_VERSION } from "@/lib/pwa-version";
 
 export const metadata: Metadata = {
-  title: "Maestro — кабинет ученика",
+  title: "Maestro — образовательная платформа",
   description: "Образовательная платформа музыкальной школы Maestro",
   manifest: "/manifest.webmanifest",
   applicationName: "Maestro",
@@ -43,6 +44,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body>
         <AuthProvider>
           {children}
+          <ClientRuntimeRecovery />
           <PwaProvider />
         </AuthProvider>
       </body>

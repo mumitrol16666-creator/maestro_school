@@ -6,6 +6,7 @@ import {
   getStudentHome,
 } from "../../application/services/student-home.service.js";
 import { aqtobeMonthKey } from "../../lib/aqtobe-month.js";
+import { calculateAggregateMonthlyPlanProgress } from "../../domain/monthly-plan.js";
 import { authenticate, requirePermission, requireStudent } from "../guards/auth.guards.js";
 
 export async function schoolOfflineRoutes(app: FastifyInstance) {
@@ -23,10 +24,16 @@ export async function schoolOfflineRoutes(app: FastifyInstance) {
         month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional(),
       }).parse(request.query ?? {});
       const requestedMonth = month ?? aqtobeMonthKey();
+      const plans = await getPublishedMonthlyPlansForStudent(
+        request.user!.id,
+        requestedMonth,
+        { requireLinkedProfile: true },
+      );
       return {
         data: {
           month: requestedMonth,
-          plans: await getPublishedMonthlyPlansForStudent(request.user!.id, requestedMonth),
+          plans,
+          aggregateProgress: calculateAggregateMonthlyPlanProgress(plans),
         },
       };
     },

@@ -5,6 +5,7 @@ import { ChangePasswordForm } from "@/components/change-password-form";
 import { useAuth } from "@/components/auth-provider";
 import { PushNotificationsCard } from "@/components/push-notifications-card";
 import { formatFio } from "@/lib/name";
+import { ImprovementSuggestionCard } from "@/components/improvement-suggestion-card";
 
 export default function FamilySettingsPage() {
   const { user, logout } = useAuth();
@@ -61,10 +62,12 @@ export default function FamilySettingsPage() {
             <ShieldCheck className="text-emerald-700" />
             <h2 className="font-display mt-4 text-2xl text-emerald-950">Защищённый семейный доступ</h2>
             <p className="mt-3 text-sm leading-6 text-emerald-900/70">
-              Здесь доступны только расписание, домашние задания, итоги занятий и абонемент
-              привязанных учеников. Переписки, курсы, тесты и ученический профиль закрыты.
+              Для каждого ребёнка действует единый набор разделов для всех привязанных родителей.
+              Ученик отправляет запрос, а администратор подтверждает изменение доступа.
             </p>
           </section>
+
+          <ImprovementSuggestionCard />
         </div>
       </div>
     </>

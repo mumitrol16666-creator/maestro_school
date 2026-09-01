@@ -4,8 +4,8 @@ import {
   CheckCircle2,
   ChevronRight,
   ClipboardCheck,
+  Flame,
   LockKeyhole,
-  Medal,
   RotateCcw,
   TriangleAlert,
 } from "lucide-react";
@@ -29,7 +29,7 @@ export default function TestsPage() {
     );
   }
 
-  const { tests, completedCount, total, totalRewardPoints } = resource.data;
+  const { tests, completedCount, total, xpRules } = resource.data;
   const next = tests.find((test) => test.available && !test.passed);
   const sections = [...new Set(tests.map((test) => test.section))];
 
@@ -78,12 +78,14 @@ export default function TestsPage() {
         )}
         <div className="flex items-center gap-4 rounded-[28px] border border-amber-200 bg-amber-50 p-5 text-amber-950 sm:p-6">
           <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gold/20 text-gold">
-            <Medal size={22} />
+            <Flame size={22} />
           </span>
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.16em] text-stone-500">Заработано</p>
-            <p className="mt-1 font-display text-2xl">+{totalRewardPoints} баллов</p>
-            <p className="mt-1 text-sm text-stone-600">По 10 баллов за первый успешный результат</p>
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-stone-500">Недельная активность</p>
+            <p className="mt-1 font-display text-2xl">+{xpRules.firstAttempt} / +{xpRules.retry} XP</p>
+            <p className="mt-1 text-sm text-stone-600">
+              За успешный тест с первой попытки или после повтора. Учитываются до {xpRules.weeklyLimit} тестов в неделю.
+            </p>
           </div>
         </div>
       </div>

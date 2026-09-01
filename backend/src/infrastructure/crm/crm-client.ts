@@ -44,7 +44,11 @@ async function crmGet<T>(path: string): Promise<T> {
   return body.data;
 }
 
-async function crmPost<T>(path: string, payload: Record<string, unknown>): Promise<T> {
+async function crmPost<T>(
+  path: string,
+  payload: Record<string, unknown>,
+  idempotencyKey?: string,
+): Promise<T> {
   let response: Response;
   try {
     response = await fetch(`${crmBaseUrl()}${path}`, {
@@ -52,6 +56,7 @@ async function crmPost<T>(path: string, payload: Record<string, unknown>): Promi
       headers: {
         ...integrationHeaders(),
         "Content-Type": "application/json",
+        ...(idempotencyKey ? { "X-Idempotency-Key": idempotencyKey } : {}),
       },
       body: JSON.stringify(payload),
       signal: AbortSignal.timeout(CRM_REQUEST_TIMEOUT_MS),
@@ -84,6 +89,17 @@ export async function fetchTeacherOfflineClasses(
     crmTeacherId: string;
     classes: Array<Record<string, unknown>>;
   }>(`/api/integration/v1/teachers/${encodeURIComponent(crmTeacherId)}/offline-classes${qs ? `?${qs}` : ""}`);
+}
+
+export type CrmDirectionRef = {
+  crmDirectionId: string;
+  title: string;
+  isActive: boolean;
+  updatedAt: string;
+};
+
+export async function fetchCrmDirections() {
+  return crmGet<{ directions: CrmDirectionRef[] }>("/api/integration/v1/directions");
 }
 
 export async function fetchTeacherStudents(crmTeacherId: string) {
@@ -330,30 +346,39 @@ export async function postTeacherFinish(
   );
 }
 
-export async function postTeacherSubmit(crmClassId: string, payload: TeacherSubmitPayload) {
+export async function postTeacherSubmit(
+  crmClassId: string,
+  payload: TeacherSubmitPayload,
+  idempotencyKey?: string,
+) {
   return crmPost<Record<string, unknown>>(
     `/api/integration/v1/classes/${encodeURIComponent(crmClassId)}/teacher-submit`,
     payload,
+    idempotencyKey,
   );
 }
 
 export async function postTeacherMarkNotHeld(
   crmClassId: string,
   payload: { crmTeacherId: string; comment?: string },
+  idempotencyKey?: string,
 ) {
   return crmPost<Record<string, unknown>>(
     `/api/integration/v1/classes/${encodeURIComponent(crmClassId)}/teacher-mark-not-held`,
     payload,
+    idempotencyKey,
   );
 }
 
 export async function postTeacherWithdraw(
   crmClassId: string,
   payload: { crmTeacherId: string; reason?: string },
+  idempotencyKey?: string,
 ) {
   return crmPost<Record<string, unknown>>(
     `/api/integration/v1/classes/${encodeURIComponent(crmClassId)}/teacher-withdraw`,
     payload,
+    idempotencyKey,
   );
 }
 
@@ -373,10 +398,12 @@ export async function postTeacherAttendance(
       notCompletedReason?: string | null;
     };
   },
+  idempotencyKey?: string,
 ) {
   return crmPost<Record<string, unknown>>(
     `/api/integration/v1/classes/${encodeURIComponent(crmClassId)}/teacher-attendance`,
     payload,
+    idempotencyKey,
   );
 }
 
@@ -465,10 +492,12 @@ export async function postAdminAttendance(
       notCompletedReason?: string | null;
     };
   },
+  idempotencyKey?: string,
 ) {
   return crmPost<Record<string, unknown>>(
     `/api/integration/v1/classes/${encodeURIComponent(crmClassId)}/admin-attendance`,
     payload,
+    idempotencyKey,
   );
 }
 
@@ -501,10 +530,16 @@ export async function postAdminReturnClass(crmClassId: string, reason?: string) 
   );
 }
 
-export async function postAdminReopenClass(crmClassId: string, reason?: string) {
+export async function postAdminReopenClass(
+  crmClassId: string,
+  reason?: string,
+  correction?: { reportId: string; reportVersion: number; reason: string },
+  idempotencyKey?: string,
+) {
   return crmPost<Record<string, unknown>>(
     `/api/integration/v1/classes/${encodeURIComponent(crmClassId)}/reopen`,
-    { reason },
+    { reason, correction },
+    idempotencyKey,
   );
 }
 

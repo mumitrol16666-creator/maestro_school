@@ -87,6 +87,7 @@ export interface OnlineLessonRequest {
   completedById: string | null;
   createdAt: string;
   updatedAt: string;
+  manualRewardsEnabled?: boolean;
   student: OnlineLessonUserSummary;
   teacher: OnlineLessonUserSummary | null;
   assignment: OnlineLessonAssignment | null;

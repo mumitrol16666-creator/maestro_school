@@ -3,6 +3,9 @@ import { isModuleCompleted } from "./course-progress.service.js";
 import { calculateStudentPoints } from "./points.service.js";
 import { countCompletedLessons, getCourseModules } from "../repositories/learning.repository.js";
 import { deliverUserNotification } from "./notification.service.js";
+import { rewardEconomyV2AppliesToEvent } from "../../config/product-features.js";
+import { requireActiveEconomicEpochForEvent } from "./economic-epoch.service.js";
+import { WEEKLY_STREAK_MILESTONES } from "./weekly-league-policy.js";
 
 type AchievementMetrics = {
   points: number;
@@ -77,6 +80,9 @@ export async function evaluateAchievements(
   studentId: string,
   courseId?: string,
 ): Promise<string[]> {
+  if (rewardEconomyV2AppliesToEvent(new Date())) {
+    return [];
+  }
   const achievements = await prisma.achievement.findMany({
     where: { isActive: true },
   });
@@ -130,7 +136,7 @@ export async function evaluateAchievements(
     }
 
     if (earned) {
-      await prisma.studentAchievement.create({
+      const earnedAchievement = await prisma.studentAchievement.create({
         data: { studentId, achievementId: achievement.id },
       });
       await deliverUserNotification({
@@ -141,8 +147,8 @@ export async function evaluateAchievements(
           ? `${achievement.title}. ${achievement.description}`
           : achievement.title,
         url: "/dashboard",
-        tag: `achievement-${achievement.id}-${studentId}`,
-        dedupeWindowMs: 2 * 60 * 1000,
+        tag: `achievement-${earnedAchievement.id}`,
+        dedupeKey: `achievement:${earnedAchievement.id}`,
       }).catch(() => undefined);
       newlyEarned.push(achievement.code);
       earnedIds.add(achievement.id);
@@ -177,6 +183,42 @@ export interface StudentAchievementOverviewItem {
 export async function getStudentAchievementsOverview(
   studentId: string,
 ): Promise<StudentAchievementOverviewItem[]> {
+  const now = new Date();
+  if (rewardEconomyV2AppliesToEvent(now)) {
+    const economicEpoch = await requireActiveEconomicEpochForEvent(now);
+    const [state, earned] = await Promise.all([
+      prisma.weeklyStreakState.findUnique({
+        where: {
+          economicEpochId_studentId: {
+            economicEpochId: economicEpoch.id,
+            studentId,
+          },
+        },
+      }),
+      prisma.weeklyStreakMilestone.findMany({
+        where: { economicEpochId: economicEpoch.id, studentId },
+      }),
+    ]);
+    const earnedByWeeks = new Map(earned.map((item) => [item.milestoneWeeks, item]));
+    const currentWeeks = state?.currentWeeks ?? 0;
+    return WEEKLY_STREAK_MILESTONES.map((milestone) => {
+      const earnedMilestone = earnedByWeeks.get(milestone.weeks);
+      return {
+        code: `weekly_streak_${milestone.weeks}`,
+        title: milestone.title,
+        description: `Сохраняйте учебную активность ${milestone.weeks} недель подряд`,
+        earned: Boolean(earnedMilestone),
+        earnedAt: earnedMilestone?.earnedAt.toISOString() ?? null,
+        progressPercent: earnedMilestone
+          ? 100
+          : Math.min(100, Math.round(currentWeeks / milestone.weeks * 100)),
+        progressLabel: earnedMilestone
+          ? "Получено"
+          : `${Math.min(currentWeeks, milestone.weeks)} из ${milestone.weeks} недель`,
+      };
+    });
+  }
+
   const [achievements, earnedRows, metrics] = await Promise.all([
     prisma.achievement.findMany({
       where: { isActive: true },
@@ -250,7 +292,7 @@ function buildAchievementProgress(params: {
       const current = Math.min(params.offlineLessons, params.threshold);
       return {
         progressPercent: Math.round((current / params.threshold) * 100),
-        progressLabel: `${params.offlineLessons} из ${params.threshold} офлайн-уроков`,
+        progressLabel: `${params.offlineLessons} из ${params.threshold} уроков с преподавателем`,
       };
     }
     case "homework_completed_count": {

@@ -1,5 +1,6 @@
 import { apiRequest, apiRequestEnvelope } from "@/lib/api-client";
 import type { StudentAchievementItem } from "@/types/api";
+import type { ParentVisibility, ParentVisibilityWorkspace } from "@/types/family";
 
 export interface AdminStudentSummary {
   id: string;
@@ -98,4 +99,20 @@ export const studentsApi = {
       method: "PATCH",
       body: JSON.stringify({ password }),
     }),
+  parentVisibility: (studentId: string) =>
+    apiRequest<ParentVisibilityWorkspace>(`/admin/students/${studentId}/parent-visibility`),
+  updateParentVisibility: (studentId: string, visibility: ParentVisibility, reason: string) =>
+    apiRequest<ParentVisibility>(`/admin/students/${studentId}/parent-visibility`, {
+      method: "PATCH",
+      body: JSON.stringify({ visibility, reason }),
+    }),
+  decideParentVisibilityRequest: (
+    studentId: string,
+    requestId: string,
+    decision: "approved" | "rejected",
+    note: string,
+  ) => apiRequest<ParentVisibilityWorkspace>(
+    `/admin/students/${studentId}/parent-visibility-requests/${requestId}/decision`,
+    { method: "POST", body: JSON.stringify({ decision, note }) },
+  ),
 };

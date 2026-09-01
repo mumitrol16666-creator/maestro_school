@@ -1,0 +1,6 @@
+services:
+  backend:
+    environment:
+      FEATURE_LEARNING_DIALOGS_V2: "true"
+      FEATURE_CURATOR_WORKSPACE_V2: "true"
+      SMOKE_BASE_URL: http://backend:4000/api/v1

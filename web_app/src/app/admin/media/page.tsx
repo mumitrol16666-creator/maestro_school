@@ -87,7 +87,7 @@ export default function MediaAdminPage() {
       <PageHeader
         eyebrow="Media Library"
         title="Медиатека"
-        description="Единое локальное хранилище изображений, видео, PDF и файлов до 20 МБ."
+        description="Материалы школы: изображения, видео, PDF и файлы до 20 МБ."
         action={(
           <div className="flex flex-wrap items-center gap-2">
             <input

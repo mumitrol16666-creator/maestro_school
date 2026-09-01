@@ -1,0 +1,102 @@
+name: maestro-local
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: maestro
+      POSTGRES_PASSWORD: maestro
+      POSTGRES_DB: maestro
+    ports:
+      - "127.0.0.1:55433:5432"
+    volumes:
+      - maestro_local_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U maestro -d maestro"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.local
+    environment:
+      NODE_ENV: production
+      TZ: Asia/Aqtobe
+      DATABASE_URL: postgresql://maestro:maestro@postgres:5432/maestro?schema=public
+      JWT_SECRET: local-maestro-jwt-secret-change-before-production
+      PORT: 4000
+      HOST: 0.0.0.0
+      CORS_ORIGIN: http://127.0.0.1:3320,http://localhost:3320
+      UPLOAD_DIR: /app/uploads
+      CRM_API_URL: http://host.docker.internal:5001
+      INTEGRATION_SERVICE_SECRET: local-maestro-integration-secret
+      INTEGRATION_SSO_SECRET: local-maestro-sso-secret
+      RELEASE_SHA: unknown
+      RELEASE_BUILT_AT: unknown
+      PRODUCT_V2_CUTOVER_AT: "2026-09-06T19:00:00.000Z"
+      FEATURE_LEARNING_TOPICS_V2: "false"
+      FEATURE_STUDENT_WORKSPACE_V2: "false"
+      FEATURE_HOMEWORK_FLOW_V2: "false"
+      FEATURE_UNIFIED_LESSON_V2: "false"
+      FEATURE_LESSON_SYNC_V2: "false"
+      FEATURE_REWARD_ECONOMY_V2: "false"
+      FEATURE_CURATOR_WORKSPACE_V2: "false"
+      FEATURE_LEARNING_DIALOGS_V2: "false"
+      FEATURE_ROLE_NAVIGATION_V2: "false"
+      MAESTRO_QA_LOCAL: "true"
+      MAESTRO_QA_DB_MARKER: maestro-local-qa
+      ADMIN_EMAIL: admin@maestro.local
+      ADMIN_PASSWORD: LocalMaestro2026!
+      ADMIN_FIRST_NAME: Local
+      ADMIN_LAST_NAME: Admin
+      AUTH_LOGIN_RATE_LIMIT_MAX: "100"
+    ports:
+      - "127.0.0.1:4000:4000"
+    volumes:
+      - maestro_local_uploads:/app/uploads
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:4000/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  web:
+    build:
+      context: ./web_app
+      dockerfile: Dockerfile.local
+      args:
+        NEXT_PUBLIC_API_URL: /api/v1
+        API_PROXY_TARGET: http://backend:4000
+        NEXT_PUBLIC_RELEASE_SHA: dev
+        NEXT_PUBLIC_RELEASE_BUILT_AT: unknown
+    environment:
+      NODE_ENV: production
+      TZ: Asia/Aqtobe
+      NEXT_PUBLIC_API_URL: /api/v1
+      API_PROXY_TARGET: http://backend:4000
+      NEXT_PUBLIC_RELEASE_SHA: dev
+      NEXT_PUBLIC_RELEASE_BUILT_AT: unknown
+    ports:
+      - "127.0.0.1:3320:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/login >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+volumes:
+  maestro_local_pg_data:
+  maestro_local_uploads:

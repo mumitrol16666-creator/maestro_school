@@ -15,7 +15,6 @@ type CourseTaskRow = {
   homeworkCreatedAt: Date;
   lessonId: string;
   lessonTitle: string;
-  lessonPoints: number;
   moduleTitle: string;
   courseTitle: string;
   progress: { status: LessonProgressStatus; createdAt: Date; updatedAt: Date } | null;
@@ -65,7 +64,7 @@ export function mapCourseTask(row: CourseTaskRow, now = new Date()): UnifiedTask
       completionPercent: status === "completed" ? 100 : null,
       scorePercent: row.submission?.testScore ?? null,
       reviewComment: row.submission?.reviewComment ?? null,
-      points: status === "completed" ? row.lessonPoints : null,
+      points: null,
       coins: null,
     },
     target: {
@@ -98,7 +97,6 @@ export async function loadCourseTasks(studentId: string, now = new Date()) {
                 select: {
                   id: true,
                   title: true,
-                  pointsReward: true,
                   lessonProgress: {
                     where: { studentId },
                     take: 1,
@@ -144,7 +142,6 @@ export async function loadCourseTasks(studentId: string, now = new Date()) {
       homeworkCreatedAt: homework.createdAt,
       lessonId: lesson.id,
       lessonTitle: lesson.title,
-      lessonPoints: lesson.pointsReward,
       moduleTitle: module.title,
       courseTitle: course.title,
       progress: lesson.lessonProgress[0] ?? null,

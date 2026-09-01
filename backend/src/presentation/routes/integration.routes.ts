@@ -23,6 +23,9 @@ import {
 import { generateWhatsappHomeworkDrafts } from "../../application/services/whatsapp-homework-message.service.js";
 import { archiveStudentAccess } from "../../application/services/student-access-archive.service.js";
 import { applyOfflineLessonLearningResults } from "../../application/services/admin-offline.service.js";
+import { markOfflineLessonReportConfirmed } from "../../application/services/offline-lesson-report.service.js";
+import { createWeeklyStreakProtection } from "../../application/services/weekly-league.service.js";
+import { recordStudentLogin } from "../../application/services/app-usage.service.js";
 
 const linkSchema = z.object({
   phone: z.string().optional(),
@@ -90,6 +93,8 @@ const offlineLessonApprovedSchema = z.object({
   lessonTitle: z.string().trim().max(500).optional().nullable(),
   date: z.string().trim().max(64).optional().nullable(),
   startTime: z.string().trim().max(32).optional().nullable(),
+  deliveryFormat: z.enum(["offline", "online"]).optional(),
+  meetingUrl: z.string().trim().url().max(1024).optional().nullable(),
 });
 
 const offlineLessonEventSchema = offlineLessonApprovedSchema.extend({
@@ -110,6 +115,14 @@ const staffTaskAssignedSchema = z.object({
   priority: z.enum(["low", "normal", "high", "urgent"]).optional(),
   dueAt: z.coerce.date().optional().nullable(),
   createdByName: z.string().trim().max(384).optional().nullable(),
+});
+
+const weeklyStreakProtectionSchema = z.object({
+  crmStudentId: z.string().min(1).max(64),
+  weekDate: z.coerce.date(),
+  category: z.enum(["school_holiday", "subscription_pause", "all_lessons_cancelled"]),
+  comment: z.string().trim().min(3).max(512),
+  externalEventId: z.string().trim().min(1).max(128),
 });
 
 function integrationProfile(
@@ -222,6 +235,7 @@ export async function integrationRoutes(app: FastifyInstance) {
     const [notification, learningRewards] = await Promise.all([
       notifyOfflineLessonApproved(body),
       applyOfflineLessonLearningResults(body.crmClassId, approvedBy).catch(() => null),
+      markOfflineLessonReportConfirmed(body.crmClassId).catch(() => null),
     ]);
     return {
       success: true,
@@ -245,6 +259,21 @@ export async function integrationRoutes(app: FastifyInstance) {
     };
   });
 
+  app.post("/weekly-league/streak-protections", async (request, reply) => {
+    const body = weeklyStreakProtectionSchema.parse(request.body);
+    const student = await findUserByCrmStudentId(body.crmStudentId);
+    if (!student) throw new BadRequestError("Ученик CRM не связан с приложением");
+    const result = await createWeeklyStreakProtection({
+      studentId: student.id,
+      weekDate: body.weekDate,
+      source: "crm",
+      category: body.category,
+      comment: body.comment,
+      sourceKey: `crm-streak-protection:${body.externalEventId}`,
+    });
+    return reply.status(result.idempotent ? 200 : 201).send({ success: true, data: result });
+  });
+
   app.post("/whatsapp/homework-drafts", async (request) => {
     const { crmClassId } = whatsappHomeworkDraftSchema.parse(request.body);
     return {
@@ -259,6 +288,9 @@ export async function integrationRoutes(app: FastifyInstance) {
     const { token } = ssoExchangeSchema.parse(request.body);
     const { user, crmStudentId } = await exchangeSsoBridgeToken(token);
     const sessionToken = await reply.jwtSign({ sub: user.id, role: user.role.slug });
+    if (user.role.slug === "student") {
+      await recordStudentLogin(user.id, "sso").catch(() => undefined);
+    }
 
     return {
       success: true,

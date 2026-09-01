@@ -16,8 +16,6 @@ export type MonthlyPlanProgress = {
 export type MonthlyPlanSnapshot = {
   schemaVersion: 1;
   goal: string;
-  expectedResult: string;
-  checkpoint: string;
   items: MonthlyPlanItem[];
   progress: MonthlyPlanProgress;
 };
@@ -55,18 +53,27 @@ export function calculateMonthlyPlanProgress(items: MonthlyPlanItem[]): MonthlyP
   };
 }
 
+export function calculateAggregateMonthlyPlanProgress(
+  plans: Array<{ items: unknown }>,
+): Pick<MonthlyPlanProgress, "completed" | "total" | "percent"> {
+  const progress = calculateMonthlyPlanProgress(
+    plans.flatMap((plan) => normalizeMonthlyPlanItems(plan.items)),
+  );
+  return {
+    completed: progress.completed,
+    total: progress.total,
+    percent: progress.percent,
+  };
+}
+
 export function buildMonthlyPlanSnapshot(input: {
   goal: string;
-  expectedResult?: string | null;
-  checkpoint?: string | null;
   items: unknown;
 }): MonthlyPlanSnapshot {
   const items = normalizeMonthlyPlanItems(input.items);
   return {
     schemaVersion: 1,
     goal: input.goal.trim(),
-    expectedResult: input.expectedResult?.trim() ?? "",
-    checkpoint: input.checkpoint?.trim() ?? "",
     items,
     progress: calculateMonthlyPlanProgress(items),
   };
@@ -78,8 +85,6 @@ export function parseMonthlyPlanSnapshot(value: unknown): MonthlyPlanSnapshot | 
   if (raw.schemaVersion !== 1 || typeof raw.goal !== "string") return null;
   return buildMonthlyPlanSnapshot({
     goal: raw.goal,
-    expectedResult: typeof raw.expectedResult === "string" ? raw.expectedResult : "",
-    checkpoint: typeof raw.checkpoint === "string" ? raw.checkpoint : "",
     items: raw.items,
   });
 }

@@ -3,6 +3,8 @@
 import {
   ArrowLeft,
   Coins,
+  Check,
+  Eye,
   Link2,
   LockKeyhole,
   LoaderCircle,
@@ -11,24 +13,27 @@ import {
   Trash2,
   Trophy,
   UserPlus,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useAuth } from "@/components/auth-provider";
 import { AchievementsWall } from "@/components/achievements-wall";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
 import { StudentPhoneLine, WhatsAppLink } from "@/components/whatsapp-link";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { formatFio } from "@/lib/name";
-import { onlineLessonStatusLabels } from "@/lib/online-lessons-ui";
 import {
   studentsApi,
   type FamilyRelationship,
   type ParentStudentLink,
 } from "@/lib/students-api";
+import type { ParentVisibility } from "@/types/family";
 
 export default function AdminStudentDetailPage() {
   const { studentId } = useParams<{ studentId: string }>();
+  const { user } = useAuth();
   const resource = useApiResource(() => studentsApi.get(studentId), [studentId]);
 
   if (resource.loading) return <LoadingState label="Открываем карточку ученика" />;
@@ -68,6 +73,10 @@ export default function AdminStudentDetailPage() {
         reload={resource.reload}
       />
 
+      {user?.productFeatures?.curatorWorkspaceV2 ? (
+        <ParentVisibilityCard studentId={student.id} studentName={studentName} />
+      ) : null}
+
       <section className="mt-6 rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
         <h2 className="font-display text-3xl">Достижения</h2>
         <p className="mt-2 text-sm text-stone-500">
@@ -78,7 +87,7 @@ export default function AdminStudentDetailPage() {
         </div>
       </section>
 
-      <section className="mt-6 grid gap-6 lg:grid-cols-2">
+      <section className="mt-6">
         <div className="rounded-[28px] border border-stone-200 bg-white p-6">
           <h2 className="font-display text-2xl">Курсы</h2>
           <div className="mt-4 space-y-3">
@@ -90,20 +99,111 @@ export default function AdminStudentDetailPage() {
             )) : <p className="text-sm text-stone-500">Курсы пока не выбраны</p>}
           </div>
         </div>
-
-        <div className="rounded-[28px] border border-stone-200 bg-white p-6">
-          <h2 className="font-display text-2xl">Онлайн-уроки</h2>
-          <div className="mt-4 space-y-3">
-            {student.onlineLessons.length ? student.onlineLessons.map((item) => (
-              <Link key={item.id} href={`/admin/online-lessons/${item.id}`} className="block rounded-2xl bg-stone-50 p-4 transition hover:bg-stone-100">
-                <p className="font-semibold text-ink">{item.directionTitle}</p>
-                <p className="mt-1 text-xs text-stone-500">{onlineLessonStatusLabels[item.status as keyof typeof onlineLessonStatusLabels]}</p>
-              </Link>
-            )) : <p className="text-sm text-stone-500">Заявок на онлайн-уроки нет</p>}
-          </div>
-        </div>
       </section>
     </>
+  );
+}
+
+const visibilityLabels: Array<{ key: keyof ParentVisibility; label: string; description: string }> = [
+  { key: "showSchedule", label: "Расписание", description: "Ближайшие занятия ученика" },
+  { key: "showBalance", label: "Баланс", description: "Текущая сумма оплаты или задолженности" },
+  { key: "showPlanProgress", label: "План месяца", description: "Цель и процент выполнения" },
+  { key: "showAchievements", label: "Достижения", description: "Полученные медали ученика" },
+];
+
+function ParentVisibilityCard({ studentId, studentName }: { studentId: string; studentName: string }) {
+  const resource = useApiResource(() => studentsApi.parentVisibility(studentId), [studentId]);
+  const [visibility, setVisibility] = useState<ParentVisibility | null>(null);
+  const [reason, setReason] = useState("Настройки согласованы администратором");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (resource.data) setVisibility(resource.data.policy);
+  }, [resource.data]);
+
+  async function save() {
+    if (!visibility) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      await studentsApi.updateParentVisibility(studentId, visibility, reason);
+      setMessage("Настройки сохранены для всех привязанных родителей");
+      await resource.reload();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Не удалось сохранить настройки");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function decide(decision: "approved" | "rejected") {
+    const request = resource.data?.pendingRequest;
+    if (!request) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      await studentsApi.decideParentVisibilityRequest(studentId, request.id, decision, reason);
+      setMessage(decision === "approved" ? "Запрос ученика одобрен" : "Запрос ученика отклонён");
+      await resource.reload();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Не удалось обработать запрос");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (resource.loading) return <div className="mt-6"><LoadingState label="Загружаем настройки родителей" /></div>;
+  if (resource.error) return <div className="mt-6"><ErrorState message={resource.error} retry={resource.reload} /></div>;
+  if (!visibility) return null;
+
+  const pending = resource.data?.pendingRequest;
+  return (
+    <section className="mt-6 rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8" data-testid="parent-visibility-admin">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold">Доступ родителей</p>
+          <h2 className="font-display mt-2 text-3xl">Что видно семье</h2>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-500">
+            Одна настройка для всех родителей {studentName}. Ученик может только отправить запрос, решение принимает администратор.
+          </p>
+        </div>
+        <Eye className="text-gold" />
+      </div>
+
+      {pending ? (
+        <div className="mt-6 border-l-4 border-gold bg-amber-50 px-5 py-4">
+          <p className="text-xs font-bold uppercase tracking-wider text-amber-900">Ожидает решения</p>
+          <p className="mt-2 text-sm text-amber-950">{pending.note || "Ученик просит изменить доступ родителей."}</p>
+          <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-amber-900">
+            {visibilityLabels.filter((item) => pending.requested[item.key]).map((item) => <span key={item.key}>{item.label}</span>)}
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button type="button" disabled={busy} onClick={() => void decide("approved")} className="inline-flex items-center gap-2 rounded-xl bg-ink px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50"><Check size={16} />Одобрить</button>
+            <button type="button" disabled={busy} onClick={() => void decide("rejected")} className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-bold text-red-700 disabled:opacity-50"><X size={16} />Отклонить</button>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="mt-6 grid gap-3 sm:grid-cols-2">
+        {visibilityLabels.map((item) => (
+          <label key={item.key} className="flex cursor-pointer items-start gap-3 border-t border-stone-200 py-4">
+            <input
+              type="checkbox"
+              checked={visibility[item.key]}
+              onChange={(event) => setVisibility({ ...visibility, [item.key]: event.target.checked })}
+              className="mt-0.5 h-5 w-5 accent-[#c59a45]"
+            />
+            <span><span className="block text-sm font-bold text-ink">{item.label}</span><span className="mt-1 block text-xs text-stone-500">{item.description}</span></span>
+          </label>
+        ))}
+      </div>
+      <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+        <input value={reason} onChange={(event) => setReason(event.target.value)} maxLength={1000} aria-label="Причина изменения доступа" className="min-w-0 flex-1 rounded-xl border border-stone-200 px-4 py-3 text-sm outline-none focus:border-gold" />
+        <button type="button" disabled={busy || reason.trim().length < 3} onClick={() => void save()} className="rounded-xl bg-ink px-5 py-3 text-sm font-bold text-white disabled:opacity-50">Сохранить доступ</button>
+      </div>
+      {message ? <p className="mt-3 text-sm font-semibold text-stone-600">{message}</p> : null}
+    </section>
   );
 }
 

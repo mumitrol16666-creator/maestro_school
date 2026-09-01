@@ -3,7 +3,7 @@ import { BadRequestError, NotFoundError } from "../../domain/errors.js";
 import { getLessonById } from "../repositories/catalog.repository.js";
 import { requireCourseEnrollment } from "./enrollment.service.js";
 import { syncLessonAvailability } from "./lesson-unlock.service.js";
-import { deliverNotificationsToUsers, deliverUserNotification, listUsersWithPermission } from "./notification.service.js";
+import { deliverUserNotification, listUsersWithPermission } from "./notification.service.js";
 
 export async function submitLessonQuestion(params: {
   lessonId: string;
@@ -47,17 +47,15 @@ export async function submitLessonQuestion(params: {
   });
 
   const recipients = await listUsersWithPermission("catalog.manage");
-  await deliverNotificationsToUsers(
-    recipients.map((recipient) => recipient.id),
-    {
+  await Promise.allSettled(recipients.map((recipient) => deliverUserNotification({
+      userId: recipient.id,
       type: "lesson_question_received",
       title: "Новый вопрос по уроку",
       body: `Ученик задал вопрос по уроку «${lesson.title}».`,
       url: "/admin/lesson-questions?status=pending",
       tag: `lesson-question-${question.id}`,
-      dedupeWindowMs: 2 * 60 * 1000,
-    },
-  ).catch(() => undefined);
+      dedupeKey: `lesson-question:received:${question.id}:${recipient.id}`,
+  })));
 
   return question;
 }
@@ -152,7 +150,7 @@ export async function markLessonQuestionAnswered(id: string) {
     body: `Вопрос по уроку «${existing.lesson.title}» отмечен как отвеченный.`,
     url: `/lessons/${existing.lesson.id}`,
     tag: `lesson-question-answered-${id}`,
-    dedupeWindowMs: 2 * 60 * 1000,
+    dedupeKey: `lesson-question:answered:${id}`,
   }).catch(() => undefined);
 
   return updated;

@@ -183,7 +183,7 @@ export function CrmLinkPanel({
       ) : (
         <p className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-emerald-700">
           <Unplug size={16} />
-          Связь активна — офлайн-разделы доступны пользователю.
+          Связь активна — расписание и учебные разделы доступны пользователю.
         </p>
       )}
 

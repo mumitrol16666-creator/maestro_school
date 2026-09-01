@@ -89,7 +89,7 @@ export function mapOfflineTask(
     status,
     context: {
       primary: lesson.groupName?.trim() || lesson.title,
-      secondary: "Урок в школе",
+      secondary: "Урок с преподавателем",
       teacherName: lesson.teacherName?.trim() || null,
     },
     timing: {

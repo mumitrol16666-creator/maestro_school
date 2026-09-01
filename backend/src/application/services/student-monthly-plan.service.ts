@@ -44,18 +44,35 @@ function normalizedPlanInput(input: MonthlyPlanInput) {
   };
 }
 
-function planDto<T extends {
+type StudentMonthlyPlanRecord = {
+  id: string;
+  month: string;
+  goal: string;
+  expectedResult: string;
+  skills: string;
+  checkpoint: string;
+  note: string;
   items: Prisma.JsonValue;
   publishedSnapshot: Prisma.JsonValue | null;
   publishedAt: Date | null;
   draftRevision: number;
   publishedRevision: number;
-}>(plan: T) {
+  updatedAt: Date;
+};
+
+function planDto(plan: StudentMonthlyPlanRecord) {
   const items = normalizeMonthlyPlanItems(plan.items);
   return {
-    ...plan,
+    id: plan.id,
+    month: plan.month,
+    goal: plan.goal,
+    expectedResult: plan.expectedResult,
+    skills: plan.skills,
+    checkpoint: plan.checkpoint,
+    note: plan.note,
     items,
     progress: calculateMonthlyPlanProgress(items),
+    updatedAt: plan.updatedAt,
     publication: {
       isPublished: Boolean(plan.publishedAt && plan.publishedSnapshot),
       publishedAt: plan.publishedAt,
@@ -103,7 +120,7 @@ export async function saveStudentMonthlyPlan(
     && existing.note === normalized.note
     && JSON.stringify(normalizeMonthlyPlanItems(existing.items)) === JSON.stringify(normalized.items);
 
-  if (unchanged) return planDto(existing);
+  if (unchanged) return { ...planDto(existing), idempotent: true };
 
   const data = {
     ...normalized,
@@ -114,7 +131,7 @@ export async function saveStudentMonthlyPlan(
     create: { crmStudentId, teacherUserId, month, ...data },
     update: { ...data, draftRevision: { increment: 1 } },
   });
-  return planDto(plan);
+  return { ...planDto(plan), idempotent: false };
 }
 
 export async function publishStudentMonthlyPlan(
@@ -133,8 +150,11 @@ export async function publishStudentMonthlyPlan(
   const snapshot = buildMonthlyPlanSnapshot(plan);
   if (!snapshot.goal) throw new BadRequestError("Заполните фокус месяца", "MONTHLY_PLAN_GOAL_REQUIRED");
   if (!snapshot.items.length) throw new BadRequestError("Добавьте хотя бы одну тему", "MONTHLY_PLAN_ITEMS_REQUIRED");
-  if (plan.publishedRevision === plan.draftRevision && plan.publishedSnapshot) return planDto(plan);
+  if (plan.publishedRevision === plan.draftRevision && plan.publishedSnapshot) {
+    return { ...planDto(plan), idempotent: true, publicationEvent: null };
+  }
 
+  const wasPublished = Boolean(plan.publishedAt && plan.publishedSnapshot);
   const publishedAt = new Date();
   const updated = await prisma.studentMonthlyPlan.update({
     where,
@@ -157,15 +177,20 @@ export async function publishStudentMonthlyPlan(
         type: "offline_lesson_report_ready",
         title: `Учебный план на ${month} готов!`,
         body: `Цель месяца: «${snapshot.goal}». Посмотри список тем и песен на главной.`,
-        url: "/dashboard",
+        url: "/monthly-plan",
         tag: `monthly-plan-${month}`,
+        dedupeKey: `legacy-monthly-plan:${plan.id}:revision:${plan.draftRevision}`,
       });
     }
   } catch {
     // Non-blocking notification delivery
   }
 
-  return planDto(updated);
+  return {
+    ...planDto(updated),
+    idempotent: false,
+    publicationEvent: wasPublished ? "monthly_plan_republished" : "monthly_plan_published",
+  };
 }
 
 export async function listPublishedStudentMonthlyPlans(crmStudentId: string, month: string) {
@@ -184,7 +209,10 @@ export async function listPublishedStudentMonthlyPlans(crmStudentId: string, mon
 
   return plans.flatMap((plan) => {
     const snapshot = parseMonthlyPlanSnapshot(plan.publishedSnapshot);
-    if (!snapshot) return [];
+    if (!snapshot) {
+      console.warn("[monthly-plan] skipped invalid student snapshot", { planId: plan.id, month });
+      return [];
+    }
     return [{
       id: plan.id,
       scope: "student" as const,

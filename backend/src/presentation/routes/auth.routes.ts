@@ -36,6 +36,8 @@ import {
   filterLoginCandidatesByProfile,
   roleMatchesLoginProfile,
 } from "../../domain/login-profile.js";
+import { getProductFeatureSnapshot } from "../../config/product-features.js";
+import { recordStudentLogin } from "../../application/services/app-usage.service.js";
 
 const ssoExchangeSchema = z.object({
   token: z.string().min(10),
@@ -46,6 +48,11 @@ const loginSchema = z.object({
   password: z.string().min(8).max(72),
   profile: z.enum(["student", "parent", "staff"]).optional(),
 });
+
+const configuredLoginRateLimit = Number(process.env.AUTH_LOGIN_RATE_LIMIT_MAX ?? 10);
+const loginRateLimitMax = Number.isInteger(configuredLoginRateLimit) && configuredLoginRateLimit > 0
+  ? configuredLoginRateLimit
+  : 10;
 
 const registerSchema = z.object({
   firstName: z.string().trim().min(1).max(128),
@@ -99,6 +106,7 @@ function profile(
     phone: user.phone,
     role: user.role.slug,
     permissions: user.role.rolePermissions.map((item) => item.permission.code),
+    productFeatures: getProductFeatureSnapshot().flags,
     points: stats?.points,
     coins: stats?.coins,
   };
@@ -118,6 +126,9 @@ export async function authRoutes(app: FastifyInstance) {
     const { token } = ssoExchangeSchema.parse(request.body);
     const { user, stats } = await exchangeSsoBridgeToken(token);
     const sessionToken = await reply.jwtSign({ sub: user.id, role: user.role.slug });
+    if (user.role.slug === "student") {
+      await recordStudentLogin(user.id, "sso").catch(() => undefined);
+    }
 
     return {
       data: {
@@ -127,7 +138,7 @@ export async function authRoutes(app: FastifyInstance) {
     };
   });
 
-  app.post("/auth/login", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (request, reply) => {
+  app.post("/auth/login", { config: { rateLimit: { max: loginRateLimitMax, timeWindow: "1 minute" } } }, async (request, reply) => {
     const body = loginSchema.parse(request.body);
     const input = body.phone.trim();
 
@@ -162,6 +173,9 @@ export async function authRoutes(app: FastifyInstance) {
 
     const token = await reply.jwtSign({ sub: user.id, role: user.role.slug });
     const stats = await studentStats(user.id, user.role.slug);
+    if (user.role.slug === "student") {
+      await recordStudentLogin(user.id, "password").catch(() => undefined);
+    }
 
     return {
       data: {
@@ -230,6 +244,7 @@ export async function authRoutes(app: FastifyInstance) {
       throw error;
     }
     const token = await reply.jwtSign({ sub: user.id, role: user.role.slug });
+    await recordStudentLogin(user.id, "registration").catch(() => undefined);
 
     await syncNewStudentToCrm({
       appUserId: user.id,

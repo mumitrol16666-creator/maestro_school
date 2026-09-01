@@ -1,7 +1,21 @@
-import { BookOpen, Coins, Laptop, ListChecks } from "lucide-react";
+import {
+  BookOpen,
+  CalendarDays,
+  Coins,
+  FileCheck2,
+  Laptop,
+  ListChecks,
+  MessagesSquare,
+  Target,
+  UsersRound,
+  WalletCards,
+  type LucideIcon,
+} from "lucide-react";
+
+export type AuthProfile = "student" | "parent" | "staff";
 
 type PreviewCard = {
-  icon: typeof BookOpen;
+  icon: LucideIcon;
   label: string;
   value: string;
   className: string;
@@ -9,37 +23,29 @@ type PreviewCard = {
   accent?: boolean;
 };
 
-const cards: PreviewCard[] = [
-  {
-    icon: BookOpen,
-    label: "Урок 2",
-    value: "Первые аккорды",
-    className: "lg:translate-x-0",
-  },
-  {
-    icon: ListChecks,
-    label: "Домашнее задание",
-    value: "На проверке",
-    badge: "Проверка",
-    className: "lg:translate-x-6",
-  },
-  {
-    icon: Coins,
-    label: "Баллы",
-    value: "180 · 12 Coins",
-    accent: true,
-    className: "lg:-translate-x-2",
-  },
-  {
-    icon: Laptop,
-    label: "Онлайн-урок",
-    value: "Назначен",
-    badge: "Zoom",
-    className: "lg:translate-x-4",
-  },
-];
+const cardsByProfile: Record<AuthProfile, PreviewCard[]> = {
+  student: [
+    { icon: BookOpen, label: "Урок 2", value: "Первые аккорды", className: "lg:translate-x-0" },
+    { icon: ListChecks, label: "Домашнее задание", value: "На проверке", badge: "Проверка", className: "lg:translate-x-6" },
+    { icon: Coins, label: "Баллы", value: "180 · 12 Coins", accent: true, className: "lg:-translate-x-2" },
+    { icon: Laptop, label: "Онлайн-урок", value: "Назначен", badge: "Zoom", className: "lg:translate-x-4" },
+  ],
+  parent: [
+    { icon: CalendarDays, label: "Расписание", value: "Следующий урок · 18:00", className: "lg:translate-x-0" },
+    { icon: WalletCards, label: "Баланс", value: "Оплачено полностью", badge: "Актуально", className: "lg:translate-x-6" },
+    { icon: Target, label: "Учебный план", value: "3 из 4 тем", accent: true, className: "lg:-translate-x-2" },
+    { icon: MessagesSquare, label: "Связь со школой", value: "Преподаватель на связи", className: "lg:translate-x-4" },
+  ],
+  staff: [
+    { icon: CalendarDays, label: "Сегодня", value: "6 уроков", className: "lg:translate-x-0" },
+    { icon: FileCheck2, label: "Отчёты", value: "2 требуют действия", badge: "Важно", className: "lg:translate-x-6" },
+    { icon: ListChecks, label: "Домашние задания", value: "3 на проверке", accent: true, className: "lg:-translate-x-2" },
+    { icon: UsersRound, label: "Ученики", value: "Планы и прогресс", className: "lg:translate-x-4" },
+  ],
+};
 
-export function AuthPlatformPreview() {
+export function AuthPlatformPreview({ profile }: { profile: AuthProfile }) {
+  const cards = cardsByProfile[profile];
   return (
     <div className="mt-10 grid gap-3 sm:grid-cols-2">
       {cards.map((card) => {

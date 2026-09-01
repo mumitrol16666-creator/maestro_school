@@ -67,7 +67,7 @@ export async function pushRoutes(app: FastifyInstance) {
   app.post("/push/test", { preHandler: [authenticate] }, async (request) => {
     const parent = request.user!.roleSlug === "parent";
     const result = await sendPushToUser(request.user!.id, {
-      title: "Maestro",
+      title: parent ? "Семейные уведомления включены" : "Уведомления включены",
       body: parent
         ? "Уведомления работают — важные события по ученику появятся на экране телефона."
         : "Уведомления работают — важные изменения появятся на экране телефона.",

@@ -1,0 +1,8 @@
+services:
+  backend:
+    environment:
+      FEATURE_LEARNING_TOPICS_V2: "true"
+      FEATURE_HOMEWORK_FLOW_V2: "true"
+      FEATURE_UNIFIED_LESSON_V2: "true"
+      FEATURE_LESSON_SYNC_V2: "true"
+      FEATURE_REWARD_ECONOMY_V2: "true"

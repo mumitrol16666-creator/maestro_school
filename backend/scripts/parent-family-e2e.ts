@@ -1,7 +1,8 @@
 import { createServer } from "node:http";
-import { PrismaClient } from "@prisma/client";
+import { EconomicEpochStatus, PrismaClient } from "@prisma/client";
+import { assertLocalE2eDatabase } from "./qa-database-guard.js";
 
-const BASE_URL = process.env.SMOKE_BASE_URL ?? "http://127.0.0.1:4011";
+const BASE_URL = process.env.SMOKE_BASE_URL ?? "http://127.0.0.1:4000";
 const API = `${BASE_URL}/api/v1`;
 const INTEGRATION_API = `${BASE_URL}/api/integration/v1`;
 const ADMIN_LOGIN = process.env.ADMIN_EMAIL;
@@ -9,6 +10,8 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 const INTEGRATION_SECRET = process.env.INTEGRATION_SERVICE_SECRET;
 const CRM_STUB_PORT = Number(process.env.CRM_STUB_PORT ?? 4012);
 const prisma = new PrismaClient();
+const createdUserIds: string[] = [];
+let cleanupSuffix: string | null = null;
 
 type ErrorEnvelope = {
   error?: { code?: string; message?: string };
@@ -38,6 +41,8 @@ async function request<T>(
     method,
     headers,
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
+  }).catch((error) => {
+    throw new Error(`${method} ${url} failed: ${error instanceof Error ? error.message : String(error)}`);
   });
   const payload = await response.json().catch(() => ({})) as {
     data?: T;
@@ -66,6 +71,53 @@ function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
 
+async function enrollStudentsInActiveEpoch(studentIds: string[], sourceSuffix: string) {
+  const epoch = await prisma.economicEpoch.findFirst({
+    where: { status: EconomicEpochStatus.active },
+  });
+  if (!epoch) return;
+
+  const activatedAt = new Date();
+  await prisma.$transaction(async (tx) => {
+    for (const studentId of studentIds) {
+      await tx.economicEpochParticipant.upsert({
+        where: { epochId_studentId: { epochId: epoch.id, studentId } },
+        create: {
+          epochId: epoch.id,
+          studentId,
+          openingPoints: epoch.openingPoints,
+          openingWeeklyXp: epoch.openingWeeklyXp,
+          openingCoins: epoch.openingCoins,
+          openingLevel: 1,
+          legacyPointsSnapshot: 0,
+          legacyWeeklyXpSnapshot: 0,
+          legacyCoinsSnapshot: 0,
+          sourceKey: `e2e:parent-family:${sourceSuffix}:epoch:${studentId}`,
+          activatedAt,
+        },
+        update: {},
+      });
+      await tx.studentCoinBalance.upsert({
+        where: { studentId },
+        create: { studentId, balance: epoch.openingCoins, economicEpochId: epoch.id },
+        update: { balance: epoch.openingCoins, economicEpochId: epoch.id },
+      });
+    }
+  });
+}
+
+async function cleanupCreatedFixtures() {
+  assertLocalE2eDatabase();
+  if (cleanupSuffix) {
+    await prisma.offlineLessonStudentCheck.deleteMany({
+      where: { crmClassId: { contains: cleanupSuffix } },
+    });
+  }
+  if (createdUserIds.length > 0) {
+    await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
+  }
+}
+
 function startCrmStub(summaries: Map<string, Record<string, unknown>>) {
   const server = createServer((req, res) => {
     const match = req.url?.match(/^\/api\/integration\/v1\/students\/([^/]+)\/offline-summary$/);
@@ -85,11 +137,13 @@ function startCrmStub(summaries: Map<string, Record<string, unknown>>) {
 }
 
 async function main() {
+  assertLocalE2eDatabase();
   if (!ADMIN_LOGIN || !ADMIN_PASSWORD) {
     throw new Error("ADMIN_EMAIL and ADMIN_PASSWORD are required");
   }
 
   const suffix = Date.now();
+  cleanupSuffix = String(suffix);
   const sharedPhone = `7700${String(suffix).slice(-7)}`;
   const secondPhone = `7701${String(suffix + 1).slice(-7)}`;
   const studentPassword = `Student_${suffix}!`;
@@ -116,6 +170,7 @@ async function main() {
       password: studentPassword,
     },
   });
+  createdUserIds.push(studentOne.user.id);
   const studentTwo = await request<{
     token: string;
     user: { id: string; role: string; login: string };
@@ -129,7 +184,9 @@ async function main() {
       password: studentPassword,
     },
   });
+  createdUserIds.push(studentTwo.user.id);
   assert(studentOne.user.role === "student" && studentTwo.user.role === "student", "registration must create students");
+  await enrollStudentsInActiveEpoch([studentOne.user.id, studentTwo.user.id], String(suffix));
   await request("GET", `${API}/admin/students`, {
     token: studentOne.token,
     expectStatus: 403,
@@ -164,6 +221,7 @@ async function main() {
       relationship: "mother",
     },
   });
+  createdUserIds.push(parentLink.parent.id);
   assert(parentLink.parent.role === "parent", "created account must have parent role");
 
   await request("POST", `${API}/admin/students/${studentTwo.user.id}/parents`, {
@@ -313,6 +371,11 @@ async function main() {
           startTime: "11:00",
           attended: true,
           homework: "Играть бой под метроном",
+          homeworkResult: {
+            status: "partial",
+            completionPercent: 60,
+            reviewedAt: "2026-07-28T06:30:00.000Z",
+          },
         },
         {
           crmClassId: `class-homework-${suffix}`,
@@ -465,5 +528,9 @@ main()
     process.exitCode = 1;
   })
   .finally(async () => {
-    await prisma.$disconnect();
+    try {
+      await cleanupCreatedFixtures();
+    } finally {
+      await prisma.$disconnect();
+    }
   });

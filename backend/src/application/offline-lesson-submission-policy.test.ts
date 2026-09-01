@@ -70,6 +70,27 @@ test("individual held lesson requires previous homework review", () => {
   if (!result.valid) assert.equal(result.code, "LESSON_HOMEWORK_REVIEW_REQUIRED");
 });
 
+test("group held lesson requires homework review for every present student", () => {
+  const result = validateOfflineLessonSubmission({
+    lesson: { classType: "group", group: { name: "Группа" } },
+    students: [
+      heldStudent,
+      {
+        name: "Второй ученик",
+        attendanceStatus: "present",
+        homeworkReview: { status: "not_checked" },
+      },
+    ],
+    payload: {
+      topic: "Аккорды",
+      lessonSummary: "Разобрали упражнение",
+    },
+  });
+
+  assert.equal(result.valid, false);
+  if (!result.valid) assert.equal(result.code, "LESSON_HOMEWORK_REVIEW_REQUIRED");
+});
+
 test("trial lead from a booking can submit without a student card", () => {
   const result = validateOfflineLessonSubmission({
     lesson: { classType: "trial", group: null },

@@ -1,24 +1,34 @@
 "use client";
 
-import { House, Settings, ShieldCheck } from "lucide-react";
+import { House, MessagesSquare, Settings, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
+import { useMessageMailboxStatus } from "@/hooks/use-message-mailbox-status";
+import { AdminPendingHomeworkBadge } from "./admin-pending-homework-badge";
 import { useAuth } from "./auth-provider";
 import { Brand } from "./brand";
 import { NotificationCenter } from "./teacher-notification-center";
 import { PushNotificationPrompt } from "./push-notification-prompt";
 import { UserMenu } from "./user-menu";
 
-const parentNavigation = [
+const baseParentNavigation = [
   { href: "/family", label: "Семья", icon: House, exact: true },
-  { href: "/family/settings", label: "Настройки", icon: Settings, exact: false },
 ];
 
 export function ParentShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { user } = useAuth();
   const { count: unreadNotifications, reload: reloadUnreadNotifications } = useUnreadNotifications();
+  const learningDialogsV2 = Boolean(user?.productFeatures?.learningDialogsV2);
+  const { count: unreadMessages } = useMessageMailboxStatus(learningDialogsV2, 30_000, true);
+  const parentNavigation = [
+    ...baseParentNavigation,
+    ...(learningDialogsV2
+      ? [{ href: "/family/messages", label: "Сообщения", icon: MessagesSquare, exact: false }]
+      : []),
+    { href: "/family/settings", label: "Настройки", icon: Settings, exact: false },
+  ];
 
   function isActive(item: typeof parentNavigation[number]) {
     return item.exact ? pathname === item.href : pathname.startsWith(item.href);
@@ -54,6 +64,9 @@ export function ParentShell({ children }: { children: React.ReactNode }) {
                   <Icon size={18} />
                 </span>
                 {item.label}
+                {item.href === "/family/messages" && unreadMessages != null && unreadMessages > 0 ? (
+                  <span className="ml-auto"><AdminPendingHomeworkBadge count={unreadMessages} /></span>
+                ) : null}
               </Link>
             );
           })}
@@ -61,7 +74,7 @@ export function ParentShell({ children }: { children: React.ReactNode }) {
         <div className="mt-auto rounded-[22px] border border-white/10 bg-white/[0.045] p-4">
           <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gold">Доступ родителя</p>
           <p className="mt-2 text-xs leading-5 text-white/50">
-            Только расписание, ДЗ, итоги занятий и абонемент привязанных учеников.
+            Расписание, баланс, учебный план и достижения в пределах доступа ученика.
           </p>
         </div>
       </aside>
@@ -91,7 +104,7 @@ export function ParentShell({ children }: { children: React.ReactNode }) {
         </main>
       </div>
 
-      <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-2 border-t border-stone-200/90 bg-paper/95 px-4 pb-[env(safe-area-inset-bottom,0px)] shadow-[0_-12px_35px_rgba(37,33,25,0.08)] backdrop-blur-xl lg:hidden">
+      <nav data-mobile-app-navigation className={`fixed inset-x-0 bottom-0 z-40 grid ${learningDialogsV2 ? "grid-cols-3" : "grid-cols-2"} border-t border-stone-200/90 bg-paper/95 px-2 pb-[env(safe-area-inset-bottom,0px)] shadow-[0_-12px_35px_rgba(37,33,25,0.08)] backdrop-blur-xl lg:hidden`}>
         {parentNavigation.map((item) => {
           const Icon = item.icon;
           const active = isActive(item);
@@ -103,10 +116,15 @@ export function ParentShell({ children }: { children: React.ReactNode }) {
                 active ? "text-ink" : "text-stone-400"
               }`}
             >
-              <span className={`grid h-9 w-12 place-items-center rounded-xl ${
+              <span className={`relative grid h-9 w-12 place-items-center rounded-xl ${
                 active ? "bg-amber-50 text-gold" : ""
               }`}>
                 <Icon size={19} />
+                {item.href === "/family/messages" && unreadMessages != null && unreadMessages > 0 ? (
+                  <span className="absolute -right-0.5 -top-0.5 grid min-h-4 min-w-4 place-items-center rounded-full bg-gold px-1 text-[9px] font-black leading-none text-ink">
+                    {unreadMessages > 9 ? "9+" : unreadMessages}
+                  </span>
+                ) : null}
               </span>
               {item.label}
             </Link>

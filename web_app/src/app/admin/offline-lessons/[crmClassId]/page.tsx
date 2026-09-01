@@ -14,6 +14,7 @@ import {
   Clock3,
   LoaderCircle,
   Minus,
+  MonitorPlay,
   Play,
   RotateCcw,
   Save,
@@ -23,6 +24,7 @@ import {
   Target,
   UserX,
   UsersRound,
+  X,
   XCircle,
 } from "lucide-react";
 import Link from "next/link";
@@ -31,8 +33,15 @@ import { useParams } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
 import { SuccessModal } from "@/components/success-modal";
+import {
+  emptyLearningLessonV2Draft,
+  LearningLessonV2Panel,
+  pendingLearningHomeworkCount,
+  type LearningLessonV2Draft,
+} from "@/components/learning-lesson-v2-panel";
 import { PageHeader } from "@/components/page-header";
 import { useApiResource } from "@/hooks/use-api-resource";
+import { useDialogBehavior } from "@/hooks/use-dialog-behavior";
 import { ApiError } from "@/lib/api-client";
 import { isContentAdminRole, isOfflineCoordinatorRole } from "@/lib/role-labels";
 import { adminOfflineApi } from "@/lib/admin-offline-api";
@@ -53,8 +62,29 @@ const statusLabels: Record<string, string> = {
   started: "Идёт",
   not_filled: "Просрочен",
   pending_admin_review: "На проверке",
+  pending_sync: "Ожидает отправки",
   completed: "Проведён",
   cancelled: "Отменён",
+};
+
+const syncEventLabels: Record<string, string> = {
+  teacher_attendance: "Посещаемость от преподавателя",
+  admin_attendance: "Посещаемость от администратора",
+  teacher_submit: "Отчёт преподавателя",
+  teacher_not_held: "Отметка «урок не состоялся»",
+  teacher_withdraw: "Возврат отчёта преподавателю",
+};
+
+const syncStatusLabels: Record<string, string> = {
+  pending: "Ожидает отправки",
+  processing: "Отправляется",
+  failed: "Не отправлено",
+  conflict: "Требует решения",
+};
+
+const syncConflictLabels: Record<string, string> = {
+  attendance_mismatch: "Посещаемость отличается от расписания",
+  stale_projection_ignored: "Расписание содержит более новые данные",
 };
 
 const REPORT_SUBMISSION_LEAD_MINUTES = 20;
@@ -312,6 +342,7 @@ type OfflineLessonFormDraft = {
     comment: string;
     trialReport: TrialLessonReport;
     studentCheckDrafts: Record<string, StudentLessonCheckDraft>;
+    learningV2Draft?: LearningLessonV2Draft;
     notHeldReason: string;
   };
 };
@@ -370,6 +401,18 @@ export default function AdminOfflineLessonDetailPage() {
     () => (isAdmin ? adminOfflineApi.students(crmClassId) : teacherOfflineApi.students(crmClassId)),
     [crmClassId, isAdmin],
   );
+  const syncJournalResource = useApiResource(
+    () => isAdmin
+      ? adminOfflineApi.syncJournal(crmClassId)
+      : Promise.resolve({ events: [], conflicts: [] }),
+    [crmClassId, isAdmin],
+  );
+  const reportVersionsResource = useApiResource(
+    () => isAdmin
+      ? adminOfflineApi.reportVersions(crmClassId)
+      : teacherOfflineApi.reportVersions(crmClassId),
+    [crmClassId, isAdmin],
+  );
 
   const [topic, setTopic] = useState("");
   const [lessonGoals, setLessonGoals] = useState("");
@@ -382,6 +425,9 @@ export default function AdminOfflineLessonDetailPage() {
   const [comment, setComment] = useState("");
   const [trialReport, setTrialReport] = useState<TrialLessonReport>(() => mergeTrialReport());
   const [studentCheckDrafts, setStudentCheckDrafts] = useState<Record<string, StudentLessonCheckDraft>>({});
+  const [learningV2Draft, setLearningV2Draft] = useState<LearningLessonV2Draft>(
+    emptyLearningLessonV2Draft,
+  );
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<FeedbackMessage | null>(null);
@@ -395,6 +441,8 @@ export default function AdminOfflineLessonDetailPage() {
   const [draftSaveStatus, setDraftSaveStatus] = useState<DraftSaveStatus | null>(null);
   const submissionLock = useRef(false);
   const lastSavedDraftForm = useRef<string | null>(null);
+  const serverDraftRevision = useRef(0);
+  const [serverDraftReadyKey, setServerDraftReadyKey] = useState<string | null>(null);
   const lessonDraftKey = useMemo(
     () => user?.id
       ? `${OFFLINE_LESSON_DRAFT_PREFIX}:${user.id}:${crmClassId}`
@@ -403,7 +451,16 @@ export default function AdminOfflineLessonDetailPage() {
   );
 
   const lesson = lessonResource.data;
+  const integration = lesson?.integration ?? studentsResource.data?.integration ?? null;
+  const effectiveLessonStatus = integration?.report?.status === "pending_sync"
+    || integration?.report?.status === "conflict"
+    ? integration.report.status
+    : integration?.report?.status === "pending_review"
+      ? "pending_admin_review"
+      : lesson?.status;
   const loadedStudents = studentsResource.data?.students ?? [];
+  const learningV2 = studentsResource.data?.learningV2 ?? null;
+  const isLearningLessonV2 = Boolean(learningV2?.enabled);
   const isTrialLesson = lesson?.classType === "trial" || Boolean(lesson?.trialParticipant || lesson?.trialBooking);
   const hasLinkedStudent = Boolean(lesson?.crmIndividualStudentId);
   const trialLeadFallback = useMemo(() => {
@@ -440,12 +497,16 @@ export default function AdminOfflineLessonDetailPage() {
   const canEditTeacherReport = Boolean(
     lesson
       && teacherEditableLessonStatuses.has(lesson.status)
+      && !["pending_sync", "conflict"].includes(effectiveLessonStatus ?? "")
       && (!isAdmin || canActForTeacher),
   );
-  const canEditAdminReview = isAdmin && lesson?.status === "pending_admin_review";
+  const canEditAdminReview = isAdmin && effectiveLessonStatus === "pending_admin_review";
   const canEditReport = Boolean(canEditTeacherReport || canEditAdminReview);
   const canManageAttendance = canEditReport;
-  const canApprove = isAdmin && lesson?.status === "pending_admin_review";
+  const canApprove = isAdmin
+    && effectiveLessonStatus === "pending_admin_review"
+    && integration?.state !== "pending_sync"
+    && integration?.state !== "conflict";
   const isNotHeld = lesson?.teacherOutcomeHint === "not_held";
   const isSubmittedAbsence = lesson?.teacherOutcomeHint === "no_submission";
   const isIndividualLesson = Boolean(
@@ -473,14 +534,26 @@ export default function AdminOfflineLessonDetailPage() {
     return isCompactGroupLesson ? alignDraftWithGroupHomework(draft, previousGroupHomework) : draft;
   };
   const unmarkedCount = students.filter((student) => draftFor(student).attendanceStatus === "unmarked").length;
-  const hasPreviousHomework = isCompactGroupLesson
+  const hasPreviousHomework = !isLearningLessonV2 && (isCompactGroupLesson
     ? Boolean(previousGroupHomework)
-    : students.some((student) => Boolean(previousHomeworkLesson(student)));
-  const homeworkReviewPendingCount = students.filter((student) =>
+    : students.some((student) => Boolean(previousHomeworkLesson(student))));
+  const homeworkReviewPendingCount = isLearningLessonV2 ? 0 : students.filter((student) =>
     (isCompactGroupLesson ? Boolean(previousGroupHomework) : Boolean(previousHomeworkLesson(student)))
       && ["present", "late"].includes(draftFor(student).attendanceStatus)
       && draftFor(student).homeworkReview.status === "not_checked",
   ).length;
+  const pendingLearningHomework = pendingLearningHomeworkCount(learningV2);
+  const pendingLearningDecisions = learningV2?.students.reduce((total, learningStudent) => {
+    const rosterStudent = students.find(
+      (student) => student.crmStudentId === learningStudent.crmStudentId,
+    );
+    if (!rosterStudent || !["present", "late"].includes(draftFor(rosterStudent).attendanceStatus)) {
+      return total;
+    }
+    return total + learningStudent.pendingHomework.filter(
+      (homework) => !learningV2Draft.homeworkDecisions[homework.recipientId]?.decision,
+    ).length;
+  }, 0) ?? 0;
   const allStudentsAbsent = students.length > 0 && students.every((student) => (
     ["excused_absence", "unexcused_absence", "emergency_freeze"].includes(draftFor(student).attendanceStatus)
   ));
@@ -549,11 +622,57 @@ export default function AdminOfflineLessonDetailPage() {
   }, [isCompactGroupLesson, previousGroupHomework, studentsResource.data, trialLeadFallback]);
 
   useEffect(() => {
+    if (!lesson || !lessonDraftKey || !user?.id || studentsResource.loading) return;
+    let cancelled = false;
+
+    if (!canEditReport || !lesson.integration) {
+      serverDraftRevision.current = 0;
+      setServerDraftReadyKey(lessonDraftKey);
+      return;
+    }
+
+    const draftApi = isAdmin ? adminOfflineApi : teacherOfflineApi;
+    void draftApi.draft(crmClassId)
+      .then((serverDraft) => {
+        if (cancelled) return;
+        serverDraftRevision.current = serverDraft?.revision ?? 0;
+        const serverForm = serverDraft?.payload?.form;
+        if (serverForm && typeof serverForm === "object" && !Array.isArray(serverForm)) {
+          const localDraft = readOfflineLessonDraft(lessonDraftKey, crmClassId, user.id);
+          const serverUpdatedAt = new Date(serverDraft.updatedAt).getTime();
+          if (!localDraft || serverUpdatedAt > localDraft.updatedAt) {
+            const restored: OfflineLessonFormDraft = {
+              version: 1,
+              lessonId: crmClassId,
+              ownerId: user.id,
+              updatedAt: serverUpdatedAt,
+              form: serverForm as OfflineLessonFormDraft["form"],
+            };
+            try {
+              window.localStorage.setItem(lessonDraftKey, JSON.stringify(restored));
+            } catch {
+              // The server copy remains available even when WebView storage is blocked.
+            }
+          }
+        }
+        setServerDraftReadyKey(lessonDraftKey);
+      })
+      .catch(() => {
+        if (!cancelled) setServerDraftReadyKey(lessonDraftKey);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [canEditReport, crmClassId, isAdmin, lesson, lessonDraftKey, studentsResource.loading, user?.id]);
+
+  useEffect(() => {
     if (
       !lesson
       || !user?.id
       || !lessonDraftKey
       || studentsResource.loading
+      || serverDraftReadyKey !== lessonDraftKey
       || hydratedLessonDraftKey === lessonDraftKey
     ) {
       return;
@@ -619,6 +738,7 @@ export default function AdminOfflineLessonDetailPage() {
         }
         return next;
       });
+      setLearningV2Draft(saved.learningV2Draft ?? emptyLearningLessonV2Draft());
       lastSavedDraftForm.current = JSON.stringify(saved);
       setDraftSaveStatus({ kind: "restored", updatedAt: savedDraft.updatedAt });
     } else {
@@ -646,6 +766,7 @@ export default function AdminOfflineLessonDetailPage() {
           studentLessonCheckDraft(student, isCompactGroupLesson ? previousGroupHomework : undefined),
         ]),
       ));
+      setLearningV2Draft(emptyLearningLessonV2Draft());
       lastSavedDraftForm.current = null;
       setDraftSaveStatus(null);
     }
@@ -661,6 +782,7 @@ export default function AdminOfflineLessonDetailPage() {
     previousGroupHomework,
     students,
     studentsResource.loading,
+    serverDraftReadyKey,
     user?.id,
   ]);
 
@@ -686,6 +808,7 @@ export default function AdminOfflineLessonDetailPage() {
       comment,
       trialReport,
       studentCheckDrafts,
+      learningV2Draft,
       notHeldReason,
     };
     const serializedForm = JSON.stringify(form);
@@ -699,13 +822,33 @@ export default function AdminOfflineLessonDetailPage() {
       updatedAt,
       form,
     };
+    let serverTimer: number | null = null;
+    let localCopySaved = false;
     try {
       window.localStorage.setItem(lessonDraftKey, JSON.stringify(draft));
-      lastSavedDraftForm.current = serializedForm;
+      localCopySaved = true;
       setDraftSaveStatus({ kind: "saved", updatedAt });
     } catch {
       setDraftSaveStatus({ kind: "error" });
     }
+    lastSavedDraftForm.current = serializedForm;
+    if (lesson.integration) {
+      const expectedRevision = serverDraftRevision.current;
+      const draftApi = isAdmin ? adminOfflineApi : teacherOfflineApi;
+      serverTimer = window.setTimeout(() => {
+        void draftApi.saveDraft(crmClassId, expectedRevision, { form })
+          .then((saved) => {
+            serverDraftRevision.current = saved.revision;
+            setDraftSaveStatus({ kind: "saved", updatedAt: new Date(saved.updatedAt).getTime() });
+          })
+          .catch(() => setDraftSaveStatus({ kind: "error" }));
+      }, 800);
+    } else if (!localCopySaved) {
+      setDraftSaveStatus({ kind: "error" });
+    }
+    return () => {
+      if (serverTimer !== null) window.clearTimeout(serverTimer);
+    };
   }, [
     canEditReport,
     comment,
@@ -716,6 +859,8 @@ export default function AdminOfflineLessonDetailPage() {
     lessonDraftKey,
     lessonGoals,
     lessonSummary,
+    isAdmin,
+    learningV2Draft,
     materialEntries,
     materialsText,
     nextLessonFocus,
@@ -735,7 +880,12 @@ export default function AdminOfflineLessonDetailPage() {
       }
     }
     lastSavedDraftForm.current = null;
+    serverDraftRevision.current = 0;
     setDraftSaveStatus(null);
+    if (lesson?.integration) {
+      const draftApi = isAdmin ? adminOfflineApi : teacherOfflineApi;
+      void draftApi.deleteDraft(crmClassId).catch(() => null);
+    }
   }
 
   const updateTrialSection: TrialSectionUpdater = function updateTrialSection<K extends keyof TrialLessonReport>(
@@ -775,7 +925,12 @@ export default function AdminOfflineLessonDetailPage() {
     setSuccess(null);
     try {
       await fn();
-      await Promise.allSettled([lessonResource.reload(), studentsResource.reload()]);
+      await Promise.allSettled([
+        lessonResource.reload(),
+        studentsResource.reload(),
+        ...(isAdmin ? [syncJournalResource.reload()] : []),
+        reportVersionsResource.reload(),
+      ]);
       if (action === "submit") {
         setSuccess({
           title: "Урок отправлен на проверку",
@@ -801,7 +956,7 @@ export default function AdminOfflineLessonDetailPage() {
       } else if (action === "approve") {
         setSuccess({
           title: "Урок подтверждён",
-          description: "Итоги опубликованы для ученика. Черновик сообщения готовится в разделе WhatsApp-напоминаний CRM.",
+          description: "Итоги опубликованы для ученика. Черновик сообщения готовится в разделе WhatsApp-напоминаний.",
         });
       } else if (action === "return") {
         setSuccess({
@@ -831,7 +986,7 @@ export default function AdminOfflineLessonDetailPage() {
           await studentsResource.reload();
           setSuccess({
             title: action === "submit-absence" ? "Отсутствие передано администратору" : "Урок отправлен на проверку",
-            description: "Ответ сервера прервался, но CRM подтвердила, что данные сохранены.",
+            description: "Данные сохранены. Обновляем состояние урока.",
           });
           return true;
         }
@@ -856,6 +1011,19 @@ export default function AdminOfflineLessonDetailPage() {
     if (allStudentsAbsent) return null;
     if (homeworkReviewPendingCount > 0) {
       return "Укажите, как выполнено прошлое домашнее задание.";
+    }
+    if (pendingLearningDecisions > 0) {
+      return `Проверьте ожидающие домашние задания присутствующих учеников. Осталось: ${pendingLearningDecisions}.`;
+    }
+    if (isLearningLessonV2) {
+      for (const decision of Object.values(learningV2Draft.homeworkDecisions)) {
+        if (
+          ["revision", "accepted_with_comment"].includes(decision.decision ?? "")
+          && !decision.comment.trim()
+        ) {
+          return "Добавьте комментарий к решению по домашнему заданию.";
+        }
+      }
     }
 
     for (const student of students) {
@@ -889,10 +1057,12 @@ export default function AdminOfflineLessonDetailPage() {
           studentId: student.crmStudentId,
           attendanceStatus: draft.attendanceStatus,
           teacherNote: draft.teacherNote.trim() || undefined,
-          homeworkReview: !isTrialLesson && attended ? draft.homeworkReview : undefined,
-          lessonPoints: attended ? draft.lessonPoints : 0,
-          monthlyPlanId: attended ? draft.monthlyPlanId : null,
-          planTopicUpdates: attended ? draft.planTopicUpdates : [],
+          homeworkReview: !isLearningLessonV2 && !isTrialLesson && attended
+            ? draft.homeworkReview
+            : undefined,
+          lessonPoints: isLearningLessonV2 ? 0 : attended ? draft.lessonPoints : 0,
+          monthlyPlanId: isLearningLessonV2 ? null : attended ? draft.monthlyPlanId : null,
+          planTopicUpdates: isLearningLessonV2 ? [] : attended ? draft.planTopicUpdates : [],
         };
       });
       if (showProgress) {
@@ -917,7 +1087,9 @@ export default function AdminOfflineLessonDetailPage() {
       const student = students[index];
       const draft = draftFor(student);
       const attended = ["present", "late"].includes(draft.attendanceStatus);
-      const homeworkReview = !isTrialLesson && attended ? draft.homeworkReview : undefined;
+      const homeworkReview = !isLearningLessonV2 && !isTrialLesson && attended
+        ? draft.homeworkReview
+        : undefined;
       const saveAttendance = () => adminOfflineApi.attendance(
             crmClassId,
             student.crmStudentId,
@@ -925,9 +1097,9 @@ export default function AdminOfflineLessonDetailPage() {
             draft.teacherNote.trim() || undefined,
             homeworkReview,
             {
-              lessonPoints: attended ? draft.lessonPoints : 0,
-              monthlyPlanId: attended ? draft.monthlyPlanId : null,
-              planTopicUpdates: attended ? draft.planTopicUpdates : [],
+              lessonPoints: isLearningLessonV2 ? 0 : attended ? draft.lessonPoints : 0,
+              monthlyPlanId: isLearningLessonV2 ? null : attended ? draft.monthlyPlanId : null,
+              planTopicUpdates: isLearningLessonV2 ? [] : attended ? draft.planTopicUpdates : [],
             },
           );
 
@@ -959,6 +1131,38 @@ export default function AdminOfflineLessonDetailPage() {
     }
   }
 
+  async function saveLearningResultsV2() {
+    if (!learningV2?.available) return;
+    const homeworkDecisions = learningV2.students.flatMap((student) => (
+      student.pendingHomework.flatMap((homework) => {
+        const decision = learningV2Draft.homeworkDecisions[homework.recipientId];
+        return decision?.decision
+          ? [{
+              recipientId: homework.recipientId,
+              cycleNumber: homework.cycleNumber,
+              decision: decision.decision,
+              comment: decision.comment.trim() || null,
+            }]
+          : [];
+      })
+    ));
+    const topicUpdates = learningV2Draft.topicId
+      && learningV2Draft.toPercent !== null
+      && learningV2Draft.toPercent !== learningV2Draft.expectedPercent
+      ? [{
+          topicId: learningV2Draft.topicId,
+          expectedPercent: learningV2Draft.expectedPercent,
+          toPercent: learningV2Draft.toPercent,
+          comment: learningV2Draft.topicComment.trim() || null,
+        }]
+      : [];
+    if (!homeworkDecisions.length && !topicUpdates.length) return;
+    const payload = { homeworkDecisions, topicUpdates };
+    await (isAdmin
+      ? adminOfflineApi.learningResults(crmClassId, payload)
+      : teacherOfflineApi.learningResults(crmClassId, payload));
+  }
+
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
     const validationError = submissionValidationError();
@@ -977,6 +1181,10 @@ export default function AdminOfflineLessonDetailPage() {
     const absenceOnly = allStudentsAbsent;
     try {
       const submitted = await runAction(absenceOnly ? "submit-absence" : "submit", async () => {
+        if (!absenceOnly && isLearningLessonV2) {
+          setSubmissionProgress("Сохраняем решения по ДЗ и прогресс темы…");
+          await saveLearningResultsV2();
+        }
         await saveStudentChecks({ showProgress: true });
         setSubmissionProgress("Отметки сохранены. Отправляем отчёт администратору…");
         const payload = {
@@ -1034,6 +1242,9 @@ export default function AdminOfflineLessonDetailPage() {
       return;
     }
     const approved = await runAction("approve", async () => {
+      if (!isNotHeld && isLearningLessonV2) {
+        await saveLearningResultsV2();
+      }
       if (!isNotHeld) await saveStudentChecks();
       return adminOfflineApi.approve(crmClassId, {
         deduct: !isNotHeld,
@@ -1076,11 +1287,43 @@ export default function AdminOfflineLessonDetailPage() {
   const teacherSubmissionIssue = canEditTeacherReport
     ? submissionTimingIssue ?? submissionValidationError()
     : null;
+  const attendanceSummary = students.reduce((summary, student) => {
+    const status = draftFor(student).attendanceStatus;
+    if (status === "present") summary.present += 1;
+    else if (status === "late") summary.late += 1;
+    else if (status !== "unmarked") summary.absent += 1;
+    return summary;
+  }, { present: 0, late: 0, absent: 0 });
+  const selectedLearningTopic = learningV2?.plans
+    .flatMap((plan) => plan.topics)
+    .find((item) => item.id === learningV2Draft.topicId);
+  const homeworkDecisionSummary = Object.values(learningV2Draft.homeworkDecisions).reduce(
+    (summary, decision) => {
+      if (decision.decision === "revision") summary.revision += 1;
+      else if (decision.decision) summary.accepted += 1;
+      return summary;
+    },
+    { accepted: 0, revision: 0 },
+  );
+  const attendedStudentIds = new Set(
+    students
+      .filter((student) => ["present", "late"].includes(draftFor(student).attendanceStatus))
+      .map((student) => student.crmStudentId),
+  );
+  const xpSummary = learningV2?.rewardPreview
+    .filter((item) => attendedStudentIds.has(item.crmStudentId))
+    .reduce((summary, item) => {
+      if (item.status === "will_award") summary.willAward += item.amount;
+      if (item.status === "weekly_limit") summary.limited += 1;
+      if (item.status === "already_awarded") summary.alreadyAwarded += item.amount;
+      if (item.status === "economy_disabled") summary.disabled += 1;
+      return summary;
+    }, { willAward: 0, limited: 0, alreadyAwarded: 0, disabled: 0 }) ?? null;
 
   return (
     <>
       <PageHeader
-        eyebrow="Офлайн-урок"
+        eyebrow={lesson.deliveryFormat === "online" ? "Онлайн-урок" : "Урок в школе"}
         title={lesson.title}
         description={`${new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long", year: "numeric" }).format(new Date(lesson.date))} · ${lesson.startTime}–${lesson.endTime}`}
         action={
@@ -1092,7 +1335,7 @@ export default function AdminOfflineLessonDetailPage() {
 
       <div className="mb-6 flex flex-wrap gap-3">
         <span className="rounded-full bg-stone-100 px-4 py-2 text-xs font-bold text-stone-700">
-          {isSubmittedAbsence ? "Отсутствие отмечено" : (statusLabels[lesson.status] ?? lesson.status)}
+          {isSubmittedAbsence ? "Отсутствие отмечено" : (statusLabels[effectiveLessonStatus ?? lesson.status] ?? effectiveLessonStatus ?? lesson.status)}
         </span>
         {lesson.group?.name ? (
           <span className="rounded-full bg-amber-50 px-4 py-2 text-xs font-bold text-amber-900">
@@ -1104,6 +1347,22 @@ export default function AdminOfflineLessonDetailPage() {
             {lesson.room.name}
           </span>
         ) : null}
+        {lesson.deliveryFormat === "online" ? (
+          lesson.meetingUrl ? (
+            <a
+              href={lesson.meetingUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded-lg bg-sky-700 px-4 py-2 text-xs font-bold text-white transition hover:bg-sky-800"
+            >
+              <MonitorPlay size={15} /> Подключиться
+            </a>
+          ) : (
+            <span className="rounded-lg border border-sky-100 bg-sky-50 px-4 py-2 text-xs font-bold text-sky-800">
+              Онлайн · ссылка пока не добавлена
+            </span>
+          )
+        ) : null}
         {lesson.teacher?.name ? (
           <span className="rounded-full bg-violet-50 px-4 py-2 text-xs font-bold text-violet-900">
             Преподаватель: {lesson.teacher.name}
@@ -1114,6 +1373,28 @@ export default function AdminOfflineLessonDetailPage() {
           </span>
         )}
       </div>
+
+      {integration?.state === "pending_sync" ? (
+        <div className="mb-6 rounded-[20px] border border-amber-300 bg-amber-50 px-5 py-4 text-amber-950">
+          <p className="text-sm font-bold">Данные сохранены и будут отправлены в расписание</p>
+          <p className="mt-1 text-sm leading-6 text-amber-900/75">
+            Можно закрыть страницу. Отправка повторится автоматически. До её завершения списание, зарплата и недельный XP не начисляются.
+          </p>
+          {integration.lastError ? (
+            <p className="mt-2 text-xs text-amber-900/70">Последняя ошибка: {integration.lastError}</p>
+          ) : null}
+        </div>
+      ) : null}
+
+      {integration?.state === "conflict" ? (
+        <div className="mb-6 rounded-[20px] border border-red-300 bg-red-50 px-5 py-4 text-red-950">
+          <p className="text-sm font-bold">Расписание не приняло данные урока</p>
+          <p className="mt-1 text-sm leading-6 text-red-900/75">
+            Откройте журнал, сравните версии и выберите верные данные, указав причину.
+          </p>
+          {integration.lastError ? <p className="mt-2 text-xs text-red-900/70">{integration.lastError}</p> : null}
+        </div>
+      ) : null}
 
       {canActForTeacher && lesson.teacher?.name && ["scheduled", ...teacherEditableLessonStatuses].includes(lesson.status) ? (
         <div className="mb-6 rounded-[24px] border border-violet-200 bg-violet-50 p-5">
@@ -1162,7 +1443,7 @@ export default function AdminOfflineLessonDetailPage() {
           canSetExcusedAbsence={isAdmin}
           canEdit={canEditReport}
           showHomeworkReview={hasPreviousHomework}
-          showLearningResult={!isTrialLesson}
+          showLearningResult={!isTrialLesson && !isLearningLessonV2}
           drafts={Object.fromEntries(students.map((student) => [student.crmStudentId, draftFor(student)]))}
           studentsError={studentsResource.error}
           onRetryStudents={studentsResource.reload}
@@ -1175,6 +1456,24 @@ export default function AdminOfflineLessonDetailPage() {
           }}
         />
       </div>
+
+      {learningV2 && !isTrialLesson && (!canEditReport || hydratedLessonDraftKey === lessonDraftKey) ? (
+        <LearningLessonV2Panel
+          context={learningV2}
+          draft={learningV2Draft}
+          disabled={!canEditReport}
+          onChange={setLearningV2Draft}
+          onTopicTitleChange={(title) => {
+            setTopic(title);
+            if (!lessonSummary) setLessonSummary(`Разобрали тему «${title}»`);
+          }}
+        />
+      ) : learningV2 && !isTrialLesson ? (
+        <section className="flex min-h-32 items-center justify-center gap-3 rounded-[24px] border border-stone-200 bg-white px-5 text-sm font-bold text-stone-500 shadow-sm" aria-live="polite">
+          <LoaderCircle className="animate-spin text-gold" size={20} />
+          Восстанавливаем черновик урока
+        </section>
+      ) : null}
 
       <div className="grid gap-7 xl:grid-cols-[1fr_420px]">
         <section className="order-last xl:order-none space-y-7">
@@ -1232,7 +1531,7 @@ export default function AdminOfflineLessonDetailPage() {
               />
             ) : (
               <>
-                {availablePlanTopics.length > 0 ? (
+                {!isLearningLessonV2 && availablePlanTopics.length > 0 ? (
                   <div className="mt-5 rounded-2xl border border-violet-100 bg-violet-50/60 p-3.5">
                     <p className="flex items-center gap-1.5 text-xs font-bold text-violet-900">
                       <Sparkles size={14} className="text-violet-600" />
@@ -1490,7 +1789,7 @@ export default function AdminOfflineLessonDetailPage() {
             </button>
           ) : null}
 
-          {!isAdmin && lesson.status === "pending_admin_review" ? (
+          {!isAdmin && ["pending_admin_review", "pending_sync"].includes(effectiveLessonStatus ?? "") ? (
             <button
               disabled={busy != null}
               onClick={() => {
@@ -1528,7 +1827,123 @@ export default function AdminOfflineLessonDetailPage() {
             </p>
           ) : null}
 
-          {lesson.status === "pending_admin_review" ? (
+          {isAdmin && (
+            integration?.state === "pending_sync"
+            || integration?.state === "conflict"
+            || (syncJournalResource.data?.conflicts.some((item) => item.status === "open") ?? false)
+          ) ? (
+            <div className="rounded-[20px] border border-stone-300 bg-white p-5">
+              <p className="text-xs font-bold uppercase text-stone-500">Обмен с расписанием</p>
+              <div className="mt-4 space-y-3">
+                {syncJournalResource.data?.events
+                  .filter((item) => ["failed", "conflict", "pending"].includes(item.status))
+                  .slice(0, 5)
+                  .map((item) => (
+                    <div key={item.id} className="rounded-[12px] border border-stone-200 p-3">
+                      <p className="text-sm font-bold text-stone-900">
+                        {syncEventLabels[item.eventType] ?? "Изменения урока"}
+                      </p>
+                      <p className="mt-1 text-xs text-stone-500">
+                        {syncStatusLabels[item.status] ?? "Проверяется"}
+                        {item.attempts > 0 ? ` · Попыток отправки: ${item.attempts}` : ""}
+                      </p>
+                      {item.lastError ? <p className="mt-2 text-xs leading-5 text-red-700">{item.lastError}</p> : null}
+                      {item.status === "failed" ? (
+                        <button
+                          type="button"
+                          disabled={busy != null}
+                          onClick={() => void runAction(
+                            `sync-retry-${item.id}`,
+                            () => adminOfflineApi.retrySyncEvent(item.id),
+                          )}
+                          className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-[10px] border border-stone-300 px-3 text-xs font-bold text-stone-800 disabled:opacity-50"
+                        >
+                          <RotateCcw size={14} />
+                          Повторить
+                        </button>
+                      ) : null}
+                    </div>
+                  ))}
+                {syncJournalResource.data?.conflicts
+                  .filter((item) => item.status === "open")
+                  .slice(0, 5)
+                  .map((item) => (
+                    <div key={item.id} className="rounded-[12px] border border-red-200 bg-red-50 p-3">
+                      <p className="text-sm font-bold text-red-950">
+                        {syncConflictLabels[item.kind] ?? "Данные урока требуют проверки"}
+                      </p>
+                      <p className="mt-2 text-xs leading-5 text-red-800">{item.errorMessage}</p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          disabled={busy != null}
+                          onClick={() => {
+                            const reason = askReason("Повторно отправить сохранённую версию?");
+                            if (reason) void runAction(
+                              `conflict-retry-${item.id}`,
+                              () => adminOfflineApi.resolveSyncConflict(item.id, "retry_local", reason),
+                            );
+                          }}
+                          className="min-h-10 rounded-[10px] border border-red-300 bg-white px-3 text-xs font-bold text-red-900 disabled:opacity-50"
+                        >
+                          Отправить снова
+                        </button>
+                        <button
+                          type="button"
+                          disabled={busy != null}
+                          onClick={() => {
+                            const reason = askReason("Принять данные из расписания и закрыть конфликт?");
+                            if (reason) void runAction(
+                              `conflict-accept-${item.id}`,
+                              () => adminOfflineApi.resolveSyncConflict(item.id, "accept_crm", reason),
+                            );
+                          }}
+                          className="min-h-10 rounded-[10px] bg-red-900 px-3 text-xs font-bold text-white disabled:opacity-50"
+                        >
+                          Принять расписание
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          ) : null}
+
+          {(reportVersionsResource.data?.versions.length ?? 0) > 0 ? (
+            <details className="rounded-[20px] border border-stone-200 bg-white p-5">
+              <summary className="cursor-pointer text-sm font-bold text-stone-900">
+                Версии отчёта · {reportVersionsResource.data?.versions.length}
+              </summary>
+              <div className="mt-4 space-y-3">
+                {reportVersionsResource.data?.versions.map((version) => (
+                  <div key={version.id} className="border-t border-stone-100 pt-3 first:border-0 first:pt-0">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-bold text-stone-900">Версия {version.version}</p>
+                      <span className="text-xs font-semibold text-stone-500">
+                        {version.state === "withdrawn" ? "Отозвана" : "Отправлена"}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-stone-500">
+                      {new Intl.DateTimeFormat("ru-RU", {
+                        day: "numeric",
+                        month: "short",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      }).format(new Date(version.submittedAt))}
+                    </p>
+                    <p className="mt-2 text-sm text-stone-700">
+                      {String(version.payload.topic ?? version.payload.comment ?? "Отчёт без темы")}
+                    </p>
+                    {version.withdrawReason ? (
+                      <p className="mt-2 text-xs leading-5 text-amber-800">Причина: {version.withdrawReason}</p>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </details>
+          ) : null}
+
+          {effectiveLessonStatus === "pending_admin_review" ? (
             <div className="rounded-[24px] border border-amber-200 bg-amber-50 p-5">
               <p className="inline-flex items-center gap-2 text-sm font-bold text-amber-900">
                 <CheckCircle2 size={16} />
@@ -1586,6 +2001,17 @@ export default function AdminOfflineLessonDetailPage() {
         busy={["submit", "submit-absence"].includes(busy ?? "")}
         progress={submissionProgress}
         error={error}
+        attendance={attendanceSummary}
+        learning={isLearningLessonV2 ? {
+          pendingHomework: pendingLearningHomework,
+          acceptedHomework: homeworkDecisionSummary.accepted,
+          revisionHomework: homeworkDecisionSummary.revision,
+          topicTitle: selectedLearningTopic?.title ?? null,
+          topicFrom: learningV2Draft.expectedPercent,
+          topicTo: learningV2Draft.toPercent,
+          rewardsEnabled: learningV2?.rewardsEnabled ?? false,
+          xp: xpSummary,
+        } : null}
         onClose={() => setSubmitConfirmationOpen(false)}
         onConfirm={() => void confirmSubmit()}
       />
@@ -1612,7 +2038,7 @@ export default function AdminOfflineLessonDetailPage() {
               </div>
               <h3 className="font-display text-2xl font-bold text-stone-900">Начать урок</h3>
               <p className="mt-3 text-sm text-stone-500 leading-relaxed">
-                Вы собираетесь начать офлайн-урок <strong className="text-stone-700">{lesson.title}</strong>.
+                Вы собираетесь начать урок <strong className="text-stone-700">{lesson.title}</strong>.
                 {lesson.group?.name ? ` Группа: ${lesson.group.name}.` : ""}
               </p>
               
@@ -1631,7 +2057,12 @@ export default function AdminOfflineLessonDetailPage() {
 
               <div className="mt-5 w-full space-y-3 text-left">
                 {students.map((student) => (
-                  <StudentPreviousContext key={student.crmStudentId} student={student} compact />
+                  <StudentPreviousContext
+                    key={student.crmStudentId}
+                    student={student}
+                    compact
+                    showHomeworkStatus={!isLearningLessonV2 && Boolean(previousHomeworkLesson(student))}
+                  />
                 ))}
               </div>
 
@@ -1645,7 +2076,7 @@ export default function AdminOfflineLessonDetailPage() {
                 <button
                   disabled={busy != null}
                   onClick={() => void runAction("start", () => teacherOfflineApi.start(crmClassId))}
-                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-700 px-5 py-4 text-sm font-bold text-white transition-all hover:bg-emerald-800 disabled:opacity-50"
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-700 px-5 py-4 text-sm font-bold text-white transition-colors hover:bg-emerald-800 disabled:opacity-50"
                 >
                   {busy === "start" ? (
                     <LoaderCircle className="animate-spin" size={16} />
@@ -1656,7 +2087,7 @@ export default function AdminOfflineLessonDetailPage() {
                 </button>
                 <Link
                   href="/admin/offline-lessons"
-                  className="flex w-full items-center justify-center rounded-2xl border border-stone-200 bg-stone-50 px-5 py-3.5 text-sm font-bold text-stone-600 transition-all hover:bg-stone-100"
+                  className="flex w-full items-center justify-center rounded-2xl border border-stone-200 bg-stone-50 px-5 py-3.5 text-sm font-bold text-stone-600 transition-colors hover:bg-stone-100"
                 >
                   Вернуться в расписание
                 </Link>
@@ -1704,6 +2135,8 @@ function SubmitLessonConfirmation({
   busy,
   progress,
   error,
+  attendance,
+  learning,
   onClose,
   onConfirm,
 }: {
@@ -1714,26 +2147,68 @@ function SubmitLessonConfirmation({
   busy: boolean;
   progress: string | null;
   error: string | null;
+  attendance: { present: number; late: number; absent: number };
+  learning: {
+    pendingHomework: number;
+    acceptedHomework: number;
+    revisionHomework: number;
+    topicTitle: string | null;
+    topicFrom: number | null;
+    topicTo: number | null;
+    rewardsEnabled: boolean;
+    xp: {
+      willAward: number;
+      limited: number;
+      alreadyAwarded: number;
+      disabled: number;
+    } | null;
+  } | null;
   onClose: () => void;
   onConfirm: () => void;
 }) {
+  const dialogRef = useDialogBehavior(open, onClose, { canClose: !busy });
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[70] grid place-items-center bg-stone-950/55 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center sm:p-4">
+      <button
+        type="button"
+        disabled={busy}
+        onClick={onClose}
+        className="absolute inset-0 h-full w-full bg-stone-950/55 backdrop-blur-sm disabled:cursor-wait"
+        aria-label="Закрыть подтверждение по фону"
+      />
       <section
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="submit-lesson-title"
-        className="w-full max-w-md rounded-[28px] border border-stone-200 bg-paper p-6 shadow-2xl"
+        aria-describedby="submit-lesson-description"
+        aria-busy={busy}
+        className="relative max-h-[94dvh] w-full max-w-2xl overflow-y-auto overscroll-contain rounded-t-xl border border-stone-200 bg-paper px-5 pb-[max(1.25rem,env(safe-area-inset-bottom,0px))] pt-5 shadow-2xl sm:max-h-[92dvh] sm:rounded-xl sm:p-6"
       >
-        <span className="grid h-12 w-12 place-items-center rounded-2xl bg-amber-50 text-amber-800">
-          <AlertTriangle size={22} />
-        </span>
-        <h2 id="submit-lesson-title" className="font-display mt-5 text-3xl">
-          {absenceOnly ? "Передать отметку об отсутствии?" : "Отправить урок на проверку?"}
-        </h2>
-        <p className="mt-3 text-sm leading-6 text-stone-600">
+        <div className="flex items-start gap-3">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-amber-50 text-amber-800">
+            <AlertTriangle size={21} aria-hidden="true" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-amber-800">Перед отправкой</p>
+            <h2 id="submit-lesson-title" className="font-display mt-1 text-2xl text-pretty sm:text-3xl">
+              {absenceOnly ? "Передать отметку об отсутствии?" : "Отправить урок на проверку?"}
+            </h2>
+          </div>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onClose}
+            data-dialog-initial-focus="true"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-stone-200 text-stone-500 transition-colors hover:border-stone-300 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold disabled:opacity-50"
+            aria-label="Закрыть подтверждение"
+          >
+            <X size={18} aria-hidden="true" />
+          </button>
+        </div>
+        <p id="submit-lesson-description" className="mt-4 text-sm leading-6 text-stone-600">
           {absenceOnly
             ? "Администратор увидит посещаемость без обычного отчёта по уроку. Тема, итог и домашнее задание не нужны."
             : "Проверьте отметки перед отправкой. Администратор увидит отчёт и после проверки опубликует итог ученику."}
@@ -1749,36 +2224,117 @@ function SubmitLessonConfirmation({
             Отмечено учеников: {studentsCount}
           </p>
         </div>
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <div className="rounded-lg bg-emerald-50 p-3">
+            <span className="text-xs font-bold text-emerald-800">Присутствовали</span>
+            <strong className="mt-1 block text-xl text-emerald-950">
+              {attendance.present + attendance.late}
+            </strong>
+            {attendance.late ? (
+              <span className="text-xs text-emerald-800">Опоздали: {attendance.late}</span>
+            ) : null}
+          </div>
+          <div className="rounded-lg bg-stone-100 p-3">
+            <span className="text-xs font-bold text-stone-600">Отсутствовали</span>
+            <strong className="mt-1 block text-xl text-ink">{attendance.absent}</strong>
+          </div>
+          <div className="col-span-2 rounded-lg bg-amber-50 p-3 sm:col-span-1">
+            <span className="text-xs font-bold text-amber-800">Статус</span>
+            <strong className="mt-1 block text-sm text-amber-950">
+              {absenceOnly ? "Только посещаемость" : "Отчёт готов"}
+            </strong>
+          </div>
+        </div>
+        {learning && !absenceOnly ? (
+          <div className="mt-4 space-y-3 rounded-lg border border-stone-200 bg-white p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-black uppercase text-stone-500">Прогресс темы</p>
+                <p className="mt-1 text-sm font-black text-ink">
+                  {learning.topicTitle ?? "Без изменения"}
+                </p>
+              </div>
+              {learning.topicTitle && learning.topicTo !== null ? (
+                <span className="shrink-0 rounded-lg bg-amber-50 px-3 py-2 text-sm font-black text-amber-950">
+                  {learning.topicFrom ?? 0}% → {learning.topicTo}%
+                </span>
+              ) : null}
+            </div>
+            {learning.topicTo === 100 && learning.rewardsEnabled ? (
+              <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-900">
+                Тема отмечается освоенной. За первое закрытие темы начисляются 100 баллов.
+              </p>
+            ) : learning.topicTo === 100 ? (
+              <p className="rounded-lg bg-stone-100 px-3 py-2 text-sm font-bold text-stone-600">
+                Тема отмечается освоенной. Награда 100 баллов для этого урока не начислится:
+                урок прошёл до даты запуска новой системы.
+              </p>
+            ) : null}
+            <div className="border-t border-stone-200 pt-3">
+              <p className="text-xs font-black uppercase text-stone-500">Проверка ДЗ</p>
+              <p className="mt-1 text-sm font-bold text-stone-700">
+                Принять: {learning.acceptedHomework} · На доработку: {learning.revisionHomework}
+              </p>
+              {learning.pendingHomework > learning.acceptedHomework + learning.revisionHomework ? (
+                <p className="mt-1 text-xs text-stone-500">
+                  Без решения останутся работы отсутствующих учеников.
+                </p>
+              ) : null}
+            </div>
+            {learning.xp ? (
+              <div className="border-t border-stone-200 pt-3">
+                <p className="text-xs font-black uppercase text-stone-500">Недельная лига</p>
+                {learning.xp.willAward > 0 ? (
+                  <p className="mt-1 text-sm font-black text-violet-800">
+                    +{learning.xp.willAward} XP после подтверждения урока
+                  </p>
+                ) : learning.xp.limited > 0 ? (
+                  <p className="mt-1 text-sm font-bold text-stone-600">
+                    Лимит двух XP-начислений за уроки на этой неделе уже использован.
+                  </p>
+                ) : learning.xp.alreadyAwarded > 0 ? (
+                  <p className="mt-1 text-sm font-bold text-emerald-800">
+                    XP за этот урок уже начислен.
+                  </p>
+                ) : learning.xp.disabled > 0 ? (
+                  <p className="mt-1 text-sm font-bold text-stone-600">
+                    XP начнёт начисляться с даты запуска новой системы.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         {error ? (
-          <p className="mt-4 rounded-2xl border border-red-100 bg-red-50 p-4 text-sm font-semibold text-red-700">
+          <p role="alert" className="mt-4 rounded-lg border border-red-100 bg-red-50 p-4 text-sm font-semibold text-red-700">
             {error}
           </p>
         ) : null}
         {busy && progress ? (
-          <p className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900">
+          <p aria-live="polite" className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900">
             {progress}
             <span className="mt-1 block text-xs font-normal text-amber-800/80">
               Не закрывайте приложение. На слабом интернете отправка может занять немного больше времени.
             </span>
           </p>
         ) : null}
-        <div className="mt-6 grid grid-cols-2 gap-3">
+        <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <button
             type="button"
             disabled={busy}
             onClick={onClose}
-            className="min-h-12 rounded-xl border border-stone-200 px-4 text-sm font-bold text-stone-600 disabled:opacity-50"
+            className="min-h-12 rounded-xl border border-stone-200 px-4 text-sm font-bold text-stone-600 transition-colors hover:bg-stone-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold disabled:opacity-50"
           >
-            Ещё проверить
+            Вернуться к уроку
           </button>
           <button
             type="button"
             disabled={busy}
             onClick={onConfirm}
-            className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-ink px-4 text-sm font-bold text-white disabled:opacity-50"
+            className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-ink px-4 text-sm font-bold text-white transition-colors hover:bg-gold hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold disabled:opacity-50"
           >
             {busy ? <LoaderCircle size={16} className="animate-spin" /> : <Send size={16} />}
-            {absenceOnly ? "Передать" : "Отправить"}
+            {absenceOnly ? "Передать посещаемость" : "Отправить на проверку"}
           </button>
         </div>
       </section>
@@ -1803,21 +2359,47 @@ function NotHeldConfirmation({
   onClose: () => void;
   onConfirm: () => void;
 }) {
+  const dialogRef = useDialogBehavior(open, onClose, { canClose: !busy });
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[70] grid place-items-center bg-stone-950/55 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center sm:p-4">
+      <button
+        type="button"
+        disabled={busy}
+        onClick={onClose}
+        className="absolute inset-0 h-full w-full bg-stone-950/55 backdrop-blur-sm disabled:cursor-wait"
+        aria-label="Закрыть подтверждение по фону"
+      />
       <section
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="not-held-title"
-        className="w-full max-w-md rounded-[28px] border border-red-100 bg-paper p-6 shadow-2xl"
+        aria-describedby="not-held-description"
+        aria-busy={busy}
+        className="relative max-h-[94dvh] w-full max-w-md overflow-y-auto overscroll-contain rounded-t-xl border border-red-100 bg-paper px-6 pb-[max(1.5rem,env(safe-area-inset-bottom,0px))] pt-6 shadow-2xl sm:rounded-xl sm:p-6"
       >
-        <span className="grid h-12 w-12 place-items-center rounded-2xl bg-red-50 text-red-700">
-          <XCircle size={22} />
-        </span>
-        <h2 id="not-held-title" className="font-display mt-5 text-3xl">Урок не проводился?</h2>
-        <p className="mt-3 text-sm leading-6 text-stone-600">
+        <div className="flex items-start gap-3">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-red-50 text-red-700">
+            <XCircle size={21} aria-hidden="true" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-red-700">Отмена урока</p>
+            <h2 id="not-held-title" className="font-display mt-1 text-2xl text-pretty sm:text-3xl">Урок не проводился?</h2>
+          </div>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onClose}
+            data-dialog-initial-focus="true"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-stone-200 text-stone-500 transition-colors hover:border-stone-300 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold disabled:opacity-50"
+            aria-label="Закрыть подтверждение"
+          >
+            <X size={18} aria-hidden="true" />
+          </button>
+        </div>
+        <p id="not-held-description" className="mt-4 text-sm leading-6 text-stone-600">
           Это действие не списывает занятие ученику и не начисляет ставку преподавателю. Если ученик не пришёл, закройте окно и выберите «Не пришёл» в посещаемости.
         </p>
         <p className="mt-4 text-sm font-bold text-ink">{lesson.title}</p>
@@ -1828,12 +2410,13 @@ function NotHeldConfirmation({
         <label className="mt-5 block text-xs font-bold uppercase tracking-wider text-stone-500">
           Что произошло?
           <textarea
-            autoFocus
             value={reason}
+            name="notHeldReason"
+            autoComplete="off"
             disabled={busy}
             onChange={(event) => onReasonChange(event.target.value)}
-            className="mt-2 min-h-24 w-full rounded-xl border border-stone-200 px-3 py-3 text-sm normal-case tracking-normal"
-            placeholder="Например: преподаватель заболел или школа отменила занятие"
+            className="mt-2 min-h-24 w-full rounded-xl border border-stone-200 px-3 py-3 text-sm normal-case tracking-normal outline-none transition-colors focus:border-red-400 focus-visible:ring-2 focus-visible:ring-red-100"
+            placeholder="Например: преподаватель заболел или школа отменила занятие…"
           />
         </label>
         <div className="mt-6 grid grid-cols-2 gap-3">
@@ -1841,7 +2424,7 @@ function NotHeldConfirmation({
             type="button"
             disabled={busy}
             onClick={onClose}
-            className="min-h-12 rounded-xl border border-stone-200 px-4 text-sm font-bold text-stone-600 disabled:opacity-50"
+            className="min-h-12 rounded-xl border border-stone-200 px-4 text-sm font-bold text-stone-600 transition-colors hover:bg-stone-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold disabled:opacity-50"
           >
             Отмена
           </button>
@@ -1849,7 +2432,7 @@ function NotHeldConfirmation({
             type="button"
             disabled={busy || reason.trim().length < 3}
             onClick={onConfirm}
-            className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-red-700 px-3 text-sm font-bold text-white disabled:opacity-45"
+            className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-red-700 px-3 text-sm font-bold text-white transition-colors hover:bg-red-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700 disabled:opacity-45"
           >
             {busy ? <LoaderCircle size={16} className="animate-spin" /> : <XCircle size={16} />}
             Подтвердить
@@ -2365,7 +2948,7 @@ function GroupLessonRoster({
           {previousHomework && attendedStudents.length
             ? ` · ДЗ выполнено ${completedHomeworkCount}/${attendedStudents.length}`
             : ""}
-          {pendingHomeworkCount ? ` · не проверено ${pendingHomeworkCount}` : ""}
+          {pendingHomeworkCount ? ` · проверить ДЗ ${pendingHomeworkCount}` : ""}
           {attentionCount ? ` · требуют уточнения ${attentionCount}` : ""}
         </p>
         {canEdit ? (
@@ -2855,7 +3438,7 @@ function StudentLearningResultFields({
               <Star size={16} className="text-gold" />
               Учебные баллы
             </span>
-            <span className="mt-0.5 block text-[11px] text-amber-900/70">От 0 до 100 XP за работу на уроке</span>
+            <span className="mt-0.5 block text-[11px] text-amber-900/70">От 0 до 100 баллов за результат урока</span>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
             <div className="flex gap-1">
@@ -2946,6 +3529,7 @@ function StudentLessonCheckCard({
 
       <StudentPreviousContext
         student={student}
+        showHomeworkStatus={showHomeworkReview}
         onSelectTopic={onSelectTopic}
       />
 
@@ -3119,7 +3703,7 @@ function StudentLessonCheckCard({
 }
 
 const homeworkReviewLabels: Record<string, string> = {
-  not_checked: "Не проверено",
+  not_checked: "Проверить на уроке",
   completed: "Выполнено",
   partial: "Частично",
   not_completed: "Не выполнено",
@@ -3129,10 +3713,12 @@ const homeworkReviewLabels: Record<string, string> = {
 function StudentPreviousContext({
   student,
   compact = false,
+  showHomeworkStatus = true,
   onSelectTopic,
 }: {
   student: TeacherOfflineStudent;
   compact?: boolean;
+  showHomeworkStatus?: boolean;
   onSelectTopic?: (topic: string) => void;
 }) {
   const lessons = student.recentLessons ?? [];
@@ -3148,6 +3734,9 @@ function StudentPreviousContext({
 
   const review = latest.homeworkReview;
   const topicTitle = latest.topic || latest.title;
+  const homeworkStatus = latest.homework?.trim()
+    ? review?.status || "not_checked"
+    : "not_assigned";
 
   return (
     <div className={`${compact ? "mt-0" : "mt-3.5"} rounded-2xl border border-gold/25 bg-amber-50/50 p-4`}>
@@ -3176,19 +3765,21 @@ function StudentPreviousContext({
         {topicTitle}
       </p>
 
-      <div className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+      <div className={`mt-3 grid gap-2 text-xs ${showHomeworkStatus ? "sm:grid-cols-2" : ""}`}>
         <div className="rounded-xl bg-white/80 p-2.5">
           <span className="block text-[10px] font-bold uppercase tracking-wider text-stone-400">Было задано на дом:</span>
           <strong className="mt-1 block text-stone-800 leading-snug">{latest.homework || "Не задавалось"}</strong>
         </div>
-        <div className="rounded-xl bg-white/80 p-2.5">
-          <span className="block text-[10px] font-bold uppercase tracking-wider text-stone-400">Статус выполнения:</span>
-          <strong className="mt-1 block text-stone-800 leading-snug">
-            {homeworkReviewLabels[review?.status || "not_checked"]}
-            {review?.completionPercent != null ? ` · ${review.completionPercent}%` : ""}
-          </strong>
-          {review?.difficulties ? <p className="mt-1 text-stone-600">Сложности: {review.difficulties}</p> : null}
-        </div>
+        {showHomeworkStatus ? (
+          <div className="rounded-xl bg-white/80 p-2.5">
+            <span className="block text-[10px] font-bold uppercase tracking-wider text-stone-400">Результат ДЗ:</span>
+            <strong className="mt-1 block text-stone-800 leading-snug">
+              {homeworkReviewLabels[homeworkStatus]}
+              {review?.completionPercent != null ? ` · ${review.completionPercent}%` : ""}
+            </strong>
+            {review?.difficulties ? <p className="mt-1 text-stone-600">Сложности: {review.difficulties}</p> : null}
+          </div>
+        ) : null}
       </div>
       {latest.nextLessonFocus || latest.teacherNote ? (
         <p className="mt-2.5 text-xs leading-5 text-stone-600">

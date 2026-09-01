@@ -5,29 +5,35 @@ import {
   Bolt,
   CalendarDays,
   CheckCircle2,
+  ClipboardList,
+  Clock3,
   CircleAlert,
   CircleX,
   AlertTriangle,
   GraduationCap,
   LoaderCircle,
   MessageCircle,
+  RotateCcw,
   Search,
+  Send,
+  Smartphone,
   TrendingUp,
   UserRound,
   Users,
-  Video,
 } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
 import { PageHeader } from "@/components/page-header";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { formatAge, formatFio } from "@/lib/name";
+import { homeworkStatisticsApi } from "@/lib/homework-statistics-api";
 import { formatPhoneDisplay } from "@/lib/phone";
+import { aqtobeMonthKey, formatMonthKey, recentMonthKeys } from "@/lib/school-month";
 import { teacherStudentsApi } from "@/lib/teacher-students-api";
+import type { HomeworkStatisticsMetrics } from "@/types/homework-statistics";
 import type { TeacherGroup, TeacherStudent } from "@/types/teacher-students";
-import { GroupMonthlyPlanEditor } from "@/components/group-monthly-plan-editor";
-import { StudentMonthlyPlanEditor } from "@/components/student-monthly-plan-editor";
 
 type RosterTab = "students" | "groups";
 
@@ -41,30 +47,28 @@ const dayLabels: Record<number, string> = {
   7: "Вс",
 };
 
-function nextOnlineLesson(student: TeacherStudent) {
-  const now = Date.now();
-  return student.onlineLessons
-    .filter((lesson) => lesson.scheduledAt && new Date(lesson.scheduledAt).getTime() >= now)
-    .sort((left, right) => (
-      new Date(left.scheduledAt!).getTime() - new Date(right.scheduledAt!).getTime()
-    ))[0];
-}
-
-function formatDateTime(value: string) {
-  return new Intl.DateTimeFormat("ru-RU", {
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
-}
-
 function formatLessonDate(value: string) {
   return new Intl.DateTimeFormat("ru-RU", {
     day: "numeric",
     month: "short",
     year: "numeric",
   }).format(new Date(value));
+}
+
+function formatAppActivity(value: string | null) {
+  if (!value) return "ещё не заходил";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "дата неизвестна";
+  const elapsedMinutes = Math.max(0, Math.floor((Date.now() - date.getTime()) / 60_000));
+  if (elapsedMinutes < 2) return "только что";
+  if (elapsedMinutes < 60) return `${elapsedMinutes} мин назад`;
+  if (elapsedMinutes < 24 * 60) return `${Math.floor(elapsedMinutes / 60)} ч назад`;
+  return new Intl.DateTimeFormat("ru-RU", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
 }
 
 function attendancePresentation(item: TeacherStudent["attendanceHistory"][number]) {
@@ -91,8 +95,20 @@ function attendancePresentation(item: TeacherStudent["attendanceHistory"][number
 export default function TeacherStudentsPage() {
   const [tab, setTab] = useState<RosterTab>("students");
   const [search, setSearch] = useState("");
+  const [homeworkMonth, setHomeworkMonth] = useState(aqtobeMonthKey);
   const studentsResource = useApiResource(() => teacherStudentsApi.list(), []);
   const groupsResource = useApiResource(() => teacherStudentsApi.groups(), []);
+  const homeworkResource = useApiResource(
+    () => homeworkStatisticsApi.teacher({ month: homeworkMonth }),
+    [homeworkMonth],
+  );
+  const homeworkMonthOptions = useMemo(() => recentMonthKeys(12), []);
+
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("view") === "groups") {
+      setTab("groups");
+    }
+  }, []);
 
   const students = useMemo(() => {
     const query = search.trim().toLocaleLowerCase("ru");
@@ -122,6 +138,13 @@ export default function TeacherStudentsPage() {
       ].some((value) => value?.toLocaleLowerCase("ru").includes(query));
     });
   }, [groupsResource.data?.groups, search]);
+
+  const homeworkByStudent = useMemo(() => new Map(
+    (homeworkResource.data?.students.items ?? []).map((student) => [student.crmStudentId, student.metrics]),
+  ), [homeworkResource.data?.students.items]);
+  const homeworkByGroup = useMemo(() => new Map(
+    (homeworkResource.data?.groups ?? []).map((group) => [group.crmGroupId, group.metrics]),
+  ), [homeworkResource.data?.groups]);
 
   const activeResource = tab === "students" ? studentsResource : groupsResource;
   if (activeResource.loading) {
@@ -198,17 +221,56 @@ export default function TeacherStudentsPage() {
         </button>
       </section>
 
+      <section className="mb-7 border-y border-stone-200 py-5" aria-labelledby="teacher-homework-summary">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.16em] text-gold">
+              <ClipboardList size={15} /> Домашние задания
+            </p>
+            <h2 id="teacher-homework-summary" className="font-display mt-1 text-2xl">Что происходит с ДЗ</h2>
+            <p className="mt-1 text-xs text-stone-500">Задания, назначенные в выбранном месяце вашим ученикам и группам.</p>
+          </div>
+          <label className="block w-full text-xs font-black text-stone-500 sm:w-56">
+            Месяц назначения
+            <select
+              value={homeworkMonth}
+              onChange={(event) => setHomeworkMonth(event.target.value)}
+              className="mt-2 min-h-11 w-full rounded-xl border border-stone-200 bg-white px-3 text-sm font-bold text-ink outline-none focus:border-gold"
+            >
+              {homeworkMonthOptions.map((option) => (
+                <option key={option} value={option}>{formatMonthKey(option)}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+        {homeworkResource.loading && !homeworkResource.data ? (
+          <p className="mt-5 text-sm text-stone-500">Обновляем результаты ДЗ...</p>
+        ) : homeworkResource.error ? (
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 bg-red-50 px-4 py-3 text-sm text-red-800">
+            <span>{homeworkResource.error}</span>
+            <button type="button" onClick={homeworkResource.reload} className="font-bold underline underline-offset-2">Повторить</button>
+          </div>
+        ) : homeworkResource.data ? (
+          <div className="mt-5 grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-4">
+            <HomeworkSummary icon={ClipboardList} label="Назначено" value={homeworkResource.data.totals.assigned} />
+            <HomeworkSummary icon={Send} label="Отправлено" value={homeworkResource.data.totals.submitted} />
+            <HomeworkSummary icon={Clock3} label="Ждут проверки" value={homeworkResource.data.totals.waitingReview} tone="text-blue-700" />
+            <HomeworkSummary icon={RotateCcw} label="На доработке" value={homeworkResource.data.totals.revision} tone="text-red-700" />
+          </div>
+        ) : null}
+      </section>
+
       {tab === "students" ? (
-        <section className="mb-7 grid gap-3 sm:grid-cols-3">
-          <Summary icon={Users} label="Закреплено за вами" value={allStudents.length} />
-          <Summary icon={GraduationCap} label="Есть план месяца" value={studentsWithPlan} />
-          <Summary icon={AlertTriangle} label="Требуют внимания" value={studentsRequiringAttention.length} />
+        <section className="mb-7 grid grid-cols-3 gap-2 sm:gap-3">
+          <Summary icon={Users} label="Мои ученики" value={allStudents.length} />
+          <Summary icon={GraduationCap} label="С планом" value={studentsWithPlan} />
+          <Summary icon={AlertTriangle} label="Внимание" value={studentsRequiringAttention.length} />
         </section>
       ) : (
-        <section className="mb-7 grid gap-3 sm:grid-cols-3">
+        <section className="mb-7 grid grid-cols-3 gap-2 sm:gap-3">
           <Summary icon={Users} label="Ваши группы" value={allGroups.length} />
           <Summary icon={UserRound} label="Участников" value={groupMembers} />
-          <Summary icon={BookOpen} label="Есть план месяца" value={groupsWithPlan} />
+          <Summary icon={BookOpen} label="С планом" value={groupsWithPlan} />
         </section>
       )}
 
@@ -264,7 +326,13 @@ export default function TeacherStudentsPage() {
         />
       ) : tab === "students" ? (
         <div className="grid gap-4 xl:grid-cols-2">
-          {students.map((student) => <StudentCard key={student.key} student={student} />)}
+          {students.map((student) => (
+            <StudentCard
+              key={student.key}
+              student={student}
+              homework={student.crmStudentId ? homeworkByStudent.get(student.crmStudentId) ?? null : null}
+            />
+          ))}
         </div>
       ) : !groups.length ? (
         <EmptyState
@@ -277,26 +345,47 @@ export default function TeacherStudentsPage() {
         />
       ) : (
         <div className="space-y-4">
-          {groups.map((group) => <GroupCard key={group.crmGroupId} group={group} />)}
+          {groups.map((group) => (
+            <GroupCard
+              key={group.crmGroupId}
+              group={group}
+              homework={homeworkByGroup.get(group.crmGroupId) ?? null}
+            />
+          ))}
         </div>
       )}
     </>
   );
 }
 
-function StudentCard({ student }: { student: TeacherStudent }) {
-  const [planOpen, setPlanOpen] = useState(false);
+function StudentCard({ student, homework }: { student: TeacherStudent; homework: HomeworkStatisticsMetrics | null }) {
+  const router = useRouter();
   const [bonusOpen, setBonusOpen] = useState(false);
   const [bonusAmount, setBonusAmount] = useState(3);
   const [bonusReason, setBonusReason] = useState("");
   const [bonusBusy, setBonusBusy] = useState(false);
   const [bonusFeedback, setBonusFeedback] = useState<string | null>(null);
-  const upcomingOnline = nextOnlineLesson(student);
+  const [dialogBusy, setDialogBusy] = useState<"student" | "parent" | null>(null);
+  const [dialogFeedback, setDialogFeedback] = useState<string | null>(null);
   const latestAttendance = student.attendanceHistory[0];
   const latestAttendanceView = latestAttendance ? attendancePresentation(latestAttendance) : null;
   const LatestAttendanceIcon = latestAttendanceView?.icon;
   const displayName = formatFio(student) || student.name;
   const ageLabel = formatAge(student.dateOfBirth);
+
+  async function openDialog(recipient: "student" | "parent") {
+    if (!student.appUserId) return;
+    setDialogBusy(recipient);
+    setDialogFeedback(null);
+    try {
+      const result = await teacherStudentsApi.openDialog(student.appUserId, recipient);
+      router.push(`/admin/messages?conversation=${encodeURIComponent(result.conversationId)}`);
+    } catch (error) {
+      setDialogFeedback(error instanceof Error ? error.message : "Не удалось открыть переписку");
+    } finally {
+      setDialogBusy(null);
+    }
+  }
 
   return (
     <article className="rounded-[26px] border border-stone-200 bg-paper p-5 shadow-soft sm:p-6">
@@ -336,6 +425,23 @@ function StudentCard({ student }: { student: TeacherStudent }) {
         </div>
       </div>
 
+      <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 border-y border-stone-100 py-3 text-xs font-semibold text-stone-600">
+        <span className="inline-flex min-w-0 items-center gap-2">
+          <Smartphone size={15} className={student.appUserId ? "text-emerald-600" : "text-stone-400"} />
+          {student.appUserId ? "Кабинет подключён" : "Кабинет не подключён"}
+        </span>
+        <span className="inline-flex min-w-0 items-center gap-2" title={student.appActivity.lastLoginAt ?? undefined}>
+          <Clock3 size={15} className="text-gold" />
+          Последний вход: {formatAppActivity(student.appActivity.lastLoginAt ?? student.appActivity.lastActiveAt)}
+        </span>
+        <span className="inline-flex min-w-0 items-center gap-2">
+          <Users size={15} className={student.family.parents.length ? "text-sky-600" : "text-stone-400"} />
+          {student.family.parents.length
+            ? `Родитель: ${student.family.parents.map((parent) => parent.name).join(", ")}`
+            : "Родитель не подключён"}
+        </span>
+      </div>
+
       <div className="mt-5 flex flex-wrap gap-2">
         {student.directions.length ? student.directions.map((direction) => (
           <span key={direction} className="rounded-full bg-stone-100 px-3 py-1.5 text-xs font-bold text-stone-600">
@@ -355,27 +461,27 @@ function StudentCard({ student }: { student: TeacherStudent }) {
         <InfoBlock icon={CalendarDays} label="Расписание">
           {student.schedules.length
             ? student.schedules.map((item) => `${dayLabels[item.dayOfWeek] ?? item.dayOfWeek}, ${item.time}`).join(" · ")
-            : upcomingOnline?.scheduledAt
-              ? formatDateTime(upcomingOnline.scheduledAt)
-              : "Ближайший урок не назначен"}
-        </InfoBlock>
-        <InfoBlock icon={Video} label="Онлайн-уроки">
-          {student.onlineLessons.length
-            ? `${student.onlineLessons.length} в истории`
-            : "Нет назначенных онлайн-уроков"}
+            : "Ближайший урок не назначен"}
         </InfoBlock>
       </div>
 
-      <section className="mt-5 rounded-2xl border border-stone-200 bg-white p-4">
+      <section className="mt-5 border-y border-stone-200 py-4">
         <div className="flex items-center gap-2">
           <TrendingUp size={16} className="text-gold" />
           <p className="text-[10px] font-black uppercase tracking-wider text-stone-500">Динамика обучения</p>
         </div>
         <div className="mt-3 grid grid-cols-3 gap-2">
           <LearningMetric label="Посещаемость" value={student.learningSummary.attendanceRate} />
-          <LearningMetric label="Выполнение ДЗ" value={student.learningSummary.homeworkCompletionRate} />
           <LearningMetric label="План месяца" value={student.learningSummary.planCompletionRate} />
+          <HomeworkLearningMetric metrics={homework} />
         </div>
+        {homework ? (
+          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 border-t border-stone-100 pt-3 text-xs font-semibold text-stone-600">
+            <span className="text-blue-700">Ждут проверки: {homework.waitingReview}</span>
+            <span className="text-red-700">На доработке: {homework.revision}</span>
+            <span>Без ответа: {homework.noAttempt}</span>
+          </div>
+        ) : null}
       </section>
 
       {student.attentionSignals.length ? (
@@ -401,7 +507,7 @@ function StudentCard({ student }: { student: TeacherStudent }) {
           <div className="flex items-center justify-between border-b border-stone-100 px-4 py-3">
             <div>
               <p className="text-[10px] font-black uppercase tracking-wider text-stone-400">
-                Последние офлайн-уроки
+                Последние уроки
               </p>
               <p className="mt-1 text-xs text-stone-500">Посещаемость этого ученика</p>
             </div>
@@ -432,14 +538,13 @@ function StudentCard({ student }: { student: TeacherStudent }) {
 
       <div className="mt-5 flex flex-wrap gap-2 border-t border-stone-200 pt-5">
         {student.crmStudentId ? (
-          <button
-            type="button"
-            onClick={() => setPlanOpen((value) => !value)}
+          <Link
+            href={`/admin/my-students/student/${encodeURIComponent(student.crmStudentId)}/plan`}
             className="inline-flex items-center gap-2 rounded-full bg-amber-50 px-4 py-2 text-xs font-bold text-amber-900 transition hover:bg-amber-100"
           >
             <GraduationCap size={14} />
-            {planOpen ? "Скрыть план" : "Месячный план"}
-          </button>
+            Открыть план
+          </Link>
         ) : null}
         {student.appUserId ? (
           <button
@@ -455,33 +560,30 @@ function StudentCard({ student }: { student: TeacherStudent }) {
           </button>
         ) : null}
         {student.appUserId ? (
-          <Link
-            href={`/admin/messages?contact=${student.appUserId}`}
-            className="inline-flex items-center gap-2 rounded-full bg-ink px-4 py-2 text-xs font-bold text-white transition hover:bg-stone-700"
+          <button
+            type="button"
+            disabled={dialogBusy !== null}
+            onClick={() => void openDialog("student")}
+            className="inline-flex min-h-9 items-center gap-2 rounded-full bg-ink px-4 py-2 text-xs font-bold text-white transition hover:bg-stone-700 disabled:opacity-50"
           >
-            <MessageCircle size={14} />
+            {dialogBusy === "student" ? <LoaderCircle size={14} className="animate-spin" /> : <MessageCircle size={14} />}
             Написать ученику
-          </Link>
-        ) : null}
-        {upcomingOnline ? (
-          <Link
-            href={`/admin/online-lessons/${upcomingOnline.id}`}
-            className="inline-flex items-center gap-2 rounded-full border border-stone-200 bg-white px-4 py-2 text-xs font-bold text-ink transition hover:border-gold/40"
-          >
-            <Video size={14} />
-            Открыть онлайн-урок
-          </Link>
+          </button>
         ) : null}
         {student.appUserId ? (
-          <span className="inline-flex items-center rounded-full bg-emerald-50 px-3 py-2 text-[11px] font-bold text-emerald-800">
-            Аккаунт приложения подключён
-          </span>
-        ) : (
-          <span className="inline-flex items-center rounded-full bg-stone-100 px-3 py-2 text-[11px] font-bold text-stone-500">
-            Аккаунт приложения не подключён
-          </span>
-        )}
+          <button
+            type="button"
+            disabled={dialogBusy !== null || student.family.parents.length === 0}
+            title={student.family.parents.length ? "Открыть переписку с родителем" : "Родитель пока не подключён"}
+            onClick={() => void openDialog("parent")}
+            className="inline-flex min-h-9 items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-4 py-2 text-xs font-bold text-sky-900 transition hover:bg-sky-100 disabled:cursor-not-allowed disabled:border-stone-200 disabled:bg-stone-100 disabled:text-stone-400"
+          >
+            {dialogBusy === "parent" ? <LoaderCircle size={14} className="animate-spin" /> : <Users size={14} />}
+            Написать родителю
+          </button>
+        ) : null}
       </div>
+      {dialogFeedback ? <p className="mt-3 text-xs font-bold text-red-700">{dialogFeedback}</p> : null}
       {bonusOpen && student.appUserId ? (
         <section className="mt-4 rounded-2xl border border-violet-200 bg-violet-50/60 p-4">
           <p className="text-[10px] font-black uppercase tracking-[0.16em] text-violet-700">Учебное поощрение</p>
@@ -556,15 +658,11 @@ function StudentCard({ student }: { student: TeacherStudent }) {
           </button>
         </section>
       ) : null}
-      {planOpen && student.crmStudentId ? (
-        <StudentMonthlyPlanEditor crmStudentId={student.crmStudentId} />
-      ) : null}
     </article>
   );
 }
 
-function GroupCard({ group }: { group: TeacherGroup }) {
-  const [planOpen, setPlanOpen] = useState(false);
+function GroupCard({ group, homework }: { group: TeacherGroup; homework: HomeworkStatisticsMetrics | null }) {
   const scheduleLabel = group.schedules.length
     ? group.schedules.map((schedule) => {
         const room = schedule.room?.name ? ` · ${schedule.room.name}` : "";
@@ -609,11 +707,26 @@ function GroupCard({ group }: { group: TeacherGroup }) {
           </InfoBlock>
         </div>
 
+        {homework ? (
+          <section className="mt-5 border-y border-stone-200 py-4">
+            <div className="flex items-center gap-2">
+              <ClipboardList size={16} className="text-gold" />
+              <p className="text-[10px] font-black uppercase tracking-wider text-stone-500">Домашние задания группы</p>
+            </div>
+            <div className="mt-3 grid grid-cols-4 gap-2 text-center">
+              <SmallCount label="Назначено" value={homework.assigned} />
+              <SmallCount label="Освоено" value={homework.accepted} />
+              <SmallCount label="Проверить" value={homework.waitingReview} />
+              <SmallCount label="Доработать" value={homework.revision} />
+            </div>
+          </section>
+        ) : null}
+
         <section className="mt-5 border-t border-stone-200 pt-5">
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-[10px] font-black uppercase tracking-wider text-stone-400">Состав группы</p>
-              <p className="mt-1 text-xs text-stone-500">Все активные участники из CRM</p>
+              <p className="mt-1 text-xs text-stone-500">Все активные участники группы</p>
             </div>
             <span className="text-sm font-black text-ink">{group.students.length}</span>
           </div>
@@ -645,16 +758,13 @@ function GroupCard({ group }: { group: TeacherGroup }) {
           )}
         </section>
 
-        <button
-          type="button"
-          onClick={() => setPlanOpen((value) => !value)}
+        <Link
+          href={`/admin/my-students/group/${encodeURIComponent(group.crmGroupId)}/plan`}
           className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl bg-ink px-4 text-sm font-bold text-white transition hover:bg-stone-700"
         >
           <BookOpen size={16} />
-          {planOpen ? "Скрыть план и материалы" : "Открыть план и материалы"}
-        </button>
-
-        {planOpen ? <GroupMonthlyPlanEditor crmGroupId={group.crmGroupId} /> : null}
+          Открыть план и материалы
+        </Link>
       </div>
     </article>
   );
@@ -669,6 +779,44 @@ function LearningMetric({ label, value }: { label: string; value: number | null 
   );
 }
 
+function HomeworkLearningMetric({ metrics }: { metrics: HomeworkStatisticsMetrics | null }) {
+  return (
+    <div className="rounded-xl bg-stone-50 px-2 py-3 text-center">
+      <p className="text-lg font-black text-ink">{metrics ? `${metrics.accepted}/${metrics.assigned}` : "—"}</p>
+      <p className="mt-1 text-[10px] font-bold text-stone-500">Освоено ДЗ</p>
+    </div>
+  );
+}
+
+function HomeworkSummary({
+  icon: Icon,
+  label,
+  value,
+  tone = "text-ink",
+}: {
+  icon: typeof ClipboardList;
+  label: string;
+  value: number;
+  tone?: string;
+}) {
+  return (
+    <div className="min-w-0 border-l-2 border-amber-200 pl-3">
+      <Icon size={16} className="text-gold" />
+      <p className={`mt-2 text-2xl font-black tabular-nums ${tone}`}>{value}</p>
+      <p className="mt-1 text-[10px] font-bold uppercase leading-4 tracking-[0.08em] text-stone-500">{label}</p>
+    </div>
+  );
+}
+
+function SmallCount({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-lg font-black tabular-nums text-ink">{value}</p>
+      <p className="mt-1 break-words text-[9px] font-bold leading-3 text-stone-500">{label}</p>
+    </div>
+  );
+}
+
 function Summary({
   icon: Icon,
   label,
@@ -679,10 +827,10 @@ function Summary({
   value: number;
 }) {
   return (
-    <div className="rounded-[22px] border border-stone-200 bg-white p-5">
-      <Icon size={18} className="text-gold" />
-      <p className="font-display mt-3 text-3xl">{value}</p>
-      <p className="mt-1 text-xs font-bold uppercase tracking-wide text-stone-500">{label}</p>
+    <div className="min-h-28 rounded-lg border border-stone-200 bg-white p-3 sm:min-h-0 sm:p-5">
+      <Icon size={17} className="text-gold sm:h-[18px] sm:w-[18px]" />
+      <p className="font-display mt-3 text-2xl sm:text-3xl">{value}</p>
+      <p className="mt-1 text-[9px] font-bold uppercase leading-4 text-stone-500 sm:text-xs sm:tracking-wide">{label}</p>
     </div>
   );
 }

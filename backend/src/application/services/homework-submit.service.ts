@@ -11,21 +11,23 @@ import { getLessonProgressRecord, getLessonWithCourse } from "../repositories/le
 import { completeLesson, markLessonSubmitted } from "./lesson-progress.service.js";
 import { syncLessonAvailability } from "./lesson-unlock.service.js";
 import { requireCourseEnrollment } from "./enrollment.service.js";
-import { deliverNotificationsToUsers, deliverUserNotification, listUsersWithPermission } from "./notification.service.js";
+import { deliverUserNotification, listUsersWithPermission } from "./notification.service.js";
 
-async function notifyHomeworkReviewQueue(params: { lessonId: string; lessonTitle: string }) {
+async function notifyHomeworkReviewQueue(params: {
+  lessonId: string;
+  lessonTitle: string;
+  submissionId: string;
+}) {
   const recipients = await listUsersWithPermission("homework.review").catch(() => []);
-  await deliverNotificationsToUsers(
-    recipients.map((recipient) => recipient.id),
-    {
+  await Promise.allSettled(recipients.map((recipient) => deliverUserNotification({
+      userId: recipient.id,
       type: "homework_submitted",
       title: "Новое домашнее задание на проверку",
       body: `Поступила работа по уроку «${params.lessonTitle}».`,
       url: "/admin/homework-review?status=submitted",
-      tag: `homework-review-${params.lessonId}`,
-      dedupeWindowMs: 2 * 60 * 1000,
-    },
-  ).catch(() => undefined);
+      tag: `homework-review-${params.submissionId}`,
+      dedupeKey: `course-hw:submitted:${params.submissionId}:${recipient.id}`,
+  })));
 }
 
 export async function submitHomework(params: {
@@ -83,7 +85,11 @@ export async function submitHomework(params: {
   });
 
   await markLessonSubmitted(params.studentId, lessonId);
-  await notifyHomeworkReviewQueue({ lessonId, lessonTitle: lesson.title });
+  await notifyHomeworkReviewQueue({
+    lessonId,
+    lessonTitle: lesson.title,
+    submissionId: submission.id,
+  });
 
   return {
     submission,
@@ -146,8 +152,8 @@ async function submitHomeworkTest(params: {
       title: "Тест пройден",
       body: `Урок «${params.lesson.title}» завершён — результат ${testResult.score}%.`,
       url: `/lessons/${params.lessonId}`,
-      tag: `homework-${params.lessonId}`,
-      dedupeWindowMs: 2 * 60 * 1000,
+      tag: `homework-${submission.id}`,
+      dedupeKey: `course-test:result:${submission.id}`,
     }).catch(() => undefined);
 
     return {
@@ -177,8 +183,8 @@ async function submitHomeworkTest(params: {
     title: "Тест нужно повторить",
     body: `По уроку «${params.lesson.title}» набрано ${testResult.score}%. Для прохождения нужно не менее ${params.homework.passingScore}%.`,
     url: `/lessons/${params.lessonId}`,
-    tag: `homework-${params.lessonId}`,
-    dedupeWindowMs: 2 * 60 * 1000,
+    tag: `homework-${submission.id}`,
+    dedupeKey: `course-test:result:${submission.id}`,
   }).catch(() => undefined);
 
   return {

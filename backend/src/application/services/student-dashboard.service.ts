@@ -6,7 +6,7 @@ import {
   getProgressMapForCourse,
 } from "../repositories/learning.repository.js";
 import { calculateCourseProgressPercent } from "./course-progress.service.js";
-import { calculateStudentPoints } from "./points.service.js";
+import { getStudentPointsReadModel } from "./points.service.js";
 import { syncLessonAvailability } from "./lesson-unlock.service.js";
 import { getStudentRank } from "../../domain/student-rank.js";
 
@@ -31,6 +31,7 @@ export interface StudentDashboardData {
   totalLessonsCount: number;
   points: number;
   rank: ReturnType<typeof getStudentRank>;
+  level: Awaited<ReturnType<typeof getStudentPointsReadModel>>["level"];
   nextAvailableLesson: {
     id: string;
     title: string;
@@ -47,14 +48,15 @@ export async function getStudentDashboard(studentId: string): Promise<StudentDas
   const enrollment = await getActiveEnrollment(studentId);
 
   if (!enrollment) {
-    const points = await calculateStudentPoints(studentId);
+    const pointsOverview = await getStudentPointsReadModel(studentId);
     return {
       currentCourse: null,
       progressPercent: 0,
       completedLessonsCount: 0,
       totalLessonsCount: 0,
-      points,
-      rank: getStudentRank(points),
+      points: pointsOverview.points,
+      rank: getStudentRank(pointsOverview.points),
+      level: pointsOverview.level,
       nextAvailableLesson: null,
     };
   }
@@ -63,13 +65,13 @@ export async function getStudentDashboard(studentId: string): Promise<StudentDas
 
   await syncLessonAvailability(studentId, courseId);
 
-  const [orderedLessons, progressMap, progressPercent, completedLessonsCount, points] =
+  const [orderedLessons, progressMap, progressPercent, completedLessonsCount, pointsOverview] =
     await Promise.all([
       getOrderedPublishedLessons(courseId),
       getProgressMapForCourse(studentId, courseId),
       calculateCourseProgressPercent(studentId, courseId),
       countCompletedLessons(studentId, courseId),
-      calculateStudentPoints(studentId),
+      getStudentPointsReadModel(studentId),
     ]);
 
   let nextAvailableLesson: StudentDashboardData["nextAvailableLesson"] = null;
@@ -102,8 +104,9 @@ export async function getStudentDashboard(studentId: string): Promise<StudentDas
     progressPercent,
     completedLessonsCount,
     totalLessonsCount: orderedLessons.length,
-    points,
-    rank: getStudentRank(points),
+    points: pointsOverview.points,
+    rank: getStudentRank(pointsOverview.points),
+    level: pointsOverview.level,
     nextAvailableLesson,
   };
 }

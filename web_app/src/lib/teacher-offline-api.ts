@@ -4,7 +4,10 @@ import type {
   TeacherOfflineClass,
   TeacherOfflineClassStudents,
   OfflineHomeworkReview,
+  LearningLessonV2ResultsInput,
   TrialLessonReport,
+  OfflineLessonServerDraft,
+  OfflineLessonReportHistory,
 } from "@/types/teacher-offline";
 
 export const teacherOfflineApi = {
@@ -20,6 +23,24 @@ export const teacherOfflineApi = {
   students: (crmClassId: string) =>
     apiRequest<TeacherOfflineClassStudents>(
       `/teachers/me/offline-lessons/${encodeURIComponent(crmClassId)}/students`,
+    ),
+  draft: (crmClassId: string) =>
+    apiRequest<OfflineLessonServerDraft | null>(
+      `/teachers/me/offline-lessons/${encodeURIComponent(crmClassId)}/draft`,
+    ),
+  saveDraft: (crmClassId: string, expectedRevision: number, payload: Record<string, unknown>) =>
+    apiRequest<OfflineLessonServerDraft>(
+      `/teachers/me/offline-lessons/${encodeURIComponent(crmClassId)}/draft`,
+      { method: "PUT", body: JSON.stringify({ expectedRevision, payload }) },
+    ),
+  deleteDraft: (crmClassId: string) =>
+    apiRequest<{ deleted: number }>(
+      `/teachers/me/offline-lessons/${encodeURIComponent(crmClassId)}/draft`,
+      { method: "DELETE" },
+    ),
+  reportVersions: (crmClassId: string) =>
+    apiRequest<OfflineLessonReportHistory | null>(
+      `/teachers/me/offline-lessons/${encodeURIComponent(crmClassId)}/report-versions`,
     ),
   start: (crmClassId: string) =>
     apiRequest<Record<string, unknown>>(
@@ -99,5 +120,10 @@ export const teacherOfflineApi = {
     apiRequest<{ savedCount: number }>(
       `/teachers/me/offline-lessons/${encodeURIComponent(crmClassId)}/attendance-batch`,
       { method: "POST", body: JSON.stringify({ checks }) },
+    ),
+  learningResults: (crmClassId: string, body: LearningLessonV2ResultsInput) =>
+    apiRequest<Record<string, unknown>>(
+      `/teachers/me/offline-lessons/${encodeURIComponent(crmClassId)}/learning-results`,
+      { method: "POST", body: JSON.stringify(body) },
     ),
 };

@@ -4,6 +4,8 @@ import type {
   HomeworkReviewFilterStatus,
   HomeworkReviewMeta,
   HomeworkReviewResponse,
+  HomeworkReviewSource,
+  HomeworkReviewDetail,
   HomeworkSubmissionItem,
 } from "@/types/homework-review";
 
@@ -12,6 +14,7 @@ export interface ListSubmissionsParams {
   courseId?: string;
   studentId?: string;
   search?: string;
+  source?: HomeworkReviewSource;
   page?: number;
   limit?: number;
 }
@@ -23,6 +26,7 @@ export const homeworkReviewApi = {
     if (params.courseId) query.set("courseId", params.courseId);
     if (params.studentId) query.set("studentId", params.studentId);
     if (params.search) query.set("search", params.search);
+    if (params.source) query.set("source", params.source);
     query.set("page", String(params.page ?? 1));
     query.set("limit", String(params.limit ?? 20));
     return apiRequestEnvelope<HomeworkSubmissionItem[], HomeworkReviewMeta>(
@@ -31,7 +35,7 @@ export const homeworkReviewApi = {
   },
 
   get: (submissionId: string) =>
-    apiRequest<HomeworkSubmissionItem>(`/admin/homework-submissions/${submissionId}`),
+    apiRequest<HomeworkReviewDetail>(`/admin/homework-submissions/${submissionId}`),
 
   attempts: (submissionId: string) =>
     apiRequest<HomeworkAttemptsResponse>(`/admin/homework-submissions/${submissionId}/attempts`),
@@ -44,4 +48,24 @@ export const homeworkReviewApi = {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
+
+  reviewLearning: (
+    recipientId: string,
+    body: {
+      decision: "revision" | "accepted" | "accepted_with_comment";
+      comment?: string | null;
+      idempotencyKey: string;
+    },
+  ) => apiRequest<{
+    review: {
+      id: string;
+      decision: "revision" | "accepted" | "accepted_with_comment";
+      comment: string | null;
+      reviewedAt: string;
+    };
+    idempotent: boolean;
+  }>(`/homework-recipients/${encodeURIComponent(recipientId)}/reviews`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  }),
 };

@@ -21,6 +21,7 @@ import {
   GraduationCap,
   History,
   MapPin,
+  MonitorPlay,
   RefreshCw,
   RotateCcw,
   Sparkles,
@@ -49,8 +50,10 @@ import {
 } from "@/lib/student-school-alerts";
 import type { SchoolOfflineLesson, StudentOfflineSummary } from "@/types/school-offline";
 import { MonthlyReportModal } from "@/components/monthly-report-modal";
+import { LearningHomeworkFolder } from "@/components/learning-homework-folder";
 import { downloadMonthlyReportExcel } from "@/lib/monthly-report-excel";
 import { isManagedMediaUrl, triggerFileDownload } from "@/lib/file-download";
+import { learningHomeworkApi } from "@/lib/learning-homework-api";
 
 /* ─── label maps ────────────────────────────────────────────────────── */
 
@@ -159,6 +162,7 @@ function LessonMaterialItems({ materials }: { materials: SchoolOfflineLesson["ma
 /* ─── tab types ─────────────────────────────────────────────────────── */
 
 type Tab = "overview" | "homework" | "schedule" | "history";
+type LessonFormatFilter = "all" | "offline" | "online";
 
 const tabs: { key: Tab; label: string; mobileLabel: string; icon: typeof GraduationCap }[] = [
   { key: "overview", label: "Обзор", mobileLabel: "Главное", icon: Sparkles },
@@ -180,6 +184,7 @@ function LessonCard({
 }) {
   const [open, setOpen] = useState(defaultOpen ?? false);
   const statusLabel = statusLabels[lesson.status] ?? lesson.status;
+  const isOnline = lesson.deliveryFormat === "online";
 
   const hasDetails =
     lesson.topic ||
@@ -191,16 +196,24 @@ function LessonCard({
 
   return (
     <article
-      className={`rounded-[24px] border shadow-soft transition-all duration-200 ${
+      className={`rounded-[24px] border shadow-soft transition-[border-color,box-shadow,background-color] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 focus-visible:ring-offset-2 ${
         upcoming
           ? "border-gold/20 bg-white"
           : "border-stone-200 bg-paper"
       } ${hasDetails ? "cursor-pointer" : ""}`}
       onClick={() => hasDetails && setOpen(!open)}
+      onKeyDown={(event) => {
+        if (!hasDetails || (event.key !== "Enter" && event.key !== " ")) return;
+        event.preventDefault();
+        setOpen(!open);
+      }}
+      role={hasDetails ? "button" : undefined}
+      tabIndex={hasDetails ? 0 : undefined}
+      aria-expanded={hasDetails ? open : undefined}
     >
       {/* collapsed header */}
-      <div className="flex flex-wrap items-start justify-between gap-3 p-5">
-        <div className="flex-1 min-w-0">
+      <div className="flex flex-col items-stretch gap-3 p-5 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 sm:flex-1">
           <h3 className="font-display text-2xl">{lesson.title}</h3>
           <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-stone-500">
             <span className="inline-flex items-center gap-1.5">
@@ -213,7 +226,12 @@ function LessonCard({
                 {lesson.teacherName}
               </span>
             ) : null}
-            {lesson.roomName ? (
+            {isOnline ? (
+              <span className="inline-flex items-center gap-1.5 font-semibold text-sky-700">
+                <MonitorPlay size={14} />
+                Онлайн
+              </span>
+            ) : lesson.roomName ? (
               <span className="inline-flex items-center gap-1.5">
                 <MapPin size={14} />
                 {lesson.roomName}
@@ -224,7 +242,24 @@ function LessonCard({
             <p className="mt-2 text-xs font-semibold text-stone-400">Группа: {lesson.groupName}</p>
           ) : null}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex w-full flex-wrap items-center justify-start gap-2 sm:w-auto sm:justify-end">
+          {upcoming && isOnline ? (
+            lesson.meetingUrl ? (
+              <a
+                href={lesson.meetingUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(event) => event.stopPropagation()}
+                className="inline-flex min-h-9 items-center gap-2 rounded-lg bg-sky-700 px-3 text-xs font-bold text-white transition hover:bg-sky-800"
+              >
+                <MonitorPlay size={14} /> Подключиться
+              </a>
+            ) : (
+              <span className="inline-flex min-h-9 items-center rounded-lg border border-sky-100 bg-sky-50 px-3 text-xs font-bold text-sky-800">
+                Ссылка появится
+              </span>
+            )
+          ) : null}
           <span
             className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-wide ${
               lesson.status === "completed"
@@ -659,12 +694,20 @@ function HomeworkCard({
   return (
     <article
       id={`homework-${lesson.crmClassId}`}
-      className={`rounded-[24px] border bg-white shadow-soft cursor-pointer transition-all ${
+      className={`cursor-pointer rounded-[24px] border bg-white shadow-soft transition-[border-color,box-shadow,background-color] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 focus-visible:ring-offset-2 ${
         reviewState === "missing_review"
           ? "border-red-100 hover:border-red-200"
           : "border-amber-100 hover:border-amber-200"
       }`}
       onClick={() => setOpen(!open)}
+      onKeyDown={(event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        setOpen(!open);
+      }}
+      role="button"
+      tabIndex={0}
+      aria-expanded={open}
     >
       <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex-1 min-w-0">
@@ -781,7 +824,7 @@ function TabNav({
           onClick={() => onChange(key)}
           type="button"
           title={label}
-          className={`relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-[10px] font-semibold leading-tight transition-all sm:flex-row sm:gap-2 sm:px-4 sm:py-2.5 sm:text-sm ${
+          className={`relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-[10px] font-semibold leading-tight transition-colors sm:flex-row sm:gap-2 sm:px-4 sm:py-2.5 sm:text-sm ${
             active === key
               ? "bg-ink text-white shadow-sm"
               : "text-stone-500 hover:bg-stone-50 hover:text-ink"
@@ -817,10 +860,15 @@ export default function SchoolLessonsPage() {
   const params = useSearchParams();
   const { user } = useAuth();
   const resource = useApiResource(() => api.studentOfflineSummary(), []);
+  const learningHomeworkResource = useApiResource(() => learningHomeworkApi.studentAssignments(), []);
   const requestedTab = params.get("tab");
+  const requestedFormat = params.get("format");
   const requestedLessonId = params.get("lesson");
   const initialTab = tabs.some((item) => item.key === requestedTab) ? requestedTab as Tab : "overview";
   const [activeTab, setActiveTab] = useState<Tab>(initialTab);
+  const [lessonFormatFilter, setLessonFormatFilter] = useState<LessonFormatFilter>(
+    requestedFormat === "online" || requestedFormat === "offline" ? requestedFormat : "all",
+  );
   const [reportMonth, setReportMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -837,16 +885,31 @@ export default function SchoolLessonsPage() {
 
   const lessonHistory = resource.data?.lessonHistory ?? [];
   const requestedHomeworkExists = requestedLessonId
-    ? lessonHistory.some((lesson) => lesson.crmClassId === requestedLessonId && Boolean(lesson.homework?.trim()))
+    ? learningHomeworkResource.loading
+      || Boolean(learningHomeworkResource.data?.assignments.some((assignment) => assignment.id === requestedLessonId))
+      || lessonHistory.some((lesson) => lesson.crmClassId === requestedLessonId && Boolean(lesson.homework?.trim()))
     : true;
 
   useEffect(() => {
-    if (!resource.data || activeTab !== "homework" || !requestedLessonId || !requestedHomeworkExists) return;
+    if (
+      !resource.data
+      || learningHomeworkResource.loading
+      || activeTab !== "homework"
+      || !requestedLessonId
+      || !requestedHomeworkExists
+    ) return;
     const frame = window.requestAnimationFrame(() => {
       document.getElementById(`homework-${requestedLessonId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [activeTab, requestedHomeworkExists, requestedLessonId, resource.data]);
+  }, [
+    activeTab,
+    learningHomeworkResource.data,
+    learningHomeworkResource.loading,
+    requestedHomeworkExists,
+    requestedLessonId,
+    resource.data,
+  ]);
 
   const availableMonths = useMemo(() => {
     const monthsMap = new Map<string, number>();
@@ -893,9 +956,9 @@ export default function SchoolLessonsPage() {
       return (
         <>
           <PageHeader
-            eyebrow="Офлайн-школа"
-            title="Уроки в школе"
-            description="Расписание, абонементы и домашние задания с занятий в студии Maestro."
+            eyebrow="Обучение Maestro"
+            title="Уроки"
+            description="Единое расписание занятий в школе и онлайн, абонементы и домашние задания."
           />
           <EmptyState
             title="Профиль школы не подключён"
@@ -945,13 +1008,16 @@ export default function SchoolLessonsPage() {
       return a.startTime.localeCompare(b.startTime);
     })
     .slice(0, 3);
+  const filteredUpcomingLessons = lessonFormatFilter === "all"
+    ? upcomingLessons
+    : upcomingLessons.filter((lesson) => (lesson.deliveryFormat || "offline") === lessonFormatFilter);
 
   return (
     <>
       <PageHeader
-        eyebrow="Офлайн-школа"
-        title="Уроки в школе"
-        description="Расписание занятий в студии, прогресс обучения и домашние задания."
+        eyebrow="Обучение Maestro"
+        title="Уроки"
+        description="Единое расписание занятий в школе и онлайн, прогресс и домашние задания."
         action={
           <div className="flex flex-col items-start gap-2 sm:items-end">
             <button
@@ -978,28 +1044,57 @@ export default function SchoolLessonsPage() {
       {/* ═══════ TAB: Overview ═══════ */}
       {activeTab === "overview" && (
         <>
+          {/* nearest lessons are the primary reason to open this screen */}
+          <section className="mb-8">
+            <div className="mb-4 flex items-center gap-3 sm:mb-5">
+              <Clock3 className="text-gold" size={22} />
+              <h2 className="font-display text-2xl sm:text-3xl">Ближайшие уроки</h2>
+              {upcomingLessons.length > 3 && (
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("schedule")}
+                  className="ml-auto text-sm font-bold text-gold hover:underline"
+                >
+                  Все {upcomingLessons.length} →
+                </button>
+              )}
+            </div>
+            {upcoming3.length === 0 ? (
+              <EmptyState
+                title="Ближайших уроков нет"
+                description="Когда администратор добавит занятия в расписание, они появятся здесь."
+              />
+            ) : (
+              <div className="space-y-4">
+                {upcoming3.map((lesson, index) => (
+                  <LessonCard key={lesson.crmClassId} lesson={lesson} upcoming defaultOpen={index === 0} />
+                ))}
+              </div>
+            )}
+          </section>
+
           {/* balance cards */}
-          <section className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            <div className="rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft">
-              <WalletCards className="text-gold" size={22} />
-              <p className="font-display mt-4 text-3xl">
+          <section className="mb-8 grid grid-cols-2 gap-2 sm:gap-4 xl:grid-cols-3">
+            <div className="rounded-[20px] border border-stone-200 bg-paper p-4 shadow-soft sm:rounded-[28px] sm:p-6">
+              <WalletCards className="text-gold" size={20} />
+              <p className="font-display mt-3 text-2xl tabular-nums sm:mt-4 sm:text-3xl">
                 {balanceSnapshot.accountBalanceKzt.toLocaleString("ru-RU")} ₸
               </p>
-              <p className="mt-1 text-sm text-stone-500">на вашем балансе</p>
+              <p className="mt-1 text-xs leading-4 text-stone-500 sm:text-sm">на вашем балансе</p>
             </div>
             {balanceSnapshot.debtAmountKzt > 0 ? (
-              <div className="rounded-[28px] border border-red-100 bg-red-50 p-6 shadow-soft">
-                <p className="text-xs font-bold uppercase tracking-[0.16em] text-red-700">Долг</p>
-                <p className="font-display mt-4 text-4xl text-red-900">
+              <div className="rounded-[20px] border border-red-100 bg-red-50 p-4 shadow-soft sm:rounded-[28px] sm:p-6">
+                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-red-700 sm:text-xs sm:tracking-[0.16em]">Долг</p>
+                <p className="font-display mt-3 text-2xl tabular-nums text-red-900 sm:mt-4 sm:text-4xl">
                   {balanceSnapshot.debtAmountKzt.toLocaleString("ru-RU")} ₸
                 </p>
-                <p className="mt-1 text-sm text-red-700/80">по активным абонементам</p>
+                <p className="mt-1 text-xs leading-4 text-red-700/80 sm:text-sm">по активным абонементам</p>
               </div>
             ) : (
-              <div className="rounded-[28px] border border-emerald-100 bg-emerald-50 p-6 shadow-soft">
-                <p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-800">Оплата</p>
-                <p className="font-display mt-4 text-3xl text-emerald-900">Без долга</p>
-                <p className="mt-1 text-sm text-emerald-800/80">по активным абонементам</p>
+              <div className="rounded-[20px] border border-emerald-100 bg-emerald-50 p-4 shadow-soft sm:rounded-[28px] sm:p-6">
+                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-800 sm:text-xs sm:tracking-[0.16em]">Оплата</p>
+                <p className="font-display mt-3 text-2xl text-emerald-900 sm:mt-4 sm:text-3xl">Без долга</p>
+                <p className="mt-1 text-xs leading-4 text-emerald-800/80 sm:text-sm">по активным абонементам</p>
               </div>
             )}
           </section>
@@ -1067,33 +1162,6 @@ export default function SchoolLessonsPage() {
             </section>
           ) : null}
 
-          {/* upcoming 3 lessons */}
-          <section className="mb-10">
-            <div className="mb-5 flex items-center gap-3">
-              <Clock3 className="text-gold" size={22} />
-              <h2 className="font-display text-3xl">Ближайшие уроки</h2>
-              {upcomingLessons.length > 3 && (
-                <button
-                  onClick={() => setActiveTab("schedule")}
-                  className="ml-auto text-sm font-bold text-gold hover:underline"
-                >
-                  Все {upcomingLessons.length} →
-                </button>
-              )}
-            </div>
-            {upcoming3.length === 0 ? (
-              <EmptyState
-                title="Ближайших уроков нет"
-                description="Когда администратор добавит занятия в расписание, они появятся здесь."
-              />
-            ) : (
-              <div className="space-y-4">
-                {upcoming3.map((lesson, i) => (
-                  <LessonCard key={lesson.crmClassId} lesson={lesson} upcoming defaultOpen={i === 0} />
-                ))}
-              </div>
-            )}
-          </section>
         </>
       )}
 
@@ -1112,7 +1180,27 @@ export default function SchoolLessonsPage() {
               Это задание уже не входит в доступное окно истории. Откройте полный отчёт за нужный месяц.
             </div>
           ) : null}
-          <HomeworkFolder lessons={lessonHistory} requestedLessonId={requestedLessonId} />
+          {learningHomeworkResource.data?.enabled ? (
+            <div className="space-y-8">
+              <section>
+                <p className="mb-3 text-[10px] font-black uppercase tracking-[0.18em] text-gold">Текущие задания</p>
+                <LearningHomeworkFolder
+                  assignments={learningHomeworkResource.data.assignments}
+                  loading={learningHomeworkResource.loading}
+                  error={learningHomeworkResource.error}
+                  onReload={learningHomeworkResource.reload}
+                />
+              </section>
+              {lessonHistory.some((lesson) => Boolean(lesson.homework)) ? (
+                <section>
+                  <p className="mb-3 text-[10px] font-black uppercase tracking-[0.18em] text-stone-400">История до 7 сентября</p>
+                  <HomeworkFolder lessons={lessonHistory} requestedLessonId={requestedLessonId} />
+                </section>
+              ) : null}
+            </div>
+          ) : (
+            <HomeworkFolder lessons={lessonHistory} requestedLessonId={requestedLessonId} />
+          )}
         </>
       )}
 
@@ -1149,20 +1237,41 @@ export default function SchoolLessonsPage() {
 
           {/* all upcoming lessons */}
           <section>
-            <div className="mb-5 flex items-center gap-3">
-              <CalendarDays className="text-gold" size={22} />
-              <h2 className="font-display text-3xl">Запланированные уроки</h2>
-              <span className="ml-2 rounded-full bg-ink px-2.5 py-1 text-xs font-bold text-white">
-                {upcomingLessons.length}
-              </span>
+            <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-3">
+                <CalendarDays className="text-gold" size={22} />
+                <h2 className="font-display text-2xl sm:text-3xl">Запланированные уроки</h2>
+                <span className="rounded-full bg-ink px-2.5 py-1 text-xs font-bold text-white">
+                  {filteredUpcomingLessons.length}
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-1 rounded-lg border border-stone-200 bg-white p-1" role="group" aria-label="Формат уроков">
+                {([
+                  ["all", "Все"],
+                  ["offline", "В школе"],
+                  ["online", "Онлайн"],
+                ] as const).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setLessonFormatFilter(value)}
+                    className={`min-h-9 rounded-md px-3 text-xs font-bold transition ${
+                      lessonFormatFilter === value ? "bg-ink text-white" : "text-stone-500 hover:bg-stone-50 hover:text-ink"
+                    }`}
+                    aria-pressed={lessonFormatFilter === value}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
-            {upcomingLessons.length === 0 ? (
+            {filteredUpcomingLessons.length === 0 ? (
               <EmptyState
-                title="Запланированных уроков нет"
-                description="Когда администратор добавит занятия в расписание, они появятся здесь."
+                title={lessonFormatFilter === "online" ? "Онлайн-уроков пока нет" : lessonFormatFilter === "offline" ? "Уроков в школе пока нет" : "Запланированных уроков нет"}
+                description="Здесь появятся ваши ближайшие занятия."
               />
             ) : (() => {
-              const sortedUpcoming = [...upcomingLessons].sort((a, b) => {
+              const sortedUpcoming = [...filteredUpcomingLessons].sort((a, b) => {
                 const dateComp = a.date.localeCompare(b.date);
                 if (dateComp !== 0) return dateComp;
                 return a.startTime.localeCompare(b.startTime);

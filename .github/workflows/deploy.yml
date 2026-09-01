@@ -23,6 +23,24 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: maestro_test
+          POSTGRES_PASSWORD: maestro_test
+          POSTGRES_DB: maestro_learning_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U maestro_test -d maestro_learning_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://maestro_test:maestro_test@127.0.0.1:5432/maestro_learning_test?schema=public
+      JWT_SECRET: maestro-ci-learning-test-secret
+      NODE_ENV: test
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -38,6 +56,11 @@ jobs:
       - name: Generate Prisma client
         working-directory: backend
         run: npm run db:generate
+      - name: Verify database migrations
+        working-directory: backend
+        run: |
+          npm run db:migrate
+          npx prisma migrate status
       - name: Lint backend
         working-directory: backend
         run: npm run lint
@@ -50,6 +73,9 @@ jobs:
       - name: Build backend
         working-directory: backend
         run: npm run build
+      - name: Audit runtime dependencies
+        working-directory: backend
+        run: npm audit --omit=dev --audit-level=critical
       - name: Verify frontend
         working-directory: web_app
         run: |
@@ -59,6 +85,7 @@ jobs:
           npm run build
 
   deploy:
+    if: github.event_name == 'workflow_dispatch'
     needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -95,6 +122,7 @@ jobs:
             git fetch "https://github.com/mumitrol16666-creator/maestro_crm.git" main
             git reset --hard FETCH_HEAD
             chmod +x deploy/deploy-maestro-all.sh
+            export LP_RELEASE_SHA_OVERRIDE="${{ github.sha }}"
             bash deploy/deploy-maestro-all.sh "${{ steps.target.outputs.value }}"
 
       - name: Health check

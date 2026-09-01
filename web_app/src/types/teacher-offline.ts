@@ -55,6 +55,49 @@ export type TrialLessonReport = {
   };
 };
 
+export type OfflineLessonIntegrationState = {
+  state: "synced" | "pending_sync" | "conflict";
+  source: "crm" | "projection";
+  pendingCount: number;
+  conflictCount: number;
+  attempts: number;
+  lastError: string | null;
+  lastSyncedAt: string | null;
+  report: {
+    status: "editing" | "pending_sync" | "pending_review" | "confirmed" | "conflict";
+    currentVersion: number;
+    confirmedVersion: number | null;
+    crmConfirmedAt: string | null;
+  } | null;
+};
+
+export type OfflineLessonServerDraft = {
+  id: string;
+  payload: Record<string, unknown>;
+  revision: number;
+  rosterVersion: string | null;
+  updatedAt: string;
+  expiresAt: string;
+};
+
+export type OfflineLessonReportHistory = {
+  id: string;
+  status: string;
+  currentVersion: number;
+  confirmedVersion: number | null;
+  crmConfirmedAt: string | null;
+  versions: Array<{
+    id: string;
+    version: number;
+    state: string;
+    payload: Record<string, unknown>;
+    submittedAt: string;
+    withdrawnAt: string | null;
+    withdrawReason: string | null;
+    crmDeliveredAt: string | null;
+  }>;
+};
+
 export type TeacherOfflineClass = {
   crmClassId: string;
   title: string;
@@ -64,6 +107,8 @@ export type TeacherOfflineClass = {
   duration?: number;
   status: string;
   classType?: string;
+  deliveryFormat?: "offline" | "online";
+  meetingUrl?: string | null;
   crmIndividualStudentId?: string | null;
   group?: { crmGroupId: string; name: string } | null;
   teacher?: { crmTeacherId: string; name: string } | null;
@@ -101,6 +146,7 @@ export type TeacherOfflineClass = {
   finishedAt?: string | null;
   submittedAt?: string | null;
   reviewedAt?: string | null;
+  integration?: OfflineLessonIntegrationState;
 };
 
 export type TeacherOfflineAgenda = {
@@ -185,6 +231,85 @@ export type TeacherOfflineClassStudents = {
     nextLessonFocus?: string | null;
   } | null;
   students: TeacherOfflineStudent[];
+  learningV2?: LearningLessonV2Context;
+  integration?: OfflineLessonIntegrationState;
+};
+
+export type LearningLessonV2Homework = {
+  recipientId: string;
+  assignmentId: string;
+  cycleNumber: number;
+  versionInCycle: number;
+  topicId: string;
+  topicTitle: string;
+  directionTitle: string;
+  instructions: string;
+  submissionMode: "materials" | "ready_for_lesson";
+  studentComment: string | null;
+  submittedAt: string;
+};
+
+export type LearningLessonV2Context = {
+  enabled: true;
+  available: boolean;
+  reason: "trial_lesson" | "one_time_replacement" | null;
+  owner: { kind: "student" | "group"; id: string };
+  eventAt?: string;
+  rewardsEnabled: boolean;
+  canApply: boolean;
+  plans: Array<{
+    planId: string;
+    month: string;
+    direction: {
+      id: string;
+      crmDirectionId: string | null;
+      title: string;
+    };
+    topics: Array<{
+      id: string;
+      title: string;
+      masteryCriteria: string;
+      progressPercent: number;
+      masteredAt: string | null;
+    }>;
+  }>;
+  students: Array<{
+    crmStudentId: string;
+    appUserId: string | null;
+    name: string;
+    pendingHomework: LearningLessonV2Homework[];
+  }>;
+  rewardPreview: Array<{
+    crmStudentId: string;
+    studentUserId: string | null;
+    status:
+      | "will_award"
+      | "weekly_limit"
+      | "already_awarded"
+      | "not_linked"
+      | "not_eligible"
+      | "economy_disabled";
+    amount: number;
+    awardedLessonCount: number;
+    weeklyLimit: number;
+    sourceKey: string;
+    weekKey: string;
+  }>;
+};
+
+export type LearningLessonV2ResultsInput = {
+  homeworkDecisions: Array<{
+    recipientId: string;
+    cycleNumber: number;
+    decision: "revision" | "accepted" | "accepted_with_comment";
+    comment?: string | null;
+  }>;
+  topicUpdates: Array<{
+    topicId: string;
+    expectedPercent: number | null;
+    toPercent: number;
+    comment?: string | null;
+  }>;
 };
 
 export type WhatsappHomeworkMessageDraft = {

@@ -12,16 +12,21 @@ import type { UnifiedTaskSource } from "@/types/unified-tasks";
 
 type View = "action" | "waiting" | "completed";
 
-const views: Array<{ key: View; label: string; icon: typeof Clock3 }> = [
-  { key: "action", label: "Нужно сделать", icon: RotateCcw },
-  { key: "waiting", label: "На проверке", icon: Clock3 },
-  { key: "completed", label: "Выполнено", icon: CheckCircle2 },
+const views: Array<{
+  key: View;
+  label: string;
+  icon: typeof Clock3;
+  accent: string;
+}> = [
+  { key: "action", label: "Нужно сделать", icon: RotateCcw, accent: "text-red-700" },
+  { key: "waiting", label: "На проверке", icon: Clock3, accent: "text-blue-700" },
+  { key: "completed", label: "Выполнено", icon: CheckCircle2, accent: "text-emerald-700" },
 ];
 
 const sources: Array<{ key: "all" | UnifiedTaskSource; label: string }> = [
   { key: "all", label: "Все" },
   { key: "course", label: "Курсы" },
-  { key: "offline", label: "В школе" },
+  { key: "offline", label: "С преподавателем" },
   { key: "online", label: "Онлайн" },
 ];
 
@@ -57,12 +62,13 @@ function TasksContent() {
     router.replace(`/tasks${query.toString() ? `?${query.toString()}` : ""}`, { scroll: false });
   }
 
-  if (resource.loading) return <LoadingState label="Собираем задания из всех разделов" />;
+  if (resource.loading && !resource.data) return <LoadingState label="Собираем задания из всех разделов" />;
   if (resource.error || !resource.data) {
     return <ErrorState message={resource.error ?? "Не удалось загрузить задания"} retry={resource.reload} />;
   }
 
   const { data, meta } = resource.data;
+  const refreshing = resource.loading;
   const items = view === "action" ? data.items.filter((task) => task.actionRequired) : data.items;
   const unavailable = (Object.entries(meta?.sources ?? {}) as Array<[UnifiedTaskSource, { status: string }]>)
     .filter(([, state]) => state.status === "unavailable")
@@ -81,40 +87,50 @@ function TasksContent() {
         description="Всё, что нужно сделать по курсам и занятиям с преподавателем."
       />
 
-      <section className="mb-5 grid grid-cols-3 gap-2 sm:gap-3">
-        <Summary label="Требуют действия" value={data.counts.actionRequired} accent="text-red-700" />
-        <Summary label="На проверке" value={data.counts.waitingReview} accent="text-blue-700" />
-        <Summary label="Выполнено" value={data.counts.completed} accent="text-emerald-700" />
+      <section
+        data-testid="task-state-filters"
+        aria-label="Состояние заданий"
+        aria-busy={refreshing}
+        className="mb-4 grid grid-cols-3 gap-2 sm:gap-3"
+      >
+        {views.map(({ key, label, icon, accent }) => (
+          <TaskStateFilter
+            key={key}
+            label={label}
+            value={key === "action"
+              ? data.counts.actionRequired
+              : key === "waiting"
+                ? data.counts.waitingReview
+                : data.counts.completed}
+            icon={icon}
+            accent={accent}
+            active={view === key}
+            onClick={() => setFilters({ view: key })}
+          />
+        ))}
       </section>
 
-      <div className="mb-5 space-y-3">
-        <div className="grid grid-cols-3 gap-2">
-          {views.map(({ key, label, icon: Icon }) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setFilters({ view: key })}
-              className={`inline-flex min-h-11 min-w-0 items-center justify-center gap-1.5 rounded-xl px-2 text-xs font-bold transition sm:gap-2 sm:px-4 sm:text-sm ${
-                view === key ? "bg-ink text-white" : "border border-stone-200 bg-white text-stone-600"
-              }`}
-            >
-              <Icon size={15} /> {label}
-            </button>
-          ))}
-        </div>
-        <div className="flex gap-2 overflow-x-auto pb-1">
+      <div className="mb-4 space-y-2">
+        <div data-testid="task-source-filters" className="grid grid-cols-2 gap-2 sm:flex">
           {sources.map(({ key, label }) => (
             <button
               key={key}
               type="button"
               onClick={() => setFilters({ source: key })}
-              className={`min-h-9 shrink-0 rounded-full px-4 text-xs font-black transition ${
+              className={`min-h-10 min-w-0 rounded-xl px-3 text-xs font-black transition sm:min-h-9 sm:shrink-0 sm:rounded-full sm:px-4 ${
                 source === key ? "bg-amber-100 text-amber-950" : "border border-stone-200 bg-white text-stone-500"
               }`}
             >
               {label}
             </button>
           ))}
+        </div>
+        <div className="flex h-5 items-center justify-end" aria-live="polite">
+          {refreshing ? (
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-stone-400">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-gold" /> Обновляем список
+            </span>
+          ) : null}
         </div>
       </div>
 
@@ -127,19 +143,25 @@ function TasksContent() {
         </div>
       ) : null}
 
-      {items.length ? (
-        <div className="grid gap-4 lg:grid-cols-2">
-          {items.map((task) => <UnifiedTaskCard key={task.id} task={task} />)}
-        </div>
-      ) : meta?.partial ? (
-        <div className="rounded-[26px] border border-dashed border-amber-300 bg-white p-8 text-center">
-          <AlertTriangle className="mx-auto text-amber-600" />
-          <h2 className="font-display mt-3 text-2xl">Часть заданий временно недоступна</h2>
-          <p className="mt-2 text-sm text-stone-500">Повторите загрузку, чтобы проверить недоступный источник.</p>
-        </div>
-      ) : (
-        <EmptyState title={source === "all" ? empty.title : `${empty.title} в выбранном разделе`} description={empty.description} />
-      )}
+      <div
+        data-testid="task-results"
+        aria-busy={refreshing}
+        className={`min-h-[360px] transition-opacity ${refreshing ? "pointer-events-none opacity-60" : "opacity-100"}`}
+      >
+        {items.length ? (
+          <div className="grid gap-4 lg:grid-cols-2">
+            {items.map((task) => <UnifiedTaskCard key={task.id} task={task} />)}
+          </div>
+        ) : meta?.partial ? (
+          <div className="rounded-[26px] border border-dashed border-amber-300 bg-white p-8 text-center">
+            <AlertTriangle className="mx-auto text-amber-600" />
+            <h2 className="font-display mt-3 text-2xl">Часть заданий временно недоступна</h2>
+            <p className="mt-2 text-sm text-stone-500">Повторите загрузку, чтобы проверить остальные задания.</p>
+          </div>
+        ) : (
+          <EmptyState title={source === "all" ? empty.title : `${empty.title} в выбранном разделе`} description={empty.description} />
+        )}
+      </div>
 
       {meta?.truncated ? (
         <p className="mt-5 text-center text-xs font-semibold text-stone-400">Показаны первые 100 заданий по выбранному фильтру.</p>
@@ -148,12 +170,40 @@ function TasksContent() {
   );
 }
 
-function Summary({ label, value, accent }: { label: string; value: number; accent: string }) {
+function TaskStateFilter({
+  label,
+  value,
+  icon: Icon,
+  accent,
+  active,
+  onClick,
+}: {
+  label: string;
+  value: number;
+  icon: typeof Clock3;
+  accent: string;
+  active: boolean;
+  onClick: () => void;
+}) {
   return (
-    <div className="min-w-0 rounded-2xl border border-stone-200 bg-white p-3 shadow-sm sm:p-4">
-      <p className="text-[9px] font-black uppercase leading-4 tracking-[0.12em] text-stone-400 sm:text-[10px] sm:tracking-[0.16em]">{label}</p>
-      <p className={`font-display mt-1 text-2xl sm:text-3xl ${accent}`}>{value}</p>
-    </div>
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={`min-w-0 rounded-2xl border p-3 text-left shadow-sm transition sm:p-4 ${
+        active
+          ? "border-ink bg-ink text-white shadow-[0_12px_28px_rgba(21,22,19,0.16)]"
+          : "border-stone-200 bg-white text-stone-700 hover:border-gold/40"
+      }`}
+    >
+      <span className={`flex min-h-8 items-start gap-1.5 text-[9px] font-black uppercase leading-4 tracking-[0.08em] sm:min-h-0 sm:text-[10px] sm:tracking-[0.12em] ${
+        active ? "text-white/65" : "text-stone-400"
+      }`}>
+        <Icon size={13} className="mt-0.5 shrink-0" />
+        <span>{label}</span>
+      </span>
+      <span className={`font-display mt-1 block text-2xl sm:text-3xl ${active ? "text-white" : accent}`}>{value}</span>
+    </button>
   );
 }
 

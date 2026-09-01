@@ -2,6 +2,7 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import jwt from "@fastify/jwt";
 import rateLimit from "@fastify/rate-limit";
+import multipart from "@fastify/multipart";
 import { env } from "./config/env.js";
 import { prisma } from "./infrastructure/database/prisma.js";
 import { errorHandler } from "./presentation/middleware/error-handler.js";
@@ -11,6 +12,11 @@ import { integrationRoutes } from "./presentation/routes/integration.routes.js";
 import { startOfflineReportReminderJob } from "./application/services/offline-report-reminder.service.js";
 import { startLessonReminderJob } from "./application/services/lesson-reminder.service.js";
 import { startWeeklyLeagueFinalizerJob } from "./application/services/weekly-league.service.js";
+import { getProductFeatureSnapshot } from "./config/product-features.js";
+import { productFeatureConfig } from "./config/product-features.js";
+import { startCrmOutboxWorker } from "./application/services/crm-outbox.service.js";
+import { startLearningDialogRetentionJob } from "./application/services/learning-dialog-retention.service.js";
+import { isCorsOriginAllowed } from "./config/cors-origin.js";
 
 async function bootstrap() {
   const app = Fastify({
@@ -30,9 +36,10 @@ async function bootstrap() {
     });
   });
 
-  const corsOrigins = env.CORS_ORIGIN.split(",").map((origin) => origin.trim()).filter(Boolean);
+  const corsOrigins = new Set(env.CORS_ORIGIN.split(",").map((origin) => origin.trim()).filter(Boolean));
+  const qaLocal = process.env.MAESTRO_QA_LOCAL === "true";
   await app.register(cors, {
-    origin: corsOrigins.length > 1 ? corsOrigins : corsOrigins[0],
+    origin: (origin, callback) => callback(null, isCorsOriginAllowed(origin, corsOrigins, qaLocal)),
     credentials: true,
   });
 
@@ -41,6 +48,16 @@ async function bootstrap() {
   });
 
   await app.register(rateLimit, { global: false });
+  await app.register(multipart, {
+    limits: {
+      fieldNameSize: 100,
+      fieldSize: 4_000,
+      fields: 3,
+      fileSize: 50 * 1024 * 1024,
+      files: 5,
+      parts: 8,
+    },
+  });
   await app.register(authPlugin);
 
   app.get("/health", async (_request, reply) => {
@@ -52,6 +69,7 @@ async function bootstrap() {
         database: "ok",
         releaseSha: env.RELEASE_SHA,
         builtAt: env.RELEASE_BUILT_AT,
+        productFeatures: getProductFeatureSnapshot(),
       };
     } catch {
       return reply.status(503).send({
@@ -60,6 +78,7 @@ async function bootstrap() {
         database: "unavailable",
         releaseSha: env.RELEASE_SHA,
         builtAt: env.RELEASE_BUILT_AT,
+        productFeatures: getProductFeatureSnapshot(),
       });
     }
   });
@@ -71,6 +90,12 @@ async function bootstrap() {
   startOfflineReportReminderJob();
   startLessonReminderJob();
   startWeeklyLeagueFinalizerJob();
+  if (productFeatureConfig.flags.lessonSyncV2) {
+    startCrmOutboxWorker();
+  }
+  if (productFeatureConfig.flags.learningDialogsV2) {
+    startLearningDialogRetentionJob();
+  }
 }
 
 bootstrap().catch((err) => {

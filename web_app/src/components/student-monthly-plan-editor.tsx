@@ -6,10 +6,16 @@ import { useApiResource } from "@/hooks/use-api-resource";
 import { ApiError } from "@/lib/api-client";
 import { teacherStudentsApi } from "@/lib/teacher-students-api";
 import { currentAqtobeMonth } from "@/lib/aqtobe-month";
+import { LearningTopicProgressEditor } from "@/components/learning-topic-progress-editor";
+import { LearningHomeworkAssignmentComposer } from "@/components/learning-homework-assignment-composer";
+import { PlanMonthField } from "@/components/plan-month-field";
 import { ProgressBar } from "@/components/progress-bar";
+import { learningHomeworkApi } from "@/lib/learning-homework-api";
 import type {
+  LearningPlanMode,
   MonthlyPlanItemStatus,
   StudentMonthlyPlan,
+  TeacherCrmDirection,
 } from "@/types/teacher-students";
 
 const itemStatuses: Array<{ value: MonthlyPlanItemStatus; label: string }> = [
@@ -46,14 +52,52 @@ function publishedDate(value?: string | null) {
 
 export function StudentMonthlyPlanEditor({
   crmStudentId,
+  directionTitles,
 }: {
   crmStudentId: string;
+  directionTitles: string[];
+}) {
+  const modeResource = useApiResource(() => teacherStudentsApi.learningPlanMode(), []);
+
+  if (modeResource.loading) {
+    return <p className="py-6 text-sm text-stone-500">Загружаем направления…</p>;
+  }
+  if (modeResource.error || !modeResource.data) {
+    return <p className="mt-5 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700">{modeResource.error ?? "Не удалось загрузить направления"}</p>;
+  }
+
+  const directions = modeResource.data.mode === "v2"
+    ? modeResource.data.directions.filter((direction) => directionTitles.includes(direction.title))
+    : [];
+  if (modeResource.data.mode === "v2" && !directions.length) {
+    return <p className="mt-5 rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-900">Для ученика не выбрано направление обучения.</p>;
+  }
+
+  return (
+    <StudentMonthlyPlanEditorContent
+      crmStudentId={crmStudentId}
+      mode={modeResource.data}
+      directions={directions}
+    />
+  );
+}
+
+function StudentMonthlyPlanEditorContent({
+  crmStudentId,
+  mode,
+  directions,
+}: {
+  crmStudentId: string;
+  mode: LearningPlanMode;
+  directions: TeacherCrmDirection[];
 }) {
   const [month, setMonth] = useState(() => currentAqtobeMonth());
+  const [crmDirectionId, setCrmDirectionId] = useState(() => directions[0]?.crmDirectionId ?? "");
   const resource = useApiResource(
-    () => teacherStudentsApi.monthlyPlan(crmStudentId, month),
-    [crmStudentId, month],
+    () => teacherStudentsApi.monthlyPlan(crmStudentId, month, crmDirectionId || undefined),
+    [crmStudentId, month, crmDirectionId],
   );
+  const homeworkFlowResource = useApiResource(() => learningHomeworkApi.teacherAvailability(), []);
   const [draft, setDraft] = useState<StudentMonthlyPlan>(() => emptyPlan(month));
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
@@ -97,14 +141,22 @@ export function StudentMonthlyPlanEditor({
       const plan = await teacherStudentsApi.saveMonthlyPlan(crmStudentId, {
         ...draft,
         month,
+        expectedVersion: mode.mode === "v2" ? draft.version ?? 0 : undefined,
         items: draft.items.filter((item) => item.title.trim()),
-      });
+      }, crmDirectionId || undefined);
       setDraft(plan);
       setSaved(true);
       await resource.reload();
       return plan;
-    } catch {
-      setError("Не удалось сохранить план. Проверьте интернет и повторите.");
+    } catch (reason) {
+      if (reason instanceof ApiError && reason.code === "MONTHLY_PLAN_STALE_DRAFT") {
+        setError("План уже изменился. Обновите данные перед сохранением.");
+        setStaleDraft(true);
+      } else if (reason instanceof ApiError) {
+        setError(reason.message);
+      } else {
+        setError("Не удалось сохранить план. Проверьте интернет и повторите.");
+      }
       return null;
     } finally {
       setSaving(false);
@@ -125,7 +177,8 @@ export function StudentMonthlyPlanEditor({
       const plan = await teacherStudentsApi.publishMonthlyPlan(
         crmStudentId,
         month,
-        savedPlan.publication?.draftRevision,
+        savedPlan.version ?? savedPlan.publication?.draftRevision,
+        crmDirectionId || undefined,
       );
       setDraft(plan);
       setSaved(true);
@@ -160,13 +213,13 @@ export function StudentMonthlyPlanEditor({
 
   return (
     <section className="mt-5 rounded-[24px] border border-amber-200 bg-amber-50/40 p-5 sm:p-6 shadow-soft">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-amber-200/60 pb-4">
-        <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-800">Учебная программа</p>
-          <h3 className="mt-0.5 font-display text-2xl text-ink">План на месяц</h3>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-          <span className={`rounded-full px-3 py-1.5 text-[11px] font-black ${
+      <div className="border-b border-amber-200/60 pb-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-800">Учебная программа</p>
+            <h3 className="mt-0.5 font-display text-2xl text-ink">План на месяц</h3>
+          </div>
+          <span className={`max-w-full self-start rounded-full px-3 py-1.5 text-[11px] font-black leading-5 ${
             draft.publication?.isPublished && !hasUnpublishedChanges
               ? "bg-emerald-100 text-emerald-800"
               : hasUnpublishedChanges && draft.publication?.isPublished
@@ -175,12 +228,28 @@ export function StudentMonthlyPlanEditor({
           }`}>
             {publicationLabel}
           </span>
-          <input
-            type="month"
-            value={month}
-            onChange={(event) => setMonth(event.target.value)}
-            className="h-11 rounded-xl border border-amber-200 bg-white px-3 text-sm font-bold shadow-xs outline-none"
-          />
+        </div>
+
+        <div className={`mt-4 grid min-w-0 gap-3 ${
+          mode.mode === "v2"
+            ? "sm:grid-cols-2"
+            : "sm:ml-auto sm:max-w-[260px]"
+        }`}>
+          {mode.mode === "v2" ? (
+            <label className="block min-w-0 text-[10px] font-black uppercase tracking-wider text-stone-500">
+              Направление
+              <select
+                value={crmDirectionId}
+                onChange={(event) => setCrmDirectionId(event.target.value)}
+                className="mt-1 h-11 w-full rounded-xl border border-amber-200 bg-white px-3 text-sm font-bold normal-case tracking-normal text-ink shadow-xs outline-none"
+              >
+                {directions.map((direction) => (
+                  <option key={direction.crmDirectionId} value={direction.crmDirectionId}>{direction.title}</option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          <PlanMonthField value={month} onChange={setMonth} />
         </div>
       </div>
 
@@ -227,44 +296,76 @@ export function StudentMonthlyPlanEditor({
 
         <div className="mt-3 space-y-2.5">
           {draft.items.map((item, index) => (
-            <div key={item.id} className="grid gap-2 rounded-2xl border border-stone-200 bg-white p-3 sm:grid-cols-[1fr_160px_40px] shadow-xs">
-              <input
-                value={item.title}
-                onChange={(event) => {
-                  const title = event.target.value;
-                  setDraft((current) => ({
-                    ...current,
-                    items: current.items.map((entry, itemIndex) => itemIndex === index ? { ...entry, title } : entry),
-                  }));
-                  setSaved(false);
-                  setStaleDraft(false);
-                }}
-                placeholder="Песня или навык (напр. Кукла колдуна)"
-                className="h-10 rounded-xl bg-stone-50 px-3 text-sm font-semibold outline-none focus:ring-2 focus:ring-amber-200"
-              />
-              <select
-                value={item.status}
-                onChange={(event) => {
-                  const status = event.target.value as MonthlyPlanItemStatus;
-                  setDraft((current) => ({
-                    ...current,
-                    items: current.items.map((entry, itemIndex) => itemIndex === index ? { ...entry, status } : entry),
-                  }));
-                  setSaved(false);
-                  setStaleDraft(false);
-                }}
-                className={"h-10 rounded-xl border px-2.5 text-xs font-bold " + (
-                  item.status === "completed"
-                    ? "border-emerald-300 bg-emerald-50 text-emerald-800"
-                    : item.status === "in_progress"
-                    ? "border-amber-300 bg-amber-50 text-amber-900"
-                    : "border-stone-200 bg-white text-stone-600"
-                )}
-              >
-                {itemStatuses.map((status) => (
-                  <option key={status.value} value={status.value}>{status.label}</option>
-                ))}
-              </select>
+            <div key={item.id} className="grid gap-2 rounded-2xl border border-stone-200 bg-white p-3 shadow-xs sm:grid-cols-[minmax(0,1fr)_180px_40px]">
+              <div className="min-w-0 space-y-2">
+                <input
+                  value={item.title}
+                  onChange={(event) => {
+                    const title = event.target.value;
+                    setDraft((current) => ({
+                      ...current,
+                      items: current.items.map((entry, itemIndex) => itemIndex === index ? { ...entry, title } : entry),
+                    }));
+                    setSaved(false);
+                    setStaleDraft(false);
+                  }}
+                  placeholder="Песня или навык (напр. Кукла колдуна)"
+                  className="h-10 w-full rounded-xl bg-stone-50 px-3 text-sm font-semibold outline-none focus:ring-2 focus:ring-amber-200"
+                />
+                {mode.mode === "v2" ? (
+                  <input
+                    value={item.masteryCriteria ?? ""}
+                    onChange={(event) => {
+                      const masteryCriteria = event.target.value;
+                      setDraft((current) => ({
+                        ...current,
+                        items: current.items.map((entry, itemIndex) => itemIndex === index ? { ...entry, masteryCriteria } : entry),
+                      }));
+                      setSaved(false);
+                      setStaleDraft(false);
+                    }}
+                    placeholder="Критерий освоения"
+                    className="h-9 w-full rounded-xl bg-stone-50 px-3 text-xs outline-none focus:ring-2 focus:ring-amber-200"
+                  />
+                ) : null}
+              </div>
+              {mode.mode === "v2" ? (
+                <LearningTopicProgressEditor
+                  topicId={item.id}
+                  progressPercent={item.progressPercent}
+                  onSaved={(result) => {
+                    setDraft((current) => ({
+                      ...current,
+                      items: current.items.map((entry) => entry.id === item.id ? { ...entry, ...result } : entry),
+                    }));
+                    void resource.reload();
+                  }}
+                />
+              ) : (
+                <select
+                  value={item.status}
+                  onChange={(event) => {
+                    const status = event.target.value as MonthlyPlanItemStatus;
+                    setDraft((current) => ({
+                      ...current,
+                      items: current.items.map((entry, itemIndex) => itemIndex === index ? { ...entry, status } : entry),
+                    }));
+                    setSaved(false);
+                    setStaleDraft(false);
+                  }}
+                  className={"h-10 rounded-xl border px-2.5 text-xs font-bold " + (
+                    item.status === "completed"
+                      ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                      : item.status === "in_progress"
+                      ? "border-amber-300 bg-amber-50 text-amber-900"
+                      : "border-stone-200 bg-white text-stone-600"
+                  )}
+                >
+                  {itemStatuses.map((status) => (
+                    <option key={status.value} value={status.value}>{status.label}</option>
+                  ))}
+                </select>
+              )}
               <button
                 type="button"
                 aria-label="Удалить тему"
@@ -277,6 +378,11 @@ export function StudentMonthlyPlanEditor({
               >
                 <Trash2 size={16} />
               </button>
+              {mode.mode === "v2" && homeworkFlowResource.data && item.progressPercent !== undefined && item.title.trim() ? (
+                <div className="min-w-0 sm:col-span-3">
+                  <LearningHomeworkAssignmentComposer topicId={item.id} topicTitle={item.title} />
+                </div>
+              ) : null}
             </div>
           ))}
           {!draft.items.length ? (
@@ -338,12 +444,12 @@ export function StudentMonthlyPlanEditor({
         </div>
       ) : null}
 
-      <div className="mt-6 flex flex-wrap gap-3">
+      <div className="sticky bottom-[72px] z-20 -mx-5 mt-6 flex flex-col gap-2 border-y border-amber-200/70 bg-amber-50/95 px-5 py-3 shadow-[0_-12px_30px_rgba(41,37,36,0.08)] backdrop-blur sm:bottom-4 sm:mx-0 sm:flex-row sm:rounded-2xl sm:border">
         <button
           type="button"
           disabled={saving || publishing}
           onClick={() => void save()}
-          className="inline-flex min-h-12 items-center gap-2 rounded-2xl border border-stone-300 bg-white px-5 text-sm font-bold text-ink shadow-xs transition hover:bg-stone-50 disabled:opacity-60"
+          className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border border-stone-300 bg-white px-5 text-sm font-bold text-ink shadow-xs transition hover:bg-stone-50 disabled:opacity-60 sm:w-auto"
         >
           {saving ? <LoaderCircle size={16} className="animate-spin" /> : saved ? <CheckCircle2 size={16} className="text-emerald-600" /> : <Save size={16} />}
           {saving ? "Сохраняем…" : "Сохранить черновик"}
@@ -352,7 +458,7 @@ export function StudentMonthlyPlanEditor({
           type="button"
           disabled={saving || publishing || !draft.goal.trim() || !draft.items.some((item) => item.title.trim())}
           onClick={() => void publish()}
-          className="inline-flex min-h-12 items-center gap-2 rounded-2xl bg-ink px-6 text-sm font-bold text-white shadow-soft transition hover:bg-stone-800 disabled:opacity-50"
+          className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-ink px-6 text-sm font-bold text-white shadow-soft transition hover:bg-stone-800 disabled:opacity-50 sm:w-auto"
         >
           {publishing ? <LoaderCircle size={16} className="animate-spin" /> : <Send size={16} />}
           {publishing ? "Публикуем…" : draft.publication?.isPublished ? "Обновить план ученику" : "Опубликовать ученику"}

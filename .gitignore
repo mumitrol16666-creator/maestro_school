@@ -10,3 +10,14 @@ __pycache__/
 .dart_tool/
 build/
 .idea/
+.agents/
+*.dataless-backup
+*.db
+*.sqlite
+*.sqlite3
+*.dump
+backend/uploads/
+.playwright-cli/
+web_app/playwright-report/
+web_app/test-results/
+web_app/blob-report/

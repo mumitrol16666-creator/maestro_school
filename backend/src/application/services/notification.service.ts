@@ -17,6 +17,7 @@ export async function createUserNotification(params: {
   title: string;
   body: string;
   url?: string | null;
+  dedupeKey?: string | null;
 }) {
   return prisma.userNotification.create({
     data: {
@@ -25,6 +26,7 @@ export async function createUserNotification(params: {
       title: params.title,
       body: params.body,
       url: params.url ?? null,
+      dedupeKey: params.dedupeKey ?? null,
     },
   });
 }
@@ -41,8 +43,18 @@ export async function deliverUserNotification(params: {
   body: string;
   url?: string | null;
   tag?: string;
+  dedupeKey?: string;
   dedupeWindowMs?: number;
 }) {
+  if (params.dedupeKey) {
+    const duplicate = await prisma.userNotification.findUnique({
+      where: { dedupeKey: params.dedupeKey },
+    });
+    if (duplicate) {
+      return { notification: duplicate, duplicate: true as const };
+    }
+  }
+
   if (params.dedupeWindowMs && params.url) {
     const duplicate = await prisma.userNotification.findFirst({
       where: {
@@ -58,7 +70,20 @@ export async function deliverUserNotification(params: {
     }
   }
 
-  const notification = await createUserNotification(params);
+  let notification;
+  try {
+    notification = await createUserNotification(params);
+  } catch (error) {
+    if (params.dedupeKey) {
+      const duplicate = await prisma.userNotification.findUnique({
+        where: { dedupeKey: params.dedupeKey },
+      });
+      if (duplicate) {
+        return { notification: duplicate, duplicate: true as const };
+      }
+    }
+    throw error;
+  }
   await sendPushToUser(params.userId, {
     title: params.title,
     body: params.body,
@@ -199,7 +224,11 @@ async function notifyParentsAboutApprovedLesson(params: {
             crmStudentId: params.student.crmStudentId,
           },
         },
-        select: { attendanceStatus: true },
+        select: {
+          attendanceStatus: true,
+          homeworkStatus: true,
+          homeworkCompletionPercent: true,
+        },
       }).catch(() => null)
     : null;
   try {
@@ -224,10 +253,17 @@ async function notifyParentsAboutApprovedLesson(params: {
       - new Date(left.homeworkResult!.reviewedAt!).getTime()
     ))[0];
   const homeworkResult = reviewedHomework?.homeworkResult;
-  const homeworkStatus = homeworkResult?.status;
+  const localHomeworkStatus = localCheck && ["completed", "partial", "not_completed"].includes(
+    localCheck.homeworkStatus,
+  )
+    ? localCheck.homeworkStatus as keyof typeof homeworkStatusText
+    : undefined;
+  const homeworkStatus = homeworkResult?.status ?? localHomeworkStatus;
+  const homeworkCompletionPercent = homeworkResult?.completionPercent
+    ?? localCheck?.homeworkCompletionPercent;
   const homeworkReviewCopy = homeworkStatus
     ? ` Прошлое ДЗ: ${homeworkStatusText[homeworkStatus]}${
-        homeworkResult.completionPercent == null ? "" : ` · ${homeworkResult.completionPercent}%`
+        homeworkCompletionPercent == null ? "" : ` · ${homeworkCompletionPercent}%`
       }.`
     : "";
   const reportType = attended === false
@@ -289,6 +325,8 @@ export async function notifyOfflineLessonEvent(params: {
   lessonTitle?: string | null;
   date?: string | null;
   startTime?: string | null;
+  deliveryFormat?: "offline" | "online";
+  meetingUrl?: string | null;
   message?: string | null;
 }) {
   const teacher = params.crmTeacherId
@@ -299,6 +337,7 @@ export async function notifyOfflineLessonEvent(params: {
   const lessonTitle = params.lessonTitle?.trim() || "Урок";
   const when = [params.date, params.startTime].filter(Boolean).join(" · ");
   const context = when ? ` (${when})` : "";
+  const scheduleUpdateMessage = params.message?.trim() || null;
   const teacherCopy = {
     approved: {
       type: "offline_lesson_approved" as const,
@@ -314,14 +353,14 @@ export async function notifyOfflineLessonEvent(params: {
     },
     cancelled: {
       type: "offline_lesson_cancelled" as const,
-      title: "Офлайн-урок отменён",
+      title: "Урок отменён",
       body: `${lessonTitle}${context}. Занятие отменено, проверьте расписание.`,
       tag: "offline-lesson-cancelled",
     },
     rescheduled: {
       type: "offline_lesson_rescheduled" as const,
-      title: "Офлайн-урок перенесён",
-      body: `${lessonTitle}${context}. Проверьте обновлённое расписание.`,
+      title: scheduleUpdateMessage ? "Данные урока обновлены" : "Урок перенесён",
+      body: `${lessonTitle}${context}. ${scheduleUpdateMessage || "Проверьте обновлённое расписание."}`,
       tag: "offline-lesson-rescheduled",
     },
   }[params.event];
@@ -343,8 +382,8 @@ export async function notifyOfflineLessonEvent(params: {
   const studentCopy = params.event === "approved"
     ? {
         type: "offline_lesson_report_ready" as const,
-        title: "Готов итог офлайн-урока",
-        body: `${lessonTitle}${context}. Посмотрите итог, материалы и домашнее задание в школе.`,
+        title: "Готов итог урока",
+        body: `${lessonTitle}${context}. Посмотрите итог, материалы и домашнее задание.`,
       }
     : {
         type: teacherCopy.type,
@@ -407,6 +446,12 @@ export async function notifyOfflineLessonEvent(params: {
             body: `${lessonTitle}${context}. Занятие отменено. Проверьте актуальное расписание в семейном кабинете.`,
             notice: "cancelled",
           }
+        : scheduleUpdateMessage
+          ? {
+              title: `Данные урока обновлены: ${childName}`,
+              body: `${lessonTitle}${context}. ${scheduleUpdateMessage} Проверьте актуальное расписание в семейном кабинете.`,
+              notice: "schedule",
+            }
         : {
             title: `Урок перенесён: ${childName}`,
             body: `${lessonTitle}${context}. Дата или время изменились. Проверьте актуальное расписание в семейном кабинете.`,

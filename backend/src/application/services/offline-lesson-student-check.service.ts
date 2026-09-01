@@ -37,7 +37,8 @@ export async function saveOfflineLessonStudentCheck(params: {
   lessonPoints?: number;
   monthlyPlanId?: string | null;
   planTopicUpdates?: OfflinePlanTopicUpdate[];
-}) {
+  syncPending?: boolean;
+}, db: Prisma.TransactionClient | typeof prisma = prisma) {
   const homework = params.homeworkReview;
   const data = {
     attendanceStatus: params.attendanceStatus,
@@ -49,6 +50,13 @@ export async function saveOfflineLessonStudentCheck(params: {
       ? { planTopicUpdates: params.planTopicUpdates as Prisma.InputJsonValue }
       : {}),
     ...(params.teacherUserId ? { teacherUserId: params.teacherUserId } : {}),
+    ...(params.syncPending
+      ? {
+          syncRevision: { increment: 1 },
+          syncStatus: "pending_sync",
+          lastSyncError: null,
+        }
+      : {}),
     ...(homework
       ? {
           homeworkStatus: homework.status,
@@ -60,7 +68,7 @@ export async function saveOfflineLessonStudentCheck(params: {
       : {}),
   };
 
-  return prisma.offlineLessonStudentCheck.upsert({
+  return db.offlineLessonStudentCheck.upsert({
     where: {
       crmClassId_crmStudentId: {
         crmClassId: params.crmClassId,
@@ -81,6 +89,8 @@ export async function saveOfflineLessonStudentCheck(params: {
       lessonPoints: params.lessonPoints ?? 0,
       monthlyPlanId: params.monthlyPlanId ?? null,
       planTopicUpdates: (params.planTopicUpdates ?? []) as Prisma.InputJsonValue,
+      syncRevision: params.syncPending ? 1 : 0,
+      syncStatus: params.syncPending ? "pending_sync" : "synced",
       markedAt: new Date(),
     },
     update: data,
@@ -128,6 +138,12 @@ export async function mergeOfflineLessonStudentChecks<T extends {
         ...student,
         ...(check
           ? {
+              ...(check.syncStatus === "conflict"
+                ? { localAttendanceStatus: check.attendanceStatus }
+                : {
+                    attendanceStatus: check.attendanceStatus,
+                    attended: ["present", "late"].includes(check.attendanceStatus),
+                  }),
               teacherNote: check.teacherNote ?? student.teacherNote,
               homeworkReview: {
                 status: check.homeworkStatus,
@@ -140,6 +156,10 @@ export async function mergeOfflineLessonStudentChecks<T extends {
               monthlyPlanId: check.monthlyPlanId,
               planTopicUpdates: check.planTopicUpdates as OfflinePlanTopicUpdate[],
               rewardsAppliedAt: check.rewardsAppliedAt?.toISOString() ?? null,
+              syncRevision: check.syncRevision,
+              syncStatus: check.syncStatus,
+              lastSyncError: check.lastSyncError,
+              syncedAt: check.syncedAt?.toISOString() ?? null,
               appMarkedAt: check.markedAt.toISOString(),
             }
           : {}),

@@ -8,7 +8,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock3,
-  Medal,
+  Flame,
   RotateCcw,
   Save,
   Send,
@@ -20,7 +20,6 @@ import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { ErrorState, LoadingState } from "@/components/data-states";
 import { PageHeader } from "@/components/page-header";
-import { useAuth } from "@/components/auth-provider";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { api } from "@/lib/api-client";
 import type { PreparedTestAttemptResponse, PreparedTestReviewItem } from "@/types/prepared-tests";
@@ -30,7 +29,6 @@ type SaveState = "idle" | "saving" | "saved" | "error";
 export default function PreparedTestPage() {
   const params = useParams<{ testId: string }>();
   const testId = params.testId;
-  const { refreshUser } = useAuth();
   const resource = useApiResource(() => api.preparedTest(testId), [testId]);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [currentQuestion, setCurrentQuestion] = useState(0);
@@ -84,9 +82,6 @@ export default function PreparedTestPage() {
       const submittedResult = await api.submitPreparedTest(testId, answers);
       setResult(submittedResult);
       setRetakeMode(false);
-      if (submittedResult.rewardPointsAwarded > 0) {
-        void refreshUser();
-      }
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "Не удалось отправить ответы");
@@ -114,7 +109,8 @@ export default function PreparedTestPage() {
     passed: test.latestAttempt?.passed ?? test.passed,
     passingScore: test.passingScore,
     attemptsRemaining: test.attemptsRemaining,
-    rewardPointsAwarded: 0,
+    xpAwarded: test.earnedXp,
+    xpStatus: test.earnedXp > 0 ? "awarded" : "already_awarded",
     review,
     topicsToRepeat: (test.latestAttempt?.passed ?? test.passed) ? [] : [test.description],
     nextTest: test.nextTest,
@@ -174,13 +170,19 @@ export default function PreparedTestPage() {
             </div>
             <div className="rounded-2xl bg-white/75 p-4">
               <p className="text-xs font-bold uppercase tracking-wide text-stone-500">
-                {completed.passed ? "Награда" : "Повторные попытки"}
+                {completed.passed ? "Недельный XP" : "Повторные попытки"}
               </p>
               <p className="mt-1 flex items-center gap-2 font-display text-3xl">
                 {completed.passed ? (
-                  completed.rewardPointsAwarded > 0
-                    ? <><Medal size={22} className="text-gold" /> +{completed.rewardPointsAwarded}</>
-                    : <span className="text-xl">Уже получена</span>
+                  completed.xpAwarded > 0
+                    ? <><Flame size={22} className="text-gold" /> +{completed.xpAwarded} XP</>
+                    : <span className="text-xl">
+                        {completed.xpStatus === "weekly_limit"
+                          ? "Лимит недели"
+                          : completed.xpStatus === "already_awarded"
+                            ? "Уже учтён"
+                            : "Не начислен"}
+                      </span>
                 ) : <span className="text-xl">Без лимита</span>}
               </p>
             </div>

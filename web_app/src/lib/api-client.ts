@@ -16,7 +16,9 @@ import type {
   StartLessonResponse,
   StudentAchievementItem,
   StudentAchievementsMeta,
+  StudentEconomyProfile,
   StudentMonthlyPlansResponse,
+  StudentPointsReadModel,
   TrialBookingInput,
   TrialBookingResponse,
 } from "@/types/api";
@@ -91,13 +93,23 @@ export async function apiRequestEnvelope<T, M = unknown>(path: string, init: Req
   if (init.body) headers.set("Content-Type", "application/json");
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
-  let response: Response;
-  try {
-    response = await fetch(`${API_URL}${path}`, { ...init, headers, cache: "no-store" });
-  } catch {
-    throw new ApiError("Не удалось связаться с сервером Maestro", 0, "NETWORK_ERROR");
+  const method = (init.method ?? "GET").toUpperCase();
+  const attempts = method === "GET" ? 2 : 1;
+  let response: Response | null = null;
+
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      response = await fetch(`${API_URL}${path}`, { ...init, headers, cache: "no-store" });
+      break;
+    } catch {
+      if (init.signal?.aborted || attempt === attempts - 1) {
+        throw new ApiError("Не удалось связаться с сервером Maestro", 0, "NETWORK_ERROR");
+      }
+      await new Promise((resolve) => setTimeout(resolve, 150));
+    }
   }
 
+  if (!response) throw new ApiError("Не удалось связаться с сервером Maestro", 0, "NETWORK_ERROR");
   const payload = (await response.json().catch(() => ({}))) as ApiEnvelope<T, M> & ApiErrorEnvelope;
   if (!response.ok) {
     if (response.status === 401) {
@@ -194,6 +206,8 @@ export const api = {
       label?: string;
     }>(`/lessons/${lessonId}/signup`, { method: "POST" }),
   dashboard: () => apiRequest<ApiDashboard>("/students/me/dashboard"),
+  studentLevel: () => apiRequest<StudentPointsReadModel>("/students/me/level"),
+  studentEconomyProfile: () => apiRequest<StudentEconomyProfile>("/students/me/economy-profile"),
   studentHome: () => apiRequest<ApiStudentHome>("/students/me/home"),
   studentMonthlyPlans: (month?: string) => apiRequest<StudentMonthlyPlansResponse>(
     `/students/me/monthly-plans${month ? `?month=${encodeURIComponent(month)}` : ""}`,

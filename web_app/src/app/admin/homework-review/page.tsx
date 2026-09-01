@@ -27,15 +27,19 @@ function statusLabel(status: string) {
       under_review: "На проверке",
       approved: "Принято",
       rejected: "Доработка",
+      waiting_review: "На проверке",
+      accepted: "Принято",
+      accepted_with_comment: "Принято с замечанием",
+      revision: "Доработка",
       pending: "Ожидает",
     }[status] ?? status
   );
 }
 
 function statusClass(status: string) {
-  if (status === "submitted" || status === "under_review") return "bg-amber-50 text-amber-800";
-  if (status === "approved") return "bg-emerald-50 text-emerald-700";
-  if (status === "rejected") return "bg-red-50 text-red-700";
+  if (["submitted", "under_review", "waiting_review"].includes(status)) return "bg-amber-50 text-amber-800";
+  if (["approved", "accepted", "accepted_with_comment"].includes(status)) return "bg-emerald-50 text-emerald-700";
+  if (["rejected", "revision"].includes(status)) return "bg-red-50 text-red-700";
   return "bg-stone-100 text-stone-600";
 }
 
@@ -73,8 +77,8 @@ export default function HomeworkReviewPage() {
     <>
       <PageHeader
         eyebrow="Обучение"
-        title="Проверка ДЗ"
-        description="Очередь домашних заданий учеников. Принимайте работы или возвращайте на доработку."
+        title="Домашние задания"
+        description="Работы учеников, которые ждут вашего решения, и история проверок."
       />
 
       <div className="mb-5 flex flex-wrap gap-2">
@@ -133,6 +137,9 @@ export default function HomeworkReviewPage() {
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="font-display text-xl">{item.studentName}</h2>
+                  <span className="rounded-full bg-stone-100 px-2.5 py-1 text-[10px] font-black uppercase text-stone-500">
+                    {item.model === "learning_homework_v2" ? "Школьное ДЗ" : "Курс"}
+                  </span>
                   <span className={`rounded-full px-3 py-1 text-xs font-bold ${statusClass(item.status)}`}>
                     {statusLabel(item.status)}
                   </span>
@@ -141,7 +148,9 @@ export default function HomeworkReviewPage() {
                   {item.courseTitle} · {item.moduleTitle} · {item.lessonTitle}
                 </p>
                 <p className="mt-2 line-clamp-2 text-sm text-stone-500">
-                  {item.studentComment || item.homeworkDescription}
+                  {item.submissionMode === "ready_for_lesson"
+                    ? `Проверить подготовку на уроке${item.studentComment ? ` · ${item.studentComment}` : ""}`
+                    : item.studentComment || item.homeworkDescription}
                 </p>
                 {item.homeworkType === "test" && item.testScore != null && (
                   <p className={`mt-2 text-xs font-bold ${item.testPassed ? "text-emerald-700" : "text-red-700"}`}>

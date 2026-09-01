@@ -1,196 +1,22 @@
 #!/usr/bin/env bash
-# Maestro School — production deploy script (runs on VPS)
+# Maestro School production deploy entrypoint.
+# The unified ecosystem deploy owns source synchronization, backups, migrations,
+# release verification and post-deploy smoke checks for both Maestro services.
 set -euo pipefail
 
-APP_DIR="/var/www/maestro_school"
-cd "$APP_DIR"
+UNIFIED_DEPLOY="${UNIFIED_DEPLOY:-/var/www/maestro_crm/deploy/deploy-maestro-all.sh}"
+RELEASE_SHA="${RELEASE_SHA:-}"
 
-DEPLOY_HOST="${DEPLOY_HOST:-178.105.59.89}"
-PUBLIC_DOMAIN="${PUBLIC_DOMAIN:-maestro-school.duckdns.org}"
-POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-}"
-JWT_SECRET="${JWT_SECRET:-}"
-CORS_ORIGIN="${CORS_ORIGIN:-https://${PUBLIC_DOMAIN}}"
-API_PUBLIC_URL="${API_PUBLIC_URL:-https://${PUBLIC_DOMAIN}/api/v1}"
-VAPID_PUBLIC_KEY="${VAPID_PUBLIC_KEY:-}"
-VAPID_PRIVATE_KEY="${VAPID_PRIVATE_KEY:-}"
-VAPID_SUBJECT="${VAPID_SUBJECT:-mailto:admin@${PUBLIC_DOMAIN}}"
-RELEASE_SHA="${RELEASE_SHA:-$(git rev-parse HEAD 2>/dev/null || echo unknown)}"
-RELEASE_BUILT_AT="${RELEASE_BUILT_AT:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
-ADMIN_EMAIL="${ADMIN_EMAIL:-}"
-ADMIN_PASSWORD="${ADMIN_PASSWORD:-}"
-ADMIN_FIRST_NAME="${ADMIN_FIRST_NAME:-}"
-ADMIN_LAST_NAME="${ADMIN_LAST_NAME:-}"
-DEPLOY_ENV_FILE="/var/lib/maestro/deploy.env"
-
-log() { echo "[deploy] $*"; }
-
-load_admin_env() {
-  if [ -f "$DEPLOY_ENV_FILE" ]; then
-    log "Loading admin env from ${DEPLOY_ENV_FILE}"
-    set -a
-    # shellcheck source=/dev/null
-    source "$DEPLOY_ENV_FILE"
-    set +a
-  fi
-}
-
-persist_admin_env() {
-  install -d -m 0700 /var/lib/maestro
-  cat > "$DEPLOY_ENV_FILE" <<EOF
-ADMIN_EMAIL="${ADMIN_EMAIL}"
-ADMIN_PASSWORD="${ADMIN_PASSWORD}"
-ADMIN_FIRST_NAME="${ADMIN_FIRST_NAME}"
-ADMIN_LAST_NAME="${ADMIN_LAST_NAME}"
-EOF
-  chmod 600 "$DEPLOY_ENV_FILE"
-}
-
-docker_compose() {
-  if docker compose version >/dev/null 2>&1; then
-    docker compose "$@"
-  else
-    docker-compose "$@"
-  fi
-}
-
-ensure_docker() {
-  if command -v docker >/dev/null 2>&1; then
-    return
-  fi
-  log "Installing Docker..."
-  export DEBIAN_FRONTEND=noninteractive
-  apt-get update -y
-  apt-get install -y curl ca-certificates
-  curl -fsSL https://get.docker.com | sh
-  systemctl enable docker
-  systemctl start docker
-}
-
-ensure_node() {
-  if command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then
-    log "Node.js $(node -v), npm $(npm -v)"
-    return
-  fi
-  log "Installing Node.js 20..."
-  export DEBIAN_FRONTEND=noninteractive
-  apt-get update -y
-  apt-get install -y curl ca-certificates
-  curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-  apt-get install -y nodejs
-  log "Node.js $(node -v), npm $(npm -v)"
-}
-
-ensure_pm2() {
-  if command -v pm2 >/dev/null 2>&1; then
-    return
-  fi
-  log "Installing PM2..."
-  npm install -g pm2
-}
-
-if [ -z "$POSTGRES_PASSWORD" ]; then
-  echo "POSTGRES_PASSWORD must be set." >&2
+if [ ! -x "$UNIFIED_DEPLOY" ]; then
+  echo "Unified Maestro deploy script is unavailable: ${UNIFIED_DEPLOY}" >&2
+  echo "Deploy from /var/www/maestro_crm with deploy/deploy-maestro-all.sh." >&2
   exit 1
 fi
 
-if [ -z "$JWT_SECRET" ] || [ "${#JWT_SECRET}" -lt 16 ]; then
-  echo "JWT_SECRET must be set (min 16 chars). Add GitHub secret JWT_SECRET." >&2
+if [[ ! "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+  echo "RELEASE_SHA must contain the exact 40-character commit SHA to deploy." >&2
   exit 1
 fi
 
-load_admin_env
-
-admin_values_set=0
-for value in "$ADMIN_EMAIL" "$ADMIN_PASSWORD" "$ADMIN_FIRST_NAME" "$ADMIN_LAST_NAME"; do
-  if [ -n "$value" ]; then
-    admin_values_set=$((admin_values_set + 1))
-  fi
-done
-
-if [ "$admin_values_set" -gt 0 ] && [ "$admin_values_set" -lt 4 ]; then
-  echo "Set all ADMIN_EMAIL, ADMIN_PASSWORD, ADMIN_FIRST_NAME and ADMIN_LAST_NAME values, or leave all of them empty." >&2
-  exit 1
-fi
-
-if [ "$admin_values_set" -eq 0 ]; then
-  log "Admin secrets are not set; keeping existing administrators unchanged."
-else
-  persist_admin_env
-fi
-
-ensure_docker
-ensure_node
-ensure_pm2
-install -d -m 0755 /var/lib/maestro/uploads
-
-log "Starting PostgreSQL..."
-export POSTGRES_PASSWORD
-docker_compose -f docker-compose.prod.yml up -d
-
-log "Waiting for database..."
-for i in $(seq 1 30); do
-  if docker_compose -f docker-compose.prod.yml exec -T postgres pg_isready -U maestro -d maestro >/dev/null 2>&1; then
-    break
-  fi
-  sleep 2
-done
-if ! docker_compose -f docker-compose.prod.yml exec -T postgres pg_isready -U maestro -d maestro >/dev/null 2>&1; then
-  echo "PostgreSQL did not become ready in time." >&2
-  exit 1
-fi
-
-log "Writing backend .env..."
-cat > backend/.env <<EOF
-DATABASE_URL="postgresql://maestro:${POSTGRES_PASSWORD}@localhost:5432/maestro?schema=public"
-JWT_SECRET="${JWT_SECRET}"
-PORT=4000
-HOST=0.0.0.0
-CORS_ORIGIN="${CORS_ORIGIN}"
-UPLOAD_DIR="/var/lib/maestro/uploads"
-VAPID_PUBLIC_KEY="${VAPID_PUBLIC_KEY}"
-VAPID_PRIVATE_KEY="${VAPID_PRIVATE_KEY}"
-VAPID_SUBJECT="${VAPID_SUBJECT}"
-RELEASE_SHA="${RELEASE_SHA}"
-RELEASE_BUILT_AT="${RELEASE_BUILT_AT}"
-EOF
-
-log "Writing web_app .env.local..."
-cat > web_app/.env.local <<EOF
-NEXT_PUBLIC_API_URL=${API_PUBLIC_URL}
-NEXT_PUBLIC_RELEASE_SHA=${RELEASE_SHA}
-NEXT_PUBLIC_RELEASE_BUILT_AT=${RELEASE_BUILT_AT}
-EOF
-
-log "Installing backend dependencies..."
-cd backend
-npm ci
-npm run db:generate
-npm run db:migrate
-
-log "Synchronizing roles, permissions and first admin..."
-export ADMIN_EMAIL ADMIN_PASSWORD ADMIN_FIRST_NAME ADMIN_LAST_NAME
-npm run db:seed
-
-log "Building backend..."
-npm run build
-cd "$APP_DIR"
-
-log "Installing frontend dependencies..."
-cd web_app
-npm ci
-
-log "Building frontend..."
-npm run build
-cd "$APP_DIR"
-
-log "Restarting PM2 apps..."
-pm2 delete maestro-web >/dev/null 2>&1 || true
-pm2 startOrReload deploy/ecosystem.config.cjs --update-env
-pm2 save
-
-log "Deploy complete."
-log "Web:    https://${PUBLIC_DOMAIN}"
-log "API:    ${API_PUBLIC_URL}"
-log "Login:  https://${PUBLIC_DOMAIN}/login"
-log "Admin:  https://${PUBLIC_DOMAIN}/admin"
-log "Health: http://127.0.0.1:4000/health"
+export LP_RELEASE_SHA_OVERRIDE="$RELEASE_SHA"
+exec "$UNIFIED_DEPLOY" learning-platform

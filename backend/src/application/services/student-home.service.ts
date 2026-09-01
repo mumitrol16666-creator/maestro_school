@@ -7,10 +7,9 @@ import {
 import { getStudentRank } from "../../domain/student-rank.js";
 import { prisma } from "../../infrastructure/database/prisma.js";
 import { aqtobeMonthKey } from "../../lib/aqtobe-month.js";
-import { listPublishedGroupMonthlyPlans } from "./group-monthly-plan.service.js";
 import { getStudentDashboard } from "./student-dashboard.service.js";
 import { getStudentSchoolOfflineSummary } from "./school-offline.service.js";
-import { listPublishedStudentMonthlyPlans } from "./student-monthly-plan.service.js";
+import { listPublishedMonthlyPlansAdapted } from "./monthly-plan-adapter.service.js";
 
 // Re-export pure domain functions so existing consumers keep working.
 export { buildOfflineHomework, offlineHomeworkStatus, selectOfflineHomeworks };
@@ -38,6 +37,10 @@ type OfflineLesson = {
   } | null;
 };
 
+type StudentSchoolSummary = {
+  profile?: { groups?: Array<{ crmGroupId?: string | null }> };
+};
+
 export async function getStudentHome(studentUserId: string) {
   const user = await prisma.user.findUnique({
     where: { id: studentUserId },
@@ -63,10 +66,15 @@ export async function getStudentHome(studentUserId: string) {
     ? dashboardResult.value
     : {
         currentCourse: null, progressPercent: 0, completedLessonsCount: 0,
-        totalLessonsCount: 0, points: 0, rank: getStudentRank(0), nextAvailableLesson: null,
+        totalLessonsCount: 0, points: 0, rank: getStudentRank(0), level: null,
+        nextAvailableLesson: null,
       };
   if (schoolResult.status === "rejected") {
-    const monthlyPlans = await listPublishedStudentMonthlyPlans(user.crmStudentId, aqtobeMonthKey());
+    const monthlyPlans = await listPublishedMonthlyPlansAdapted(
+      user.crmStudentId,
+      [],
+      aqtobeMonthKey(),
+    );
     if (dashboardResult.status === "rejected" && !monthlyPlans.length) {
       throw new BadRequestError("Не удалось собрать учебную главную", "STUDENT_HOME_UNAVAILABLE");
     }
@@ -83,7 +91,9 @@ export async function getStudentHome(studentUserId: string) {
     [key: string]: unknown;
   };
   const month = aqtobeMonthKey();
-  const monthlyPlans = await getPublishedMonthlyPlansForStudent(studentUserId, month, school);
+  const monthlyPlans = await getPublishedMonthlyPlansForStudent(studentUserId, month, {
+    schoolSummary: school,
+  });
   const upcoming = school.upcomingLessons ?? [];
   const homeworks = selectOfflineHomeworks(school.lessonHistory ?? [], upcoming);
 
@@ -96,44 +106,44 @@ export async function getStudentHome(studentUserId: string) {
   };
 }
 
-function getNextMonthKey(monthKey: string): string {
-  const [yearStr, monthStr] = monthKey.split("-");
-  const year = parseInt(yearStr, 10) || new Date().getFullYear();
-  const monthNum = parseInt(monthStr, 10) || 1;
-  if (monthNum >= 12) {
-    return `${year + 1}-01`;
-  }
-  return `${year}-${String(monthNum + 1).padStart(2, "0")}`;
-}
-
 export async function getPublishedMonthlyPlansForStudent(
   studentUserId: string,
   month: string,
-  schoolSummary?: { profile?: { groups?: Array<{ crmGroupId?: string | null }> } } | null,
+  options: {
+    requireLinkedProfile?: boolean;
+    schoolSummary?: StudentSchoolSummary | null;
+  } = {},
 ) {
   const user = await prisma.user.findUnique({
     where: { id: studentUserId },
     select: { crmStudentId: true },
   });
-  if (!user?.crmStudentId) return [];
-  const school = schoolSummary ?? await getStudentSchoolOfflineSummary(studentUserId) as {
-    profile?: { groups?: Array<{ crmGroupId?: string | null }> };
-  };
-  const groupIds = (school.profile?.groups ?? [])
-    .map((group) => group.crmGroupId ?? "")
-    .filter(Boolean);
-  const [studentPlans, groupPlans] = await Promise.all([
-    listPublishedStudentMonthlyPlans(user.crmStudentId, month),
-    listPublishedGroupMonthlyPlans(groupIds, month),
-  ]);
-  let plans = [...studentPlans, ...groupPlans];
-  if (!plans.length) {
-    const nextMonth = getNextMonthKey(month);
-    const [nextStudentPlans, nextGroupPlans] = await Promise.all([
-      listPublishedStudentMonthlyPlans(user.crmStudentId, nextMonth),
-      listPublishedGroupMonthlyPlans(groupIds, nextMonth),
-    ]);
-    plans = [...nextStudentPlans, ...nextGroupPlans];
+  if (!user?.crmStudentId) {
+    if (options.requireLinkedProfile) {
+      throw new BadRequestError(
+        "Профиль школы не подключён. Обратитесь к администратору Maestro.",
+        "CRM_NOT_LINKED",
+      );
+    }
+    return [];
   }
-  return plans;
+  let schoolSummary = options.schoolSummary;
+  if (schoolSummary === undefined) {
+    try {
+      schoolSummary = await getStudentSchoolOfflineSummary(studentUserId) as StudentSchoolSummary;
+    } catch {
+      schoolSummary = null;
+    }
+  }
+
+  const groupIds = [...new Set(
+    (schoolSummary?.profile?.groups ?? [])
+      .map((group) => group.crmGroupId?.trim() ?? "")
+      .filter(Boolean),
+  )];
+  const plans = await listPublishedMonthlyPlansAdapted(user.crmStudentId, groupIds, month);
+  return plans.sort((left, right) => (
+    left.teacher.name.localeCompare(right.teacher.name, "ru-RU")
+    || left.id.localeCompare(right.id)
+  ));
 }

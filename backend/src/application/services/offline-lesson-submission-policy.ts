@@ -95,8 +95,7 @@ export function validateOfflineLessonSubmission(params: {
   }
 
   const isTrial = lesson.classType === "trial";
-  const isIndividual = !isTrial && (lesson.classType === "individual" || (!lesson.group && students.length === 1));
-  if (isIndividual) {
+  if (!isTrial) {
     for (const student of presentStudents) {
       const homework = student.homeworkReview;
       if (!homework?.status || homework.status === "not_checked") {

@@ -1,6 +1,6 @@
 import { Prisma, type DifficultyLevel, type HomeworkType, type MaterialType } from "@prisma/client";
 import { prisma } from "../../infrastructure/database/prisma.js";
-import { NotFoundError } from "../../domain/errors.js";
+import { BadRequestError, NotFoundError } from "../../domain/errors.js";
 
 export interface PageInput {
   page: number;
@@ -244,10 +244,18 @@ export async function listAdminNews(input: PageInput) {
   return { items, total };
 }
 
-export const createNews = (data: { title: string; content: string; authorId: string; isPublished?: boolean; publishedAt?: Date | null }) =>
+export const createNews = (data: { title: string; content: string; authorId: string; showToStudents?: boolean; showToParents?: boolean; isPublished?: boolean; publishedAt?: Date | null }) =>
   prisma.newsPost.create({ data });
 
-export async function updateNews(id: string, data: { title?: string; content?: string; isPublished?: boolean; publishedAt?: Date | null; deletedAt?: Date | null }) {
-  await requireRecord(prisma.newsPost.findUnique({ where: { id }, select: { id: true } }), "News post");
+export async function updateNews(id: string, data: { title?: string; content?: string; showToStudents?: boolean; showToParents?: boolean; isPublished?: boolean; publishedAt?: Date | null; deletedAt?: Date | null }) {
+  const existing = await requireRecord(prisma.newsPost.findUnique({
+    where: { id },
+    select: { id: true, showToStudents: true, showToParents: true },
+  }), "News post");
+  const showToStudents = data.showToStudents ?? existing.showToStudents;
+  const showToParents = data.showToParents ?? existing.showToParents;
+  if (!showToStudents && !showToParents) {
+    throw new BadRequestError("Выберите хотя бы одну аудиторию", "NEWS_AUDIENCE_REQUIRED");
+  }
   return prisma.newsPost.update({ where: { id }, data });
 }

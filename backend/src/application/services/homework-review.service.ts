@@ -56,7 +56,8 @@ export async function reviewHomeworkSubmission(params: {
       title: "Домашнее задание принято",
       body: `Урок «${lesson.title}» — задание проверено, можно продолжать.`,
       url: `/lessons/${lessonId}`,
-      tag: `homework-${lessonId}`,
+      tag: `homework-${params.submissionId}`,
+      dedupeKey: `course-hw:review:${params.submissionId}:approved`,
     }).catch(() => undefined);
 
     return {
@@ -93,7 +94,8 @@ export async function reviewHomeworkSubmission(params: {
     title: "Нужна доработка ДЗ",
     body: `Урок «${lesson.title}» — преподаватель оставил комментарий.`,
     url: `/lessons/${lessonId}`,
-    tag: `homework-${lessonId}`,
+    tag: `homework-${params.submissionId}`,
+    dedupeKey: `course-hw:review:${params.submissionId}:rejected`,
   }).catch(() => undefined);
 
   return {

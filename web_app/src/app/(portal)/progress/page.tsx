@@ -1,7 +1,6 @@
 "use client";
 
-import { CheckCircle2, Clock3, Star, Trophy } from "lucide-react";
-import { AchievementsWall } from "@/components/achievements-wall";
+import { CheckCircle2, Clock3, Star } from "lucide-react";
 import Link from "next/link";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
 import { PageHeader } from "@/components/page-header";
@@ -12,61 +11,140 @@ import { normalizeLessonStatus } from "@/lib/adapters";
 import { api } from "@/lib/api-client";
 
 export default function ProgressPage() {
-  const resource = useApiResource(async () => {
-    const [progress, achievements] = await Promise.all([api.progress(), api.achievements()]);
-    return { progress, achievements };
-  }, []);
-  if (resource.loading) return <LoadingState label="Загружаем прогресс" />;
-  if (resource.error) return <ErrorState message={resource.error} retry={resource.reload} />;
-  if (!resource.data?.progress.enrollments.length) {
-    return <EmptyState title="Прогресс пока пуст" description="После начала обучения здесь появятся уроки и история баллов." />;
-  }
+  const resource = useApiResource(() => api.progress(), []);
 
-  const { lessons, points, pointsHistory, enrollments } = resource.data.progress;
-  const achievements = resource.data.achievements;
+  if (resource.loading) return <LoadingState label="Загружаем историю обучения" />;
+  if (resource.error) return <ErrorState message={resource.error} retry={resource.reload} />;
+  if (!resource.data) return null;
+
+  const { lessons, points, pointsHistory, enrollments } = resource.data;
+  if (!enrollments.length && !pointsHistory.length) {
+    return (
+      <EmptyState
+        title="История пока пустая"
+        description="После начала обучения здесь появятся курсы, пройденные уроки и начисления баллов."
+      />
+    );
+  }
 
   return (
     <>
-      <PageHeader eyebrow="Учебный путь" title="Прогресс" description="Статусы уроков и история начисления баллов из Learning Engine." />
-      <div className="grid gap-6 xl:grid-cols-[1fr_340px]">
-        <section className="space-y-6">
-          {enrollments.map((enrollment) => {
+      <PageHeader
+        eyebrow="Обучение"
+        title="История обучения"
+        description="Онлайн-курсы и последние начисления учебных баллов."
+      />
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <section className="space-y-6" aria-label="Курсы и уроки">
+          {enrollments.length ? enrollments.map((enrollment) => {
             const courseLessons = lessons.filter((item) => item.lesson.module.courseId === enrollment.courseId);
             const completed = courseLessons.filter((item) => item.status === "completed").length;
             const percent = courseLessons.length ? Math.round((completed / courseLessons.length) * 100) : 0;
+
             return (
-              <div key={enrollment.id} className="rounded-[30px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
-                <div className="mb-6 flex items-end justify-between"><div><p className="text-xs font-bold uppercase tracking-widest text-gold">{enrollment.course.direction.title}</p><Link href={`/courses/${enrollment.courseId}`} className="font-display mt-2 block text-4xl">{enrollment.course.title}</Link></div><p className="text-sm text-stone-400">{completed} из {courseLessons.length} уроков</p></div>
-                <div className="grid grid-cols-[1fr_auto] items-center gap-4"><ProgressBar value={percent} /><span className="font-display text-2xl">{percent}%</span></div>
-                <div className="mt-8 space-y-3">
-                  {courseLessons.map((item) => {
-                    const status = normalizeLessonStatus(item.status);
-                    return <Link href={status === "locked" ? `/courses/${enrollment.courseId}` : `/lessons/${item.lessonId}`} key={item.lessonId} className="card-hover flex items-center gap-4 rounded-2xl border border-stone-200 p-4"><span className="grid h-11 w-11 place-items-center rounded-xl bg-stone-100">{status === "completed" ? <CheckCircle2 size={18} className="text-emerald-700" /> : <Clock3 size={18} className="text-gold" />}</span><span className="min-w-0 flex-1"><span className="block truncate font-display text-xl">{item.lesson.title}</span><span className="mt-1 block text-xs text-stone-400">{item.lesson.module.title}</span></span><StatusBadge status={status} /></Link>;
-                  })}
+              <article key={enrollment.id} className="rounded-[30px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
+                <div className="flex flex-col gap-3 border-b border-stone-200 pb-5 sm:flex-row sm:items-end sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold uppercase tracking-widest text-gold">
+                      {enrollment.course.direction.title}
+                    </p>
+                    <h2 className="font-display mt-2 text-3xl text-pretty sm:text-4xl">
+                      <Link href={`/courses/${enrollment.courseId}`} className="hover:text-gold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-gold">
+                        {enrollment.course.title}
+                      </Link>
+                    </h2>
+                  </div>
+                  <p className="shrink-0 text-sm font-semibold text-stone-500">
+                    {completed} из {courseLessons.length} уроков
+                  </p>
                 </div>
-              </div>
+
+                <div className="mt-5 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4">
+                  <ProgressBar value={percent} />
+                  <span className="font-display text-2xl tabular-nums">{percent}%</span>
+                </div>
+
+                {courseLessons.length ? (
+                  <div className="mt-7 divide-y divide-stone-200 border-y border-stone-200">
+                    {courseLessons.map((item) => {
+                      const status = normalizeLessonStatus(item.status);
+                      const href = status === "locked"
+                        ? `/courses/${enrollment.courseId}`
+                        : `/lessons/${item.lessonId}`;
+
+                      return (
+                        <Link
+                          href={href}
+                          key={item.lessonId}
+                          className="group flex min-w-0 items-center gap-3 py-4 transition-colors hover:text-gold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold sm:gap-4"
+                        >
+                          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-stone-100 text-gold">
+                            {status === "completed"
+                              ? <CheckCircle2 size={18} aria-hidden="true" />
+                              : <Clock3 size={18} aria-hidden="true" />}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate font-display text-lg text-ink group-hover:text-gold sm:text-xl">
+                              {item.lesson.title}
+                            </span>
+                            <span className="mt-1 block truncate text-xs text-stone-500">
+                              {item.lesson.module.title}
+                            </span>
+                          </span>
+                          <StatusBadge status={status} />
+                        </Link>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="mt-7 border-y border-stone-200 py-6 text-sm text-stone-500">
+                    Уроки курса ещё не открыты.
+                  </p>
+                )}
+              </article>
             );
-          })}
-        </section>
-        <aside className="space-y-5">
-          <div className="rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft">
-            <div className="flex items-center gap-3">
-              <span className="grid h-11 w-11 place-items-center rounded-2xl bg-amber-50 text-gold">
-                <Trophy size={20} />
-              </span>
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.16em] text-gold">Достижения</p>
-                <p className="mt-1 text-sm font-bold text-ink">
-                  {achievements.meta?.earnedCount ?? 0} из {achievements.meta?.totalCount ?? achievements.data.length}
-                </p>
-              </div>
+          }) : (
+            <div className="border-y border-stone-200 py-8">
+              <h2 className="font-display text-2xl">Онлайн-курсы пока не начаты</h2>
+              <p className="mt-2 text-sm leading-6 text-stone-500">
+                История начислений учебных баллов остаётся доступной ниже.
+              </p>
             </div>
-            <div className="mt-5">
-              <AchievementsWall achievements={achievements.data} />
+          )}
+        </section>
+
+        <aside className="self-start overflow-hidden rounded-[28px] border border-stone-200 bg-paper shadow-soft" data-testid="learning-points-history">
+          <div className="bg-ink p-6 text-white">
+            <Star size={22} className="text-gold" fill="currentColor" aria-hidden="true" />
+            <p className="font-display mt-6 text-4xl tabular-nums">{points.toLocaleString("ru-RU")}</p>
+            <p className="mt-1 text-sm text-white/60">учебных баллов</p>
+          </div>
+          <div className="p-6">
+            <div className="flex items-end justify-between gap-3">
+              <h2 className="font-display text-2xl">Начисления</h2>
+              <span className="text-xs font-bold text-stone-400">Последние 10</span>
+            </div>
+            <div className="mt-4 divide-y divide-stone-200 border-y border-stone-200">
+              {pointsHistory.length ? pointsHistory.slice(0, 10).map((item) => {
+                const positive = item.amount >= 0;
+                return (
+                  <div key={item.id} className="flex items-start justify-between gap-3 py-4">
+                    <div className="min-w-0">
+                      <p className="break-words text-sm font-bold text-ink">{item.reason}</p>
+                      <time dateTime={item.createdAt} className="mt-1 block text-xs text-stone-400">
+                        {new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short", year: "numeric" }).format(new Date(item.createdAt))}
+                      </time>
+                    </div>
+                    <span className={`shrink-0 text-sm font-black tabular-nums ${positive ? "text-emerald-700" : "text-red-700"}`}>
+                      {positive ? "+" : "−"}{Math.abs(item.amount)}
+                    </span>
+                  </div>
+                );
+              }) : (
+                <p className="py-6 text-sm text-stone-500">Начислений пока нет.</p>
+              )}
             </div>
           </div>
-          <div className="rounded-[28px] bg-ink p-6 text-white shadow-soft"><Star size={22} className="text-gold" fill="currentColor" /><p className="font-display mt-8 text-4xl">{points.toLocaleString("ru-RU")}</p><p className="mt-1 text-sm text-white/50">баллов Maestro</p></div>
-          <div className="rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft"><p className="text-xs font-bold uppercase tracking-[0.16em] text-stone-400">История баллов</p><div className="mt-5 space-y-4">{pointsHistory.length ? pointsHistory.slice(0, 5).map((item) => <div key={item.id} className="flex items-start justify-between gap-3 border-b border-stone-100 pb-4 last:border-0"><div><p className="text-sm font-bold">{item.reason}</p><p className="mt-1 text-xs text-stone-400">{new Date(item.createdAt).toLocaleDateString("ru-RU")}</p></div><span className="text-sm font-bold text-emerald-700">+{item.amount}</span></div>) : <p className="text-sm text-stone-500">Начислений пока нет.</p>}</div></div>
         </aside>
       </div>
     </>

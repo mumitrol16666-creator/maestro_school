@@ -1,4 +1,5 @@
 import { prisma } from "../../infrastructure/database/prisma.js";
+import { productFeatureConfig } from "../../config/product-features.js";
 import { BadRequestError } from "../../domain/errors.js";
 import { fetchTeacherStudents } from "../../infrastructure/crm/crm-client.js";
 import { aqtobeMonthKey } from "../../lib/aqtobe-month.js";
@@ -18,6 +19,8 @@ export async function requireCrmTeacherId(appUserId: string) {
 }
 
 export async function listTeacherStudents(appTeacherId: string) {
+  const exactHomeworkStatisticsEnabled = productFeatureConfig.flags.learningTopicsV2
+    && productFeatureConfig.flags.homeworkFlowV2;
   const crmTeacherId = await requireCrmTeacherId(appTeacherId);
   const [crmRoster, onlineRequests] = await Promise.all([
     fetchTeacherStudents(crmTeacherId),
@@ -136,18 +139,62 @@ export async function listTeacherStudents(appTeacherId: string) {
   const crmStudentIds = students
     .map((student) => student.crmStudentId)
     .filter((studentId): studentId is string => Boolean(studentId));
+  const appUserIds = students
+    .map((student) => student.appUserId)
+    .filter((userId): userId is string => Boolean(userId));
   const month = aqtobeMonthKey();
-  const [checks, plans] = crmStudentIds.length
-    ? await Promise.all([
-        prisma.offlineLessonStudentCheck.findMany({
+  const [checks, plans, latestActivity, latestLogin, parentLinks] = await Promise.all([
+    crmStudentIds.length
+      ? prisma.offlineLessonStudentCheck.findMany({
           where: { teacherUserId: appTeacherId, crmStudentId: { in: crmStudentIds } },
           orderBy: { markedAt: "desc" },
-        }),
-        prisma.studentMonthlyPlan.findMany({
+        })
+      : [],
+    crmStudentIds.length
+      ? prisma.studentMonthlyPlan.findMany({
           where: { teacherUserId: appTeacherId, crmStudentId: { in: crmStudentIds }, month },
-        }),
-      ])
-    : [[], []];
+        })
+      : [],
+    appUserIds.length
+      ? prisma.appUsageEvent.groupBy({
+          by: ["userId"],
+          where: { userId: { in: appUserIds } },
+          _max: { occurredAt: true },
+        })
+      : [],
+    appUserIds.length
+      ? prisma.appUsageEvent.groupBy({
+          by: ["userId"],
+          where: { userId: { in: appUserIds }, eventType: "login" },
+          _max: { occurredAt: true },
+        })
+      : [],
+    appUserIds.length
+      ? prisma.parentStudentLink.findMany({
+          where: {
+            studentUserId: { in: appUserIds },
+            isActive: true,
+            revokedAt: null,
+            parent: { isActive: true, deletedAt: null, role: { slug: "parent" } },
+          },
+          orderBy: { createdAt: "asc" },
+          select: {
+            studentUserId: true,
+            parentUserId: true,
+            relationship: true,
+            parent: {
+              select: {
+                firstName: true,
+                lastName: true,
+                middleName: true,
+                login: true,
+                email: true,
+              },
+            },
+          },
+        })
+      : [],
+  ]);
   const checksByStudent = new Map<string, typeof checks>();
   for (const check of checks) {
     const list = checksByStudent.get(check.crmStudentId) ?? [];
@@ -155,6 +202,22 @@ export async function listTeacherStudents(appTeacherId: string) {
     checksByStudent.set(check.crmStudentId, list);
   }
   const plansByStudent = new Map(plans.map((plan) => [plan.crmStudentId, plan]));
+  const activityByStudent = new Map(latestActivity.map((item) => [item.userId, item._max.occurredAt]));
+  const loginByStudent = new Map(latestLogin.map((item) => [item.userId, item._max.occurredAt]));
+  const parentsByStudent = new Map<string, Array<{
+    id: string;
+    name: string;
+    relationship: string;
+  }>>();
+  for (const link of parentLinks) {
+    const current = parentsByStudent.get(link.studentUserId) ?? [];
+    current.push({
+      id: link.parentUserId,
+      name: formatParentName(link.parent),
+      relationship: link.relationship,
+    });
+    parentsByStudent.set(link.studentUserId, current);
+  }
 
   return {
     teacher: crmRoster.teacher,
@@ -191,7 +254,7 @@ export async function listTeacherStudents(appTeacherId: string) {
           tone: "danger",
         });
       }
-      if (recentMissedHomework >= 2) {
+      if (!exactHomeworkStatisticsEnabled && recentMissedHomework >= 2) {
         signals.push({
           code: "homework_decline",
           title: "Домашнее задание не выполнено несколько раз",
@@ -202,6 +265,13 @@ export async function listTeacherStudents(appTeacherId: string) {
 
       return {
         ...student,
+        appActivity: {
+          lastActiveAt: student.appUserId ? activityByStudent.get(student.appUserId) ?? null : null,
+          lastLoginAt: student.appUserId ? loginByStudent.get(student.appUserId) ?? null : null,
+        },
+        family: {
+          parents: student.appUserId ? parentsByStudent.get(student.appUserId) ?? [] : [],
+        },
         learningSummary: {
           attendanceRate: recentAttendance.length
             ? Math.round((attendedCount / recentAttendance.length) * 100)
@@ -218,4 +288,17 @@ export async function listTeacherStudents(appTeacherId: string) {
       };
     }),
   };
+}
+
+function formatParentName(parent: {
+  firstName: string;
+  lastName: string;
+  middleName: string | null;
+  login: string | null;
+  email: string | null;
+}) {
+  return [parent.lastName, parent.firstName, parent.middleName]
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join(" ") || parent.login || parent.email || "Родитель";
 }

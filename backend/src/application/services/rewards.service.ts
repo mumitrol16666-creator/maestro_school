@@ -8,7 +8,7 @@ import {
   type RewardStatus,
 } from "../../domain/reward-redemption-policy.js";
 import { getStudentCoins } from "./coins.service.js";
-import { calculateStudentPoints } from "./points.service.js";
+import { getStudentPointsReadModel } from "./points.service.js";
 import { deliverUserNotification } from "./notification.service.js";
 
 const rewardItemSelect = {
@@ -60,13 +60,13 @@ async function notifyRewardManagers(redemptionId: string, rewardTitle: string) {
     body: `Ученик обменял Maestro Coins на награду «${rewardTitle}».`,
     url: "/admin/rewards",
     tag: `reward-request-${redemptionId}-${manager.id}`,
-    dedupeWindowMs: 2 * 60 * 1000,
+    dedupeKey: `reward:requested:${redemptionId}:${manager.id}`,
   })));
 }
 
 export async function getStudentRewardsOverview(studentId: string) {
-  const [points, coins, catalog, redemptions] = await Promise.all([
-    calculateStudentPoints(studentId),
+  const [pointsOverview, coins, catalog, redemptions] = await Promise.all([
+    getStudentPointsReadModel(studentId),
     getStudentCoins(studentId),
     prisma.rewardCatalogItem.findMany({
       where: { isActive: true },
@@ -87,9 +87,10 @@ export async function getStudentRewardsOverview(studentId: string) {
   ]);
 
   return {
-    points,
+    points: pointsOverview.points,
     coins,
-    rank: getStudentRank(points),
+    rank: getStudentRank(pointsOverview.points),
+    level: pointsOverview.level,
     catalog,
     redemptions,
   };
@@ -337,7 +338,7 @@ export async function processRewardRedemption(params: {
       : result.rewardTitle,
     url: "/rewards",
     tag: `reward-status-${result.id}-${result.status}`,
-    dedupeWindowMs: 2 * 60 * 1000,
+    dedupeKey: `reward:status:${result.id}:${result.status}`,
   }).catch(() => undefined);
 
   return result;

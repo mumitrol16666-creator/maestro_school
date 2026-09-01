@@ -1,5 +1,4 @@
 import type { ApiDashboard, StudentHomeMonthlyPlan } from "@/types/api";
-import type { OnlineLessonRequest } from "@/types/online-lessons";
 import type { SchoolOfflineLesson } from "@/types/school-offline";
 import type { UnifiedTask } from "@/types/unified-tasks";
 
@@ -22,7 +21,6 @@ export type StudentHomeHero = {
 type SelectStudentHomeHeroInput = {
   tasks: UnifiedTask[];
   schoolLessons: SchoolOfflineLesson[];
-  onlineLessons: OnlineLessonRequest[];
   plans: StudentHomeMonthlyPlan[];
   dashboard: ApiDashboard;
   now?: Date;
@@ -51,7 +49,7 @@ function formatDateTime(value: Date) {
 }
 
 function sourceLabel(task: UnifiedTask) {
-  if (task.source === "offline") return "Урок в школе";
+  if (task.source === "offline") return "Урок с преподавателем";
   if (task.source === "online") return "Онлайн с преподавателем";
   return "Самостоятельный курс";
 }
@@ -97,80 +95,42 @@ function taskHero(task: UnifiedTask): StudentHomeHero {
 function liveSchoolHero(lesson: SchoolOfflineLesson, now: Date): StudentHomeHero {
   const startsAt = schoolDateTime(lesson, lesson.startTime);
   const started = startsAt.getTime() <= now.getTime();
-  const context = [lesson.teacherName, lesson.groupName, lesson.roomName]
+  const isOnline = lesson.deliveryFormat === "online";
+  const context = [lesson.teacherName, lesson.groupName, isOnline ? "Онлайн" : lesson.roomName]
     .filter(Boolean)
     .join(" · ");
 
   return {
-    kind: "school_lesson",
+    kind: isOnline ? "online_lesson" : "school_lesson",
     id: lesson.crmClassId,
-    eyebrow: "Сейчас · урок в школе",
+    eyebrow: isOnline ? "Сейчас · онлайн-урок" : "Сейчас · урок в школе",
     title: lesson.title,
     subtitle: context || null,
     detail: started
       ? `Урок уже идёт · до ${lesson.endTime}`
       : `Начало через ${Math.max(1, Math.ceil((startsAt.getTime() - now.getTime()) / MINUTE))} мин · ${lesson.startTime}`,
     badge: { label: started ? "Урок идёт" : "Скоро начало", tone: "success" },
-    href: "/school-lessons?tab=schedule",
-    actionLabel: "Детали урока",
-  };
-}
-
-function liveOnlineHero(lesson: OnlineLessonRequest, now: Date): StudentHomeHero {
-  const startsAt = new Date(lesson.scheduledAt!);
-  const started = startsAt.getTime() <= now.getTime();
-  const teacherName = lesson.teacher
-    ? [lesson.teacher.firstName, lesson.teacher.lastName].filter(Boolean).join(" ")
-    : null;
-
-  return {
-    kind: "online_lesson",
-    id: lesson.id,
-    eyebrow: "Сейчас · онлайн с преподавателем",
-    title: lesson.directionTitle,
-    subtitle: teacherName,
-    detail: started
-      ? "Онлайн-урок уже идёт"
-      : `Начало через ${Math.max(1, Math.ceil((startsAt.getTime() - now.getTime()) / MINUTE))} мин · ${formatDateTime(startsAt)}`,
-    badge: { label: started ? "Урок идёт" : "Скоро начало", tone: "success" },
-    href: lesson.zoomUrl || `/online-lessons/${lesson.id}`,
-    actionLabel: "Войти в урок",
-    external: Boolean(lesson.zoomUrl),
+    href: isOnline && lesson.meetingUrl ? lesson.meetingUrl : `/school-lessons?tab=schedule${isOnline ? "&format=online" : ""}`,
+    actionLabel: isOnline && lesson.meetingUrl ? "Подключиться" : "Детали урока",
+    external: Boolean(isOnline && lesson.meetingUrl),
   };
 }
 
 function upcomingSchoolHero(lesson: SchoolOfflineLesson): StudentHomeHero {
   const startsAt = schoolDateTime(lesson, lesson.startTime);
-  const context = [lesson.teacherName, lesson.groupName, lesson.roomName]
+  const isOnline = lesson.deliveryFormat === "online";
+  const context = [lesson.teacherName, lesson.groupName, isOnline ? "Онлайн" : lesson.roomName]
     .filter(Boolean)
     .join(" · ");
   return {
-    kind: "school_lesson",
+    kind: isOnline ? "online_lesson" : "school_lesson",
     id: lesson.crmClassId,
-    eyebrow: "Дальше · урок в школе",
+    eyebrow: isOnline ? "Дальше · онлайн-урок" : "Дальше · урок в школе",
     title: lesson.title,
     subtitle: context || null,
     detail: formatDateTime(startsAt),
     badge: null,
-    href: "/school-lessons?tab=schedule",
-    actionLabel: "Детали урока",
-  };
-}
-
-function upcomingOnlineHero(lesson: OnlineLessonRequest): StudentHomeHero {
-  const startsAt = new Date(lesson.scheduledAt!);
-  const teacherName = lesson.teacher
-    ? [lesson.teacher.firstName, lesson.teacher.lastName].filter(Boolean).join(" ")
-    : null;
-  return {
-    kind: "online_lesson",
-    id: lesson.id,
-    eyebrow: "Дальше · онлайн с преподавателем",
-    title: lesson.directionTitle,
-    subtitle: teacherName,
-    detail: formatDateTime(startsAt),
-    badge: null,
-    href: `/online-lessons/${lesson.id}`,
+    href: `/school-lessons?tab=schedule${isOnline ? "&format=online" : ""}`,
     actionLabel: "Детали урока",
   };
 }
@@ -178,7 +138,6 @@ function upcomingOnlineHero(lesson: OnlineLessonRequest): StudentHomeHero {
 export function selectStudentHomeHero({
   tasks,
   schoolLessons,
-  onlineLessons,
   plans,
   dashboard,
   now = new Date(),
@@ -194,14 +153,6 @@ export function selectStudentHomeHero({
     const endsAt = schoolDateTime(lesson, lesson.endTime).getTime();
     if (startsAt - nowValue <= 60 * MINUTE && endsAt >= nowValue) {
       liveCandidates.push({ startsAt, hero: liveSchoolHero(lesson, now) });
-    }
-  });
-  onlineLessons.forEach((lesson) => {
-    if (lesson.status !== "scheduled" || !lesson.scheduledAt) return;
-    const startsAt = Date.parse(lesson.scheduledAt);
-    const assumedEndsAt = startsAt + 90 * MINUTE;
-    if (startsAt - nowValue <= 60 * MINUTE && assumedEndsAt >= nowValue) {
-      liveCandidates.push({ startsAt, hero: liveOnlineHero(lesson, now) });
     }
   });
   liveCandidates.sort((left, right) => left.startsAt - right.startsAt);
@@ -258,11 +209,6 @@ export function selectStudentHomeHero({
   schoolLessons.forEach((lesson) => {
     const startsAt = schoolDateTime(lesson, lesson.startTime).getTime();
     if (startsAt > nowValue) futureLessons.push({ startsAt, hero: upcomingSchoolHero(lesson) });
-  });
-  onlineLessons.forEach((lesson) => {
-    if (lesson.status !== "scheduled" || !lesson.scheduledAt) return;
-    const startsAt = Date.parse(lesson.scheduledAt);
-    if (startsAt > nowValue) futureLessons.push({ startsAt, hero: upcomingOnlineHero(lesson) });
   });
   futureLessons.sort((left, right) => left.startsAt - right.startsAt);
   if (futureLessons[0]) return futureLessons[0].hero;

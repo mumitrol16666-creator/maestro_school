@@ -1,0 +1,5 @@
+services:
+  backend:
+    environment:
+      FEATURE_LEARNING_TOPICS_V2: "true"
+      FEATURE_HOMEWORK_FLOW_V2: "true"

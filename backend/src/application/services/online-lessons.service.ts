@@ -9,9 +9,12 @@ import { addMaestroCoins } from "./coins.service.js";
 import { evaluateAchievements } from "./achievement.service.js";
 import { deliverUserNotification } from "./notification.service.js";
 import { awardManualPoints } from "./points.service.js";
-import { awardLeagueXp } from "./weekly-league.service.js";
-import { onlineAssignmentLeagueXp } from "./weekly-league-policy.js";
+import {
+  awardHomeworkAcceptedXp,
+  awardLessonAttendanceXp,
+} from "./weekly-league.service.js";
 import { postOnlineLessonBooking, postOnlineLessonStatus } from "../../infrastructure/crm/crm-client.js";
+import { rewardEconomyV2AppliesToEvent } from "../../config/product-features.js";
 
 const requestSelect = {
   id: true,
@@ -72,6 +75,30 @@ const requestSelect = {
     },
   },
 } as const;
+
+function withOnlineLessonRewardPolicy<T extends object>(item: T, now = new Date()) {
+  return {
+    ...item,
+    manualRewardsEnabled: !rewardEconomyV2AppliesToEvent(now),
+  };
+}
+
+function assertOnlineLessonManualRewardsAllowed(params: {
+  eventAt: Date;
+  points: number;
+  coins: number;
+  assignmentPoints?: number;
+}) {
+  if (
+    rewardEconomyV2AppliesToEvent(params.eventAt)
+    && (params.points > 0 || params.coins > 0 || (params.assignmentPoints ?? 0) > 0)
+  ) {
+    throw new BadRequestError(
+      "Ручные Points и Coins отключены в новой экономике",
+      "LEGACY_ONLINE_REWARDS_DISABLED",
+    );
+  }
+}
 
 async function bestEffortNotification(params: Parameters<typeof deliverUserNotification>[0]) {
   await deliverUserNotification(params).catch((error) => {
@@ -155,15 +182,16 @@ export async function createOnlineLessonRequest(params: {
     );
   }
 
-  return request;
+  return withOnlineLessonRewardPolicy(request);
 }
 
 export async function listStudentOnlineLessonRequests(studentId: string) {
-  return prisma.onlineLessonRequest.findMany({
+  const items = await prisma.onlineLessonRequest.findMany({
     where: { studentId },
     orderBy: { createdAt: "desc" },
     select: requestSelect,
   });
+  return items.map((item) => withOnlineLessonRewardPolicy(item));
 }
 
 export async function getStudentOnlineLessonRequest(studentId: string, requestId: string) {
@@ -172,7 +200,7 @@ export async function getStudentOnlineLessonRequest(studentId: string, requestId
     select: requestSelect,
   });
   if (!item) throw new NotFoundError("Online lesson request");
-  return item;
+  return withOnlineLessonRewardPolicy(item);
 }
 
 export async function listAdminOnlineLessonRequests(input: {
@@ -217,7 +245,10 @@ export async function listAdminOnlineLessonRequests(input: {
     prisma.onlineLessonRequest.count({ where }),
   ]);
 
-  return { items, total };
+  return {
+    items: items.map((item) => withOnlineLessonRewardPolicy(item)),
+    total,
+  };
 }
 
 export async function getAdminOnlineLessonRequest(requestId: string) {
@@ -226,7 +257,7 @@ export async function getAdminOnlineLessonRequest(requestId: string) {
     select: requestSelect,
   });
   if (!item) throw new NotFoundError("Online lesson request");
-  return item;
+  return withOnlineLessonRewardPolicy(item);
 }
 
 export async function getStaffOnlineLessonRequest(
@@ -341,7 +372,7 @@ export async function assignOnlineLessonRequest(
     });
   }
 
-  return updated;
+  return withOnlineLessonRewardPolicy(updated);
 }
 
 export async function scheduleOnlineLessonRequest(requestId: string, params: {
@@ -403,7 +434,7 @@ export async function scheduleOnlineLessonRequest(requestId: string, params: {
   ]);
 
   await syncCrmStatus(requestId, "scheduled");
-  return updated;
+  return withOnlineLessonRewardPolicy(updated);
 }
 
 export async function cancelOnlineLessonRequest(requestId: string) {
@@ -436,7 +467,7 @@ export async function cancelOnlineLessonRequest(requestId: string) {
         })
       : Promise.resolve(),
   ]);
-  return updated;
+  return withOnlineLessonRewardPolicy(updated);
 }
 
 export async function markOnlineLessonNoShow(requestId: string) {
@@ -472,7 +503,7 @@ export async function markOnlineLessonNoShow(requestId: string) {
         })
       : Promise.resolve(),
   ]);
-  return updated;
+  return withOnlineLessonRewardPolicy(updated);
 }
 
 export async function syncOnlineLessonFromCrm(requestId: string, params: {
@@ -550,6 +581,14 @@ export async function completeOnlineLessonRequest(requestId: string, params: {
     throw new BadRequestError("Завершить можно только назначенный или взятый урок");
   }
 
+  const completedAt = new Date();
+  assertOnlineLessonManualRewardsAllowed({
+    eventAt: completedAt,
+    points: params.lessonPoints,
+    coins: params.lessonCoins,
+    assignmentPoints: params.createAssignment ? params.assignment?.pointsReward : 0,
+  });
+
   assertCoinsReason(params.lessonCoins, params.lessonCoinsReason);
 
   if (params.createAssignment) {
@@ -570,7 +609,7 @@ export async function completeOnlineLessonRequest(requestId: string, params: {
         lessonPoints: params.lessonPoints,
         lessonCoins: params.lessonCoins,
         lessonCoinsReason: params.lessonCoinsReason?.trim() || null,
-        completedAt: new Date(),
+        completedAt,
         completedById: params.completedBy,
       },
       select: requestSelect,
@@ -612,13 +651,13 @@ export async function completeOnlineLessonRequest(requestId: string, params: {
       idempotencyKey: `online-lesson-points:${requestId}`,
     });
   }
-  await awardLeagueXp({
+  await awardLessonAttendanceXp({
     studentId: item.studentId,
-    amount: 20,
     sourceType: "online_lesson",
     sourceKey: `online-lesson:${requestId}`,
     description: `Онлайн-урок «${item.directionTitle}» завершён`,
     awardedById: params.completedBy,
+    eventAt: result.completedAt ?? new Date(),
   });
 
   if (params.lessonCoins > 0) {
@@ -726,6 +765,7 @@ export async function reviewOnlineLessonAssignment(submissionId: string, params:
               id: true,
               studentId: true,
               teacherId: true,
+              directionId: true,
               directionTitle: true,
             },
           },
@@ -748,6 +788,12 @@ export async function reviewOnlineLessonAssignment(submissionId: string, params:
     throw new BadRequestError("Комментарий обязателен при возврате на доработку");
   }
 
+  const reviewedAt = new Date();
+  assertOnlineLessonManualRewardsAllowed({
+    eventAt: reviewedAt,
+    points: params.reviewPoints,
+    coins: params.reviewCoins,
+  });
   assertCoinsReason(params.reviewCoins, params.reviewCoinsReason);
 
   const statusMap = {
@@ -765,7 +811,7 @@ export async function reviewOnlineLessonAssignment(submissionId: string, params:
       reviewCoins: params.action === "return" ? 0 : params.reviewCoins,
       reviewCoinsReason: params.reviewCoinsReason?.trim() || null,
       reviewedById: params.reviewerId,
-      reviewedAt: new Date(),
+      reviewedAt,
     },
   });
 
@@ -779,25 +825,30 @@ export async function reviewOnlineLessonAssignment(submissionId: string, params:
     });
   }
   if (params.action !== "return") {
+    const submissionAttempts = await prisma.onlineLessonAssignmentSubmission.count({
+      where: {
+        assignmentId: submission.assignmentId,
+        studentId: submission.studentId,
+        createdAt: { lte: submission.createdAt },
+      },
+    });
     const late = Boolean(
       submission.assignment.dueAt
       && submission.createdAt.getTime() > submission.assignment.dueAt.getTime()
     );
-    const leagueXp = onlineAssignmentLeagueXp({
-      late,
-      withRemarks: params.action === "approve_with_remarks",
-    });
-    await awardLeagueXp({
+    await awardHomeworkAcceptedXp({
       studentId: submission.studentId,
-      amount: leagueXp,
+      directionId: submission.assignment.request.directionId,
       sourceType: "online_assignment",
-      sourceKey: `online-assignment:${submissionId}`,
+      sourceKey: `online-assignment:${submission.assignmentId}:${submission.studentId}`,
+      attemptNumber: submissionAttempts,
       description: late
         ? `ДЗ «${submission.assignment.title}» принято после срока`
         : params.action === "approve_with_remarks"
           ? `ДЗ «${submission.assignment.title}» принято с замечаниями`
           : `ДЗ «${submission.assignment.title}» принято`,
       awardedById: params.reviewerId,
+      eventAt: updated.reviewedAt ?? new Date(),
     });
   }
 

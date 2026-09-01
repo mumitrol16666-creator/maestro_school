@@ -86,7 +86,7 @@ export function LessonEditorForm({
           </p>
         ) : (
           <p className="mt-3 max-w-2xl text-sm leading-6 text-stone-500">
-            Здесь меняются название, описание, видео и баллы. Материалы и задание настраиваются в своих вкладках выше.
+            Здесь меняются название, описание, видео и порядок урока. Материалы и задание настраиваются в своих вкладках выше.
           </p>
         )}
       </div>
@@ -129,18 +129,8 @@ export function LessonEditorForm({
         />
       </Section>
 
-      <Section step={3} title="Параметры" description="Баллы за прохождение и порядок в модуле.">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
-            Баллы за урок
-            <input
-              type="number"
-              min="0"
-              value={values.pointsReward}
-              onChange={(event) => onChange({ ...values, pointsReward: Number(event.target.value) })}
-              className={`${inputClass} mt-2`}
-            />
-          </label>
+      <Section step={3} title="Порядок" description="Позиция урока внутри модуля.">
+        <div className="max-w-sm">
           <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
             Порядок в модуле
             <input

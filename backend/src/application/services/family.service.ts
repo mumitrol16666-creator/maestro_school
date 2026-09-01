@@ -10,6 +10,12 @@ import { buildFamilyOfflineSummary } from "../../domain/family-view.js";
 import { isValidLogin, normalizeLogin } from "../../lib/login.js";
 import { isValidPhone, normalizePhoneDigits } from "../../lib/phone.js";
 import { getStudentSchoolOfflineSummary } from "./school-offline.service.js";
+import { getStudentAchievementsOverview } from "./achievement.service.js";
+import { getParentVisibility } from "./parent-visibility.service.js";
+import {
+  curatorWorkspaceV2Enabled,
+  upsertAdminJournalEntry,
+} from "./admin-journal.service.js";
 
 export type FamilyRelationship = "mother" | "father" | "guardian" | "other";
 
@@ -137,6 +143,22 @@ export async function createParentForStudent(params: {
       },
       include: { parent: { select: parentSelect } },
     });
+    if (curatorWorkspaceV2Enabled()) {
+      await upsertAdminJournalEntry({
+        sourceKey: `parent-access:${createdLink.id}:granted`,
+        type: "parent_access",
+        severity: "normal",
+        source: "application",
+        linkedEntityType: "parent_student_link",
+        linkedEntityId: createdLink.id,
+        title: "Родительский доступ выдан",
+        summary: "Новый родительский профиль создан и получил доступ к данным ученика.",
+        actorId: params.actorId,
+        initialStatus: "resolved",
+        resolution: "Доступ выдан администратором",
+        payload: { operation: "created_and_linked", studentId: params.studentId },
+      }, tx);
+    }
     return createdLink;
   });
 
@@ -164,26 +186,45 @@ export async function linkExistingParentToStudent(params: {
     throw new NotFoundError("Родитель с таким логином не найден");
   }
 
-  const link = await prisma.parentStudentLink.upsert({
-    where: {
-      parentUserId_studentUserId: {
+  const link = await prisma.$transaction(async (tx) => {
+    const updatedLink = await tx.parentStudentLink.upsert({
+      where: {
+        parentUserId_studentUserId: {
+          parentUserId: parent.id,
+          studentUserId: params.studentId,
+        },
+      },
+      create: {
         parentUserId: parent.id,
         studentUserId: params.studentId,
+        relationship: params.relationship,
+        createdById: params.actorId,
       },
-    },
-    create: {
-      parentUserId: parent.id,
-      studentUserId: params.studentId,
-      relationship: params.relationship,
-      createdById: params.actorId,
-    },
-    update: {
-      relationship: params.relationship,
-      isActive: true,
-      revokedAt: null,
-      createdById: params.actorId,
-    },
-    include: { parent: { select: parentSelect } },
+      update: {
+        relationship: params.relationship,
+        isActive: true,
+        revokedAt: null,
+        createdById: params.actorId,
+      },
+      include: { parent: { select: parentSelect } },
+    });
+    if (curatorWorkspaceV2Enabled()) {
+      await upsertAdminJournalEntry({
+        sourceKey: `parent-access:${updatedLink.id}:granted`,
+        type: "parent_access",
+        severity: "normal",
+        source: "application",
+        linkedEntityType: "parent_student_link",
+        linkedEntityId: updatedLink.id,
+        title: "Родительский доступ выдан",
+        summary: "Существующий родительский профиль получил доступ к данным ученика.",
+        actorId: params.actorId,
+        initialStatus: "resolved",
+        resolution: "Доступ выдан администратором",
+        payload: { operation: "linked", studentId: params.studentId },
+      }, tx);
+    }
+    return updatedLink;
   });
 
   return parentLinkView(link);
@@ -192,6 +233,7 @@ export async function linkExistingParentToStudent(params: {
 export async function revokeParentLink(params: {
   studentId: string;
   linkId: string;
+  actorId: string;
 }) {
   await assertStudent(params.studentId);
   const link = await prisma.parentStudentLink.findFirst({
@@ -204,9 +246,27 @@ export async function revokeParentLink(params: {
   });
   if (!link) throw new NotFoundError("Parent link");
 
-  await prisma.parentStudentLink.update({
-    where: { id: link.id },
-    data: { isActive: false, revokedAt: new Date() },
+  await prisma.$transaction(async (tx) => {
+    await tx.parentStudentLink.update({
+      where: { id: link.id },
+      data: { isActive: false, revokedAt: new Date() },
+    });
+    if (curatorWorkspaceV2Enabled()) {
+      await upsertAdminJournalEntry({
+        sourceKey: `parent-access:${link.id}:revoked`,
+        type: "parent_access",
+        severity: "normal",
+        source: "application",
+        linkedEntityType: "parent_student_link",
+        linkedEntityId: link.id,
+        title: "Родительский доступ отозван",
+        summary: "Доступ родительского профиля к данным ученика отключён.",
+        actorId: params.actorId,
+        initialStatus: "resolved",
+        resolution: "Доступ отозван администратором",
+        payload: { operation: "revoked", studentId: params.studentId },
+      }, tx);
+    }
   });
   return { revoked: true };
 }
@@ -305,9 +365,17 @@ export async function getParentChildOfflineSummary(
   studentUserId: string,
 ) {
   const link = await assertParentChildLink(parentUserId, studentUserId);
-  const summary = buildFamilyOfflineSummary(
-    await getStudentSchoolOfflineSummary(studentUserId),
-  );
+  const visibility = await getParentVisibility(studentUserId);
+  const [offlineSummary, achievements] = await Promise.all([
+    getStudentSchoolOfflineSummary(studentUserId),
+    visibility.showAchievements
+      ? getStudentAchievementsOverview(studentUserId)
+      : Promise.resolve([]),
+  ]);
+  const summary = {
+    ...buildFamilyOfflineSummary(offlineSummary, visibility),
+    achievements: achievements.filter((item) => item.earned),
+  };
   return {
     child: {
       id: link.student.id,
@@ -318,6 +386,7 @@ export async function getParentChildOfflineSummary(
       avatar: link.student.avatar,
       relationship: link.relationship,
     },
+    visibility,
     summary,
   };
 }

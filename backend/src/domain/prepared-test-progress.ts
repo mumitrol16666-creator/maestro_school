@@ -2,7 +2,6 @@ import type { HomeworkTestAnswerMap, HomeworkTestQuestion } from "./homework-tes
 
 export const PREPARED_TEST_PASSING_SCORE = 70;
 export const PREPARED_TEST_MAX_ATTEMPTS = null;
-export const PREPARED_TEST_REWARD_POINTS = 10;
 
 export interface PreparedAttemptSummary {
   testId: string;

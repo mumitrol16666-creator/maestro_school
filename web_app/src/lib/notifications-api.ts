@@ -18,6 +18,7 @@ export type UserNotificationType =
   | "lesson_teacher_reminder"
   | "lesson_student_reminder"
   | "direct_message_received"
+  | "homework_assigned"
   | "homework_submitted"
   | "homework_reviewed"
   | "lesson_question_received"

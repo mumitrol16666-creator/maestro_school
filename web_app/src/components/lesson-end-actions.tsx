@@ -5,6 +5,8 @@ import Link from "next/link";
 import { FormEvent, useState } from "react";
 import type { ApiLessonEndActions } from "@/types/api";
 import { ApiError, api } from "@/lib/api-client";
+import { useAuth } from "@/components/auth-provider";
+import { learningDialogsApi, notifyLearningDialogsUpdated } from "@/lib/learning-dialogs-api";
 
 interface LessonEndActionsProps {
   lessonId: string;
@@ -23,6 +25,7 @@ export function LessonEndActions({
   onSignupComplete,
   onError,
 }: LessonEndActionsProps) {
+  const { user } = useAuth();
   const [questionOpen, setQuestionOpen] = useState(false);
   const [question, setQuestion] = useState("");
   const [questionSent, setQuestionSent] = useState(false);
@@ -36,7 +39,12 @@ export function LessonEndActions({
     if (!question.trim()) return;
     setSubmittingQuestion(true);
     try {
-      await api.askLessonQuestion(lessonId, question.trim());
+      if (user?.productFeatures?.learningDialogsV2) {
+        await learningDialogsApi.askLessonQuestion(lessonId, question.trim());
+        notifyLearningDialogsUpdated();
+      } else {
+        await api.askLessonQuestion(lessonId, question.trim());
+      }
       setQuestion("");
       setQuestionOpen(false);
       setQuestionSent(true);
@@ -117,7 +125,7 @@ export function LessonEndActions({
 
       {questionSent && (
         <p className="mt-4 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
-          Вопрос отправлен. Преподаватель увидит его в админке.
+          Вопрос отправлен преподавателю.
         </p>
       )}
 

@@ -65,7 +65,7 @@ export default function CourseDetailPage() {
               <>
             <div className="mb-3 flex items-end justify-between"><span className="text-sm text-white/55">Прогресс курса</span><span className="font-display text-3xl text-gold">{progressPercent}%</span></div>
             <ProgressBar value={progressPercent} dark />
-            <div className="mt-5 grid grid-cols-2 gap-3 text-xs text-white/55"><span className="flex items-center gap-2"><BookOpen size={14} /> {lessons.length} уроков</span><span className="flex items-center gap-2"><Trophy size={14} /> {progress?.points ?? 0} баллов</span></div>
+            <div className="mt-5 grid grid-cols-2 gap-3 text-xs text-white/55"><span className="flex items-center gap-2"><BookOpen size={14} /> {lessons.length} уроков</span><span className="flex items-center gap-2"><Trophy size={14} /> {course.completionCoinsReward > 0 ? `+${course.completionCoinsReward} Coins` : "Без награды"}</span></div>
               </>
             ) : (
               <>

@@ -9,6 +9,7 @@ import {
   ChevronRight,
   Clock3,
   FileCheck2,
+  MonitorPlay,
   Send,
   UsersRound,
   UserX,
@@ -198,6 +199,7 @@ export default function AdminOfflineLessonsPage() {
   const isAdmin = isOfflineCoordinatorRole(user?.role);
   const [activeTab, setActiveTab] = useState<LessonTab>("today");
   const [selectedTeacherId, setSelectedTeacherId] = useState("");
+  const [deliveryFilter, setDeliveryFilter] = useState<"all" | "offline" | "online">("all");
   const [period, setPeriod] = useState(() => monthPeriod());
   const selectedPeriod = periodQuery(period);
 
@@ -226,8 +228,8 @@ export default function AdminOfflineLessonsPage() {
     return (
       <>
         <PageHeader
-          eyebrow="Офлайн-школа"
-          title="Офлайн-уроки"
+          eyebrow="Расписание занятий"
+          title="Уроки"
           description="Расписание, отчёты и статусы уроков."
         />
         <EmptyState
@@ -264,6 +266,7 @@ export default function AdminOfflineLessonsPage() {
   };
 
   const filtered = staged.filter(({ lesson, stage }) => {
+    if (deliveryFilter !== "all" && (lesson.deliveryFormat || "offline") !== deliveryFilter) return false;
     if (selectedTeacherId === "unassigned" && lesson.teacher?.crmTeacherId) return false;
     if (
       selectedTeacherId
@@ -320,8 +323,8 @@ export default function AdminOfflineLessonsPage() {
   return (
     <>
       <PageHeader
-        eyebrow="Офлайн-школа"
-        title={isAdmin ? "Уроки школы" : "Офлайн-уроки"}
+        eyebrow="Расписание занятий"
+        title={isAdmin ? "Уроки школы" : "Мои уроки"}
         description={
           isAdmin
             ? "Все занятия школы по преподавателям. Можно открыть урок, помочь заполнить отчёт и проверить результат."
@@ -387,15 +390,13 @@ export default function AdminOfflineLessonsPage() {
         </section>
       )}
 
-      <section className="mb-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="mb-6 grid grid-cols-2 gap-2 sm:mb-8 sm:gap-3 xl:grid-cols-4">
         <SummaryCard
           icon={CalendarDays}
           label="Уроки сегодня"
           hint="Расписание на текущий день"
           value={counts.today}
           tone="sky"
-          active={activeTab === "today"}
-          onClick={() => handleTabChange("today")}
         />
         <SummaryCard
           icon={AlertCircle}
@@ -403,8 +404,6 @@ export default function AdminOfflineLessonsPage() {
           hint="Заполнить или исправить отчёт"
           value={counts.report}
           tone="amber"
-          active={activeTab === "report"}
-          onClick={() => handleTabChange("report")}
         />
         <SummaryCard
           icon={Send}
@@ -412,8 +411,6 @@ export default function AdminOfflineLessonsPage() {
           hint={isAdmin ? "Отчёты и отметки отсутствия" : "Переданы администратору"}
           value={counts.processing}
           tone="cream"
-          active={activeTab === "processing"}
-          onClick={() => handleTabChange("processing")}
         />
         <SummaryCard
           icon={CheckCircle2}
@@ -421,12 +418,10 @@ export default function AdminOfflineLessonsPage() {
           hint="Подтверждены администратором"
           value={counts.accepted}
           tone="green"
-          active={activeTab === "accepted"}
-          onClick={() => handleTabChange("accepted")}
         />
       </section>
 
-      <nav className="mb-8 grid grid-cols-2 gap-1.5 rounded-2xl border border-stone-200 bg-white p-1.5 shadow-sm sm:grid-cols-3 xl:grid-cols-6" aria-label="Разделы уроков">
+      <nav className="mb-8 grid grid-cols-2 gap-1.5 rounded-2xl border border-stone-200 bg-white p-1.5 shadow-sm sm:grid-cols-3 xl:grid-cols-6" aria-label="Фильтр уроков">
         {tabs.map((tab) => (
           <button
             key={tab.id}
@@ -443,24 +438,42 @@ export default function AdminOfflineLessonsPage() {
         ))}
       </nav>
 
-      {isAdmin ? (
-        <section className="mb-8 rounded-[24px] border border-stone-200 bg-white p-4 shadow-sm sm:p-5">
-          <label className="block text-xs font-bold uppercase tracking-[0.16em] text-stone-400">
-            Преподаватель
-            <select
-              value={selectedTeacherId}
-              onChange={(event) => setSelectedTeacherId(event.target.value)}
-              className="mt-2 h-12 w-full rounded-2xl border border-stone-200 bg-white px-4 text-sm font-bold text-ink outline-none focus:border-gold sm:max-w-md"
-            >
-              <option value="">Все преподаватели</option>
-              {teacherOptions.map(([teacherId, teacherName]) => (
-                <option key={teacherId} value={teacherId}>{teacherName}</option>
+      <section className="mb-8 rounded-[20px] border border-stone-200 bg-white p-4 shadow-sm sm:p-5">
+        <div className={`grid gap-4 ${isAdmin ? "lg:grid-cols-[minmax(260px,1fr)_auto] lg:items-end" : "lg:justify-end"}`}>
+          {isAdmin ? (
+            <label className="block text-xs font-bold uppercase tracking-[0.16em] text-stone-400">
+              Преподаватель
+              <select
+                value={selectedTeacherId}
+                onChange={(event) => setSelectedTeacherId(event.target.value)}
+                className="mt-2 h-11 w-full rounded-xl border border-stone-200 bg-white px-4 text-sm font-bold text-ink outline-none focus:border-gold sm:max-w-md"
+              >
+                <option value="">Все преподаватели</option>
+                {teacherOptions.map(([teacherId, teacherName]) => (
+                  <option key={teacherId} value={teacherId}>{teacherName}</option>
+                ))}
+                <option value="unassigned">Без преподавателя</option>
+              </select>
+            </label>
+          ) : null}
+          <div>
+            <p className="mb-2 text-xs font-bold uppercase tracking-[0.16em] text-stone-400">Формат</p>
+            <div className="grid grid-cols-3 gap-1 rounded-lg border border-stone-200 bg-stone-50 p-1" role="group" aria-label="Формат уроков">
+              {([['all', 'Все'], ['offline', 'В школе'], ['online', 'Онлайн']] as const).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setDeliveryFilter(value)}
+                  className={`min-h-9 rounded-md px-3 text-xs font-bold transition ${deliveryFilter === value ? "bg-ink text-white" : "text-stone-500 hover:bg-white hover:text-ink"}`}
+                  aria-pressed={deliveryFilter === value}
+                >
+                  {label}
+                </button>
               ))}
-              <option value="unassigned">Без преподавателя</option>
-            </select>
-          </label>
-        </section>
-      ) : null}
+            </div>
+          </div>
+        </div>
+      </section>
 
       <div id="lessons-list-container" className="scroll-mt-28">
         {filtered.length === 0 ? (
@@ -553,16 +566,12 @@ function SummaryCard({
   hint,
   value,
   tone,
-  active,
-  onClick,
 }: {
   icon: typeof CalendarDays;
   label: string;
   hint: string;
   value: number;
   tone: "sky" | "amber" | "cream" | "green";
-  active: boolean;
-  onClick: () => void;
 }) {
   const tones = {
     sky: "border-sky-200 bg-sky-50 text-sky-900",
@@ -571,24 +580,19 @@ function SummaryCard({
     green: "border-emerald-200 bg-emerald-50 text-emerald-900",
   };
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={`group min-h-[154px] rounded-[24px] border p-5 text-left shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 ${tones[tone]} ${
-        active ? "ring-2 ring-ink ring-offset-2" : ""
-      }`}
+    <article
+      aria-label={`${label}: ${value}`}
+      className={`min-h-[108px] rounded-[18px] border p-3.5 text-left shadow-sm sm:min-h-[136px] sm:rounded-[24px] sm:p-5 ${tones[tone]}`}
     >
-      <span className="flex items-start justify-between gap-3">
-        <span className="grid h-10 w-10 place-items-center rounded-xl bg-white/70 shadow-sm">
+      <span className="flex items-center justify-between gap-3">
+        <span className="grid h-9 w-9 place-items-center rounded-xl bg-white/70 shadow-sm sm:h-10 sm:w-10">
           <Icon size={19} />
         </span>
-        <ChevronRight size={18} className={`transition group-hover:translate-x-1 ${active ? "opacity-100" : "opacity-45"}`} />
+        <strong className="font-display text-3xl tabular-nums sm:text-4xl">{value}</strong>
       </span>
-      <span className="mt-4 block text-sm font-black">{label}</span>
-      <span className="mt-1 block text-xs opacity-65">{hint}</span>
-      <span className="font-display mt-3 block text-3xl">{value} {value === 1 ? "урок" : "уроков"}</span>
-    </button>
+      <span className="mt-2.5 block text-xs font-black leading-4 sm:mt-3 sm:text-sm">{label}</span>
+      <span className="mt-1 hidden text-xs opacity-65 sm:block">{hint}</span>
+    </article>
   );
 }
 
@@ -657,13 +661,25 @@ function LessonRow({
         <h3 className="font-display mt-2 text-2xl">{lesson.title}</h3>
         <p className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-stone-500">
           <span>{lesson.group?.name ?? "Индивидуальный урок"}</span>
-          {lesson.room?.name ? <span>Кабинет: {lesson.room.name}</span> : null}
+          {lesson.deliveryFormat === "online" ? (
+            <span className="inline-flex items-center gap-1 font-bold text-sky-700"><MonitorPlay size={14} /> Онлайн</span>
+          ) : lesson.room?.name ? <span>Кабинет: {lesson.room.name}</span> : null}
           {lesson.teacher?.name ? <span>Преподаватель: {lesson.teacher.name}</span> : null}
         </p>
       </div>
       <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
         <span className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase ${meta.badge}`}>{meta.label}</span>
         {detail ? <span className="text-xs text-stone-500">{detail}</span> : null}
+        {lesson.deliveryFormat === "online" && lesson.meetingUrl && stage === "scheduled" ? (
+          <a
+            href={lesson.meetingUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-sky-700 px-4 text-sm font-bold text-white transition hover:bg-sky-800"
+          >
+            <MonitorPlay size={15} /> Подключиться
+          </a>
+        ) : null}
         <Link
           href={`/admin/offline-lessons/${lesson.crmClassId}`}
           className={`mt-1 inline-flex min-h-10 items-center gap-2 rounded-xl px-4 text-sm font-bold transition hover:-translate-y-0.5 ${

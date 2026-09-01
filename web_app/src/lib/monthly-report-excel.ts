@@ -192,7 +192,7 @@ export function generateMonthlyReportXml(
      <Data ss:Type="String">📚 Проведено уроков: ${totalLessons}</Data>
     </Cell>
     <Cell ss:MergeAcross="3" ss:StyleID="KpiCard">
-     <Data ss:Type="String">⭐ Набрано баллов: ${totalPoints} XP</Data>
+     <Data ss:Type="String">⭐ Набрано учебных баллов: ${totalPoints}</Data>
     </Cell>
     <Cell ss:MergeAcross="3" ss:StyleID="KpiCard">
      <Data ss:Type="String">🎯 Темы плана: ${completedTopicsCount} из ${planItems.length} освоено</Data>
@@ -283,4 +283,3 @@ export function downloadMonthlyReportExcel(summary: StudentOfflineSummary, repor
   link.click();
   URL.revokeObjectURL(link.href);
 }
-

@@ -42,3 +42,29 @@ export const offlineLessonStudentCheckSchema = z.object({
     });
   }
 });
+
+export const learningLessonResultsSchema = z.object({
+  homeworkDecisions: z.array(z.object({
+    recipientId: z.string().uuid(),
+    cycleNumber: z.number().int().min(1),
+    decision: z.enum(["revision", "accepted", "accepted_with_comment"]),
+    comment: z.string().max(5000).nullable().optional(),
+  }).superRefine((decision, context) => {
+    if (
+      ["revision", "accepted_with_comment"].includes(decision.decision)
+      && !decision.comment?.trim()
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["comment"],
+        message: "Для этого решения нужен комментарий",
+      });
+    }
+  })).max(50).default([]),
+  topicUpdates: z.array(z.object({
+    topicId: z.string().uuid(),
+    expectedPercent: z.number().int().min(0).max(100).nullable(),
+    toPercent: z.number().int().min(0).max(100),
+    comment: z.string().max(5000).nullable().optional(),
+  })).max(20).default([]),
+});

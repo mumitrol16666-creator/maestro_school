@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, ExternalLink, LoaderCircle, RotateCcw, Send } from "lucide-react";
+import { ArrowLeft, Download, ExternalLink, LoaderCircle, RotateCcw, Send } from "lucide-react";
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
@@ -11,6 +11,7 @@ import { attachmentTypeLabels } from "@/lib/homework-ui";
 import { onlineLessonStatusClasses, onlineLessonStatusLabels } from "@/lib/online-lessons-ui";
 import { notificationsApi } from "@/lib/notifications-api";
 import { onlineLessonsApi } from "@/lib/online-lessons-api";
+import { formatDownloadUrl, triggerFileDownload } from "@/lib/file-download";
 import type { HomeworkAttachmentType } from "@/types/homework";
 
 export default function OnlineLessonDetailPage() {
@@ -125,10 +126,13 @@ export default function OnlineLessonDetailPage() {
             <Summary label="Что получилось" value={item.whatWorked} />
             <Summary label="Что доработать" value={item.whatToImprove} />
             {item.completionComment && <Summary label="Комментарий преподавателя" value={item.completionComment} />}
-            <p className="text-sm font-semibold text-emerald-800">
-              Баллы за урок: {item.lessonPoints}
-              {item.lessonCoins > 0 ? ` · Maestro Coins: ${item.lessonCoins}` : ""}
-            </p>
+            {item.lessonPoints > 0 || item.lessonCoins > 0 ? (
+              <p className="text-sm font-semibold text-emerald-800">
+                {item.lessonPoints > 0 ? `Баллы за урок: ${item.lessonPoints}` : ""}
+                {item.lessonPoints > 0 && item.lessonCoins > 0 ? " · " : ""}
+                {item.lessonCoins > 0 ? `Maestro Coins: ${item.lessonCoins}` : ""}
+              </p>
+            ) : null}
           </div>
         )}
       </div>
@@ -148,14 +152,37 @@ export default function OnlineLessonDetailPage() {
             <div className="mt-6 space-y-2">
               <p className="text-xs font-bold uppercase tracking-wider text-stone-400">Материалы</p>
               {assignment.materials.map((material) => (
-                <div key={material.id} className="rounded-xl border border-stone-200 bg-stone-50 p-3 text-sm">
-                  <p className="font-bold">{material.title}</p>
+                <div key={material.id} className="flex flex-col gap-2 rounded-xl border border-stone-200 bg-stone-50 p-3.5 text-sm sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="font-bold">{material.title}</p>
+                    {material.content && <p className="mt-1 text-xs text-stone-600">{material.content}</p>}
+                  </div>
                   {material.url && (
-                    <a href={material.url} target="_blank" rel="noreferrer" className="mt-1 inline-flex items-center gap-1 text-gold hover:underline">
-                      Открыть <ExternalLink size={12} />
-                    </a>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <a
+                        href={formatDownloadUrl(material.url, material.title)}
+                        target="_blank"
+                        rel="noreferrer"
+                        download={material.title || "material"}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void triggerFileDownload(material.url!, material.title || "material");
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-xs font-bold text-ink hover:bg-amber-50 transition"
+                      >
+                        <Download size={13} className="text-gold" />
+                        <span>Скачать</span>
+                      </a>
+                      <a
+                        href={material.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 rounded-lg border border-stone-200 bg-white px-2.5 py-1.5 text-xs font-bold text-stone-600 hover:text-ink transition"
+                      >
+                        <ExternalLink size={13} />
+                      </a>
+                    </div>
                   )}
-                  {material.content && <p className="mt-2 text-stone-600">{material.content}</p>}
                 </div>
               ))}
             </div>
@@ -196,9 +223,13 @@ export default function OnlineLessonDetailPage() {
                   Предыдущий материал <ExternalLink size={13} />
                 </a>
               ) : null}
-              {latestSubmission.reviewPoints != null && (
-                <p className="mt-2 font-semibold">Баллы: {latestSubmission.reviewPoints}{latestSubmission.reviewCoins ? ` · Coins: ${latestSubmission.reviewCoins}` : ""}</p>
-              )}
+              {(latestSubmission.reviewPoints ?? 0) > 0 || (latestSubmission.reviewCoins ?? 0) > 0 ? (
+                <p className="mt-2 font-semibold">
+                  {(latestSubmission.reviewPoints ?? 0) > 0 ? `Баллы: ${latestSubmission.reviewPoints}` : ""}
+                  {(latestSubmission.reviewPoints ?? 0) > 0 && (latestSubmission.reviewCoins ?? 0) > 0 ? " · " : ""}
+                  {(latestSubmission.reviewCoins ?? 0) > 0 ? `Coins: ${latestSubmission.reviewCoins}` : ""}
+                </p>
+              ) : null}
             </div>
           )}
 

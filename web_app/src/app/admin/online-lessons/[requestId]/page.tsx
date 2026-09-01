@@ -75,6 +75,7 @@ export default function AdminOnlineLessonDetailPage() {
 
   const studentName = formatFio(item.student);
   const pendingSubmission = item.assignment?.submissions.find((sub) => sub.status === "submitted") ?? null;
+  const manualRewardsEnabled = item.manualRewardsEnabled !== false;
 
   return (
     <>
@@ -227,16 +228,16 @@ export default function AdminOnlineLessonDetailPage() {
                   whatWorked,
                   whatToImprove,
                   completionComment: completionComment || undefined,
-                  lessonPoints,
-                  lessonCoins,
-                  lessonCoinsReason: lessonCoins > 0 ? lessonCoinsReason : undefined,
+                  lessonPoints: manualRewardsEnabled ? lessonPoints : 0,
+                  lessonCoins: manualRewardsEnabled ? lessonCoins : 0,
+                  lessonCoinsReason: manualRewardsEnabled && lessonCoins > 0 ? lessonCoinsReason : undefined,
                   createAssignment,
                   assignment: createAssignment ? {
                     title: assignmentTitle,
                     description: assignmentDescription,
                     dueAt: assignmentDueAt ? new Date(assignmentDueAt).toISOString() : null,
                     submissionFormat: assignmentFormat,
-                    pointsReward: assignmentPoints,
+                    pointsReward: manualRewardsEnabled ? assignmentPoints : 0,
                   } : undefined,
                 });
                 setMessage("Урок завершён. Ученик увидит итоги и домашнее задание.");
@@ -260,22 +261,26 @@ export default function AdminOnlineLessonDetailPage() {
               Комментарий преподавателя
               <textarea value={completionComment} onChange={(e) => setCompletionComment(e.target.value)} className={`${inputClass} mt-2 min-h-20`} />
             </label>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
-                Баллы за урок
-                <input type="number" min="0" value={lessonPoints} onChange={(e) => setLessonPoints(Number(e.target.value))} className={`${inputClass} mt-2`} />
-              </label>
-              <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
-                Maestro Coins (необязательно)
-                <input type="number" min="0" value={lessonCoins} onChange={(e) => setLessonCoins(Number(e.target.value))} className={`${inputClass} mt-2`} />
-              </label>
-            </div>
-            {lessonCoins > 0 && (
-              <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
-                Причина начисления Coins
-                <input required value={lessonCoinsReason} onChange={(e) => setLessonCoinsReason(e.target.value)} className={`${inputClass} mt-2`} />
-              </label>
-            )}
+            {manualRewardsEnabled ? (
+              <>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
+                    Баллы за урок
+                    <input type="number" min="0" value={lessonPoints} onChange={(e) => setLessonPoints(Number(e.target.value))} className={`${inputClass} mt-2`} />
+                  </label>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
+                    Maestro Coins (необязательно)
+                    <input type="number" min="0" value={lessonCoins} onChange={(e) => setLessonCoins(Number(e.target.value))} className={`${inputClass} mt-2`} />
+                  </label>
+                </div>
+                {lessonCoins > 0 ? (
+                  <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
+                    Причина начисления Coins
+                    <input required value={lessonCoinsReason} onChange={(e) => setLessonCoinsReason(e.target.value)} className={`${inputClass} mt-2`} />
+                  </label>
+                ) : null}
+              </>
+            ) : null}
 
             <label className="flex items-center gap-3 rounded-2xl border border-stone-200 p-4">
               <input type="checkbox" checked={createAssignment} onChange={(e) => setCreateAssignment(e.target.checked)} />
@@ -293,7 +298,9 @@ export default function AdminOnlineLessonDetailPage() {
                   <option value="audio">Аудио</option>
                   <option value="file">Файл (ссылка)</option>
                 </select>
-                <input type="number" min="0" value={assignmentPoints} onChange={(e) => setAssignmentPoints(Number(e.target.value))} className={inputClass} placeholder="Баллы за выполнение" />
+                {manualRewardsEnabled ? (
+                  <input type="number" min="0" value={assignmentPoints} onChange={(e) => setAssignmentPoints(Number(e.target.value))} className={inputClass} placeholder="Баллы за выполнение" />
+                ) : null}
               </div>
             )}
 
@@ -317,10 +324,12 @@ export default function AdminOnlineLessonDetailPage() {
               <LessonResult label="Комментарий преподавателя" value={item.completionComment} />
             ) : null}
           </div>
-          <div className="mt-5 flex flex-wrap gap-2 text-xs font-bold">
-            <span className="rounded-full bg-stone-100 px-3 py-2">Баллы: {item.lessonPoints}</span>
-            <span className="rounded-full bg-amber-50 px-3 py-2 text-amber-900">Maestro Coins: {item.lessonCoins}</span>
-          </div>
+          {item.lessonPoints > 0 || item.lessonCoins > 0 ? (
+            <div className="mt-5 flex flex-wrap gap-2 text-xs font-bold">
+              {item.lessonPoints > 0 ? <span className="rounded-full bg-stone-100 px-3 py-2">Баллы: {item.lessonPoints}</span> : null}
+              {item.lessonCoins > 0 ? <span className="rounded-full bg-amber-50 px-3 py-2 text-amber-900">Maestro Coins: {item.lessonCoins}</span> : null}
+            </div>
+          ) : null}
           {item.assignment ? (
             <div className="mt-6 rounded-[22px] border border-stone-200 bg-stone-50 p-5">
               <p className="text-xs font-bold uppercase tracking-wider text-stone-400">Домашнее задание</p>
@@ -343,13 +352,17 @@ export default function AdminOnlineLessonDetailPage() {
 
           <div className="mt-4 space-y-4">
             <textarea value={reviewComment} onChange={(e) => setReviewComment(e.target.value)} className={`${inputClass} min-h-24`} placeholder="Комментарий преподавателя" />
-            <div className="grid gap-4 sm:grid-cols-2">
-              <input type="number" min="0" value={reviewPoints} onChange={(e) => setReviewPoints(Number(e.target.value))} className={inputClass} placeholder="Баллы за ДЗ" />
-              <input type="number" min="0" value={reviewCoins} onChange={(e) => setReviewCoins(Number(e.target.value))} className={inputClass} placeholder="Maestro Coins" />
-            </div>
-            {reviewCoins > 0 && (
-              <input required value={reviewCoinsReason} onChange={(e) => setReviewCoinsReason(e.target.value)} className={inputClass} placeholder="Причина начисления Coins" />
-            )}
+            {manualRewardsEnabled ? (
+              <>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <input type="number" min="0" value={reviewPoints} onChange={(e) => setReviewPoints(Number(e.target.value))} className={inputClass} placeholder="Баллы за ДЗ" />
+                  <input type="number" min="0" value={reviewCoins} onChange={(e) => setReviewCoins(Number(e.target.value))} className={inputClass} placeholder="Maestro Coins" />
+                </div>
+                {reviewCoins > 0 ? (
+                  <input required value={reviewCoinsReason} onChange={(e) => setReviewCoinsReason(e.target.value)} className={inputClass} placeholder="Причина начисления Coins" />
+                ) : null}
+              </>
+            ) : null}
             <div className="flex flex-wrap gap-2">
               {(["approve", "approve_with_remarks", "return"] as const).map((action) => (
                 <button
@@ -359,9 +372,9 @@ export default function AdminOnlineLessonDetailPage() {
                     await onlineLessonsApi.reviewSubmission(pendingSubmission.id, {
                       action,
                       reviewComment: reviewComment || undefined,
-                      reviewPoints,
-                      reviewCoins,
-                      reviewCoinsReason: reviewCoins > 0 ? reviewCoinsReason : undefined,
+                      reviewPoints: manualRewardsEnabled ? reviewPoints : 0,
+                      reviewCoins: manualRewardsEnabled ? reviewCoins : 0,
+                      reviewCoinsReason: manualRewardsEnabled && reviewCoins > 0 ? reviewCoinsReason : undefined,
                     });
                     setMessage(action === "return" ? "Задание возвращено на доработку." : "Задание проверено.");
                   })}

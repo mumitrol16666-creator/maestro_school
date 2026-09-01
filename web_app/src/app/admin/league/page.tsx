@@ -5,6 +5,7 @@ import {
   Search,
   ShieldCheck,
   ShieldOff,
+  Snowflake,
   Trophy,
   Users,
 } from "lucide-react";
@@ -18,6 +19,10 @@ export default function AdminWeeklyLeaguePage() {
   const [weekOffset, setWeekOffset] = useState(0);
   const [search, setSearch] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [protectionStudentId, setProtectionStudentId] = useState<string | null>(null);
+  const [protectionCategory, setProtectionCategory] = useState<"illness" | "family" | "other">("illness");
+  const [protectionComment, setProtectionComment] = useState("");
+  const [protectionError, setProtectionError] = useState<string | null>(null);
   const resource = useApiResource(
     () => weeklyLeagueApi.adminOverview(weekOffset),
     [weekOffset],
@@ -41,10 +46,37 @@ export default function AdminWeeklyLeaguePage() {
     }
   }
 
+  async function protectStreak(studentId: string) {
+    const comment = protectionComment.trim();
+    if (comment.length < 3) {
+      setProtectionError("Укажите причину подробнее");
+      return;
+    }
+    setBusyId(studentId);
+    setProtectionError(null);
+    try {
+      await weeklyLeagueApi.protectStreak({
+        studentId,
+        weekDate: resource.data!.week.startAt,
+        category: protectionCategory,
+        comment,
+        idempotencyKey: crypto.randomUUID(),
+      });
+      setProtectionStudentId(null);
+      setProtectionComment("");
+      await resource.reload();
+    } catch (error) {
+      setProtectionError(error instanceof Error ? error.message : "Не удалось защитить серию");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   if (resource.loading && !resource.data) return <LoadingState label="Загружаем недельную лигу" />;
   if (resource.error) return <ErrorState message={resource.error} retry={resource.reload} />;
   if (!resource.data) return null;
   const data = resource.data;
+  const economyV2Enabled = data.economyV2Enabled;
 
   return (
     <>
@@ -114,29 +146,76 @@ export default function AdminWeeklyLeaguePage() {
 
         <div className="mt-6 space-y-3">
           {students.map((student) => (
-            <article key={student.id} className="flex flex-col gap-4 rounded-2xl border border-stone-100 bg-stone-50 p-4 sm:flex-row sm:items-center">
-              <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl ${student.effectiveEligible ? "bg-emerald-50 text-emerald-700" : "bg-stone-200 text-stone-500"}`}>
-                {student.effectiveEligible ? <ShieldCheck size={19} /> : <ShieldOff size={19} />}
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="font-bold">{student.fullName}</p>
-                <p className="mt-1 text-xs text-stone-500">
-                  {student.login ? `@${student.login} · ` : ""}
-                  {student.isActive ? (student.position ? `${student.position} место · ${student.xp} XP` : "пока без XP") : "аккаунт неактивен"}
-                </p>
+            <article key={student.id} className="rounded-2xl border border-stone-100 bg-stone-50 p-4">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl ${student.effectiveEligible ? "bg-emerald-50 text-emerald-700" : "bg-stone-200 text-stone-500"}`}>
+                  {student.effectiveEligible ? <ShieldCheck size={19} /> : <ShieldOff size={19} />}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="font-bold">{student.fullName}</p>
+                  <p className="mt-1 text-xs text-stone-500">
+                    {student.login ? `@${student.login} · ` : ""}
+                    {student.isActive ? (student.position ? `${student.position} место · ${student.xp} XP` : "пока без XP") : "аккаунт неактивен"}
+                    {` · серия ${student.streakWeeks}`}
+                  </p>
+                  {student.streakProtection ? (
+                    <p className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-sky-800"><Snowflake size={13} /> Неделя защищена: {student.streakProtection.comment}</p>
+                  ) : null}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {economyV2Enabled && !student.streakProtection && student.isActive ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setProtectionStudentId(student.id);
+                        setProtectionError(null);
+                      }}
+                      className="min-h-11 rounded-2xl border border-sky-200 bg-white px-4 text-xs font-black text-sky-800 hover:bg-sky-50"
+                    >
+                      Защитить серию
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    disabled={busyId === student.id || !student.isActive}
+                    onClick={() => void toggleEligibility(student.id, !student.leagueEligible)}
+                    className={`min-h-11 rounded-2xl border px-4 text-xs font-black transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                      student.leagueEligible
+                        ? "border-red-200 bg-white text-red-700 hover:bg-red-50"
+                        : "border-emerald-200 bg-white text-emerald-700 hover:bg-emerald-50"
+                    }`}
+                  >
+                    {busyId === student.id ? "Сохраняем…" : student.leagueEligible ? "Исключить" : "Включить"}
+                  </button>
+                </div>
               </div>
-              <button
-                type="button"
-                disabled={busyId === student.id || !student.isActive}
-                onClick={() => void toggleEligibility(student.id, !student.leagueEligible)}
-                className={`min-h-11 rounded-2xl border px-4 text-xs font-black transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                  student.leagueEligible
-                    ? "border-red-200 bg-white text-red-700 hover:bg-red-50"
-                    : "border-emerald-200 bg-white text-emerald-700 hover:bg-emerald-50"
-                }`}
-              >
-                {busyId === student.id ? "Сохраняем…" : student.leagueEligible ? "Исключить" : "Включить"}
-              </button>
+              {protectionStudentId === student.id ? (
+                <div className="mt-4 grid gap-3 border-t border-stone-200 pt-4 sm:grid-cols-[190px_minmax(0,1fr)_auto] sm:items-start">
+                  <select
+                    value={protectionCategory}
+                    onChange={(event) => setProtectionCategory(event.target.value as typeof protectionCategory)}
+                    className="min-h-11 rounded-xl border border-stone-200 bg-white px-3 text-sm outline-none focus:border-gold"
+                  >
+                    <option value="illness">Болезнь</option>
+                    <option value="family">Семейные обстоятельства</option>
+                    <option value="other">Другая причина</option>
+                  </select>
+                  <div>
+                    <input
+                      value={protectionComment}
+                      onChange={(event) => setProtectionComment(event.target.value)}
+                      placeholder="Краткий комментарий"
+                      maxLength={512}
+                      className="min-h-11 w-full rounded-xl border border-stone-200 bg-white px-3 text-sm outline-none focus:border-gold"
+                    />
+                    {protectionError ? <p className="mt-2 text-xs font-bold text-red-700">{protectionError}</p> : null}
+                  </div>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => void protectStreak(student.id)} disabled={busyId === student.id} className="min-h-11 rounded-xl bg-ink px-4 text-xs font-black text-white disabled:opacity-50">Подтвердить</button>
+                    <button type="button" onClick={() => setProtectionStudentId(null)} className="min-h-11 rounded-xl border border-stone-200 bg-white px-4 text-xs font-black">Отмена</button>
+                  </div>
+                </div>
+              ) : null}
             </article>
           ))}
         </div>
@@ -148,7 +227,7 @@ export default function AdminWeeklyLeaguePage() {
           <div>
             <h2 className="font-display text-2xl">Призы выдаются автоматически</h2>
             <p className="mt-2 text-sm leading-6 text-amber-900">
-              После окончания недели: 15 / 10 / 7 Coins за первые три места и +3 Coins каждому, кто набрал 80 XP. Повторная выдача технически исключена.
+              После окончания недели: {data.prizes.placements.map((item) => item.coins).join(" / ")} Coins за первые три места и +{data.prizes.personalGoal.coins} Coins каждому, кто набрал {data.prizes.personalGoal.xp} XP.{economyV2Enabled ? " Первые два подтверждённых занятия дают ещё по 50 Coins." : ""} Награды за одну неделю начисляются один раз.
             </p>
           </div>
         </div>

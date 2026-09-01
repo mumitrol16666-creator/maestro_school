@@ -7,9 +7,11 @@ import {
   updateMaterial, updateModule, updateNews,
 } from "../../application/repositories/cms.repository.js";
 import { writeAuditLog } from "../../application/services/audit.service.js";
+import { listAdminCrmDirectionProjection } from "../../application/services/crm-direction-projection.service.js";
 import { getMediaInfoFromUrl } from "../../application/services/media-storage.service.js";
+import { productFeatureConfig } from "../../config/product-features.js";
 import { authenticate, requireContentAdmin, requirePermission } from "../guards/auth.guards.js";
-import { BadRequestError } from "../../domain/errors.js";
+import { BadRequestError, ConflictError } from "../../domain/errors.js";
 import { listPreparedTestTemplates } from "../../domain/prepared-tests.js";
 
 const idParams = z.object({ id: z.string().uuid() });
@@ -81,28 +83,43 @@ function validateVideoUrl(value?: string | null) {
   }
 }
 
+function assertDirectionWriteAllowed() {
+  if (productFeatureConfig.flags.curatorWorkspaceV2) {
+    throw new ConflictError(
+      "Направления управляются в CRM и доступны в приложении только для чтения",
+      "CRM_DIRECTION_SOURCE_OF_TRUTH",
+    );
+  }
+}
+
 export async function cmsRoutes(app: FastifyInstance) {
   app.get("/admin/directions", { preHandler: catalogGuards() }, async (request) => {
     const query = pageQuery.parse(request.query);
-    const result = await listAdminDirections(query);
+    const result = productFeatureConfig.flags.curatorWorkspaceV2
+      ? await listAdminCrmDirectionProjection(query)
+      : await listAdminDirections(query);
     return { data: result.items, meta: meta(query.page, query.limit, result.total) };
   });
   app.post("/admin/directions", { preHandler: catalogGuards() }, async (request, reply) => {
+    assertDirectionWriteAllowed();
     const body = z.object({ title: z.string().min(1).max(255), slug: z.string().regex(/^[a-z0-9-]+$/), description: z.string().nullable().optional(), imageUrl: nullableUrl, isPublished: z.boolean().optional() }).parse(request.body);
     const item = await createDirection(body); await audit(request, "direction", item.id, "create");
     return reply.status(201).send({ data: item });
   });
   app.patch("/admin/directions/:id", { preHandler: catalogGuards() }, async (request) => {
+    assertDirectionWriteAllowed();
     const { id } = idParams.parse(request.params);
     const body = z.object({ title: z.string().min(1).max(255).optional(), slug: z.string().regex(/^[a-z0-9-]+$/).optional(), description: z.string().nullable().optional(), imageUrl: nullableUrl }).parse(request.body);
     const item = await updateDirection(id, body); await audit(request, "direction", id, "update"); return { data: item };
   });
   app.post("/admin/directions/:id/publish", { preHandler: catalogGuards() }, async (request) => {
+    assertDirectionWriteAllowed();
     const { id } = idParams.parse(request.params); const body = publishBody.parse(request.body);
     const item = await updateDirection(id, { isPublished: body.isPublished, deletedAt: null });
     await audit(request, "direction", id, body.isPublished ? "publish" : "unpublish"); return { data: item };
   });
   app.delete("/admin/directions/:id", { preHandler: catalogGuards() }, async (request) => {
+    assertDirectionWriteAllowed();
     const { id } = idParams.parse(request.params);
     const item = await updateDirection(id, { isPublished: false, deletedAt: new Date() });
     await audit(request, "direction", id, "delete"); return { data: item };
@@ -255,12 +272,25 @@ export async function cmsRoutes(app: FastifyInstance) {
     return { data: result.items, meta: meta(query.page, query.limit, result.total) };
   });
   app.post("/admin/news", { preHandler: newsGuards() }, async (request, reply) => {
-    const body = z.object({ title: z.string().min(1).max(255), content: z.string().min(1), isPublished: z.boolean().optional() }).parse(request.body);
+    const body = z.object({
+      title: z.string().min(1).max(255),
+      content: z.string().min(1),
+      showToStudents: z.boolean().default(true),
+      showToParents: z.boolean().default(false),
+      isPublished: z.boolean().optional(),
+    }).refine((value) => value.showToStudents || value.showToParents, {
+      message: "Выберите хотя бы одну аудиторию",
+    }).parse(request.body);
     const item = await createNews({ ...body, authorId: request.user!.id, publishedAt: body.isPublished ? new Date() : null });
     await audit(request, "news_post", item.id, "create"); return reply.status(201).send({ data: item });
   });
   app.patch("/admin/news/:id", { preHandler: newsGuards() }, async (request) => {
-    const { id } = idParams.parse(request.params); const body = z.object({ title: z.string().min(1).max(255).optional(), content: z.string().min(1).optional() }).parse(request.body);
+    const { id } = idParams.parse(request.params); const body = z.object({
+      title: z.string().min(1).max(255).optional(),
+      content: z.string().min(1).optional(),
+      showToStudents: z.boolean().optional(),
+      showToParents: z.boolean().optional(),
+    }).parse(request.body);
     const item = await updateNews(id, body); await audit(request, "news_post", id, "update"); return { data: item };
   });
   app.post("/admin/news/:id/publish", { preHandler: newsGuards() }, async (request) => {

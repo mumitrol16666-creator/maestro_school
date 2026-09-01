@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import type { UserNotificationType } from "@prisma/client";
 import { z } from "zod";
 import {
   countUnreadNotifications,
@@ -27,6 +28,7 @@ export async function notificationsRoutes(app: FastifyInstance) {
     "lesson_teacher_reminder",
     "lesson_student_reminder",
     "direct_message_received",
+    "homework_assigned",
     "homework_submitted",
     "homework_reviewed",
     "lesson_question_received",
@@ -50,7 +52,14 @@ export async function notificationsRoutes(app: FastifyInstance) {
     const query = z.object({
       type: typeSchema.optional(),
     }).parse(request.query);
-    return { data: { count: await countUnreadNotifications(request.user!.id, query.type) } };
+    return {
+      data: {
+        count: await countUnreadNotifications(
+          request.user!.id,
+          query.type as UserNotificationType | undefined,
+        ),
+      },
+    };
   });
 
   app.get("/students/me/notifications", { preHandler: [authenticate] }, async (request) => {
@@ -65,7 +74,10 @@ export async function notificationsRoutes(app: FastifyInstance) {
 
   app.post("/students/me/notifications/read-all", { preHandler: [authenticate] }, async (request) => {
     const query = z.object({ type: typeSchema.optional() }).parse(request.query);
-    await markAllNotificationsRead(request.user!.id, query.type);
+    await markAllNotificationsRead(
+      request.user!.id,
+      query.type as UserNotificationType | undefined,
+    );
     return { data: { ok: true } };
   });
 }

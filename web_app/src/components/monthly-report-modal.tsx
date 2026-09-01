@@ -14,7 +14,8 @@ import {
   User,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useDialogBehavior } from "@/hooks/use-dialog-behavior";
 import { downloadMonthlyReportExcel } from "@/lib/monthly-report-excel";
 import type { SchoolOfflineLesson, StudentOfflineSummary } from "@/types/school-offline";
 
@@ -51,6 +52,11 @@ export function MonthlyReportModal({
   initialMonth: string;
 }) {
   const [selectedMonth, setSelectedMonth] = useState(initialMonth);
+  const dialogRef = useDialogBehavior(open, onClose);
+
+  useEffect(() => {
+    if (open) setSelectedMonth(initialMonth);
+  }, [initialMonth, open]);
 
   if (!open) return null;
 
@@ -65,6 +71,11 @@ export function MonthlyReportModal({
 
   const totalLessons = lessons.length;
   const totalPoints = lessons.reduce((sum, l) => sum + (Number(l.lessonPoints) || 0), 0);
+  const attendanceTracked = lessons.filter((lesson) => lesson.attended !== null);
+  const attendedLessons = attendanceTracked.filter((lesson) => lesson.attended).length;
+  const attendancePercent = attendanceTracked.length
+    ? Math.round((attendedLessons / attendanceTracked.length) * 100)
+    : null;
   const planItems = summary.monthlyPlan?.items || [];
   const completedTopics = planItems.filter((i) => i.status === "completed");
 
@@ -107,59 +118,56 @@ export function MonthlyReportModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 p-3 backdrop-blur-sm sm:p-6 print:static print:inset-auto print:bg-transparent print:p-0">
-      <div className="relative flex max-h-[92vh] w-full max-w-4xl flex-col rounded-[28px] border border-stone-200 bg-white shadow-2xl print:max-h-none print:w-full print:rounded-none print:border-none print:shadow-none">
+    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-6 print:static print:inset-auto print:p-0">
+      <button
+        type="button"
+        onClick={onClose}
+        className="absolute inset-0 h-full w-full bg-black/60 backdrop-blur-sm print:hidden"
+        aria-label="Закрыть отчёт по фону"
+      />
+      <section
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="monthly-report-title"
+        className="relative flex max-h-[94dvh] w-full max-w-4xl flex-col overflow-hidden overscroll-contain rounded-t-xl border border-stone-200 bg-white shadow-2xl sm:max-h-[92dvh] sm:rounded-xl print:max-h-none print:w-full print:rounded-none print:border-none print:shadow-none"
+      >
         
         {/* Header bar (hidden on print) */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-100 px-6 py-4 print:hidden">
-          <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3 border-b border-stone-100 px-4 py-4 sm:px-6 print:hidden">
+          <div className="order-1 flex min-w-0 flex-1 items-center gap-3">
             <span className="grid h-10 w-10 place-items-center rounded-xl bg-gold/15 text-gold">
               <FileSpreadsheet size={20} />
             </span>
-            <div>
-              <h2 className="text-base font-bold text-ink sm:text-lg">Отчёт об обучении</h2>
+            <div className="min-w-0">
+              <h2 id="monthly-report-title" className="text-base font-bold text-ink sm:text-lg">Отчёт об обучении</h2>
               <p className="text-xs text-stone-500">Музыкальная школа Maestro</p>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="order-3 flex w-full items-center sm:order-2 sm:w-auto">
             <input
               type="month"
+              name="reportMonth"
+              aria-label="Месяц отчёта"
               value={selectedMonth}
               onChange={(e) => setSelectedMonth(e.target.value)}
-              className="h-10 rounded-xl border border-stone-200 bg-stone-50 px-3 text-xs font-bold text-ink outline-none focus:ring-2 focus:ring-amber-200"
+              className="h-10 w-full rounded-xl border border-stone-200 bg-stone-50 px-3 text-sm font-bold text-ink outline-none focus:ring-2 focus:ring-amber-200 sm:w-auto"
             />
-            <button
-              type="button"
-              onClick={handleDownloadExcel}
-              className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-emerald-700 px-3.5 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-800"
-              title="Скачать Excel файл с оформлением"
-            >
-              <Download size={14} />
-              Excel (.xls)
-            </button>
-            <button
-              type="button"
-              onClick={handlePrint}
-              className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3.5 text-xs font-bold text-stone-700 transition hover:bg-stone-50"
-              title="Распечатать или сохранить в PDF"
-            >
-              <Printer size={14} />
-              Печать / PDF
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="grid h-10 w-10 place-items-center rounded-xl text-stone-400 hover:bg-stone-100 hover:text-stone-700"
-              aria-label="Закрыть"
-            >
-              <X size={18} />
-            </button>
           </div>
+          <button
+            type="button"
+            onClick={onClose}
+            data-dialog-initial-focus="true"
+            className="order-2 grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-stone-200 bg-white text-stone-500 transition-colors hover:border-stone-300 hover:text-stone-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold sm:order-3"
+            aria-label="Закрыть"
+          >
+            <X size={18} />
+          </button>
         </div>
 
         {/* Scrollable Printable Content */}
-        <div className="overflow-y-auto p-6 sm:p-8 print:p-0">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-6 sm:p-8 print:overflow-visible print:p-0">
           
           {/* School Header Banner */}
           <div className="flex flex-wrap items-start justify-between gap-4 border-b border-stone-200 pb-6">
@@ -195,7 +203,7 @@ export function MonthlyReportModal({
               <span className="flex items-center gap-1.5 text-xs font-bold text-stone-600">
                 <Award size={14} className="text-emerald-600" /> Баллы за месяц
               </span>
-              <p className="font-display mt-2 text-2xl font-bold text-emerald-700">+{totalPoints} XP</p>
+              <p className="font-display mt-2 text-2xl font-bold text-emerald-700">+{totalPoints}</p>
               <span className="text-[11px] text-stone-600">учебные баллы</span>
             </div>
 
@@ -214,9 +222,11 @@ export function MonthlyReportModal({
                 <Clock size={14} className="text-amber-600" /> Посещаемость
               </span>
               <p className="font-display mt-2 text-2xl font-bold text-ink">
-                {totalLessons > 0 ? "100%" : "—"}
+                {attendancePercent !== null ? `${attendancePercent}%` : "—"}
               </p>
-              <span className="text-[11px] text-stone-600">по графику</span>
+              <span className="text-[11px] text-stone-600">
+                {attendancePercent !== null ? `${attendedLessons} из ${attendanceTracked.length}` : "нет отметок"}
+              </span>
             </div>
           </div>
 
@@ -298,7 +308,7 @@ export function MonthlyReportModal({
                         )}
                         {lesson.lessonPoints ? (
                           <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-black text-emerald-700">
-                            +{lesson.lessonPoints} XP
+                            +{lesson.lessonPoints} баллов
                           </span>
                         ) : null}
                       </div>
@@ -370,20 +380,20 @@ export function MonthlyReportModal({
         </div>
 
         {/* Bottom Actions (hidden on print) */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-stone-100 bg-stone-50/80 px-6 py-4 rounded-b-[28px] print:hidden">
+        <div className="flex flex-col gap-3 border-t border-stone-100 bg-stone-50/80 px-6 pb-[max(1rem,env(safe-area-inset-bottom,0px))] pt-4 sm:flex-row sm:items-center sm:justify-between sm:py-4 print:hidden">
           <button
             type="button"
             onClick={handleDownloadCsv}
-            className="inline-flex items-center gap-1.5 text-xs font-bold text-stone-500 hover:text-ink"
+            className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl px-3 text-xs font-bold text-stone-500 transition-colors hover:bg-stone-100 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold"
           >
             <FileText size={14} /> Скачать в формате CSV
           </button>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <button
               type="button"
               onClick={handlePrint}
-              className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-stone-300 bg-white px-4 text-xs font-bold text-stone-800 transition hover:bg-stone-50"
+              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-stone-300 bg-white px-4 text-xs font-bold text-stone-800 transition hover:bg-stone-50"
             >
               <Printer size={14} />
               Распечатать
@@ -391,7 +401,7 @@ export function MonthlyReportModal({
             <button
               type="button"
               onClick={handleDownloadExcel}
-              className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-ink px-5 text-xs font-bold text-white transition hover:bg-stone-800"
+              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl bg-ink px-5 text-xs font-bold text-white transition hover:bg-stone-800"
             >
               <Download size={14} />
               Скачать Excel (.xls)
@@ -399,7 +409,7 @@ export function MonthlyReportModal({
           </div>
         </div>
 
-      </div>
+      </section>
     </div>
   );
 }

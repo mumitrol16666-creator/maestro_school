@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { buildFamilyOfflineSummary } from "./family-view.js";
 
-test("family summary exposes learning results without private student fields or materials", () => {
+test("family summary exposes only the configured parent skeleton", () => {
   const result = buildFamilyOfflineSummary({
     crmStudentId: "crm-secret",
     appUserId: "internal-user-id",
@@ -11,17 +11,11 @@ test("family summary exposes learning results without private student fields or 
       phone: "77000000000",
       groups: [{ name: "Гитара" }],
     },
-    balanceSnapshot: { classesRemainingTotal: 4 },
+    balanceSnapshot: { debtAmountKzt: 4500, accountBalanceKzt: 0 },
     upcomingLessons: [{
       crmClassId: "class-1",
       title: "Гитара",
       materials: [{ url: "https://private.example/material.pdf" }],
-    }],
-    lessonHistory: [{
-      crmClassId: "class-0",
-      homework: "Повторить аккорды",
-      lessonSummary: "Получилось уверенно",
-      materials: [{ url: "https://private.example/video.mp4" }],
     }],
     monthlyPlan: null,
   });
@@ -34,7 +28,28 @@ test("family summary exposes learning results without private student fields or 
   assert.equal("crmStudentId" in result, false);
   assert.equal("appUserId" in result, false);
   assert.equal("materials" in result.upcomingLessons[0], false);
-  assert.equal("materials" in result.lessonHistory[0], false);
-  assert.equal(result.lessonHistory[0].homework, "Повторить аккорды");
-  assert.equal(result.lessonHistory[0].lessonSummary, "Получилось уверенно");
+  assert.deepEqual(result.financialBalance, {
+    signedAmountKzt: -4500,
+    status: "debt",
+    source: "crm",
+  });
+  assert.equal("lessonHistory" in result, false);
+  assert.equal("balanceSnapshot" in result, false);
+});
+
+test("family summary removes modules disabled for all linked parents", () => {
+  const result = buildFamilyOfflineSummary({
+    profile: { name: "Ученик", groups: [] },
+    balanceSnapshot: { debtAmountKzt: 0, accountBalanceKzt: 12000 },
+    upcomingLessons: [{ crmClassId: "class-1", materials: [] }],
+    monthlyPlan: { id: "plan-1" },
+  }, {
+    showSchedule: false,
+    showBalance: false,
+    showPlanProgress: false,
+  });
+
+  assert.equal(result.financialBalance, null);
+  assert.deepEqual(result.upcomingLessons, []);
+  assert.equal(result.monthlyPlan, null);
 });
