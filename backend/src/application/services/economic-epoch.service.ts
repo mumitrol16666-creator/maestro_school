@@ -249,9 +249,9 @@ export async function applyEconomicEpochCutover(params: {
       },
     });
 
-    for (const snapshot of snapshots) {
-      await tx.economicEpochParticipant.create({
-        data: {
+    if (snapshots.length) {
+      await tx.economicEpochParticipant.createMany({
+        data: snapshots.map((snapshot) => ({
           epochId: epoch.id,
           studentId: snapshot.studentId,
           openingPoints: ECONOMY_V2_OPENING_POINTS,
@@ -263,22 +263,26 @@ export async function applyEconomicEpochCutover(params: {
           legacyCoinsSnapshot: snapshot.legacyCoins,
           sourceKey: participantSourceKey(code, snapshot.studentId),
           activatedAt,
-        },
+        })),
       });
-      await tx.studentCoinBalance.upsert({
-        where: { studentId: snapshot.studentId },
-        update: {
+      const studentIds = snapshots.map((snapshot) => snapshot.studentId);
+      await tx.studentCoinBalance.updateMany({
+        where: { studentId: { in: studentIds } },
+        data: {
           balance: ECONOMY_V2_OPENING_COINS,
           economicEpochId: epoch.id,
         },
-        create: {
+      });
+      await tx.studentCoinBalance.createMany({
+        data: snapshots.map((snapshot) => ({
           studentId: snapshot.studentId,
           balance: ECONOMY_V2_OPENING_COINS,
           economicEpochId: epoch.id,
-        },
+        })),
+        skipDuplicates: true,
       });
-      await tx.maestroCoinTransaction.create({
-        data: {
+      await tx.maestroCoinTransaction.createMany({
+        data: snapshots.map((snapshot) => ({
           economicEpochId: epoch.id,
           studentId: snapshot.studentId,
           amount: ECONOMY_V2_OPENING_COINS,
@@ -289,7 +293,7 @@ export async function applyEconomicEpochCutover(params: {
           createdById: null,
           balanceBefore: 0,
           balanceAfter: ECONOMY_V2_OPENING_COINS,
-        },
+        })),
       });
     }
 

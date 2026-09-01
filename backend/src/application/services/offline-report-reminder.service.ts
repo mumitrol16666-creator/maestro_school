@@ -17,6 +17,12 @@ function isReportOpen(item: Record<string, unknown>) {
   return !["pending_admin_review", "completed", "cancelled"].includes(String(item.status ?? ""));
 }
 
+async function inBatches<T>(items: T[], batchSize: number, task: (item: T) => Promise<void>) {
+  for (let index = 0; index < items.length; index += batchSize) {
+    await Promise.allSettled(items.slice(index, index + batchSize).map(task));
+  }
+}
+
 export async function sendOfflineReportReminders() {
   const teachers = await prisma.user.findMany({
     where: {
@@ -33,13 +39,13 @@ export async function sendOfflineReportReminders() {
   const to = new Date(now);
   to.setDate(to.getDate() + 1);
 
-  for (const teacher of teachers) {
-    if (!teacher.crmTeacherId) continue;
+  await inBatches(teachers, 5, async (teacher) => {
+    if (!teacher.crmTeacherId) return;
     const agenda = await fetchTeacherOfflineClasses(teacher.crmTeacherId, {
       from: from.toISOString(),
       to: to.toISOString(),
     }).catch(() => null);
-    if (!agenda) continue;
+    if (!agenda) return;
 
     for (const item of agenda.classes) {
       if (!isReportOpen(item)) continue;
@@ -65,7 +71,7 @@ export async function sendOfflineReportReminders() {
         dedupeWindowMs: 6 * 60 * 60 * 1000,
       }).catch(() => undefined);
     }
-  }
+  });
 }
 
 export function startOfflineReportReminderJob() {

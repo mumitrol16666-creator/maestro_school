@@ -294,18 +294,49 @@ function serializeMembers(members: Array<{
   }));
 }
 
-async function unreadCountForConversation(params: {
+type ConversationCounterRow = {
   conversationId: string;
-  actorId: string;
-  lastReadAt: Date | null;
-}) {
-  return prisma.learningMessage.count({
-    where: {
-      conversationId: params.conversationId,
-      authorId: { not: params.actorId },
-      ...(params.lastReadAt ? { createdAt: { gt: params.lastReadAt } } : {}),
-    },
-  });
+  unreadCount: bigint;
+  openReportCount: bigint;
+};
+
+async function conversationCounters(
+  conversations: Array<{ id: string; members: Array<{ userId?: string; lastReadAt: Date | null }> }>,
+  actor: DialogActor,
+) {
+  if (!conversations.length) return new Map<string, { unreadCount: number; openReportCount: number }>();
+  const thresholds = Prisma.join(conversations.map((conversation) => {
+    const member = conversation.members.find((item) => !item.userId || item.userId === actor.userId) ?? null;
+    return Prisma.sql`(${conversation.id}::uuid, ${member?.lastReadAt ?? null}::timestamptz)`;
+  }));
+  const includeReports = isLearningDialogCuratorRole(actor.roleSlug);
+  const rows = await prisma.$queryRaw<ConversationCounterRow[]>(Prisma.sql`
+    WITH thresholds("conversationId", "lastReadAt") AS (
+      VALUES ${thresholds}
+    )
+    SELECT
+      thresholds."conversationId" AS "conversationId",
+      (
+        SELECT COUNT(*)
+        FROM "learning_messages" AS message
+        WHERE message."conversation_id" = thresholds."conversationId"
+          AND message."author_id" IS NOT NULL
+          AND message."author_id" <> ${actor.userId}::uuid
+          AND (thresholds."lastReadAt" IS NULL OR message."created_at" > thresholds."lastReadAt")
+      ) AS "unreadCount",
+      CASE WHEN ${includeReports} THEN (
+        SELECT COUNT(*)
+        FROM "learning_message_reports" AS report
+        INNER JOIN "learning_messages" AS message ON message."id" = report."message_id"
+        WHERE message."conversation_id" = thresholds."conversationId"
+          AND report."status" = 'open'
+      ) ELSE 0 END AS "openReportCount"
+    FROM thresholds
+  `);
+  return new Map(rows.map((row) => [row.conversationId, {
+    unreadCount: Number(row.unreadCount),
+    openReportCount: Number(row.openReportCount),
+  }]));
 }
 
 export async function listLearningConversations(
@@ -333,10 +364,12 @@ export async function listLearningConversations(
       },
     },
   });
+  const counters = await conversationCounters(conversations, actor);
 
-  return Promise.all(conversations.map(async (conversation) => {
+  return conversations.map((conversation) => {
     const member = actorMember(conversation.members, actor.userId);
     const lastMessage = conversation.messages[0] ?? null;
+    const counter = counters.get(conversation.id) ?? { unreadCount: 0, openReportCount: 0 };
     return {
       id: conversation.id,
       type: conversation.type,
@@ -357,11 +390,7 @@ export async function listLearningConversations(
         createdAt: lastMessage.createdAt,
       } : null,
       lastMessageAt: conversation.lastMessageAt,
-      unreadCount: await unreadCountForConversation({
-        conversationId: conversation.id,
-        actorId: actor.userId,
-        lastReadAt: member?.lastReadAt ?? null,
-      }),
+      unreadCount: counter.unreadCount,
       canWrite: canActorWrite(
         conversation,
         member,
@@ -369,13 +398,9 @@ export async function listLearningConversations(
       ),
       notificationsMuted: member?.notificationsMuted ?? false,
       archivedAt: member?.archivedAt ?? null,
-      openReportCount: isLearningDialogCuratorRole(actor.roleSlug)
-        ? await prisma.learningMessageReport.count({
-            where: { message: { conversationId: conversation.id }, status: "open" },
-          })
-        : 0,
+      openReportCount: counter.openReportCount,
     };
-  }));
+  });
 }
 
 export async function countUnreadLearningMessages(actor: DialogActor) {
@@ -391,14 +416,8 @@ export async function countUnreadLearningMessages(actor: DialogActor) {
       },
     },
   });
-  const counts = await Promise.all(conversations.map((conversation) => (
-    unreadCountForConversation({
-      conversationId: conversation.id,
-      actorId: actor.userId,
-      lastReadAt: conversation.members[0]?.lastReadAt ?? null,
-    })
-  )));
-  return counts.reduce((total, count) => total + count, 0);
+  const counters = await conversationCounters(conversations, actor);
+  return [...counters.values()].reduce((total, counter) => total + counter.unreadCount, 0);
 }
 
 export async function getLearningConversation(

@@ -1379,7 +1379,15 @@ export async function finalizeWeeklyLeagueSnapshot(params: {
       };
     }
 
-    const [events, participants, activities, protections, streakStates, attendanceCoinRows] = await Promise.all([
+    const [
+      events,
+      participants,
+      activities,
+      protections,
+      streakStates,
+      attendanceCoinRows,
+      existingMilestones,
+    ] = await Promise.all([
       tx.leagueXpEvent.findMany({
         where: {
           economicEpochId: params.economicEpochId,
@@ -1446,14 +1454,19 @@ export async function finalizeWeeklyLeagueSnapshot(params: {
         },
         select: { studentId: true, amount: true },
       }),
+      tx.weeklyStreakMilestone.findMany({
+        where: { economicEpochId: params.economicEpochId },
+        select: { studentId: true, milestoneWeeks: true },
+      }),
     ]);
     const ranking = rankLeagueEvents(events);
     const rankingByStudent = new Map(ranking.map((entry) => [entry.studentId, entry]));
     const participantsByStudent = new Map(participants.map((entry) => [entry.studentId, entry.student]));
+    const eventStudentById = new Map(events.map((event) => [event.studentId, event.student]));
     for (const entry of ranking) {
       if (!participantsByStudent.has(entry.studentId)) {
-        const event = events.find((item) => item.studentId === entry.studentId);
-        if (event) participantsByStudent.set(entry.studentId, event.student);
+        const student = eventStudentById.get(entry.studentId);
+        if (student) participantsByStudent.set(entry.studentId, student);
       }
     }
     const unrankedStudentIds = [...participantsByStudent.keys()]
@@ -1496,24 +1509,11 @@ export async function finalizeWeeklyLeagueSnapshot(params: {
         (attendanceCoinsByStudent.get(row.studentId) ?? 0) + row.amount,
       );
     }
+    const existingMilestoneKeys = new Set(
+      existingMilestones.map((row) => `${row.studentId}:${row.milestoneWeeks}`),
+    );
 
-    const snapshotEntries: Array<{
-      studentId: string;
-      displayName: string;
-      position: number;
-      xp: number;
-      eventCount: number;
-      goalXp: number;
-      goalMet: boolean;
-      coinsAwarded: number;
-      streakWeeks: number;
-      streakOutcome: "extended" | "frozen" | "broken";
-      coinBreakdown: Prisma.InputJsonValue;
-      milestonesEarned: Prisma.InputJsonValue;
-      breakdown: Prisma.InputJsonValue;
-    }> = [];
-
-    for (const entry of finalRanking) {
+    const streakEvaluations = finalRanking.map((entry) => {
       const currentState = stateByStudent.get(entry.studentId);
       if (
         currentState?.lastProcessedWeekStart
@@ -1531,8 +1531,11 @@ export async function finalizeWeeklyLeagueSnapshot(params: {
         hasActivity: activeStudentIds.has(entry.studentId),
         frozen: Boolean(protection),
       });
-      await tx.weeklyStreakEvent.create({
-        data: {
+      return { entry, currentState, protection, streak };
+    });
+    if (streakEvaluations.length) {
+      await tx.weeklyStreakEvent.createMany({
+        data: streakEvaluations.map(({ entry, currentState, protection, streak }) => ({
           economicEpochId: params.economicEpochId,
           studentId: entry.studentId,
           weekStart: params.week.start,
@@ -1546,8 +1549,27 @@ export async function finalizeWeeklyLeagueSnapshot(params: {
             : streak.eventType === "frozen"
               ? protection?.comment ?? "Серия защищена"
               : "Неделя завершилась без подтверждённой активности",
-        },
+        })),
       });
+    }
+
+    const snapshotEntries: Array<{
+      studentId: string;
+      displayName: string;
+      position: number;
+      xp: number;
+      eventCount: number;
+      goalXp: number;
+      goalMet: boolean;
+      coinsAwarded: number;
+      streakWeeks: number;
+      streakOutcome: "extended" | "frozen" | "broken";
+      coinBreakdown: Prisma.InputJsonValue;
+      milestonesEarned: Prisma.InputJsonValue;
+      breakdown: Prisma.InputJsonValue;
+    }> = [];
+
+    for (const { entry, currentState, streak } of streakEvaluations) {
       await tx.weeklyStreakState.upsert({
         where: {
           economicEpochId_studentId: {
@@ -1630,43 +1652,31 @@ export async function finalizeWeeklyLeagueSnapshot(params: {
       const milestone = streak.eventType === "extended"
         ? weeklyStreakMilestone(streak.currentWeeks)
         : null;
-      if (milestone) {
-        const existingMilestone = await tx.weeklyStreakMilestone.findUnique({
-          where: {
-            economicEpochId_studentId_milestoneWeeks: {
-              economicEpochId: params.economicEpochId,
-              studentId: entry.studentId,
-              milestoneWeeks: milestone.weeks,
-            },
+      if (milestone && !existingMilestoneKeys.has(`${entry.studentId}:${milestone.weeks}`)) {
+        const sourceKey = `weekly-streak-milestone:${params.economicEpochId}:${entry.studentId}:${milestone.weeks}`;
+        const milestoneRow = await tx.weeklyStreakMilestone.create({
+          data: {
+            economicEpochId: params.economicEpochId,
+            studentId: entry.studentId,
+            milestoneWeeks: milestone.weeks,
+            coinsAwarded: milestone.coins,
+            sourceKey,
+            earnedAt: params.finalizedAt,
           },
           select: { id: true },
         });
-        if (!existingMilestone) {
-          const sourceKey = `weekly-streak-milestone:${params.economicEpochId}:${entry.studentId}:${milestone.weeks}`;
-          const milestoneRow = await tx.weeklyStreakMilestone.create({
-            data: {
-              economicEpochId: params.economicEpochId,
-              studentId: entry.studentId,
-              milestoneWeeks: milestone.weeks,
-              coinsAwarded: milestone.coins,
-              sourceKey,
-              earnedAt: params.finalizedAt,
-            },
-            select: { id: true },
-          });
-          await creditMaestroCoinsInTransaction(tx, {
-            economicEpochId: params.economicEpochId,
-            studentId: entry.studentId,
-            amount: milestone.coins,
-            reason: milestone.title,
-            sourceType: "streak_milestone",
-            sourceId: milestoneRow.id,
-            sourceKey,
-            eventAt: params.finalizedAt,
-          });
-          milestoneCoins = milestone.coins;
-          earnedMilestones.push(milestone.weeks);
-        }
+        await creditMaestroCoinsInTransaction(tx, {
+          economicEpochId: params.economicEpochId,
+          studentId: entry.studentId,
+          amount: milestone.coins,
+          reason: milestone.title,
+          sourceType: "streak_milestone",
+          sourceId: milestoneRow.id,
+          sourceKey,
+          eventAt: params.finalizedAt,
+        });
+        milestoneCoins = milestone.coins;
+        earnedMilestones.push(milestone.weeks);
       }
 
       const attendanceCoins = attendanceCoinsByStudent.get(entry.studentId) ?? 0;

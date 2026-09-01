@@ -5,6 +5,12 @@ import { prisma } from "../../infrastructure/database/prisma.js";
 import { aqtobeMonthKey } from "../../lib/aqtobe-month.js";
 
 const AQTOBE_OFFSET_MS = 5 * 60 * 60 * 1_000;
+const usageDayFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Asia/Aqtobe",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
 
 type PeriodRange = {
   key: string;
@@ -12,12 +18,15 @@ type PeriodRange = {
   end: Date;
 };
 
-type UsageAggregateRow = {
-  active_students: bigint;
+type PeriodMetricsRow = {
+  month: string;
+  activeStudents: bigint;
   logins: bigint;
   sessions: bigint;
-  page_views: bigint;
-  homework_views: bigint;
+  pageViews: bigint;
+  homeworkViews: bigint;
+  homeworkSubmissions: bigint;
+  testsCompleted: bigint;
 };
 
 function number(value: bigint | number | null | undefined) {
@@ -46,40 +55,69 @@ function shiftMonth(key: string, amount: number) {
   return `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
-async function periodMetrics(range: PeriodRange) {
-  const [usage] = await prisma.$queryRaw<UsageAggregateRow[]>(Prisma.sql`
+async function periodMetricsSeries(months: string[]) {
+  if (!months.length) return [];
+  const ranges = months.map(appAnalyticsMonthRange);
+  const start = ranges[0].start;
+  const end = ranges[ranges.length - 1].end;
+  const monthRows = Prisma.join(months.map((month) => Prisma.sql`(${month})`));
+  const rows = await prisma.$queryRaw<PeriodMetricsRow[]>(Prisma.sql`
+    WITH month_keys("month") AS (
+      VALUES ${monthRows}
+    ), usage AS (
+      SELECT
+        TO_CHAR("occurred_at" AT TIME ZONE 'Asia/Aqtobe', 'YYYY-MM') AS "month",
+        COUNT(DISTINCT "user_id") AS "activeStudents",
+        COUNT(*) FILTER (WHERE "event_type" = 'login') AS "logins",
+        COUNT(DISTINCT "session_id") FILTER (WHERE "session_id" IS NOT NULL) AS "sessions",
+        COUNT(*) FILTER (WHERE "event_type" = 'page_view') AS "pageViews",
+        COUNT(*) FILTER (WHERE "event_type" = 'page_view' AND "section" = 'homework') AS "homeworkViews"
+      FROM "app_usage_events"
+      WHERE "occurred_at" >= ${start} AND "occurred_at" < ${end}
+      GROUP BY 1
+    ), outcomes AS (
+      SELECT "month", COUNT(*) FILTER (WHERE "kind" = 'homework') AS "homeworkSubmissions",
+        COUNT(*) FILTER (WHERE "kind" = 'test') AS "testsCompleted"
+      FROM (
+        SELECT TO_CHAR("created_at" AT TIME ZONE 'Asia/Aqtobe', 'YYYY-MM') AS "month", 'homework' AS "kind"
+        FROM "homework_submissions" WHERE "created_at" >= ${start} AND "created_at" < ${end}
+        UNION ALL
+        SELECT TO_CHAR("submitted_at" AT TIME ZONE 'Asia/Aqtobe', 'YYYY-MM'), 'homework'
+        FROM "learning_homework_attempts" WHERE "submitted_at" >= ${start} AND "submitted_at" < ${end}
+        UNION ALL
+        SELECT TO_CHAR("created_at" AT TIME ZONE 'Asia/Aqtobe', 'YYYY-MM'), 'homework'
+        FROM "online_lesson_assignment_submissions" WHERE "created_at" >= ${start} AND "created_at" < ${end}
+        UNION ALL
+        SELECT TO_CHAR("created_at" AT TIME ZONE 'Asia/Aqtobe', 'YYYY-MM'), 'test'
+        FROM "prepared_test_attempts"
+        WHERE "created_at" >= ${start} AND "created_at" < ${end} AND "passed" = TRUE
+      ) AS outcome_events
+      GROUP BY "month"
+    )
     SELECT
-      COUNT(DISTINCT "user_id") AS active_students,
-      COUNT(*) FILTER (WHERE "event_type" = 'login') AS logins,
-      COUNT(DISTINCT "session_id") FILTER (WHERE "session_id" IS NOT NULL) AS sessions,
-      COUNT(*) FILTER (WHERE "event_type" = 'page_view') AS page_views,
-      COUNT(*) FILTER (WHERE "event_type" = 'page_view' AND "section" = 'homework') AS homework_views
-    FROM "app_usage_events"
-    WHERE "occurred_at" >= ${range.start} AND "occurred_at" < ${range.end}
+      month_keys."month",
+      COALESCE(usage."activeStudents", 0) AS "activeStudents",
+      COALESCE(usage."logins", 0) AS "logins",
+      COALESCE(usage."sessions", 0) AS "sessions",
+      COALESCE(usage."pageViews", 0) AS "pageViews",
+      COALESCE(usage."homeworkViews", 0) AS "homeworkViews",
+      COALESCE(outcomes."homeworkSubmissions", 0) AS "homeworkSubmissions",
+      COALESCE(outcomes."testsCompleted", 0) AS "testsCompleted"
+    FROM month_keys
+    LEFT JOIN usage USING ("month")
+    LEFT JOIN outcomes USING ("month")
+    ORDER BY month_keys."month"
   `);
-  const [legacyHomework, learningHomework, onlineHomework, testsCompleted] = await Promise.all([
-    prisma.homeworkSubmission.count({
-      where: { createdAt: { gte: range.start, lt: range.end } },
-    }),
-    prisma.learningHomeworkAttempt.count({
-      where: { submittedAt: { gte: range.start, lt: range.end } },
-    }),
-    prisma.onlineLessonAssignmentSubmission.count({
-      where: { createdAt: { gte: range.start, lt: range.end } },
-    }),
-    prisma.preparedTestAttempt.count({
-      where: { createdAt: { gte: range.start, lt: range.end }, passed: true },
-    }),
-  ]);
-  return {
-    activeStudents: number(usage?.active_students),
-    logins: number(usage?.logins),
-    sessions: number(usage?.sessions),
-    pageViews: number(usage?.page_views),
-    homeworkViews: number(usage?.homework_views),
-    homeworkSubmissions: legacyHomework + learningHomework + onlineHomework,
-    testsCompleted,
-  };
+  return rows.map((row) => ({
+    month: row.month,
+    activeStudents: number(row.activeStudents),
+    logins: number(row.logins),
+    sessions: number(row.sessions),
+    pageViews: number(row.pageViews),
+    homeworkViews: number(row.homeworkViews),
+    homeworkSubmissions: number(row.homeworkSubmissions),
+    testsCompleted: number(row.testsCompleted),
+  }));
 }
 
 type StudentOutcome = {
@@ -137,12 +175,7 @@ async function studentOutcomeMap(studentIds: string[], range: PeriodRange) {
 }
 
 function usageDay(value: Date) {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Aqtobe",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(value);
+  return usageDayFormatter.format(value);
 }
 
 function emptyStudentUsage() {
@@ -253,10 +286,10 @@ export async function getAppAnalytics(params: {
   };
 
   const seriesKeys = Array.from({ length: 6 }, (_, index) => shiftMonth(month, index - 5));
-  const [currentSummary, previousSummary, series, tracking, totalStudents, students] = await Promise.all([
-    periodMetrics(current),
-    periodMetrics(previous),
-    Promise.all(seriesKeys.map(async (key) => ({ month: key, ...(await periodMetrics(appAnalyticsMonthRange(key))) }))),
+  const series = await periodMetricsSeries(seriesKeys);
+  const currentSummary = series.find((item) => item.month === current.key)!;
+  const previousSummary = series.find((item) => item.month === previous.key)!;
+  const [tracking, totalStudents, students] = await Promise.all([
     prisma.appUsageEvent.aggregate({ _min: { occurredAt: true } }),
     prisma.user.count({ where: studentWhere }),
     prisma.user.findMany({
