@@ -14,6 +14,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
+import { useAuth } from "@/components/auth-provider";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
 import { ProgressBar } from "@/components/progress-bar";
 import { useApiResource } from "@/hooks/use-api-resource";
@@ -23,15 +24,19 @@ import { aqtobeMonthKey, formatMonthKey } from "@/lib/school-month";
 import type { UnifiedTask } from "@/types/unified-tasks";
 
 export default function LearningWorkspacePage() {
+  const { user } = useAuth();
+  const homeworkFlowV2 = Boolean(user?.productFeatures?.homeworkFlowV2);
   const resource = useApiResource(async () => {
     const month = aqtobeMonthKey();
     const [plans, tasks, homeworkStatistics] = await Promise.all([
       api.studentMonthlyPlans(),
       api.studentTasks({ scope: "active", limit: 12 }),
-      homeworkStatisticsApi.student({ month }),
+      homeworkFlowV2
+        ? homeworkStatisticsApi.student({ month }).catch(() => null)
+        : Promise.resolve(null),
     ]);
     return { plans, tasks, homeworkStatistics, month };
-  }, []);
+  }, [homeworkFlowV2]);
 
   if (resource.loading) return <LoadingState label="Собираем текущее обучение" />;
   if (resource.error || !resource.data) {
@@ -53,8 +58,8 @@ export default function LearningWorkspacePage() {
   const nextTask = activeTasks[0] ?? null;
   const remainingTasks = nextTask ? activeTasks.slice(1) : activeTasks;
   const leadTopic = activeTopics[0] ?? null;
-  const assignedHomework = homeworkStatistics.totals.assigned;
-  const acceptedHomework = homeworkStatistics.totals.accepted;
+  const assignedHomework = homeworkStatistics?.totals.assigned ?? 0;
+  const acceptedHomework = homeworkStatistics?.totals.accepted ?? 0;
   const homeworkProgress = assignedHomework > 0
     ? Math.round((acceptedHomework / assignedHomework) * 100)
     : 0;
@@ -134,37 +139,48 @@ export default function LearningWorkspacePage() {
             action="История ДЗ"
           />
 
-          <div className="mt-5 border-y border-stone-200 py-4">
-            <div className="flex items-end justify-between gap-4">
-              <div>
-                <p className="text-xs font-bold text-stone-500">Освоено за месяц</p>
-                <p className="font-display mt-1 text-3xl tabular-nums text-ink">
-                  {acceptedHomework} <span className="text-lg text-stone-400">из {assignedHomework}</span>
-                </p>
+          {homeworkStatistics ? (
+            <>
+              <div className="mt-5 border-y border-stone-200 py-4">
+                <div className="flex items-end justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-bold text-stone-500">Освоено за месяц</p>
+                    <p className="font-display mt-1 text-3xl tabular-nums text-ink">
+                      {acceptedHomework} <span className="text-lg text-stone-400">из {assignedHomework}</span>
+                    </p>
+                  </div>
+                  <p className="text-sm font-black tabular-nums text-emerald-700">{homeworkProgress}%</p>
+                </div>
+                <div className="mt-3">
+                  <ProgressBar value={homeworkProgress} />
+                </div>
               </div>
-              <p className="text-sm font-black tabular-nums text-emerald-700">{homeworkProgress}%</p>
-            </div>
-            <div className="mt-3">
-              <ProgressBar value={homeworkProgress} />
-            </div>
-          </div>
 
-          <div className="grid grid-cols-2 gap-x-5">
-            <HomeworkMetric label="Назначено" value={assignedHomework} />
-            <HomeworkMetric label="Освоено" value={acceptedHomework} tone="text-emerald-700" />
-            <HomeworkMetric label="Ждёт проверки" value={homeworkStatistics.totals.waitingReview} tone="text-blue-700" />
-            <HomeworkMetric label="Доработать" value={homeworkStatistics.totals.revision} tone="text-red-700" />
-          </div>
+              <div className="grid grid-cols-2 gap-x-5">
+                <HomeworkMetric label="Назначено" value={assignedHomework} />
+                <HomeworkMetric label="Освоено" value={acceptedHomework} tone="text-emerald-700" />
+                <HomeworkMetric label="Ждёт проверки" value={homeworkStatistics.totals.waitingReview} tone="text-blue-700" />
+                <HomeworkMetric label="Доработать" value={homeworkStatistics.totals.revision} tone="text-red-700" />
+              </div>
 
-          {homeworkStatistics.totals.noAttempt > 0 ? (
-            <Link
-              href="/school-lessons?tab=homework"
-              className="mt-5 flex items-center justify-between gap-3 border-l-2 border-amber-400 bg-amber-50/70 px-4 py-3 text-xs font-semibold text-amber-950 transition hover:bg-amber-50"
-            >
-              <span>Без ответа: {homeworkStatistics.totals.noAttempt}</span>
-              <span className="inline-flex items-center gap-1 font-black">Открыть <ArrowRight size={14} /></span>
-            </Link>
-          ) : null}
+              {homeworkStatistics.totals.noAttempt > 0 ? (
+                <Link
+                  href="/school-lessons?tab=homework"
+                  className="mt-5 flex items-center justify-between gap-3 border-l-2 border-amber-400 bg-amber-50/70 px-4 py-3 text-xs font-semibold text-amber-950 transition hover:bg-amber-50"
+                >
+                  <span>Без ответа: {homeworkStatistics.totals.noAttempt}</span>
+                  <span className="inline-flex items-center gap-1 font-black">Открыть <ArrowRight size={14} /></span>
+                </Link>
+              ) : null}
+            </>
+          ) : (
+            <div className="mt-5">
+              <EmptyState
+                title="Итоги ДЗ появятся здесь"
+                description="После подключения нового формата домашних заданий здесь будет виден результат за месяц."
+              />
+            </div>
+          )}
         </section>
       </div>
 
