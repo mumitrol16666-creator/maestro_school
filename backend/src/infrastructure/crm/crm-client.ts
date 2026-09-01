@@ -1,7 +1,12 @@
 import { env } from "../../config/env.js";
 import { AppError } from "../../domain/errors.js";
 
-type CrmResponse<T> = { success: boolean; data?: T; error?: string };
+type CrmResponse<T> = {
+  success: boolean;
+  data?: T;
+  error?: string | { message?: string; code?: string };
+  code?: string;
+};
 type TrialLessonReportPayload = Record<string, unknown>;
 const CRM_REQUEST_TIMEOUT_MS = 20_000;
 
@@ -19,6 +24,13 @@ function integrationHeaders(): Record<string, string> {
 
 function crmBaseUrl(): string {
   return env.CRM_API_URL.replace(/\/$/, "");
+}
+
+function crmResponseError<T>(body: CrmResponse<T>, fallback: string) {
+  return {
+    message: typeof body.error === "string" ? body.error : body.error?.message || fallback,
+    code: typeof body.error === "object" ? body.error.code : body.code,
+  };
 }
 
 async function crmGet<T>(path: string): Promise<T> {
@@ -39,7 +51,8 @@ async function crmGet<T>(path: string): Promise<T> {
 
   const body = (await response.json().catch(() => ({}))) as CrmResponse<T>;
   if (!response.ok || !body.success || !body.data) {
-    throw new AppError(response.status, body.error || `CRM request failed (${response.status})`);
+    const error = crmResponseError(body, `CRM request failed (${response.status})`);
+    throw new AppError(response.status, error.message, error.code);
   }
   return body.data;
 }
@@ -72,7 +85,8 @@ async function crmPost<T>(
 
   const body = (await response.json().catch(() => ({}))) as CrmResponse<T>;
   if (!response.ok || !body.success || !body.data) {
-    throw new AppError(response.status, body.error || `CRM request failed (${response.status})`);
+    const error = crmResponseError(body, `CRM request failed (${response.status})`);
+    throw new AppError(response.status, error.message, error.code);
   }
   return body.data;
 }
@@ -475,6 +489,86 @@ export type ManagementDayOverview = {
 
 export async function fetchManagementDayOverview() {
   return crmGet<ManagementDayOverview>("/api/integration/v1/management/day-overview");
+}
+
+export type CrmShopProduct = {
+  id: string;
+  sku: string;
+  name: string;
+  category: string;
+  unit: string;
+  description: string | null;
+  imageUrl: string | null;
+  salePrice: number;
+  stockQuantity: number;
+  coinPaymentPercent: 0 | 50 | 100;
+  maxCoinsPerUnit: number;
+  available: boolean;
+  updatedAt: string;
+};
+
+export type CrmShopOrder = {
+  id: string;
+  number: string;
+  externalKey: string;
+  status: "awaiting_coins" | "new" | "completed" | "cancelled";
+  subtotal: number;
+  discountAmount: number;
+  coinsSpent: number;
+  coinsRefunded: boolean;
+  cashAmount: number;
+  notes: string;
+  confirmedAt: string | null;
+  completedAt: string | null;
+  cancelledAt: string | null;
+  cancellationReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+  items: Array<{
+    id: string;
+    productId: string;
+    productName: string;
+    sku: string;
+    quantity: number;
+    unitPrice: number;
+    lineTotal: number;
+    coinPaymentPercent: 0 | 50 | 100;
+    maxCoins: number;
+  }>;
+};
+
+export async function fetchStudentShop(crmStudentId: string) {
+  const query = `?crmStudentId=${encodeURIComponent(crmStudentId)}`;
+  const [catalog, orders] = await Promise.all([
+    crmGet<{ products: CrmShopProduct[] }>("/api/integration/v1/shop/catalog"),
+    crmGet<{ orders: CrmShopOrder[] }>(`/api/integration/v1/shop/orders${query}`),
+  ]);
+  return { products: catalog.products, orders: orders.orders };
+}
+
+export async function postStudentShopOrder(payload: {
+  externalKey: string;
+  crmStudentId: string;
+  items: Array<{ productId: string; quantity: number }>;
+  coinsToUse: number;
+  notes?: string | null;
+}) {
+  return crmPost<{ order: CrmShopOrder }>(
+    "/api/integration/v1/shop/orders",
+    payload,
+    payload.externalKey,
+  );
+}
+
+export async function cancelStudentShopOrder(
+  orderId: string,
+  payload: { crmStudentId: string; reason?: string | null },
+) {
+  return crmPost<{ order: CrmShopOrder }>(
+    `/api/integration/v1/shop/orders/${encodeURIComponent(orderId)}/cancel`,
+    payload,
+    `shop-order-cancel:${orderId}`,
+  );
 }
 
 export async function postAdminAttendance(

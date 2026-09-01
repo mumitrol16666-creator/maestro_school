@@ -135,6 +135,7 @@ enum MaestroCoinSourceType {
   weekly_league
   streak_milestone
   reward
+  shop_order
   manual
   economic_epoch
 }
@@ -407,6 +408,7 @@ enum UserNotificationType {
   coins_awarded
   reward_requested
   reward_status_updated
+  shop_order_updated
   staff_task_assigned
   parent_lesson_reminder
   parent_lesson_report_ready
@@ -1763,7 +1765,7 @@ model OnlineLessonAssignmentSubmission {
   @@map("online_lesson_assignment_submissions")
 }
 
-// ─── Maestro Coins (manual awards only — no shop yet) ────────────────────────
+// ─── Maestro Coins ──────────────────────────────────────────────────────────
 
 model StudentCoinBalance {
   id              String   @id @default(uuid()) @db.Uuid
@@ -1947,7 +1949,7 @@ model LearningConversationMember {
   role               LearningConversationMemberRole
   canWrite           Boolean                        @default(true) @map("can_write")
   notificationsMuted Boolean                        @default(false) @map("notifications_muted")
-  archivedAt          DateTime?                      @map("archived_at") @db.Timestamptz(6)
+  archivedAt         DateTime?                      @map("archived_at") @db.Timestamptz(6)
   lastReadAt         DateTime?                      @map("last_read_at") @db.Timestamptz(6)
   joinedAt           DateTime                       @default(now()) @map("joined_at") @db.Timestamptz(6)
   leftAt             DateTime?                      @map("left_at") @db.Timestamptz(6)

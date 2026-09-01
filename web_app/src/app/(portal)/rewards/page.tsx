@@ -24,6 +24,7 @@ import { useAuth } from "@/components/auth-provider";
 import { ErrorState, LoadingState } from "@/components/data-states";
 import { PageHeader } from "@/components/page-header";
 import { SuccessModal } from "@/components/success-modal";
+import { CommercialShop } from "@/components/commercial-shop";
 import { useDialogBehavior } from "@/hooks/use-dialog-behavior";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { rewardsApi } from "@/lib/rewards-api";
@@ -192,10 +193,14 @@ export default function RewardsPage() {
         </p>
       </section>
 
-      <section className="mt-7">
+      <div className="mt-8">
+        <CommercialShop onCoinsChanged={resource.reload} />
+      </div>
+
+      <section className="mt-12 border-t border-stone-200 pt-9">
         <div className="mb-5">
-          <p className="text-xs font-black uppercase tracking-[0.18em] text-gold">Витрина за Coins</p>
-          <h2 className="font-display mt-2 text-3xl">Выберите товар или возможность</h2>
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-gold">Награды и возможности</p>
+          <h2 className="font-display mt-2 text-3xl">Можно получить полностью за Coins</h2>
         </div>
         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
           {data.catalog.map((reward) => {

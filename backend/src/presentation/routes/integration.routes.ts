@@ -26,6 +26,11 @@ import { applyOfflineLessonLearningResults } from "../../application/services/ad
 import { markOfflineLessonReportConfirmed } from "../../application/services/offline-lesson-report.service.js";
 import { createWeeklyStreakProtection } from "../../application/services/weekly-league.service.js";
 import { recordStudentLogin } from "../../application/services/app-usage.service.js";
+import {
+  debitShopCoins,
+  getShopCoinBalance,
+  refundShopCoins,
+} from "../../application/services/shop-coins.service.js";
 
 const linkSchema = z.object({
   phone: z.string().optional(),
@@ -125,6 +130,26 @@ const weeklyStreakProtectionSchema = z.object({
   externalEventId: z.string().trim().min(1).max(128),
 });
 
+const shopCoinBalanceSchema = z.object({
+  crmStudentId: z.string().trim().min(1).max(64),
+});
+
+const shopCoinOperationSchema = shopCoinBalanceSchema.extend({
+  orderId: z.string().trim().min(1).max(128),
+  orderNumber: z.string().trim().min(1).max(128),
+  amount: z.number().int().positive().max(2_000_000_000),
+});
+
+const shopCoinRefundSchema = shopCoinOperationSchema.extend({
+  reason: z.string().trim().max(1000).optional().nullable(),
+});
+
+function requireCrmIntegration(request: { integrationSystem?: "crm" | "learning-platform" }) {
+  if (request.integrationSystem !== "crm") {
+    throw new BadRequestError("Эта операция доступна только CRM", "CRM_INTEGRATION_REQUIRED");
+  }
+}
+
 function integrationProfile(
   user: NonNullable<Awaited<ReturnType<typeof findUserWithRoleById>>>,
 ) {
@@ -145,6 +170,24 @@ function integrationProfile(
 
 export async function integrationRoutes(app: FastifyInstance) {
   app.addHook("preHandler", requireIntegrationAuth);
+
+  app.post("/shop/coins/balance", async (request) => {
+    requireCrmIntegration(request);
+    const body = shopCoinBalanceSchema.parse(request.body);
+    return { success: true, data: await getShopCoinBalance(body.crmStudentId) };
+  });
+
+  app.post("/shop/coins/debit", async (request) => {
+    requireCrmIntegration(request);
+    const body = shopCoinOperationSchema.parse(request.body);
+    return { success: true, data: await debitShopCoins(body) };
+  });
+
+  app.post("/shop/coins/refund", async (request) => {
+    requireCrmIntegration(request);
+    const body = shopCoinRefundSchema.parse(request.body);
+    return { success: true, data: await refundShopCoins(body) };
+  });
 
   app.post("/users/link", async (request, reply) => {
     const body = linkSchema.parse(request.body);

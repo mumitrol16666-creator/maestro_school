@@ -32,6 +32,7 @@ import { improvementSuggestionRoutes } from "./improvement-suggestions.routes.js
 import { appUsageRoutes } from "./app-usage.routes.js";
 import { appAnalyticsRoutes } from "./app-analytics.routes.js";
 import { homeworkStatisticsRoutes } from "./homework-statistics.routes.js";
+import { shopRoutes } from "./shop.routes.js";
 
 export async function registerRoutes(app: FastifyInstance) {
   await app.register(async (api) => {
@@ -67,6 +68,7 @@ export async function registerRoutes(app: FastifyInstance) {
     await api.register(appUsageRoutes);
     await api.register(appAnalyticsRoutes);
     await api.register(homeworkStatisticsRoutes);
+    await api.register(shopRoutes);
     await api.register(publicTrialRoutes);
   }, { prefix: "/api/v1" });
 }
