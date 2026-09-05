@@ -48,7 +48,11 @@ import {
   markSchoolAlertsSeen,
   type SchoolAlertCounts,
 } from "@/lib/student-school-alerts";
-import type { SchoolOfflineLesson, StudentOfflineSummary } from "@/types/school-offline";
+import type {
+  SchoolOfflineLesson,
+  SchoolOfflineMembership,
+  StudentOfflineSummary,
+} from "@/types/school-offline";
 import { MonthlyReportModal } from "@/components/monthly-report-modal";
 import { LearningHomeworkFolder } from "@/components/learning-homework-folder";
 import { downloadMonthlyReportExcel } from "@/lib/monthly-report-excel";
@@ -67,16 +71,45 @@ const statusLabels: Record<string, string> = {
 };
 
 const membershipTypeLabels: Record<string, string> = {
-  trial: "Пробный",
-  monthly: "Месячный",
-  monthly_12: "12 занятий",
-  quarterly: "Квартальный",
-  individual_single: "Индивидуальный",
-  individual_package: "Пакет индивид.",
-  single_class: "Разовое",
-  custom: "Индивидуальный",
-  hybrid_1m: "Гибридный 1 мес.",
-  hybrid_2m: "Гибридный 2 мес.",
+  trial: "Пробное занятие",
+  monthly: "Абонемент на месяц",
+  monthly_12: "Абонемент на 12 занятий",
+  quarterly: "Абонемент на 3 месяца",
+  individual_single: "Индивидуальное занятие",
+  individual_package: "Индивидуальный формат",
+  single_class: "Разовое занятие",
+  single_lesson: "Разовое занятие",
+  custom: "Индивидуальный формат",
+  hybrid_1: "Гибридный формат",
+  hybrid_1m: "Гибридный формат",
+  hybrid_2m: "Гибридный формат",
+  group_evening: "Групповой формат",
+  group_mini: "Мини-группа",
+  duet: "Дуо",
+  individual_1_2: "Индивидуальный формат",
+  individual_2_2: "Индивидуальный формат",
+  individual_4_long: "Индивидуальный формат",
+  individual_archived: "Индивидуальный формат",
+  individual_1: "Индивидуальный формат",
+  individual_2: "Индивидуальный формат",
+  individual_3: "Индивидуальный формат",
+  individual_4: "Индивидуальный формат",
+  individual_8_25: "Индивидуальный формат",
+  individual_year: "Индивидуальный формат",
+  theory: "Теория",
+  quartet_only: "Квартет",
+};
+
+const membershipFormatLabels: Record<string, string> = {
+  individual: "Индивидуальный формат",
+  personal: "Индивидуальный формат",
+  hybrid: "Гибридный формат",
+  mixed: "Гибридный формат",
+  group: "Групповой формат",
+  quartet: "Квартет",
+  duet: "Дуо",
+  theory: "Теория",
+  trial: "Пробное занятие",
 };
 
 /* ─── helpers ───────────────────────────────────────────────────────── */
@@ -94,6 +127,38 @@ function formatShortDate(dateStr: string) {
     day: "numeric",
     month: "short",
   }).format(new Date(dateStr));
+}
+
+function isTechnicalMembershipName(value: string) {
+  return (
+    /^[a-z][a-z0-9]*(?:_[a-z0-9]+)+$/i.test(value) ||
+    /^абонемент\s*\d+$/i.test(value) ||
+    /^индивидуальн(?:ый|ая)\s+\d+(?:[-–]\d+)?$/i.test(value)
+  );
+}
+
+function membershipDisplayName(membership: SchoolOfflineMembership) {
+  const planName = membership.planName?.trim();
+  if (planName && !isTechnicalMembershipName(planName)) return planName;
+
+  return (
+    membershipTypeLabels[membership.type] ||
+    membershipFormatLabels[membership.lessonFormat] ||
+    "Абонемент Maestro"
+  );
+}
+
+function membershipDisplayDetails(membership: SchoolOfflineMembership) {
+  const groupName = membership.groupName?.trim();
+  const normalizedGroupName = groupName?.toLocaleLowerCase("ru-RU");
+  const visibleGroupName =
+    normalizedGroupName && !["общий", "без группы"].includes(normalizedGroupName)
+      ? groupName
+      : null;
+
+  return [membership.directionName?.trim(), visibleGroupName, membership.teacherName?.trim()]
+    .filter((value, index, values): value is string => Boolean(value) && values.indexOf(value) === index)
+    .join(" · ");
 }
 
 function MaterialPreview({ material }: { material: SchoolOfflineLesson["materials"][number] }) {
@@ -1111,21 +1176,25 @@ export default function SchoolLessonsPage() {
               <div className="mt-4 flex flex-wrap items-end justify-between gap-5">
                 <div>
                   <h2 className="font-display text-3xl">
-                    {currentMembership.planName ||
-                      membershipTypeLabels[currentMembership.type] ||
-                      currentMembership.type}
+                    {membershipDisplayName(currentMembership)}
                   </h2>
-                  <p className="mt-2 text-sm text-white/65">
-                    {[currentMembership.directionName, currentMembership.groupName, currentMembership.teacherName]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </p>
+                  {membershipDisplayDetails(currentMembership) ? (
+                    <p className="mt-2 text-sm text-white/65">
+                      {membershipDisplayDetails(currentMembership)}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="text-right">
                   <p className="font-display text-4xl text-gold">
-                    {currentMembership.classesRemaining} из {currentMembership.totalClasses}
+                    {currentMembership.classesRemaining}
                   </p>
-                  <p className="mt-1 text-xs text-white/50">до {formatLessonDate(currentMembership.endDate)}</p>
+                  <p className="mt-1 text-xs text-white/65">занятий осталось</p>
+                  <p className="mt-2 text-xs text-white/50">
+                    Всего в пакете: {currentMembership.totalClasses} занятий
+                  </p>
+                  <p className="mt-1 text-xs text-white/50">
+                    Действует до {formatLessonDate(currentMembership.endDate)}
+                  </p>
                 </div>
               </div>
 
@@ -1358,13 +1427,20 @@ export default function SchoolLessonsPage() {
               <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {balanceSnapshot.memberships.map((m) => (
                   <div key={m.crmMembershipId} className="rounded-2xl border border-stone-200 bg-white p-5">
-                    <p className="font-display text-4xl text-ink">{m.classesRemaining}</p>
-                    <p className="mt-2 text-sm font-semibold text-stone-700">
-                      {m.groupName} · {membershipTypeLabels[m.type] ?? m.type}
+                    <div className="flex items-end gap-2">
+                      <p className="font-display text-4xl leading-none text-ink">{m.classesRemaining}</p>
+                      <p className="pb-0.5 text-xs font-semibold text-stone-500">занятий осталось</p>
+                    </div>
+                    <p className="mt-4 text-sm font-semibold text-stone-800">
+                      {membershipDisplayName(m)}
                     </p>
-                    <p className="mt-1 text-xs text-stone-500">
-                      из {m.totalClasses} до {formatLessonDate(m.endDate)}
-                    </p>
+                    {membershipDisplayDetails(m) ? (
+                      <p className="mt-1 text-xs text-stone-500">{membershipDisplayDetails(m)}</p>
+                    ) : null}
+                    <div className="mt-3 border-t border-stone-100 pt-3 text-xs text-stone-500">
+                      <p>Всего в пакете: {m.totalClasses} занятий</p>
+                      <p className="mt-1">Действует до {formatLessonDate(m.endDate)}</p>
+                    </div>
                     {m.remainingAmountKzt > 0 ? (
                       <p className="mt-3 text-xs font-bold text-red-700">
                         Долг: {m.remainingAmountKzt.toLocaleString("ru-RU")} ₸
