@@ -368,10 +368,29 @@ export async function adminOfflineSubmit(
     crmClassId,
     projectedRoster.roster as { students: Array<Record<string, unknown>> },
   );
+  const learningV2 = await getLearningLessonV2Context(actorUserId, crmClassId);
+  const presentStudentIds = new Set(roster.students
+    .filter((student) => ["present", "late"].includes(String(student.attendanceStatus ?? "")))
+    .map((student) => String(student.crmStudentId ?? "")));
+  const pendingLearningHomework = learningV2?.available
+    ? learningV2.students.reduce(
+        (total, student) => total + (presentStudentIds.has(student.crmStudentId)
+          ? student.pendingHomework.length
+          : 0),
+        0,
+      )
+    : 0;
+  if (pendingLearningHomework > 0) {
+    throw new BadRequestError(
+      "Проверьте прошлое домашнее задание у всех присутствующих учеников.",
+      "LESSON_HOMEWORK_REVIEW_REQUIRED",
+    );
+  }
   const validation = validateOfflineLessonSubmission({
     lesson,
     students: roster.students,
     payload,
+    requiresLegacyHomeworkReview: !learningV2?.enabled,
   });
   if (!validation.valid) {
     throw new BadRequestError(validation.message, validation.code);

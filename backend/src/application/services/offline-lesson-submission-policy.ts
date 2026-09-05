@@ -54,8 +54,14 @@ export function validateOfflineLessonSubmission(params: {
   lesson: SubmissionLesson;
   students: SubmissionStudent[];
   payload: SubmissionPayload;
+  requiresLegacyHomeworkReview?: boolean;
 }) {
-  const { lesson, students, payload } = params;
+  const {
+    lesson,
+    students,
+    payload,
+    requiresLegacyHomeworkReview = true,
+  } = params;
 
   if (!students.length) {
     return {
@@ -95,7 +101,7 @@ export function validateOfflineLessonSubmission(params: {
   }
 
   const isTrial = lesson.classType === "trial";
-  if (!isTrial) {
+  if (!isTrial && requiresLegacyHomeworkReview) {
     for (const student of presentStudents) {
       const homework = student.homeworkReview;
       if (!homework?.status || homework.status === "not_checked") {

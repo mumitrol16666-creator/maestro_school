@@ -91,6 +91,25 @@ test("group held lesson requires homework review for every present student", () 
   if (!result.valid) assert.equal(result.code, "LESSON_HOMEWORK_REVIEW_REQUIRED");
 });
 
+test("learning v2 lesson does not require the legacy homework review field", () => {
+  const result = validateOfflineLessonSubmission({
+    lesson: { classType: "individual", group: null },
+    students: [{
+      name: "Ученик",
+      attendanceStatus: "present",
+      homeworkReview: { status: "not_checked" },
+    }],
+    payload: {
+      topic: "Аккорды",
+      lessonSummary: "Разобрали упражнение",
+    },
+    requiresLegacyHomeworkReview: false,
+  });
+
+  assert.equal(result.valid, true);
+  if (result.valid) assert.equal(result.outcome, "held");
+});
+
 test("trial lead from a booking can submit without a student card", () => {
   const result = validateOfflineLessonSubmission({
     lesson: { classType: "trial", group: null },
