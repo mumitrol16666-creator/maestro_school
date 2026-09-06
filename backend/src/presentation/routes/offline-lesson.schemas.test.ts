@@ -27,3 +27,29 @@ test("lesson results schema rejects duplicate topic updates", () => {
 
   assert.equal(result.success, false);
 });
+
+test("lesson results schema accepts a topic-linked homework assignment", () => {
+  const result = learningLessonResultsSchema.safeParse({
+    homeworkAssignment: {
+      topicId: "22222222-2222-4222-8222-222222222222",
+      instructions: "Повторить переходы под метроном 15 минут",
+    },
+    homeworkDecisions: [],
+    topicUpdates: [],
+  });
+
+  assert.equal(result.success, true);
+});
+
+test("lesson results schema rejects an empty homework assignment", () => {
+  const result = learningLessonResultsSchema.safeParse({
+    homeworkAssignment: {
+      topicId: "22222222-2222-4222-8222-222222222222",
+      instructions: "   ",
+    },
+    homeworkDecisions: [],
+    topicUpdates: [],
+  });
+
+  assert.equal(result.success, false);
+});

@@ -44,6 +44,10 @@ export const offlineLessonStudentCheckSchema = z.object({
 });
 
 export const learningLessonResultsSchema = z.object({
+  homeworkAssignment: z.object({
+    topicId: z.string().uuid(),
+    instructions: z.string().trim().min(1).max(5000),
+  }).nullable().optional(),
   homeworkDecisions: z.array(z.object({
     recipientId: z.string().uuid(),
     cycleNumber: z.number().int().min(1),

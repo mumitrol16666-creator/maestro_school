@@ -873,19 +873,38 @@ async function requireLessonTopicScope(actorUserId: string, topicId: string) {
   return topic;
 }
 
+export function topicRewardCrmStudentIds(
+  topic: { crmStudentId: string | null; crmGroupId: string | null },
+  currentGroupCrmStudentIds: readonly string[],
+  immutableRecipientCrmStudentIds?: readonly string[],
+) {
+  const candidates = immutableRecipientCrmStudentIds ?? (
+    topic.crmStudentId ? [topic.crmStudentId] : currentGroupCrmStudentIds
+  );
+  const uniqueCandidates = [...new Set(candidates.map((id) => id.trim()).filter(Boolean))];
+  if (topic.crmStudentId) {
+    return uniqueCandidates.includes(topic.crmStudentId) ? [topic.crmStudentId] : [];
+  }
+  return topic.crmGroupId ? uniqueCandidates : [];
+}
+
 async function resolveTopicRewardStudents(
   topic: { crmStudentId: string | null; crmGroupId: string | null },
   crmClassId: string,
+  immutableRecipientCrmStudentIds?: readonly string[],
 ) {
-  const crmStudentIds = topic.crmStudentId
-    ? [topic.crmStudentId]
-    : topic.crmGroupId
-      ? ((await fetchClassStudents(crmClassId)) as {
-          students?: Array<{ crmStudentId: string; groupStatus?: string }>;
-        }).students
-          ?.filter((student) => !["inactive", "archived", "left"].includes(student.groupStatus ?? "active"))
-          .map((student) => student.crmStudentId) ?? []
-      : [];
+  const currentGroupCrmStudentIds = topic.crmGroupId && immutableRecipientCrmStudentIds === undefined
+    ? ((await fetchClassStudents(crmClassId)) as {
+        students?: Array<{ crmStudentId: string; groupStatus?: string }>;
+      }).students
+        ?.filter((student) => !["inactive", "archived", "left"].includes(student.groupStatus ?? "active"))
+        .map((student) => student.crmStudentId) ?? []
+    : [];
+  const crmStudentIds = topicRewardCrmStudentIds(
+    topic,
+    currentGroupCrmStudentIds,
+    immutableRecipientCrmStudentIds,
+  );
 
   return prisma.user.findMany({
     where: {
@@ -902,10 +921,15 @@ async function applyTopicMasteryRewards(params: {
   topic: Awaited<ReturnType<typeof requireLessonTopicScope>>;
   crmClassId: string;
   occurredAt: Date;
+  immutableRecipientCrmStudentIds?: readonly string[];
 }) {
   if (!rewardEconomyV2AppliesToEvent(params.occurredAt)) return;
 
-  const students = await resolveTopicRewardStudents(params.topic, params.crmClassId);
+  const students = await resolveTopicRewardStudents(
+    params.topic,
+    params.crmClassId,
+    params.immutableRecipientCrmStudentIds,
+  );
   for (const student of students) {
     await awardSystemPoints({
       studentId: student.id,
@@ -968,6 +992,7 @@ export async function updateLearningTopicProgressFromLessonV2(
     expectedPercent: number | null;
     comment?: string;
     occurredAt?: Date;
+    rewardRecipientCrmStudentIds?: readonly string[];
   },
 ) {
   if (!Number.isInteger(input.toPercent) || input.toPercent < 0 || input.toPercent > 100) {
@@ -996,6 +1021,7 @@ export async function updateLearningTopicProgressFromLessonV2(
         topic: scoped,
         crmClassId: input.crmClassId,
         occurredAt: existingEvent.occurredAt,
+        immutableRecipientCrmStudentIds: input.rewardRecipientCrmStudentIds,
       });
     }
     return { ...topicDto(scoped), idempotent: true };
@@ -1018,7 +1044,11 @@ export async function updateLearningTopicProgressFromLessonV2(
   const occurredAt = input.occurredAt ?? new Date();
   let masteryStudents: Array<{ id: string }> = [];
   if (input.toPercent === 100 && rewardEconomyV2AppliesToEvent(occurredAt)) {
-    masteryStudents = await resolveTopicRewardStudents(scoped, input.crmClassId);
+    masteryStudents = await resolveTopicRewardStudents(
+      scoped,
+      input.crmClassId,
+      input.rewardRecipientCrmStudentIds,
+    );
   }
 
   try {
@@ -1084,6 +1114,7 @@ export async function updateLearningTopicProgressFromLessonV2(
         topic: current,
         crmClassId: input.crmClassId,
         occurredAt: committedEvent.occurredAt,
+        immutableRecipientCrmStudentIds: input.rewardRecipientCrmStudentIds,
       });
     }
     return { ...topicDto(current), idempotent: true };
@@ -1094,6 +1125,7 @@ export async function updateLearningTopicProgressFromLessonV2(
       topic: scoped,
       crmClassId: input.crmClassId,
       occurredAt,
+      immutableRecipientCrmStudentIds: input.rewardRecipientCrmStudentIds,
     });
   }
 

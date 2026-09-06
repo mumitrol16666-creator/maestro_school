@@ -362,7 +362,7 @@ function learningResultsV2Draft(
   if (!results) return emptyLearningLessonV2Draft();
   const topic = results.topicUpdates[0];
   return {
-    topicId: topic?.topicId ?? null,
+    topicId: results.homeworkAssignment?.topicId ?? topic?.topicId ?? null,
     expectedPercent: topic?.expectedPercent ?? null,
     toPercent: topic?.toPercent ?? null,
     topicComment: topic?.comment ?? "",
@@ -374,6 +374,13 @@ function learningResultsV2Draft(
       },
     ])),
   };
+}
+
+function learningResultsV2Homework(
+  results: LearningLessonV2ResultsInput | null | undefined,
+  legacyHomeworkDraft: string | null | undefined,
+): string {
+  return results?.homeworkAssignment?.instructions ?? legacyHomeworkDraft ?? "";
 }
 
 function readOfflineLessonDraft(
@@ -604,7 +611,7 @@ export default function AdminOfflineLessonDetailPage() {
     if (lesson.topic) setTopic(lesson.topic);
     if (lesson.lessonGoals) setLessonGoals(lesson.lessonGoals);
     if (lesson.lessonSummary) setLessonSummary(lesson.lessonSummary);
-    if (lesson.homeworkDraft) setHomework(lesson.homeworkDraft);
+    setHomework(learningResultsV2Homework(learningV2?.pendingResults, lesson.homeworkDraft));
     if (lesson.nextLessonFocus) setNextLessonFocus(lesson.nextLessonFocus);
     if (lesson.materials) {
       setMaterialsText(lesson.materials.map((item) => item.url || item.title || "").filter(Boolean).join("\n"));
@@ -618,7 +625,7 @@ export default function AdminOfflineLessonDetailPage() {
     if (isTrialLesson) {
       setTrialReport(mergeTrialReport(lesson.trialReport));
     }
-  }, [isTrialLesson, lesson]);
+  }, [isTrialLesson, learningV2?.pendingResults, lesson]);
 
   useEffect(() => {
     const interval = window.setInterval(() => setClockNow(Date.now()), 30_000);
@@ -717,7 +724,10 @@ export default function AdminOfflineLessonDetailPage() {
       setTopic(saved.topic ?? "");
       setLessonGoals(saved.lessonGoals ?? "");
       setLessonSummary(saved.lessonSummary ?? "");
-      setHomework(saved.homework ?? "");
+      setHomework(learningResultsV2Homework(
+        learningV2?.pendingResults,
+        saved.homework ?? lesson.homeworkDraft,
+      ));
       setNextLessonFocus(saved.nextLessonFocus ?? "");
       setMaterialsText(saved.materialsText ?? "");
       setMaterialEntries(Array.isArray(saved.materialEntries) ? saved.materialEntries : []);
@@ -759,14 +769,19 @@ export default function AdminOfflineLessonDetailPage() {
         }
         return next;
       });
-      setLearningV2Draft(saved.learningV2Draft ?? emptyLearningLessonV2Draft());
+      const savedLearningV2Draft = saved.learningV2Draft ?? emptyLearningLessonV2Draft();
+      setLearningV2Draft({
+        ...savedLearningV2Draft,
+        topicId: learningV2?.pendingResults?.homeworkAssignment?.topicId
+          ?? savedLearningV2Draft.topicId,
+      });
       lastSavedDraftForm.current = JSON.stringify(saved);
       setDraftSaveStatus({ kind: "restored", updatedAt: savedDraft.updatedAt });
     } else {
       setTopic(lesson.topic ?? "");
       setLessonGoals(lesson.lessonGoals ?? "");
       setLessonSummary(lesson.lessonSummary ?? "");
-      setHomework(lesson.homeworkDraft ?? "");
+      setHomework(learningResultsV2Homework(learningV2?.pendingResults, lesson.homeworkDraft));
       setNextLessonFocus(lesson.nextLessonFocus ?? "");
       setMaterialsText(
         lesson.materials?.map((item) => item.url || item.title || "").filter(Boolean).join("\n") ?? "",
@@ -1046,6 +1061,9 @@ export default function AdminOfflineLessonDetailPage() {
           return "Добавьте комментарий к решению по домашнему заданию.";
         }
       }
+      if (homework.trim() && !learningV2Draft.topicId) {
+        return "Выберите тему, к которой относится новое домашнее задание.";
+      }
     }
 
     for (const student of students) {
@@ -1184,8 +1202,18 @@ export default function AdminOfflineLessonDetailPage() {
           comment: learningV2Draft.topicComment.trim() || null,
         }]
       : [];
-    if (!homeworkDecisions.length && !topicUpdates.length) return undefined;
-    return { homeworkDecisions, topicUpdates };
+    const homeworkAssignment = homework.trim() && learningV2Draft.topicId
+      ? {
+          topicId: learningV2Draft.topicId,
+          instructions: homework.trim(),
+        }
+      : undefined;
+    if (!homeworkDecisions.length && !topicUpdates.length && !homeworkAssignment) return undefined;
+    return {
+      ...(homeworkAssignment ? { homeworkAssignment } : {}),
+      homeworkDecisions,
+      topicUpdates,
+    };
   }
 
   function handleSubmit(event: FormEvent) {

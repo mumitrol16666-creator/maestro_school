@@ -51,6 +51,7 @@ import {
   submitOfflineLessonReportVersion,
 } from "./offline-lesson-report.service.js";
 import { finalizeOfflineLessonApproval } from "./offline-lesson-finalization.service.js";
+import { buildOfflineLessonApprovalSnapshot } from "./offline-lesson-approval-snapshot.js";
 
 function lessonSyncV2Enabled() {
   return productFeatureConfig.flags.lessonSyncV2;
@@ -335,6 +336,9 @@ export async function adminOfflineApprove(
     }
     const expectedVersion = report.currentVersion;
     const currentLearningResults = readOfflineLessonLearningResultsV2(version.payload);
+    const homeworkApproval = currentLearningResults?.homeworkAssignment
+      ? buildOfflineLessonApprovalSnapshot(version)
+      : undefined;
     let approvalEvent = approvalState.event;
     if (report.crmConfirmedAt) {
       if (approvalEvent && ["pending", "failed"].includes(approvalEvent.status)) {
@@ -355,6 +359,7 @@ export async function adminOfflineApprove(
               ?? approvedBy,
             learningResultsV2: currentLearningResults,
             reportVersion: expectedVersion,
+            homeworkApproval,
           });
           return { ...response, idempotent: true, learningRewards };
         }
@@ -374,6 +379,7 @@ export async function adminOfflineApprove(
           ?? approvedBy,
         learningResultsV2: currentLearningResults,
         reportVersion: expectedVersion,
+        homeworkApproval,
       });
       return { crmClassId, status: "completed", idempotent: true, learningRewards };
     }

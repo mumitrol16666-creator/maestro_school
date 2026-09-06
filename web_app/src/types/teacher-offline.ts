@@ -300,6 +300,10 @@ export type LearningLessonV2Context = {
 };
 
 export type LearningLessonV2ResultsInput = {
+  homeworkAssignment?: {
+    topicId: string;
+    instructions: string;
+  } | null;
   homeworkDecisions: Array<{
     recipientId: string;
     cycleNumber: number;

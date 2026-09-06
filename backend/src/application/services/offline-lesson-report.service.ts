@@ -2,7 +2,10 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../../infrastructure/database/prisma.js";
 import { BadRequestError, ConflictError } from "../../domain/errors.js";
 import type { TeacherSubmitPayload } from "../../infrastructure/crm/crm-client.js";
-import type { LearningLessonV2ResultsInput } from "./learning-lesson-v2.service.js";
+import {
+  withInferredTopicHomeworkAssignment,
+  type LearningLessonV2ResultsInput,
+} from "./learning-lesson-v2.service.js";
 import {
   enqueueCrmOutboxEvent,
   flushCrmOutboxForLesson,
@@ -128,7 +131,10 @@ export function readOfflineLessonLearningResultsV2(
       "LESSON_LEARNING_RESULTS_INVALID",
     );
   }
-  return value as LearningLessonV2ResultsInput;
+  return withInferredTopicHomeworkAssignment(
+    payload,
+    value as LearningLessonV2ResultsInput,
+  );
 }
 
 function withoutSyncRevision(value: unknown): unknown {

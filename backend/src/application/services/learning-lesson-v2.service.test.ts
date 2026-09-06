@@ -2,9 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   canApplyLearningLessonResults,
+  learningHomeworkAssignmentRecipientsForApproval,
   missingLearningHomeworkDecisions,
   planCompletionRewardTopicId,
+  validateLearningHomeworkAssignmentRecipients,
   validateLearningLessonV2ResultDuplicates,
+  withInferredTopicHomeworkAssignment,
 } from "./learning-lesson-v2.service.js";
 import { LearningPlanTopicState } from "@prisma/client";
 
@@ -148,4 +151,100 @@ test("an approved snapshot keeps only internal duplicate invariants", () => {
       && error.code === "LESSON_TOPIC_DUPLICATE"
     ),
   );
+});
+
+test("legacy lesson homework is attached to its only selected topic", () => {
+  const result = withInferredTopicHomeworkAssignment(
+    { homeworkDraft: "  Играть под метроном  " },
+    {
+      homeworkDecisions: [],
+      topicUpdates: [{
+        topicId: "topic-1",
+        expectedPercent: 0,
+        toPercent: 90,
+      }],
+    },
+  );
+
+  assert.deepEqual(result.homeworkAssignment, {
+    topicId: "topic-1",
+    instructions: "Играть под метроном",
+  });
+});
+
+test("legacy homework is never guessed when the topic is ambiguous", () => {
+  const source = {
+    homeworkDecisions: [],
+    topicUpdates: [
+      { topicId: "topic-1", expectedPercent: 0, toPercent: 50 },
+      { topicId: "topic-2", expectedPercent: 0, toPercent: 25 },
+    ],
+  };
+
+  assert.strictEqual(
+    withInferredTopicHomeworkAssignment({ homeworkDraft: "Повторить" }, source),
+    source,
+  );
+});
+
+test("an explicit empty homework assignment is not replaced from legacy text", () => {
+  const source = {
+    homeworkAssignment: null,
+    homeworkDecisions: [],
+    topicUpdates: [{ topicId: "topic-1", expectedPercent: 0, toPercent: 50 }],
+  };
+
+  assert.strictEqual(
+    withInferredTopicHomeworkAssignment({ homeworkDraft: "Старый текст" }, source),
+    source,
+  );
+});
+
+test("submission rejects a new homework assignment when nobody attended", () => {
+  assert.throws(
+    () => validateLearningHomeworkAssignmentRecipients({
+      homeworkAssignment: {
+        topicId: "topic-1",
+        instructions: "Повторить упражнение",
+      },
+      homeworkDecisions: [],
+      topicUpdates: [],
+    }, new Set()),
+    (error: unknown) => (
+      typeof error === "object"
+      && error !== null
+      && "code" in error
+      && error.code === "HOMEWORK_RECIPIENTS_REQUIRED"
+    ),
+  );
+  assert.doesNotThrow(() => validateLearningHomeworkAssignmentRecipients({
+    homeworkAssignment: {
+      topicId: "topic-1",
+      instructions: "Повторить упражнение",
+    },
+    homeworkDecisions: [],
+    topicUpdates: [],
+  }, new Set(["student-1"])));
+  assert.doesNotThrow(() => validateLearningHomeworkAssignmentRecipients({
+    homeworkDecisions: [],
+    topicUpdates: [],
+  }, new Set()));
+});
+
+test("approval safely skips an assignment if an old submitted snapshot has no recipients", () => {
+  const input = {
+    homeworkAssignment: {
+      topicId: "topic-1",
+      instructions: "Повторить упражнение",
+    },
+    homeworkDecisions: [],
+    topicUpdates: [],
+  };
+
+  assert.equal(learningHomeworkAssignmentRecipientsForApproval(input, {
+    recipientCrmStudentIds: [],
+  }), null);
+  assert.deepEqual(learningHomeworkAssignmentRecipientsForApproval(input, {
+    recipientCrmStudentIds: [" student-2 ", "student-1", "student-2"],
+  }), ["student-2", "student-1"]);
 });

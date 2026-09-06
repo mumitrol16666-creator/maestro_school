@@ -4,6 +4,7 @@ import { AppError } from "../../domain/errors.js";
 import {
   assertExpectedLearningPlanVersion,
   learningTopicStatus,
+  topicRewardCrmStudentIds,
   validateOutsideLessonTopicProgress,
 } from "./learning-plan-v2.service.js";
 
@@ -71,4 +72,37 @@ test("outside a lesson a teacher can set only 0-99 percent", () => {
       toPercent: 101,
     }),
   );
+});
+
+test("group topic rewards exclude students absent from the immutable approval snapshot", () => {
+  const topic = { crmStudentId: null, crmGroupId: "group-1" };
+  const currentRoster = ["student-present", "student-late", "student-absent"];
+
+  assert.deepEqual(
+    topicRewardCrmStudentIds(
+      topic,
+      currentRoster,
+      ["student-present", "student-late"],
+    ),
+    ["student-present", "student-late"],
+  );
+});
+
+test("group topic reward recipients remain stable when the current roster changes before retry", () => {
+  const topic = { crmStudentId: null, crmGroupId: "group-1" };
+  const submittedRecipients = [" student-present ", "student-late", "student-present"];
+
+  const firstAttempt = topicRewardCrmStudentIds(
+    topic,
+    ["student-present", "student-late", "student-absent"],
+    submittedRecipients,
+  );
+  const retryAfterRosterChange = topicRewardCrmStudentIds(
+    topic,
+    ["student-present", "student-new"],
+    submittedRecipients,
+  );
+
+  assert.deepEqual(firstAttempt, ["student-present", "student-late"]);
+  assert.deepEqual(retryAfterRosterChange, firstAttempt);
 });

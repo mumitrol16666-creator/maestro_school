@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../infrastructure/database/prisma.js";
+import { ConflictError } from "../../domain/errors.js";
 import { fetchClassCard } from "../../infrastructure/crm/crm-client.js";
 import { awardManualPoints } from "./points.service.js";
 import { addMaestroCoins } from "./coins.service.js";
@@ -15,6 +16,10 @@ import {
   type LearningLessonV2ResultsInput,
 } from "./learning-lesson-v2.service.js";
 import { rewardEconomyV2AppliesToEvent } from "../../config/product-features.js";
+import {
+  buildOfflineLessonApprovalSnapshot,
+  type OfflineLessonApprovalSnapshot,
+} from "./offline-lesson-approval-snapshot.js";
 
 export type FinalizedOfflineLesson = {
   teacher?: { crmTeacherId?: string; name?: string } | null;
@@ -34,10 +39,93 @@ type StoredMonthlyPlanItem = {
   status: "planned" | "in_progress" | "completed" | "moved";
 };
 
+export function awardedOfflineLessonAttendanceAmounts(result: {
+  awarded: boolean;
+  amount: number;
+  coins?: number;
+}) {
+  return result.awarded
+    ? { xp: result.amount, coins: result.coins ?? 0 }
+    : { xp: 0, coins: 0 };
+}
+
+export type OfflineLessonAttendanceRewardEligibility = "attended" | "not_attended" | "ignore";
+
+/**
+ * Once a report version has been submitted, its attendance snapshot is the source of truth for
+ * reward recipients. A later edit to the mutable lesson check must neither remove an originally
+ * present student nor add a student who was absent in the approved version.
+ */
+export function offlineLessonAttendanceRewardEligibility(
+  check: { crmStudentId: string; attendanceStatus: string },
+  approvalSnapshot?: Pick<OfflineLessonApprovalSnapshot, "recipientCrmStudentIds">,
+): OfflineLessonAttendanceRewardEligibility {
+  if (approvalSnapshot) {
+    return approvalSnapshot.recipientCrmStudentIds.includes(check.crmStudentId)
+      ? "attended"
+      : "ignore";
+  }
+  return ["present", "late"].includes(check.attendanceStatus)
+    ? "attended"
+    : "not_attended";
+}
+
+async function resolveOfflineLessonApprovalSnapshot(params: {
+  crmClassId: string;
+  reportVersion?: number;
+  approvalSnapshot?: OfflineLessonApprovalSnapshot;
+}) {
+  if (params.approvalSnapshot) {
+    if (
+      params.reportVersion !== undefined
+      && params.approvalSnapshot.reportVersion !== params.reportVersion
+    ) {
+      throw new ConflictError(
+        "Снимок посещаемости относится к другой версии отчёта.",
+        "LESSON_APPROVAL_ATTENDANCE_SNAPSHOT_MISMATCH",
+      );
+    }
+    return params.approvalSnapshot;
+  }
+  if (params.reportVersion === undefined) return undefined;
+
+  const report = await prisma.offlineLessonReport.findUnique({
+    where: { crmClassId: params.crmClassId },
+    select: { id: true, confirmedVersion: true },
+  });
+  if (!report || report.confirmedVersion !== params.reportVersion) {
+    throw new ConflictError(
+      "Подтверждённая версия отчёта для снимка посещаемости не найдена.",
+      "LESSON_APPROVAL_ATTENDANCE_SNAPSHOT_MISSING",
+    );
+  }
+  const version = await prisma.offlineLessonReportVersion.findUnique({
+    where: {
+      reportId_version: {
+        reportId: report.id,
+        version: params.reportVersion,
+      },
+    },
+    select: {
+      version: true,
+      authorUserId: true,
+      attendancePayload: true,
+    },
+  });
+  if (!version) {
+    throw new ConflictError(
+      "Подтверждённая версия отчёта для снимка посещаемости не найдена.",
+      "LESSON_APPROVAL_ATTENDANCE_SNAPSHOT_MISSING",
+    );
+  }
+  return buildOfflineLessonApprovalSnapshot(version);
+}
+
 async function applyOfflineLessonAttendanceRewards(
   crmClassId: string,
   approvedBy: string,
   lesson: FinalizedOfflineLesson,
+  approvalSnapshot?: OfflineLessonApprovalSnapshot,
 ) {
   const checks = await prisma.offlineLessonStudentCheck.findMany({
     where: { crmClassId, rewardsAppliedAt: null },
@@ -54,8 +142,9 @@ async function applyOfflineLessonAttendanceRewards(
   const trialLesson = ["trial", "repeat_trial"].includes(String(lesson.classType ?? ""));
 
   for (const check of checks) {
-    const attended = ["present", "late"].includes(check.attendanceStatus);
-    if (!attended) {
+    const eligibility = offlineLessonAttendanceRewardEligibility(check, approvalSnapshot);
+    if (eligibility === "ignore") continue;
+    if (eligibility === "not_attended") {
       await prisma.offlineLessonStudentCheck.update({
         where: { id: check.id },
         data: { rewardsAppliedAt: new Date() },
@@ -70,6 +159,7 @@ async function applyOfflineLessonAttendanceRewards(
         select: { id: true },
       });
       let awardedXp = 0;
+      let awardedCoins = 0;
       if (student && !trialLesson) {
         const xpResult = await awardOfflineLessonAttendanceXp({
           studentId: student.id,
@@ -78,7 +168,9 @@ async function applyOfflineLessonAttendanceRewards(
           eventAt,
           awardedById: check.teacherUserId ?? approvedBy,
         });
-        awardedXp = xpResult.awarded ? xpResult.amount : 0;
+        const awarded = awardedOfflineLessonAttendanceAmounts(xpResult);
+        awardedXp = awarded.xp;
+        awardedCoins = awarded.coins;
       }
       await prisma.offlineLessonStudentCheck.update({
         where: { id: check.id },
@@ -87,7 +179,7 @@ async function applyOfflineLessonAttendanceRewards(
       results.push({
         crmStudentId: check.crmStudentId,
         points: 0,
-        coins: 0,
+        coins: awardedCoins,
         xp: awardedXp,
         planTopics: 0,
       });
@@ -216,19 +308,36 @@ async function executeOfflineLessonFinalization(params: {
   approvedBy: string;
   learningResultsV2?: LearningLessonV2ResultsInput | null;
   lesson?: FinalizedOfflineLesson | null;
+  reportVersion?: number;
+  homeworkApproval?: OfflineLessonApprovalSnapshot;
 }) {
+  const approvalSnapshot = await resolveOfflineLessonApprovalSnapshot({
+    crmClassId: params.crmClassId,
+    reportVersion: params.reportVersion,
+    approvalSnapshot: params.homeworkApproval,
+  });
+  if (params.learningResultsV2?.homeworkAssignment) {
+    if (!approvalSnapshot) {
+      throw new ConflictError(
+        "Для назначения домашнего задания отсутствует снимок подтверждённой версии отчёта.",
+        "LESSON_APPROVAL_ATTENDANCE_SNAPSHOT_MISSING",
+      );
+    }
+  }
   const lesson = params.lesson ?? await fetchClassCard(params.crmClassId) as FinalizedOfflineLesson;
   const learningV2 = params.learningResultsV2
     ? await applyApprovedLearningLessonV2Results(
         params.approvedBy,
         params.crmClassId,
         params.learningResultsV2,
+        approvalSnapshot,
       )
     : null;
   const attendance = await applyOfflineLessonAttendanceRewards(
     params.crmClassId,
     params.approvedBy,
     lesson,
+    approvalSnapshot,
   );
   return { attendance, learningV2 };
 }
@@ -242,8 +351,11 @@ export function finalizeOfflineLessonApproval(params: {
   learningResultsV2?: LearningLessonV2ResultsInput | null;
   lesson?: FinalizedOfflineLesson | null;
   reportVersion?: number;
+  homeworkApproval?: OfflineLessonApprovalSnapshot;
 }) {
-  const key = `${params.crmClassId}:v${params.reportVersion ?? "legacy"}`;
+  const key = `${params.crmClassId}:v${params.homeworkApproval?.reportVersion
+    ?? params.reportVersion
+    ?? "legacy"}`;
   const active = activeFinalizations.get(key);
   if (active) return active;
   const pending = executeOfflineLessonFinalization(params);

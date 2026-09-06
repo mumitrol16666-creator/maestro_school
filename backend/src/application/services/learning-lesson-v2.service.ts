@@ -12,7 +12,10 @@ import {
 } from "../../infrastructure/crm/crm-client.js";
 import { aqtobeMonthKey } from "../../lib/aqtobe-month.js";
 import { listLearningHomeworkReviewQueue } from "./learning-homework-review-queue.service.js";
-import { reviewLearningHomework } from "./learning-homework-v2.service.js";
+import {
+  createLearningHomeworkAssignmentForRecipients,
+  reviewLearningHomework,
+} from "./learning-homework-v2.service.js";
 import { updateLearningTopicProgressFromLessonV2 } from "./learning-plan-v2.service.js";
 import { requireCrmTeacherId } from "./teacher-students.service.js";
 import { previewOfflineLessonAttendanceXp } from "./weekly-league.service.js";
@@ -69,9 +72,39 @@ export type LearningLessonTopicUpdate = {
 };
 
 export type LearningLessonV2ResultsInput = {
+  homeworkAssignment?: {
+    topicId: string;
+    instructions: string;
+  } | null;
   homeworkDecisions: LearningLessonHomeworkDecision[];
   topicUpdates: LearningLessonTopicUpdate[];
 };
+
+/**
+ * Reports created before topic-linked homework stored the same teacher text only
+ * in `homeworkDraft`. When there is exactly one selected topic, the relationship
+ * is unambiguous and can be recovered during approval without changing the
+ * immutable report snapshot.
+ */
+export function withInferredTopicHomeworkAssignment(
+  reportPayload: unknown,
+  input: LearningLessonV2ResultsInput,
+): LearningLessonV2ResultsInput {
+  if (Object.prototype.hasOwnProperty.call(input, "homeworkAssignment")) return input;
+  if (!reportPayload || typeof reportPayload !== "object" || Array.isArray(reportPayload)) {
+    return input;
+  }
+  const homeworkDraft = (reportPayload as Record<string, unknown>).homeworkDraft;
+  const instructions = typeof homeworkDraft === "string" ? homeworkDraft.trim() : "";
+  if (!instructions || input.topicUpdates.length !== 1) return input;
+  return {
+    ...input,
+    homeworkAssignment: {
+      topicId: input.topicUpdates[0].topicId,
+      instructions,
+    },
+  };
+}
 
 type LearningLessonV2Context = NonNullable<Awaited<ReturnType<typeof getLearningLessonV2Context>>>;
 
@@ -394,7 +427,11 @@ function validateLearningLessonV2Input(
   options: { requireEditable: boolean; requirePendingHomework: boolean },
 ) {
   if (!context.available) {
-    if (!input.homeworkDecisions.length && !input.topicUpdates.length) return;
+    if (
+      !input.homeworkDecisions.length
+      && !input.topicUpdates.length
+      && !input.homeworkAssignment
+    ) return;
     throw new ForbiddenError(
       context.reason === "one_time_replacement"
         ? "Разовая замена заполняет только отчёт урока без доступа к учебной истории"
@@ -417,6 +454,9 @@ function validateLearningLessonV2Input(
     if (!allowedTopics.has(update.topicId)) {
       throw new ForbiddenError("Тема не принадлежит этому уроку");
     }
+  }
+  if (input.homeworkAssignment && !allowedTopics.has(input.homeworkAssignment.topicId)) {
+    throw new ForbiddenError("Тема домашнего задания не принадлежит этому уроку");
   }
   if (options.requirePendingHomework) {
     for (const decision of input.homeworkDecisions) {
@@ -447,6 +487,28 @@ export function validateLearningLessonV2ResultDuplicates(input: LearningLessonV2
   }
 }
 
+export function validateLearningHomeworkAssignmentRecipients(
+  input: LearningLessonV2ResultsInput,
+  presentStudentIds: ReadonlySet<string>,
+) {
+  if (!input.homeworkAssignment || presentStudentIds.size > 0) return;
+  throw new BadRequestError(
+    "Домашнее задание некому назначить: отметьте хотя бы одного присутствующего ученика",
+    "HOMEWORK_RECIPIENTS_REQUIRED",
+  );
+}
+
+export function learningHomeworkAssignmentRecipientsForApproval(
+  input: LearningLessonV2ResultsInput,
+  approval?: { recipientCrmStudentIds: readonly string[] },
+) {
+  if (!input.homeworkAssignment || !approval) return null;
+  const recipients = [
+    ...new Set(approval.recipientCrmStudentIds.map((id) => id.trim()).filter(Boolean)),
+  ];
+  return recipients.length ? recipients : null;
+}
+
 export async function validateLearningLessonV2ResultsForSubmission(
   actorUserId: string,
   crmClassId: string,
@@ -460,6 +522,7 @@ export async function validateLearningLessonV2ResultsForSubmission(
     requireEditable: true,
     requirePendingHomework: true,
   });
+  validateLearningHomeworkAssignmentRecipients(input, presentStudentIds);
   if (!context.available) return context;
   const missing = missingLearningHomeworkDecisions(
     context.students,
@@ -497,7 +560,13 @@ async function applyValidatedLearningLessonV2Results(
   crmClassId: string,
   input: LearningLessonV2ResultsInput,
   context: LearningLessonV2Context,
+  approval?: {
+    reportVersion: number;
+    createdByUserId: string;
+    recipientCrmStudentIds: string[];
+  },
 ) {
+  const assignmentRecipients = learningHomeworkAssignmentRecipientsForApproval(input, approval);
   const homeworkResults = [];
   for (const decision of input.homeworkDecisions) {
     homeworkResults.push(await reviewLearningHomework({
@@ -519,13 +588,25 @@ async function applyValidatedLearningLessonV2Results(
         toPercent: update.toPercent,
         comment: update.comment ?? undefined,
         occurredAt: context.eventAt,
+        rewardRecipientCrmStudentIds: approval?.recipientCrmStudentIds,
       },
     ));
   }
+  const homeworkAssignment = input.homeworkAssignment && approval && assignmentRecipients
+    ? await createLearningHomeworkAssignmentForRecipients({
+        createdByUserId: approval.createdByUserId,
+        topicId: input.homeworkAssignment.topicId,
+        crmStudentIds: assignmentRecipients,
+        instructions: input.homeworkAssignment.instructions,
+        sourceLessonId: crmClassId,
+        idempotencyKey: `offline-lesson:${crmClassId}:v${approval.reportVersion}:assignment`,
+      })
+    : null;
   return {
     crmClassId,
     homeworkResults,
     topicResults,
+    homeworkAssignment,
   };
 }
 
@@ -533,6 +614,11 @@ export async function applyApprovedLearningLessonV2Results(
   actorUserId: string,
   crmClassId: string,
   input: LearningLessonV2ResultsInput,
+  approval?: {
+    reportVersion: number;
+    createdByUserId: string;
+    recipientCrmStudentIds: string[];
+  },
 ) {
   if (!learningLessonV2Enabled()) return null;
   const context = await getLearningLessonV2Context(actorUserId, crmClassId);
@@ -541,5 +627,5 @@ export async function applyApprovedLearningLessonV2Results(
   // retried after the current monthly plan has been republished or homework has been consumed
   // by an earlier partial attempt, so only snapshot-internal invariants are checked here.
   validateLearningLessonV2ResultDuplicates(input);
-  return applyValidatedLearningLessonV2Results(actorUserId, crmClassId, input, context);
+  return applyValidatedLearningLessonV2Results(actorUserId, crmClassId, input, context, approval);
 }

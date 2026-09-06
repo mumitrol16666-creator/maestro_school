@@ -221,9 +221,14 @@ function sameAssignmentRequest(
     sourceLessonId: string | null;
     dueAt?: Date | null;
     materials: LearningHomeworkMaterialInput[];
+    crmStudentIds?: string[];
   },
 ) {
-  return existing.createdById === input.teacherUserId
+  const sameRecipients = input.crmStudentIds === undefined
+    || [...new Set(existing.recipients.map((recipient) => recipient.crmStudentId))].sort().join("\n")
+      === [...new Set(input.crmStudentIds)].sort().join("\n");
+  return sameRecipients
+    && existing.createdById === input.teacherUserId
     && existing.topicId === input.topicId
     && existing.instructions === input.instructions
     && existing.sourceLessonId === input.sourceLessonId
@@ -495,8 +500,81 @@ export async function createLearningHomeworkAssignment(
   const topic = await requireScopedTopic(input.topicId);
   const crmStudentIds = await teacherTopicRecipients(teacherUserId, topic);
 
+  return persistLearningHomeworkAssignment({
+    teacherUserId,
+    topic,
+    crmStudentIds,
+    instructions,
+    materials,
+    sourceLessonId,
+    dueAt: input.dueAt,
+    idempotencyKey: input.idempotencyKey,
+  });
+}
+
+export async function createLearningHomeworkAssignmentForRecipients(input: {
+  createdByUserId: string;
+  topicId: string;
+  crmStudentIds: string[];
+  instructions: string;
+  materials?: LearningHomeworkMaterialInput[];
+  dueAt?: Date | null;
+  sourceLessonId?: string | null;
+  idempotencyKey: string;
+}) {
+  const instructions = input.instructions.trim();
+  if (!instructions) {
+    throw new BadRequestError("Добавьте текст домашнего задания", "HOMEWORK_INSTRUCTIONS_REQUIRED");
+  }
+  const topic = await requireScopedTopic(input.topicId);
+  const crmStudentIds = [...new Set(input.crmStudentIds.map((id) => id.trim()).filter(Boolean))];
+  if (!crmStudentIds.length) {
+    throw new BadRequestError(
+      "Домашнее задание некому назначить: на уроке нет присутствующих учеников",
+      "HOMEWORK_RECIPIENTS_REQUIRED",
+    );
+  }
+  if (topic.crmStudentId && (
+    crmStudentIds.length !== 1 || crmStudentIds[0] !== topic.crmStudentId
+  )) {
+    throw new ForbiddenError("Ученик не относится к выбранной теме");
+  }
+
+  return persistLearningHomeworkAssignment({
+    teacherUserId: input.createdByUserId,
+    topic,
+    crmStudentIds,
+    instructions,
+    materials: normalizeMaterials(input.materials),
+    sourceLessonId: input.sourceLessonId?.trim() || null,
+    dueAt: input.dueAt,
+    idempotencyKey: input.idempotencyKey,
+  });
+}
+
+async function persistLearningHomeworkAssignment(input: {
+  teacherUserId: string;
+  topic: ScopedTopic;
+  crmStudentIds: string[];
+  instructions: string;
+  materials: LearningHomeworkMaterialInput[];
+  sourceLessonId: string | null;
+  dueAt?: Date | null;
+  idempotencyKey: string;
+}) {
+  const {
+    teacherUserId,
+    topic,
+    crmStudentIds,
+    instructions,
+    materials,
+    sourceLessonId,
+    dueAt,
+    idempotencyKey,
+  } = input;
+
   const existing = await prisma.learningHomeworkAssignment.findUnique({
-    where: { idempotencyKey: input.idempotencyKey },
+    where: { idempotencyKey },
     include: assignmentInclude,
   });
   if (existing) {
@@ -505,8 +583,9 @@ export async function createLearningHomeworkAssignment(
       topicId: topic.id,
       instructions,
       sourceLessonId,
-      dueAt: input.dueAt,
+      dueAt,
       materials,
+      crmStudentIds,
     })) {
       throw new ConflictError(
         "Ключ запроса уже использован для другого домашнего задания",
@@ -535,9 +614,9 @@ export async function createLearningHomeworkAssignment(
         sourceLessonId,
         instructions,
         materials,
-        dueAt: input.dueAt ?? null,
+        dueAt: dueAt ?? null,
         createdById: teacherUserId,
-        idempotencyKey: input.idempotencyKey,
+        idempotencyKey,
         recipients: {
           create: crmStudentIds.map((crmStudentId) => ({
             id: randomUUID(),
@@ -553,7 +632,7 @@ export async function createLearningHomeworkAssignment(
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       const duplicate = await prisma.learningHomeworkAssignment.findUnique({
-        where: { idempotencyKey: input.idempotencyKey },
+        where: { idempotencyKey },
         include: assignmentInclude,
       });
       if (duplicate && sameAssignmentRequest(duplicate, {
@@ -561,8 +640,9 @@ export async function createLearningHomeworkAssignment(
         topicId: topic.id,
         instructions,
         sourceLessonId,
-        dueAt: input.dueAt,
+        dueAt,
         materials,
+        crmStudentIds,
       })) {
         await notifyLearningHomeworkAssigned(duplicate);
         return assignmentDto(duplicate, true);
