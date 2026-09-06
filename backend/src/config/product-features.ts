@@ -42,12 +42,20 @@ function parseCutoverAt(value: string | undefined) {
 export function loadProductFeatureConfig(
   source: Record<string, string | undefined> = process.env,
 ): ProductFeatureConfig {
-  const flags = Object.fromEntries(
+  const configuredFlags = Object.fromEntries(
     Object.entries(PRODUCT_FEATURE_ENV).map(([feature, envKey]) => [
       feature,
       parseFeatureSwitch(source[envKey], envKey),
     ]),
   ) as Record<ProductFeatureKey, boolean>;
+
+  // Unified lesson results are persisted and approved through lesson sync V2.
+  // Treat the unified lesson flag as unavailable when its storage dependency is
+  // off so the UI/API cannot offer a result flow that would later lose data.
+  const flags = {
+    ...configuredFlags,
+    unifiedLessonV2: configuredFlags.unifiedLessonV2 && configuredFlags.lessonSyncV2,
+  };
 
   return {
     cutoverAt: parseCutoverAt(source.PRODUCT_V2_CUTOVER_AT),

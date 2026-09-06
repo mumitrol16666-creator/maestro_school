@@ -608,13 +608,18 @@ export async function postAdminApproveClass(
     teacherComment?: string;
     trialReport?: TrialLessonReportPayload;
   },
+  idempotencyKey?: string,
 ) {
   return crmPost<{
     crmClassId: string;
     status: string;
     class: Record<string, unknown>;
     deductions: Array<{ studentId: string; deducted?: boolean }>;
-  }>(`/api/integration/v1/classes/${encodeURIComponent(crmClassId)}/approve`, payload);
+  }>(
+    `/api/integration/v1/classes/${encodeURIComponent(crmClassId)}/approve`,
+    payload,
+    idempotencyKey,
+  );
 }
 
 export async function postAdminReturnClass(crmClassId: string, reason?: string) {

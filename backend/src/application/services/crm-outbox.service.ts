@@ -1,7 +1,8 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../infrastructure/database/prisma.js";
-import { AppError, BadRequestError } from "../../domain/errors.js";
+import { AppError, BadRequestError, ConflictError } from "../../domain/errors.js";
 import {
+  postAdminApproveClass,
   postAdminAttendance,
   postTeacherAttendance,
   postTeacherMarkNotHeld,
@@ -15,6 +16,9 @@ import {
   resolveAdminJournalEntryBySource,
   upsertAdminJournalEntry,
 } from "./admin-journal.service.js";
+import { finalizeOfflineLessonApproval } from "./offline-lesson-finalization.service.js";
+import type { LearningLessonV2ResultsInput } from "./learning-lesson-v2.service.js";
+import { notifyOfflineLessonApproved } from "./notification.service.js";
 
 type DbClient = Prisma.TransactionClient | typeof prisma;
 type JsonRecord = Record<string, unknown>;
@@ -22,6 +26,7 @@ type JsonRecord = Record<string, unknown>;
 export type CrmOutboxEventType =
   | "teacher_attendance"
   | "admin_attendance"
+  | "admin_approve"
   | "teacher_submit"
   | "teacher_not_held"
   | "teacher_withdraw";
@@ -33,7 +38,35 @@ type DeliveryPayload = {
   studentCheckId?: string;
   studentId?: string;
   syncRevision?: number;
+  approvedBy?: string;
+  approvalNotificationDelivery?: ApprovalNotificationDelivery;
 };
+
+export type OfflineLessonApprovedNotificationRequest = {
+  crmClassId: string;
+  crmTeacherId: string;
+  reportVersion?: number;
+  crmStudentIds?: string[];
+  lessonTitle?: string | null;
+  date?: string | null;
+  startTime?: string | null;
+  deliveryFormat?: "offline" | "online";
+  meetingUrl?: string | null;
+};
+
+type ApprovalNotificationResult = Awaited<ReturnType<typeof notifyOfflineLessonApproved>>;
+
+type ApprovalNotificationDelivery = {
+  reportVersion: number;
+  request: OfflineLessonApprovedNotificationRequest & { reportVersion: number };
+  state: "pending" | "delivered" | "discarded";
+  queuedAt: string;
+  deliveredAt?: string;
+  lastError?: string;
+  result?: ApprovalNotificationResult;
+};
+
+const APPROVAL_NOTIFICATION_PAYLOAD_KEY = "approvalNotificationDelivery";
 
 function inputJson(value: unknown) {
   return value as Prisma.InputJsonValue;
@@ -41,6 +74,66 @@ function inputJson(value: unknown) {
 
 function outputJson(value: unknown) {
   return value as Prisma.InputJsonValue;
+}
+
+function stableJson(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stableJson);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, item]) => [key, stableJson(item)]),
+    );
+  }
+  return value;
+}
+
+function sameJson(left: unknown, right: unknown) {
+  return JSON.stringify(stableJson(left)) === JSON.stringify(stableJson(right));
+}
+
+function crmDeliveryContractPayload(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const payload = { ...(value as JsonRecord) };
+  delete payload[APPROVAL_NOTIFICATION_PAYLOAD_KEY];
+  return payload;
+}
+
+function jsonSafe<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function readApprovalNotificationDelivery(payload: unknown): ApprovalNotificationDelivery | null {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  const delivery = (payload as JsonRecord)[APPROVAL_NOTIFICATION_PAYLOAD_KEY];
+  if (!delivery || typeof delivery !== "object" || Array.isArray(delivery)) return null;
+  const candidate = delivery as JsonRecord;
+  const request = candidate.request;
+  if (
+    !Number.isInteger(candidate.reportVersion)
+    || !request
+    || typeof request !== "object"
+    || Array.isArray(request)
+    || typeof (request as JsonRecord).crmClassId !== "string"
+    || typeof (request as JsonRecord).crmTeacherId !== "string"
+    || !["pending", "delivered", "discarded"].includes(String(candidate.state))
+  ) {
+    return null;
+  }
+  return delivery as ApprovalNotificationDelivery;
+}
+
+function withApprovalNotificationDelivery(
+  payload: unknown,
+  delivery: ApprovalNotificationDelivery,
+) {
+  const current = payload && typeof payload === "object" && !Array.isArray(payload)
+    ? payload as JsonRecord
+    : {};
+  return jsonSafe({
+    ...current,
+    [APPROVAL_NOTIFICATION_PAYLOAD_KEY]: delivery,
+  });
 }
 
 function retryable(error: unknown) {
@@ -65,7 +158,7 @@ export async function enqueueCrmOutboxEvent(
   },
   db: DbClient = prisma,
 ) {
-  return db.crmOutboxEvent.upsert({
+  const event = await db.crmOutboxEvent.upsert({
     where: { idempotencyKey: params.idempotencyKey },
     create: {
       aggregateType: "offline_lesson",
@@ -75,6 +168,136 @@ export async function enqueueCrmOutboxEvent(
       idempotencyKey: params.idempotencyKey,
     },
     update: {},
+  });
+  if (
+    event.aggregateType !== "offline_lesson"
+    || event.aggregateId !== params.aggregateId
+    || event.eventType !== params.eventType
+    || !sameJson(
+      crmDeliveryContractPayload(event.payload),
+      crmDeliveryContractPayload(params.payload),
+    )
+  ) {
+    throw new ConflictError(
+      "Ключ повторной отправки уже занят другим CRM-событием.",
+      "CRM_OUTBOX_IDEMPOTENCY_CONFLICT",
+    );
+  }
+  return event;
+}
+
+function readApprovalLearningResults(payload: unknown): LearningLessonV2ResultsInput | null {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  const value = (payload as JsonRecord).learningResultsV2;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const candidate = value as JsonRecord;
+  if (!Array.isArray(candidate.homeworkDecisions) || !Array.isArray(candidate.topicUpdates)) {
+    throw new ConflictError(
+      "Снимок учебных результатов подтверждаемой версии повреждён.",
+      "LESSON_APPROVAL_SNAPSHOT_INVALID",
+    );
+  }
+  return value as LearningLessonV2ResultsInput;
+}
+
+function readApprovalActor(payload: unknown, fallback: string) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return fallback;
+  const approvedBy = (payload as JsonRecord).learningResultsApprovedBy;
+  return typeof approvedBy === "string" && approvedBy.trim() ? approvedBy : fallback;
+}
+
+async function confirmOfflineLessonApproval(event: {
+  aggregateId: string;
+  payload: Prisma.JsonValue;
+}, database: typeof prisma = prisma) {
+  const payload = event.payload as unknown as DeliveryPayload;
+  if (!payload.reportVersionId) {
+    throw new ConflictError(
+      "CRM-подтверждение не связано с версией отчёта.",
+      "LESSON_APPROVAL_VERSION_MISSING",
+    );
+  }
+  return database.$transaction(async (tx) => {
+    const version = await tx.offlineLessonReportVersion.findUnique({
+      where: { id: payload.reportVersionId },
+    });
+    if (!version || version.state !== "submitted") {
+      throw new ConflictError(
+        "Подтверждаемая версия отчёта не найдена или уже отозвана.",
+        "LESSON_APPROVAL_VERSION_INVALID",
+      );
+    }
+    const report = await tx.offlineLessonReport.findUnique({
+      where: { id: version.reportId },
+    });
+    if (!report || report.crmClassId !== event.aggregateId) {
+      throw new ConflictError(
+        "Подтверждение CRM связано с другим уроком.",
+        "LESSON_APPROVAL_REPORT_MISMATCH",
+      );
+    }
+    if (report.currentVersion !== version.version) {
+      throw new ConflictError(
+        "CRM ответила на устаревшую версию отчёта.",
+        "LESSON_APPROVAL_STALE_VERSION",
+      );
+    }
+    if (["editing", "correcting"].includes(report.status)) {
+      throw new ConflictError(
+        "Отчёт уже возвращён на исправление.",
+        "LESSON_APPROVAL_SUPERSEDED",
+      );
+    }
+
+    const deliveredAt = new Date();
+    await tx.offlineLessonReportVersion.update({
+      where: { id: version.id },
+      data: { crmDeliveredAt: version.crmDeliveredAt ?? deliveredAt },
+    });
+
+    if (
+      report.status === "confirmed"
+      && report.crmConfirmedAt
+      && report.confirmedVersion === version.version
+    ) {
+      return {
+        reportVersion: version.version,
+        approvedBy: readApprovalActor(version.payload, payload.approvedBy ?? version.authorUserId),
+        learningResultsV2: readApprovalLearningResults(version.payload),
+      };
+    }
+    if (report.crmConfirmedAt || report.confirmedVersion) {
+      throw new ConflictError(
+        "У урока уже подтверждена другая версия отчёта.",
+        "LESSON_APPROVAL_CONFIRMED_VERSION_MISMATCH",
+      );
+    }
+
+    const confirmed = await tx.offlineLessonReport.updateMany({
+      where: {
+        id: report.id,
+        currentVersion: version.version,
+        status: { in: ["approving", "pending_sync", "conflict", "pending_review"] },
+        crmConfirmedAt: null,
+        confirmedVersion: null,
+      },
+      data: {
+        status: "confirmed",
+        confirmedVersion: version.version,
+        crmConfirmedAt: deliveredAt,
+      },
+    });
+    if (confirmed.count !== 1) {
+      throw new ConflictError(
+        "Состояние отчёта изменилось во время подтверждения.",
+        "LESSON_REPORT_STATE_CHANGED",
+      );
+    }
+    return {
+      reportVersion: version.version,
+      approvedBy: readApprovalActor(version.payload, payload.approvedBy ?? version.authorUserId),
+      learningResultsV2: readApprovalLearningResults(version.payload),
+    };
   });
 }
 
@@ -95,6 +318,12 @@ async function deliver(event: {
       return postAdminAttendance(
         payload.crmClassId,
         payload.body as Parameters<typeof postAdminAttendance>[1],
+        event.idempotencyKey,
+      );
+    case "admin_approve":
+      return postAdminApproveClass(
+        payload.crmClassId,
+        payload.body as Parameters<typeof postAdminApproveClass>[1],
         event.idempotencyKey,
       );
     case "teacher_submit":
@@ -120,16 +349,161 @@ async function deliver(event: {
   }
 }
 
+type ApprovalFreshness =
+  | { current: true }
+  | { current: false; reason: string };
+
+async function readApprovalFreshness(
+  event: { aggregateId: string; eventType: string; payload: Prisma.JsonValue },
+  database: DbClient,
+): Promise<ApprovalFreshness> {
+  if (event.eventType !== "admin_approve") return { current: true };
+  const payload = event.payload as unknown as DeliveryPayload;
+  if (!payload.reportVersionId) {
+    // A malformed event is a real conflict, not a historical event that may be hidden.
+    return { current: true };
+  }
+  const version = await database.offlineLessonReportVersion.findUnique({
+    where: { id: payload.reportVersionId },
+    select: { reportId: true, version: true, state: true },
+  });
+  if (!version) {
+    return { current: false, reason: "Подтверждение отменено: версия отчёта больше не существует." };
+  }
+  const report = await database.offlineLessonReport.findUnique({
+    where: { id: version.reportId },
+    select: { crmClassId: true, currentVersion: true, status: true },
+  });
+  if (!report || report.crmClassId !== event.aggregateId) {
+    return { current: false, reason: "Подтверждение отменено: отчёт больше не относится к этому уроку." };
+  }
+  if (version.state !== "submitted" || report.currentVersion !== version.version) {
+    return { current: false, reason: "Подтверждение отменено: версия отчёта устарела." };
+  }
+  if (["editing", "correcting"].includes(report.status)) {
+    return { current: false, reason: "Подтверждение отменено: отчёт возвращён на исправление." };
+  }
+  return { current: true };
+}
+
+async function cancelStaleApprovalEventIfNeeded(
+  eventId: string,
+  database: typeof prisma = prisma,
+  claimToken?: Date,
+) {
+  const event = await database.crmOutboxEvent.findUnique({ where: { id: eventId } });
+  if (!event || event.eventType !== "admin_approve") return false;
+  const freshness = await readApprovalFreshness(event, database);
+  if (freshness.current) return false;
+
+  const cancelledAt = new Date();
+  const cancelled = await database.$transaction(async (tx) => {
+    const where: Prisma.CrmOutboxEventWhereInput = claimToken
+      ? { id: event.id, status: "processing", processingAt: claimToken }
+      : { id: event.id, status: { in: ["pending", "failed", "conflict"] } };
+    const result = await tx.crmOutboxEvent.updateMany({
+      where,
+      data: {
+        status: "cancelled",
+        lastError: freshness.reason,
+        nextAttemptAt: null,
+        processingAt: null,
+        completedAt: cancelledAt,
+      },
+    });
+    if (result.count !== 1) return false;
+    await tx.crmSyncConflict.updateMany({
+      where: {
+        outboxEventId: event.id,
+        status: { in: ["open", "retrying"] },
+      },
+      data: {
+        status: "resolved",
+        resolution: "superseded_by_new_report_version",
+        resolutionNote: freshness.reason,
+        resolvedAt: cancelledAt,
+      },
+    });
+    return true;
+  });
+  if (cancelled && curatorWorkspaceV2Enabled()) {
+    await resolveAdminJournalEntryBySource({
+      sourceKey: `crm-sync:${event.id}`,
+      resolution: freshness.reason,
+      actionKey: `crm-sync:${event.id}:superseded`,
+      payload: { eventType: event.eventType, crmClassId: event.aggregateId },
+    });
+  }
+  return cancelled;
+}
+
+async function assertApprovalCurrentBeforeFinalization(
+  event: { id: string; aggregateId: string; payload: Prisma.JsonValue },
+  claimToken: Date,
+  expectedReportVersion: number,
+  database: typeof prisma = prisma,
+) {
+  const payload = event.payload as unknown as DeliveryPayload;
+  if (!payload.reportVersionId) {
+    throw new ConflictError(
+      "Финализация не связана с версией отчёта.",
+      "LESSON_APPROVAL_VERSION_MISSING",
+    );
+  }
+  const state = await database.$transaction(async (tx) => {
+    const liveEvent = await tx.crmOutboxEvent.findUnique({
+      where: { id: event.id },
+      select: { status: true, processingAt: true },
+    });
+    const version = await tx.offlineLessonReportVersion.findUnique({
+      where: { id: payload.reportVersionId },
+      select: { reportId: true, version: true, state: true },
+    });
+    const report = version
+      ? await tx.offlineLessonReport.findUnique({
+          where: { id: version.reportId },
+          select: {
+            crmClassId: true,
+            currentVersion: true,
+            status: true,
+            confirmedVersion: true,
+            crmConfirmedAt: true,
+          },
+        })
+      : null;
+    return { liveEvent, version, report };
+  });
+  const ownsClaim = state.liveEvent?.status === "processing"
+    && state.liveEvent.processingAt?.getTime() === claimToken.getTime();
+  const current = state.version?.state === "submitted"
+    && state.version.version === expectedReportVersion
+    && state.report?.crmClassId === event.aggregateId
+    && state.report.currentVersion === expectedReportVersion
+    && state.report.status === "confirmed"
+    && state.report.confirmedVersion === expectedReportVersion
+    && Boolean(state.report.crmConfirmedAt);
+  if (!ownsClaim || !current) {
+    throw new ConflictError(
+      "Версия отчёта изменилась перед финализацией. Награды не начислены.",
+      "LESSON_APPROVAL_SUPERSEDED",
+    );
+  }
+}
+
 async function markDelivered(event: {
   id: string;
   aggregateId: string;
   eventType: string;
   payload: Prisma.JsonValue;
-}, response: JsonRecord) {
+}, response: JsonRecord, claimToken: Date, database: typeof prisma = prisma) {
   const payload = event.payload as unknown as DeliveryPayload;
-  await prisma.$transaction(async (tx) => {
-    await tx.crmOutboxEvent.update({
-      where: { id: event.id },
+  const ownsClaim = await database.$transaction(async (tx) => {
+    const delivered = await tx.crmOutboxEvent.updateMany({
+      where: {
+        id: event.id,
+        status: "processing",
+        processingAt: claimToken,
+      },
       data: {
         status: "succeeded",
         lastError: null,
@@ -139,6 +513,7 @@ async function markDelivered(event: {
         completedAt: new Date(),
       },
     });
+    if (delivered.count !== 1) return false;
 
     if (payload.studentCheckId && payload.syncRevision !== undefined) {
       await tx.offlineLessonStudentCheck.updateMany({
@@ -161,18 +536,28 @@ async function markDelivered(event: {
       });
       const version = await tx.offlineLessonReportVersion.findUnique({
         where: { id: payload.reportVersionId },
-        select: { reportId: true },
+        select: { reportId: true, version: true },
       });
-      if (version) {
-        await tx.offlineLessonReport.update({
-          where: { id: version.reportId },
+      if (version && event.eventType !== "admin_approve") {
+        const expectedStatuses = event.eventType === "teacher_withdraw"
+          ? ["pending_sync"]
+          : ["pending_sync", "conflict"];
+        await tx.offlineLessonReport.updateMany({
+          where: {
+            id: version.reportId,
+            currentVersion: version.version,
+            status: { in: expectedStatuses },
+            crmConfirmedAt: null,
+          },
           data: {
             status: event.eventType === "teacher_withdraw" ? "editing" : "pending_review",
           },
         });
       }
     }
+    return true;
   });
+  if (!ownsClaim) return false;
 
   const responseClass = response.class;
   if (responseClass && typeof responseClass === "object" && !Array.isArray(responseClass)) {
@@ -186,6 +571,7 @@ async function markDelivered(event: {
       payload: { eventType: event.eventType, crmClassId: event.aggregateId },
     });
   }
+  return true;
 }
 
 async function markFailed(event: {
@@ -194,14 +580,18 @@ async function markFailed(event: {
   eventType: string;
   payload: Prisma.JsonValue;
   attempts: number;
-}, error: unknown) {
+}, error: unknown, claimToken: Date, database: typeof prisma = prisma) {
   const message = errorMessage(error);
   const shouldRetry = retryable(error);
   const payload = event.payload as unknown as DeliveryPayload;
 
-  await prisma.$transaction(async (tx) => {
-    await tx.crmOutboxEvent.update({
-      where: { id: event.id },
+  const ownsClaim = await database.$transaction(async (tx) => {
+    const failed = await tx.crmOutboxEvent.updateMany({
+      where: {
+        id: event.id,
+        status: "processing",
+        processingAt: claimToken,
+      },
       data: {
         status: shouldRetry ? "failed" : "conflict",
         lastError: message,
@@ -209,6 +599,7 @@ async function markFailed(event: {
         processingAt: null,
       },
     });
+    if (failed.count !== 1) return false;
 
     if (payload.studentCheckId) {
       await tx.offlineLessonStudentCheck.update({
@@ -223,12 +614,25 @@ async function markFailed(event: {
     if (payload.reportVersionId) {
       const version = await tx.offlineLessonReportVersion.findUnique({
         where: { id: payload.reportVersionId },
-        select: { reportId: true },
+        select: { reportId: true, version: true },
       });
       if (version) {
-        await tx.offlineLessonReport.update({
-          where: { id: version.reportId },
-          data: { status: shouldRetry ? "pending_sync" : "conflict" },
+        await tx.offlineLessonReport.updateMany({
+          where: {
+            id: version.reportId,
+            currentVersion: version.version,
+            status: event.eventType === "admin_approve"
+              ? { in: ["approving", "pending_sync", "conflict"] }
+              : { in: ["pending_sync", "conflict"] },
+            crmConfirmedAt: null,
+          },
+          data: {
+            status: event.eventType === "admin_approve" && shouldRetry
+              ? "approving"
+              : shouldRetry
+                ? "pending_sync"
+                : "conflict",
+          },
         });
       }
     }
@@ -254,7 +658,9 @@ async function markFailed(event: {
         });
       }
     }
+    return true;
   });
+  if (!ownsClaim) return false;
   if (curatorWorkspaceV2Enabled()) {
     await upsertAdminJournalEntry({
       sourceKey: `crm-sync:${event.id}`,
@@ -272,32 +678,353 @@ async function markFailed(event: {
       },
     });
   }
+  return true;
 }
 
-export async function processCrmOutboxEvent(eventId: string) {
-  const claimed = await prisma.crmOutboxEvent.updateMany({
+type CrmOutboxProcessorDependencies = {
+  database: typeof prisma;
+  deliverEvent: typeof deliver;
+  confirmApproval: typeof confirmOfflineLessonApproval;
+  finalizeApproval: typeof finalizeOfflineLessonApproval;
+  notifyApproval: typeof notifyOfflineLessonApproved;
+  now: () => Date;
+};
+
+const defaultCrmOutboxProcessorDependencies: CrmOutboxProcessorDependencies = {
+  database: prisma,
+  deliverEvent: deliver,
+  confirmApproval: confirmOfflineLessonApproval,
+  finalizeApproval: finalizeOfflineLessonApproval,
+  notifyApproval: notifyOfflineLessonApproved,
+  now: () => new Date(),
+};
+
+export type CrmOutboxProcessorOverrides = Partial<CrmOutboxProcessorDependencies>;
+
+function crmOutboxProcessorDependencies(overrides: CrmOutboxProcessorOverrides) {
+  return { ...defaultCrmOutboxProcessorDependencies, ...overrides };
+}
+
+type ApprovalNotificationDrainResult = {
+  state: ApprovalNotificationDelivery["state"];
+  reportVersion: number;
+  result: ApprovalNotificationResult | null;
+  error?: string;
+};
+
+async function replaceApprovalNotificationDelivery(
+  event: { id: string; status: string; payload: Prisma.JsonValue },
+  delivery: ApprovalNotificationDelivery,
+  database: typeof prisma,
+) {
+  const nextPayload = withApprovalNotificationDelivery(event.payload, delivery);
+  const updated = await database.crmOutboxEvent.updateMany({
+    where: {
+      id: event.id,
+      status: event.status,
+      payload: { equals: inputJson(event.payload) },
+    },
+    data: { payload: inputJson(nextPayload) },
+  });
+  return updated.count === 1;
+}
+
+export async function deliverQueuedOfflineLessonApprovedNotification(
+  eventId: string,
+  overrides: CrmOutboxProcessorOverrides = {},
+): Promise<ApprovalNotificationDrainResult | null> {
+  const dependencies = crmOutboxProcessorDependencies(overrides);
+  const event = await dependencies.database.crmOutboxEvent.findUnique({ where: { id: eventId } });
+  if (!event || event.eventType !== "admin_approve") return null;
+
+  const delivery = readApprovalNotificationDelivery(event.payload);
+  if (!delivery) return null;
+  if (delivery.state === "delivered") {
+    return {
+      state: "delivered",
+      reportVersion: delivery.reportVersion,
+      result: delivery.result ?? null,
+    };
+  }
+  if (delivery.state === "discarded") {
+    return {
+      state: "discarded",
+      reportVersion: delivery.reportVersion,
+      result: null,
+      error: delivery.lastError,
+    };
+  }
+  if (event.status !== "succeeded") {
+    return { state: "pending", reportVersion: delivery.reportVersion, result: null };
+  }
+
+  const report = await dependencies.database.offlineLessonReport.findUnique({
+    where: { crmClassId: event.aggregateId },
+    select: {
+      currentVersion: true,
+      status: true,
+      confirmedVersion: true,
+      crmConfirmedAt: true,
+    },
+  });
+  const approvalIsCurrent = delivery.request.crmClassId === event.aggregateId
+    && report?.currentVersion === delivery.reportVersion
+    && report.status === "confirmed"
+    && report.confirmedVersion === delivery.reportVersion
+    && Boolean(report.crmConfirmedAt);
+  if (!approvalIsCurrent) {
+    const reason = "Уведомление отменено: подтверждение относится к неактуальной версии отчёта.";
+    const discarded: ApprovalNotificationDelivery = {
+      ...delivery,
+      state: "discarded",
+      lastError: reason,
+    };
+    await replaceApprovalNotificationDelivery(event, discarded, dependencies.database);
+    return {
+      state: "discarded",
+      reportVersion: delivery.reportVersion,
+      result: null,
+      error: reason,
+    };
+  }
+
+  try {
+    const result = await dependencies.notifyApproval({
+      ...delivery.request,
+      dedupeIdentity: `offline-lesson-approval:${event.aggregateId}:v${delivery.reportVersion}`,
+    });
+    const delivered: ApprovalNotificationDelivery = {
+      ...delivery,
+      state: "delivered",
+      deliveredAt: dependencies.now().toISOString(),
+      lastError: undefined,
+      result,
+    };
+    const stored = await replaceApprovalNotificationDelivery(event, delivered, dependencies.database);
+    return stored
+      ? { state: "delivered", reportVersion: delivery.reportVersion, result }
+      : { state: "pending", reportVersion: delivery.reportVersion, result: null };
+  } catch (error) {
+    const message = errorMessage(error);
+    await replaceApprovalNotificationDelivery(event, {
+      ...delivery,
+      state: "pending",
+      lastError: message,
+    }, dependencies.database);
+    return {
+      state: "pending",
+      reportVersion: delivery.reportVersion,
+      result: null,
+      error: message,
+    };
+  }
+}
+
+function emptyApprovalNotificationResult(): ApprovalNotificationResult {
+  return {
+    delivered: false,
+    teacherLinked: false,
+    studentsDelivered: 0,
+    parentsDelivered: 0,
+    duplicate: false,
+    notificationId: null,
+  };
+}
+
+export async function queueOfflineLessonApprovedNotification(
+  request: OfflineLessonApprovedNotificationRequest,
+  overrides: CrmOutboxProcessorOverrides = {},
+) {
+  const dependencies = crmOutboxProcessorDependencies(overrides);
+  const queuedAt = dependencies.now().toISOString();
+  const staged = await dependencies.database.$transaction(async (tx) => {
+    const report = await tx.offlineLessonReport.findUnique({
+      where: { crmClassId: request.crmClassId },
+    });
+    if (!report?.currentVersion) {
+      throw new ConflictError(
+        "Для урока нет актуального отчёта, который можно подтвердить.",
+        "LESSON_APPROVAL_REPORT_NOT_FOUND",
+      );
+    }
+    if (request.reportVersion !== undefined && request.reportVersion !== report.currentVersion) {
+      throw new ConflictError(
+        "Callback относится к устаревшей версии отчёта.",
+        "LESSON_APPROVAL_CALLBACK_STALE_VERSION",
+      );
+    }
+    const version = await tx.offlineLessonReportVersion.findUnique({
+      where: {
+        reportId_version: {
+          reportId: report.id,
+          version: report.currentVersion,
+        },
+      },
+    });
+    const event = await tx.crmOutboxEvent.findUnique({
+      where: {
+        idempotencyKey: `lesson-report:${request.crmClassId}:v${report.currentVersion}:approve`,
+      },
+    });
+    const payload = event?.payload as unknown as DeliveryPayload | undefined;
+    if (
+      !version
+      || !event
+      || event.eventType !== "admin_approve"
+      || event.aggregateId !== request.crmClassId
+      || payload?.reportVersionId !== version.id
+    ) {
+      throw new ConflictError(
+        "Подтверждение CRM не связано с актуальной версией отчёта.",
+        "LESSON_APPROVAL_CALLBACK_EVENT_MISSING",
+      );
+    }
+    if (!["pending", "failed", "processing", "succeeded"].includes(event.status)) {
+      throw new ConflictError(
+        "Подтверждение CRM уже отменено или находится в конфликте.",
+        "LESSON_APPROVAL_CALLBACK_NOT_DELIVERABLE",
+      );
+    }
+
+    const existing = readApprovalNotificationDelivery(event.payload);
+    if (existing?.state === "delivered") {
+      return { event, report, delivery: existing };
+    }
+
+    const normalizedRequest = jsonSafe({
+      ...request,
+      reportVersion: report.currentVersion,
+    }) as OfflineLessonApprovedNotificationRequest & { reportVersion: number };
+    const delivery: ApprovalNotificationDelivery = {
+      reportVersion: report.currentVersion,
+      request: normalizedRequest,
+      state: "pending",
+      queuedAt: existing?.queuedAt ?? queuedAt,
+    };
+    const updated = await tx.crmOutboxEvent.updateMany({
+      where: {
+        id: event.id,
+        status: { in: ["pending", "failed", "processing", "succeeded"] },
+      },
+      data: {
+        payload: inputJson(withApprovalNotificationDelivery(event.payload, delivery)),
+      },
+    });
+    if (updated.count !== 1) {
+      throw new ConflictError(
+        "Состояние подтверждения изменилось во время постановки уведомления в очередь.",
+        "LESSON_APPROVAL_CALLBACK_STATE_CHANGED",
+      );
+    }
+    const liveEvent = await tx.crmOutboxEvent.findUniqueOrThrow({ where: { id: event.id } });
+    return { event: liveEvent, report, delivery };
+  });
+
+  let drain: ApprovalNotificationDrainResult | null = null;
+  if (staged.event.status === "succeeded") {
+    drain = await deliverQueuedOfflineLessonApprovedNotification(staged.event.id, dependencies);
+  }
+  const liveEvent = await dependencies.database.crmOutboxEvent.findUnique({
+    where: { id: staged.event.id },
+  });
+  const liveDelivery = readApprovalNotificationDelivery(liveEvent?.payload)
+    ?? staged.delivery;
+  const notification = liveDelivery.state === "delivered"
+    ? liveDelivery.result ?? drain?.result ?? emptyApprovalNotificationResult()
+    : emptyApprovalNotificationResult();
+  const response = liveEvent?.responsePayload
+    && typeof liveEvent.responsePayload === "object"
+    && !Array.isArray(liveEvent.responsePayload)
+    ? liveEvent.responsePayload as JsonRecord
+    : null;
+  const approvalStatus = liveEvent?.status ?? staged.event.status;
+  const confirmed = staged.report.status === "confirmed"
+    && staged.report.confirmedVersion === liveDelivery.reportVersion
+    && approvalStatus === "succeeded";
+
+  return {
+    ...notification,
+    queued: liveDelivery.state === "pending",
+    deliveryState: liveDelivery.state,
+    deliveryError: liveDelivery.lastError ?? drain?.error ?? null,
+    learningRewards: response?.learningRewards ?? null,
+    reconciliation: {
+      reportVersion: liveDelivery.reportVersion,
+      reportStatus: staged.report.status,
+      approvalStatus,
+      current: confirmed,
+    },
+  };
+}
+
+export async function processCrmOutboxEvent(
+  eventId: string,
+  overrides: CrmOutboxProcessorOverrides = {},
+) {
+  const dependencies = crmOutboxProcessorDependencies(overrides);
+  if (await cancelStaleApprovalEventIfNeeded(eventId, dependencies.database)) {
+    return dependencies.database.crmOutboxEvent.findUnique({ where: { id: eventId } });
+  }
+  const claimToken = dependencies.now();
+  const claimed = await dependencies.database.crmOutboxEvent.updateMany({
     where: {
       id: eventId,
       status: { in: ["pending", "failed"] },
     },
     data: {
       status: "processing",
-      processingAt: new Date(),
+      processingAt: claimToken,
       attempts: { increment: 1 },
     },
   });
   if (!claimed.count) {
-    return prisma.crmOutboxEvent.findUnique({ where: { id: eventId } });
+    return dependencies.database.crmOutboxEvent.findUnique({ where: { id: eventId } });
   }
 
-  const event = await prisma.crmOutboxEvent.findUniqueOrThrow({ where: { id: eventId } });
+  const event = await dependencies.database.crmOutboxEvent.findUniqueOrThrow({
+    where: { id: eventId },
+  });
   try {
-    const response = await deliver(event) as JsonRecord;
-    await markDelivered(event, response);
+    const response = await dependencies.deliverEvent(event) as JsonRecord;
+    if (event.eventType === "admin_approve") {
+      const approval = await dependencies.confirmApproval(event, dependencies.database);
+      await assertApprovalCurrentBeforeFinalization(
+        event,
+        claimToken,
+        approval.reportVersion,
+        dependencies.database,
+      );
+      const responseClass = response.class;
+      const lesson = responseClass && typeof responseClass === "object" && !Array.isArray(responseClass)
+        ? responseClass as JsonRecord
+        : null;
+      const learningRewards = await dependencies.finalizeApproval({
+        crmClassId: event.aggregateId,
+        approvedBy: approval.approvedBy,
+        learningResultsV2: approval.learningResultsV2,
+        lesson,
+        reportVersion: approval.reportVersion,
+      });
+      const markedDelivered = await markDelivered(
+        event,
+        { ...response, learningRewards },
+        claimToken,
+        dependencies.database,
+      );
+      if (markedDelivered) {
+        await deliverQueuedOfflineLessonApprovedNotification(event.id, dependencies);
+      }
+    } else {
+      await markDelivered(event, response, claimToken, dependencies.database);
+    }
   } catch (error) {
-    await markFailed(event, error);
+    const superseded = event.eventType === "admin_approve"
+      && await cancelStaleApprovalEventIfNeeded(event.id, dependencies.database, claimToken);
+    if (!superseded) {
+      await markFailed(event, error, claimToken, dependencies.database);
+    }
   }
-  return prisma.crmOutboxEvent.findUnique({ where: { id: eventId } });
+  return dependencies.database.crmOutboxEvent.findUnique({ where: { id: eventId } });
 }
 
 export async function flushCrmOutboxForLesson(crmClassId: string) {
@@ -313,19 +1040,26 @@ export async function flushCrmOutboxForLesson(crmClassId: string) {
   for (const event of events) {
     const result = await processCrmOutboxEvent(event.id);
     results.push(result);
-    if (result?.status !== "succeeded") break;
+    if (result?.status !== "succeeded" && result?.status !== "cancelled") break;
   }
   return results;
 }
 
-export async function processDueCrmOutboxEvents(limit = 25) {
-  const stale = new Date(Date.now() - 2 * 60_000);
-  await prisma.crmOutboxEvent.updateMany({
-    where: { status: "processing", processingAt: { lt: stale } },
-    data: { status: "failed", processingAt: null, nextAttemptAt: new Date() },
+export async function processDueCrmOutboxEvents(
+  limit = 25,
+  overrides: CrmOutboxProcessorOverrides = {},
+) {
+  const dependencies = crmOutboxProcessorDependencies(overrides);
+  const now = dependencies.now();
+  const stale = new Date(now.getTime() - 2 * 60_000);
+  await dependencies.database.crmOutboxEvent.updateMany({
+    where: {
+      status: "processing",
+      processingAt: { lt: stale },
+    },
+    data: { status: "failed", processingAt: null, nextAttemptAt: now },
   });
-  const now = new Date();
-  const events = await prisma.crmOutboxEvent.findMany({
+  const events = await dependencies.database.crmOutboxEvent.findMany({
     where: {
       OR: [
         { status: "pending" },
@@ -336,7 +1070,22 @@ export async function processDueCrmOutboxEvents(limit = 25) {
     take: limit,
   });
   for (const event of events) {
-    await processCrmOutboxEvent(event.id);
+    await processCrmOutboxEvent(event.id, dependencies);
+  }
+  const notificationEvents = await dependencies.database.crmOutboxEvent.findMany({
+    where: {
+      eventType: "admin_approve",
+      status: "succeeded",
+      payload: {
+        path: [APPROVAL_NOTIFICATION_PAYLOAD_KEY, "state"],
+        equals: "pending",
+      },
+    },
+    orderBy: { updatedAt: "asc" },
+    take: limit,
+  });
+  for (const event of notificationEvents) {
+    await deliverQueuedOfflineLessonApprovedNotification(event.id, dependencies);
   }
   return events.length;
 }
@@ -378,6 +1127,9 @@ export async function listCrmSyncJournal(crmClassId?: string) {
 export async function retryCrmOutboxEvent(eventId: string) {
   const event = await prisma.crmOutboxEvent.findUnique({ where: { id: eventId } });
   if (!event) throw new BadRequestError("Запись для повторной отправки не найдена", "CRM_OUTBOX_NOT_FOUND");
+  if (await cancelStaleApprovalEventIfNeeded(eventId)) {
+    return prisma.crmOutboxEvent.findUnique({ where: { id: eventId } });
+  }
   if (!["failed", "conflict"].includes(event.status)) {
     throw new BadRequestError("Повтор для этого события сейчас не требуется", "CRM_OUTBOX_NOT_RETRYABLE");
   }

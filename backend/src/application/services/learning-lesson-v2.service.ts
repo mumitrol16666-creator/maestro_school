@@ -2,6 +2,7 @@ import { LearningPlanTopicState } from "@prisma/client";
 import { productFeatureConfig, rewardEconomyV2AppliesToEvent } from "../../config/product-features.js";
 import { isOfflineCoordinatorRole } from "../../domain/cms-access.js";
 import { AppError, BadRequestError, ForbiddenError } from "../../domain/errors.js";
+import { NON_EMPTY_PLAN_COMPLETION_POINTS } from "../../domain/product-economy-v2.js";
 import { prisma } from "../../infrastructure/database/prisma.js";
 import {
   fetchClassCard,
@@ -66,6 +67,49 @@ export type LearningLessonTopicUpdate = {
   toPercent: number;
   comment?: string | null;
 };
+
+export type LearningLessonV2ResultsInput = {
+  homeworkDecisions: LearningLessonHomeworkDecision[];
+  topicUpdates: LearningLessonTopicUpdate[];
+};
+
+type LearningLessonV2Context = NonNullable<Awaited<ReturnType<typeof getLearningLessonV2Context>>>;
+
+export function missingLearningHomeworkDecisions(
+  students: Array<{
+    crmStudentId: string;
+    pendingHomework: Array<{ recipientId: string; cycleNumber: number }>;
+  }>,
+  presentStudentIds: ReadonlySet<string>,
+  decisions: LearningLessonHomeworkDecision[],
+) {
+  const decided = new Set(decisions.map((item) => `${item.recipientId}:${item.cycleNumber}`));
+  return students.flatMap((student) => (
+    presentStudentIds.has(student.crmStudentId)
+      ? student.pendingHomework.filter(
+          (item) => !decided.has(`${item.recipientId}:${item.cycleNumber}`),
+        )
+      : []
+  ));
+}
+
+export function planCompletionRewardTopicId(plan: {
+  completionRewardSourceKey: string | null;
+  topics: Array<{
+    topicId: string;
+    state: LearningPlanTopicState;
+    topic: { progressPercent: number | null; archivedAt: Date | null };
+  }>;
+}) {
+  if (plan.completionRewardSourceKey !== null) return null;
+  const activeTopics = plan.topics.filter((item) => (
+    item.state === LearningPlanTopicState.active
+  ));
+  const incompleteTopics = activeTopics.filter((item) => item.topic.progressPercent !== 100);
+  return incompleteTopics.length === 1 && !incompleteTopics[0].topic.archivedAt
+    ? incompleteTopics[0].topicId
+    : null;
+}
 
 export function offlineLessonEventAt(lesson: LessonCard) {
   const source = lesson.date ? new Date(lesson.date) : new Date();
@@ -242,6 +286,10 @@ async function lessonPlans(scope: LessonScope) {
   return [...selectedByDirection.values()].flatMap((plan) => {
     const version = plan.versions.find((item) => item.version === plan.publishedVersionNumber);
     if (!version) return [];
+    const completionRewardTopicId = planCompletionRewardTopicId({
+      completionRewardSourceKey: plan.completionRewardSourceKey,
+      topics: version.topics,
+    });
     return [{
       planId: plan.id,
       month: plan.month,
@@ -261,6 +309,9 @@ async function lessonPlans(scope: LessonScope) {
           masteryCriteria: item.masteryCriteriaSnapshot,
           progressPercent: item.topic.progressPercent ?? 0,
           masteredAt: item.topic.masteredAt,
+          planCompletionRewardPoints: item.topic.id === completionRewardTopicId
+            ? NON_EMPTY_PLAN_COMPLETION_POINTS
+            : 0,
         })),
     }];
   });
@@ -337,31 +388,26 @@ export async function getLearningLessonV2Context(actorUserId: string, crmClassId
   };
 }
 
-export async function applyLearningLessonV2Results(
-  actorUserId: string,
-  crmClassId: string,
-  input: {
-    homeworkDecisions: LearningLessonHomeworkDecision[];
-    topicUpdates: LearningLessonTopicUpdate[];
-  },
+function validateLearningLessonV2Input(
+  context: LearningLessonV2Context,
+  input: LearningLessonV2ResultsInput,
+  options: { requireEditable: boolean; requirePendingHomework: boolean },
 ) {
-  if (!learningLessonV2Enabled()) {
-    throw new BadRequestError("Новый сценарий урока выключен", "UNIFIED_LESSON_V2_DISABLED");
-  }
-  const context = await getLearningLessonV2Context(actorUserId, crmClassId);
-  if (!context?.available) {
+  if (!context.available) {
+    if (!input.homeworkDecisions.length && !input.topicUpdates.length) return;
     throw new ForbiddenError(
-      context?.reason === "one_time_replacement"
+      context.reason === "one_time_replacement"
         ? "Разовая замена заполняет только отчёт урока без доступа к учебной истории"
         : "Учебные действия для этого урока недоступны",
     );
   }
-  if (!context.canApply) {
+  if (options.requireEditable && !context.canApply) {
     throw new BadRequestError(
       "Учебный результат можно изменить только во время открытого урока или его проверки",
       "LESSON_LEARNING_NOT_EDITABLE",
     );
   }
+  validateLearningLessonV2ResultDuplicates(input);
   const allowedTopics = new Set(context.plans.flatMap((plan) => plan.topics.map((topic) => topic.id)));
   const pendingByRecipient = new Map(
     context.students.flatMap((student) => student.pendingHomework)
@@ -372,15 +418,86 @@ export async function applyLearningLessonV2Results(
       throw new ForbiddenError("Тема не принадлежит этому уроку");
     }
   }
-  for (const decision of input.homeworkDecisions) {
-    const pending = pendingByRecipient.get(decision.recipientId);
-    if (!pending || pending.cycleNumber !== decision.cycleNumber) {
-      throw new BadRequestError(
-        "Домашнее задание уже изменилось. Обновите урок.",
-        "LESSON_HOMEWORK_STALE",
-      );
+  if (options.requirePendingHomework) {
+    for (const decision of input.homeworkDecisions) {
+      const pending = pendingByRecipient.get(decision.recipientId);
+      if (!pending || pending.cycleNumber !== decision.cycleNumber) {
+        throw new BadRequestError(
+          "Домашнее задание уже изменилось. Обновите урок.",
+          "LESSON_HOMEWORK_STALE",
+        );
+      }
     }
   }
+}
+
+export function validateLearningLessonV2ResultDuplicates(input: LearningLessonV2ResultsInput) {
+  const topicIds = input.topicUpdates.map((item) => item.topicId);
+  if (new Set(topicIds).size !== topicIds.length) {
+    throw new BadRequestError("Одна тема указана несколько раз", "LESSON_TOPIC_DUPLICATE");
+  }
+  const homeworkKeys = input.homeworkDecisions.map(
+    (item) => `${item.recipientId}:${item.cycleNumber}`,
+  );
+  if (new Set(homeworkKeys).size !== homeworkKeys.length) {
+    throw new BadRequestError(
+      "Одно домашнее задание указано несколько раз",
+      "LESSON_HOMEWORK_DECISION_DUPLICATE",
+    );
+  }
+}
+
+export async function validateLearningLessonV2ResultsForSubmission(
+  actorUserId: string,
+  crmClassId: string,
+  input: LearningLessonV2ResultsInput,
+  presentStudentIds: ReadonlySet<string>,
+) {
+  if (!learningLessonV2Enabled()) return null;
+  const context = await getLearningLessonV2Context(actorUserId, crmClassId);
+  if (!context) return null;
+  validateLearningLessonV2Input(context, input, {
+    requireEditable: true,
+    requirePendingHomework: true,
+  });
+  if (!context.available) return context;
+  const missing = missingLearningHomeworkDecisions(
+    context.students,
+    presentStudentIds,
+    input.homeworkDecisions,
+  );
+  if (missing.length) {
+    throw new BadRequestError(
+      "Проверьте прошлое домашнее задание у всех присутствующих учеников.",
+      "LESSON_HOMEWORK_REVIEW_REQUIRED",
+    );
+  }
+  return context;
+}
+
+export async function applyLearningLessonV2Results(
+  actorUserId: string,
+  crmClassId: string,
+  input: LearningLessonV2ResultsInput,
+) {
+  if (!learningLessonV2Enabled()) {
+    throw new BadRequestError("Новый сценарий урока выключен", "UNIFIED_LESSON_V2_DISABLED");
+  }
+  const context = await getLearningLessonV2Context(actorUserId, crmClassId);
+  if (!context) throw new BadRequestError("Новый сценарий урока выключен", "UNIFIED_LESSON_V2_DISABLED");
+  validateLearningLessonV2Input(context, input, {
+    requireEditable: true,
+    requirePendingHomework: true,
+  });
+  return applyValidatedLearningLessonV2Results(actorUserId, crmClassId, input, context);
+}
+
+async function applyValidatedLearningLessonV2Results(
+  actorUserId: string,
+  crmClassId: string,
+  input: LearningLessonV2ResultsInput,
+  context: LearningLessonV2Context,
+) {
   const homeworkResults = [];
   for (const decision of input.homeworkDecisions) {
     homeworkResults.push(await reviewLearningHomework({
@@ -410,4 +527,19 @@ export async function applyLearningLessonV2Results(
     homeworkResults,
     topicResults,
   };
+}
+
+export async function applyApprovedLearningLessonV2Results(
+  actorUserId: string,
+  crmClassId: string,
+  input: LearningLessonV2ResultsInput,
+) {
+  if (!learningLessonV2Enabled()) return null;
+  const context = await getLearningLessonV2Context(actorUserId, crmClassId);
+  if (!context) return null;
+  // This immutable report version was fully validated before submission. Finalization may be
+  // retried after the current monthly plan has been republished or homework has been consumed
+  // by an earlier partial attempt, so only snapshot-internal invariants are checked here.
+  validateLearningLessonV2ResultDuplicates(input);
+  return applyValidatedLearningLessonV2Results(actorUserId, crmClassId, input, context);
 }

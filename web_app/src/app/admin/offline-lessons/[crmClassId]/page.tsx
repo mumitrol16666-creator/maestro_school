@@ -54,6 +54,7 @@ import type {
   OfflineHomeworkReview,
   TeacherOfflineClassStudents,
   TeacherOfflineStudent,
+  LearningLessonV2ResultsInput,
   TrialLessonReport,
 } from "@/types/teacher-offline";
 
@@ -354,6 +355,26 @@ type DraftSaveStatus =
 
 const OFFLINE_LESSON_DRAFT_PREFIX = "maestro:offline-lesson-report:v1";
 const OFFLINE_LESSON_DRAFT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+function learningResultsV2Draft(
+  results?: LearningLessonV2ResultsInput | null,
+): LearningLessonV2Draft {
+  if (!results) return emptyLearningLessonV2Draft();
+  const topic = results.topicUpdates[0];
+  return {
+    topicId: topic?.topicId ?? null,
+    expectedPercent: topic?.expectedPercent ?? null,
+    toPercent: topic?.toPercent ?? null,
+    topicComment: topic?.comment ?? "",
+    homeworkDecisions: Object.fromEntries(results.homeworkDecisions.map((decision) => [
+      decision.recipientId,
+      {
+        decision: decision.decision,
+        comment: decision.comment ?? "",
+      },
+    ])),
+  };
+}
 
 function readOfflineLessonDraft(
   key: string,
@@ -766,7 +787,7 @@ export default function AdminOfflineLessonDetailPage() {
           studentLessonCheckDraft(student, isCompactGroupLesson ? previousGroupHomework : undefined),
         ]),
       ));
-      setLearningV2Draft(emptyLearningLessonV2Draft());
+      setLearningV2Draft(learningResultsV2Draft(learningV2?.pendingResults));
       lastSavedDraftForm.current = null;
       setDraftSaveStatus(null);
     }
@@ -779,6 +800,7 @@ export default function AdminOfflineLessonDetailPage() {
     lessonDraftKey,
     isTrialLesson,
     isCompactGroupLesson,
+    learningV2,
     previousGroupHomework,
     students,
     studentsResource.loading,
@@ -1131,10 +1153,16 @@ export default function AdminOfflineLessonDetailPage() {
     }
   }
 
-  async function saveLearningResultsV2() {
-    if (!learningV2?.available) return;
+  function buildLearningResultsV2(): LearningLessonV2ResultsInput | undefined {
+    if (!learningV2?.available) return undefined;
     const homeworkDecisions = learningV2.students.flatMap((student) => (
       student.pendingHomework.flatMap((homework) => {
+        const rosterStudent = students.find(
+          (item) => item.crmStudentId === student.crmStudentId,
+        );
+        if (!rosterStudent || !["present", "late"].includes(draftFor(rosterStudent).attendanceStatus)) {
+          return [];
+        }
         const decision = learningV2Draft.homeworkDecisions[homework.recipientId];
         return decision?.decision
           ? [{
@@ -1156,11 +1184,8 @@ export default function AdminOfflineLessonDetailPage() {
           comment: learningV2Draft.topicComment.trim() || null,
         }]
       : [];
-    if (!homeworkDecisions.length && !topicUpdates.length) return;
-    const payload = { homeworkDecisions, topicUpdates };
-    await (isAdmin
-      ? adminOfflineApi.learningResults(crmClassId, payload)
-      : teacherOfflineApi.learningResults(crmClassId, payload));
+    if (!homeworkDecisions.length && !topicUpdates.length) return undefined;
+    return { homeworkDecisions, topicUpdates };
   }
 
   function handleSubmit(event: FormEvent) {
@@ -1181,10 +1206,6 @@ export default function AdminOfflineLessonDetailPage() {
     const absenceOnly = allStudentsAbsent;
     try {
       const submitted = await runAction(absenceOnly ? "submit-absence" : "submit", async () => {
-        if (!absenceOnly && isLearningLessonV2) {
-          setSubmissionProgress("Сохраняем решения по ДЗ и прогресс темы…");
-          await saveLearningResultsV2();
-        }
         await saveStudentChecks({ showProgress: true });
         setSubmissionProgress("Отметки сохранены. Отправляем отчёт администратору…");
         const payload = {
@@ -1203,6 +1224,7 @@ export default function AdminOfflineLessonDetailPage() {
             ? { ...trialReport, capturedAt: new Date().toISOString() }
             : undefined,
           teacherOutcomeHint: absenceOnly ? "no_submission" as const : "held" as const,
+          learningResultsV2: absenceOnly ? undefined : buildLearningResultsV2(),
         };
         return canActForTeacher
           ? adminOfflineApi.submitForTeacher(crmClassId, payload)
@@ -1242,9 +1264,6 @@ export default function AdminOfflineLessonDetailPage() {
       return;
     }
     const approved = await runAction("approve", async () => {
-      if (!isNotHeld && isLearningLessonV2) {
-        await saveLearningResultsV2();
-      }
       if (!isNotHeld) await saveStudentChecks();
       return adminOfflineApi.approve(crmClassId, {
         deduct: !isNotHeld,
@@ -1257,6 +1276,7 @@ export default function AdminOfflineLessonDetailPage() {
         trialReport: isTrialLesson
           ? { ...trialReport, capturedAt: trialReport.capturedAt ?? new Date().toISOString() }
           : undefined,
+        learningResultsV2: isNotHeld ? undefined : buildLearningResultsV2(),
         materials: materialsText
           .split("\n")
           .map((url) => url.trim())
@@ -1310,6 +1330,20 @@ export default function AdminOfflineLessonDetailPage() {
       .filter((student) => ["present", "late"].includes(draftFor(student).attendanceStatus))
       .map((student) => student.crmStudentId),
   );
+  const linkedLearningStudentCount = learningV2?.students.filter(
+    (student) => Boolean(student.appUserId),
+  ).length ?? 0;
+  const planCompletionReward = selectedLearningTopic
+    && learningV2?.rewardsEnabled
+    && learningV2Draft.toPercent === 100
+    && learningV2Draft.expectedPercent !== 100
+    && selectedLearningTopic.planCompletionRewardPoints > 0
+    && linkedLearningStudentCount > 0
+    ? {
+        points: selectedLearningTopic.planCompletionRewardPoints,
+        recipientsCount: linkedLearningStudentCount,
+      }
+    : null;
   const xpSummary = learningV2?.rewardPreview
     .filter((item) => attendedStudentIds.has(item.crmStudentId))
     .reduce((summary, item) => {
@@ -1803,21 +1837,17 @@ export default function AdminOfflineLessonDetailPage() {
             </button>
           ) : null}
 
-          {isAdmin && ["completed", "cancelled"].includes(lesson.status) ? (
+          {isAdmin && lesson.status === "cancelled" ? (
             <button
               disabled={busy != null}
               onClick={() => {
-                const reason = askReason(
-                  lesson.status === "cancelled"
-                    ? "Восстановить отменённый урок в расписании?"
-                    : "Открыть подтверждённый урок повторно? Все списания будут возвращены.",
-                );
+                const reason = askReason("Восстановить отменённый урок в расписании?");
                 if (reason) void runAction("reopen", () => adminOfflineApi.reopen(crmClassId, reason));
               }}
               className="flex w-full items-center justify-center gap-2 rounded-[24px] border border-violet-300 bg-violet-50 px-5 py-4 text-sm font-bold text-violet-900 disabled:opacity-50"
             >
               {busy === "reopen" ? <LoaderCircle className="animate-spin" size={16} /> : <RotateCcw size={16} />}
-              {lesson.status === "cancelled" ? "Восстановить урок" : "Пересмотреть урок"}
+              Восстановить урок
             </button>
           ) : null}
 
@@ -2010,6 +2040,7 @@ export default function AdminOfflineLessonDetailPage() {
           topicFrom: learningV2Draft.expectedPercent,
           topicTo: learningV2Draft.toPercent,
           rewardsEnabled: learningV2?.rewardsEnabled ?? false,
+          planCompletionReward,
           xp: xpSummary,
         } : null}
         onClose={() => setSubmitConfirmationOpen(false)}
@@ -2156,6 +2187,10 @@ function SubmitLessonConfirmation({
     topicFrom: number | null;
     topicTo: number | null;
     rewardsEnabled: boolean;
+    planCompletionReward: {
+      points: number;
+      recipientsCount: number;
+    } | null;
     xp: {
       willAward: number;
       limited: number;
@@ -2268,6 +2303,18 @@ function SubmitLessonConfirmation({
               <p className="rounded-lg bg-stone-100 px-3 py-2 text-sm font-bold text-stone-600">
                 Тема отмечается освоенной. Награда 100 баллов для этого урока не начислится:
                 урок прошёл до даты запуска новой системы.
+              </p>
+            ) : null}
+            {learning.planCompletionReward ? (
+              <p
+                data-testid="plan-completion-reward-preview"
+                className="rounded-lg bg-amber-50 px-3 py-2 text-sm font-bold text-amber-950"
+              >
+                Эта отметка завершит план месяца. После подтверждения администратором
+                {learning.planCompletionReward.recipientsCount === 1
+                  ? ` привязанному ученику будет начислено +${learning.planCompletionReward.points}`
+                  : ` каждому привязанному ученику будет начислено по +${learning.planCompletionReward.points}`}
+                {" учебных баллов."}
               </p>
             ) : null}
             <div className="border-t border-stone-200 pt-3">

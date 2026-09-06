@@ -103,6 +103,7 @@ export const adminOfflineApi = {
       teacherOutcomeHint?: "held" | "not_held" | "no_submission";
       trialReport?: TrialLessonReport;
       comment?: string;
+      learningResultsV2?: LearningLessonV2ResultsInput;
     },
   ) =>
     apiRequest(`/admin/offline-lessons/${encodeURIComponent(crmClassId)}/submit-for-teacher`, {
@@ -139,11 +140,6 @@ export const adminOfflineApi = {
         }),
       },
     ),
-  learningResults: (crmClassId: string, body: LearningLessonV2ResultsInput) =>
-    apiRequest<Record<string, unknown>>(
-      `/admin/offline-lessons/${encodeURIComponent(crmClassId)}/learning-results`,
-      { method: "POST", body: JSON.stringify(body) },
-    ),
   approve: (
     crmClassId: string,
     body: {
@@ -156,6 +152,7 @@ export const adminOfflineApi = {
       teacherComment?: string;
       materials?: Array<{ type?: string; url?: string; title?: string; description?: string | null; mimeType?: string | null }>;
       trialReport?: TrialLessonReport;
+      learningResultsV2?: LearningLessonV2ResultsInput;
     },
   ) =>
     apiRequest<ApproveOfflineLessonResult>(

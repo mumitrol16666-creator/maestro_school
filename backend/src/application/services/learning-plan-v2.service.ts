@@ -982,7 +982,10 @@ export async function updateLearningTopicProgressFromLessonV2(
     where: { sourceKey },
   });
   if (existingEvent) {
-    if (existingEvent.topicId !== topicId || existingEvent.toPercent !== input.toPercent) {
+    if (!sameLearningTopicProgressRequest(existingEvent, {
+      topicId,
+      toPercent: input.toPercent,
+    })) {
       throw new ConflictError(
         "Прогресс этой темы уже зафиксирован в итогах урока",
         "LESSON_TOPIC_PROGRESS_ALREADY_RECORDED",
@@ -1018,44 +1021,73 @@ export async function updateLearningTopicProgressFromLessonV2(
     masteryStudents = await resolveTopicRewardStudents(scoped, input.crmClassId);
   }
 
-  await prisma.$transaction(async (tx) => {
-    const updated = await tx.learningTopic.updateMany({
-      where: {
-        id: topicId,
-        progressPercent: input.expectedPercent,
-        archivedAt: null,
-      },
-      data: {
-        progressPercent: input.toPercent,
-        ...(input.toPercent === 100
-          ? {
-              masteredAt: occurredAt,
-              masteryRewardSourceKey: masteryStudents.length
-                ? `learning-topic-mastery:${topicId}`
-                : null,
-            }
-          : {}),
-      },
+  try {
+    await prisma.$transaction(async (tx) => {
+      const updated = await tx.learningTopic.updateMany({
+        where: {
+          id: topicId,
+          progressPercent: input.expectedPercent,
+          archivedAt: null,
+        },
+        data: {
+          progressPercent: input.toPercent,
+          ...(input.toPercent === 100
+            ? {
+                masteredAt: occurredAt,
+                masteryRewardSourceKey: masteryStudents.length
+                  ? `learning-topic-mastery:${topicId}`
+                  : null,
+              }
+            : {}),
+        },
+      });
+      if (updated.count !== 1) {
+        throw new ConflictError(
+          "Процент темы изменился. Обновите урок и повторите действие.",
+          "LEARNING_TOPIC_STALE_PROGRESS",
+        );
+      }
+      await tx.learningTopicProgress.create({
+        data: {
+          topicId,
+          fromPercent: input.expectedPercent,
+          toPercent: input.toPercent,
+          source: LearningTopicProgressSource.lesson,
+          sourceKey,
+          comment: input.comment?.trim() || null,
+          changedById: actorUserId,
+          occurredAt,
+        },
+      });
     });
-    if (updated.count !== 1) {
-      throw new ConflictError(
-        "Процент темы изменился. Обновите урок и повторите действие.",
-        "LEARNING_TOPIC_STALE_PROGRESS",
-      );
+  } catch (error) {
+    const duplicateRace = (
+      error instanceof Prisma.PrismaClientKnownRequestError
+      && error.code === "P2002"
+    ) || (
+      error instanceof ConflictError
+      && error.code === "LEARNING_TOPIC_STALE_PROGRESS"
+    );
+    if (!duplicateRace) throw error;
+    const committedEvent = await prisma.learningTopicProgress.findUnique({
+      where: { sourceKey },
+    });
+    if (!committedEvent || !sameLearningTopicProgressRequest(committedEvent, {
+      topicId,
+      toPercent: input.toPercent,
+    })) {
+      throw error;
     }
-    await tx.learningTopicProgress.create({
-      data: {
-        topicId,
-        fromPercent: input.expectedPercent,
-        toPercent: input.toPercent,
-        source: LearningTopicProgressSource.lesson,
-        sourceKey,
-        comment: input.comment?.trim() || null,
-        changedById: actorUserId,
-        occurredAt,
-      },
-    });
-  });
+    const current = await requireLessonTopicScope(actorUserId, topicId);
+    if (committedEvent.toPercent === 100) {
+      await applyTopicMasteryRewards({
+        topic: current,
+        crmClassId: input.crmClassId,
+        occurredAt: committedEvent.occurredAt,
+      });
+    }
+    return { ...topicDto(current), idempotent: true };
+  }
 
   if (input.toPercent === 100) {
     await applyTopicMasteryRewards({
@@ -1069,4 +1101,12 @@ export async function updateLearningTopicProgressFromLessonV2(
     ...topicDto(await requireLessonTopicScope(actorUserId, topicId)),
     idempotent: false,
   };
+}
+
+export function sameLearningTopicProgressRequest(
+  existing: { topicId: string; toPercent: number },
+  requested: { topicId: string; toPercent: number },
+) {
+  return existing.topicId === requested.topicId
+    && existing.toPercent === requested.toPercent;
 }

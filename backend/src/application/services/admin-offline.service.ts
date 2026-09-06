@@ -1,4 +1,3 @@
-import { Prisma } from "@prisma/client";
 import { prisma } from "../../infrastructure/database/prisma.js";
 import {
   fetchClassCard,
@@ -14,30 +13,20 @@ import {
   postAdminReturnClass,
   type TeacherSubmitPayload,
 } from "../../infrastructure/crm/crm-client.js";
-import { AppError, BadRequestError } from "../../domain/errors.js";
+import { AppError, BadRequestError, ConflictError } from "../../domain/errors.js";
 import {
   mergeOfflineLessonStudentChecks,
   saveOfflineLessonStudentCheck,
   type OfflineHomeworkReviewInput,
 } from "./offline-lesson-student-check.service.js";
 import { validateOfflineLessonSubmission } from "./offline-lesson-submission-policy.js";
-import { awardManualPoints } from "./points.service.js";
-import { addMaestroCoins } from "./coins.service.js";
-import {
-  awardLeagueXp,
-  awardOfflineLessonAttendanceXp,
-} from "./weekly-league.service.js";
-import { evaluateAchievements } from "./achievement.service.js";
 import { aqtobeMonthKey } from "../../lib/aqtobe-month.js";
-import { buildMonthlyPlanSnapshot } from "../../domain/monthly-plan.js";
 import {
   getLearningLessonV2Context,
-  offlineLessonEventAt,
+  validateLearningLessonV2ResultsForSubmission,
+  type LearningLessonV2ResultsInput,
 } from "./learning-lesson-v2.service.js";
-import {
-  productFeatureConfig,
-  rewardEconomyV2AppliesToEvent,
-} from "../../config/product-features.js";
+import { productFeatureConfig } from "../../config/product-features.js";
 import {
   fetchOfflineLessonWithProjection,
   fetchOfflineRosterWithProjection,
@@ -51,10 +40,17 @@ import {
   processCrmOutboxEvent,
 } from "./crm-outbox.service.js";
 import {
-  markOfflineLessonReportConfirmed,
-  reopenOfflineLessonReport,
+  assertCurrentOfflineLessonApprovalForFinalization,
+  getCurrentOfflineLessonApprovalState,
+  getCurrentOfflineLessonLearningResultsV2,
+  prepareOfflineLessonApproval,
+  readOfflineLessonApprovedBy,
+  readOfflineLessonLearningResultsV2,
+  completeOfflineLessonCorrection,
+  reserveOfflineLessonCorrection,
   submitOfflineLessonReportVersion,
 } from "./offline-lesson-report.service.js";
+import { finalizeOfflineLessonApproval } from "./offline-lesson-finalization.service.js";
 
 function lessonSyncV2Enabled() {
   return productFeatureConfig.flags.lessonSyncV2;
@@ -72,196 +68,9 @@ type StoredPlanTopicUpdate = {
   status: "in_progress" | "completed";
 };
 
-type StoredMonthlyPlanItem = {
-  id: string;
-  title: string;
-  status: "planned" | "in_progress" | "completed" | "moved";
-};
-
 function lessonMonth(lesson: Record<string, unknown>) {
   const date = typeof lesson.date === "string" ? new Date(lesson.date) : null;
   return date && !Number.isNaN(date.getTime()) ? aqtobeMonthKey(date) : aqtobeMonthKey();
-}
-
-export async function applyOfflineLessonLearningResults(
-  crmClassId: string,
-  approvedBy: string,
-  lesson?: AdminOfflineLesson,
-) {
-  const checks = await prisma.offlineLessonStudentCheck.findMany({
-    where: { crmClassId, rewardsAppliedAt: null },
-  });
-  const results: Array<{
-    crmStudentId: string;
-    points: number;
-    coins: number;
-    xp: number;
-    planTopics: number;
-  }> = [];
-  const eventAt = offlineLessonEventAt((lesson ?? {}) as Parameters<typeof offlineLessonEventAt>[0]);
-  const useV2Economy = rewardEconomyV2AppliesToEvent(eventAt);
-  const trialLesson = ["trial", "repeat_trial"].includes(String(lesson?.classType ?? ""));
-
-  for (const check of checks) {
-    const attended = ["present", "late"].includes(check.attendanceStatus);
-    if (!attended) {
-      await prisma.offlineLessonStudentCheck.update({
-        where: { id: check.id },
-        data: { rewardsAppliedAt: new Date() },
-      });
-      results.push({ crmStudentId: check.crmStudentId, points: 0, coins: 0, xp: 0, planTopics: 0 });
-      continue;
-    }
-
-    if (useV2Economy) {
-      const student = await prisma.user.findUnique({
-        where: { crmStudentId: check.crmStudentId },
-        select: { id: true },
-      });
-      let awardedXp = 0;
-      if (
-        student
-        && !trialLesson
-        && rewardEconomyV2AppliesToEvent(eventAt)
-      ) {
-        const xpResult = await awardOfflineLessonAttendanceXp({
-          studentId: student.id,
-          crmStudentId: check.crmStudentId,
-          crmClassId,
-          eventAt,
-          awardedById: check.teacherUserId ?? approvedBy,
-        });
-        awardedXp = xpResult.awarded ? xpResult.amount : 0;
-      }
-      await prisma.offlineLessonStudentCheck.update({
-        where: { id: check.id },
-        data: { rewardsAppliedAt: new Date() },
-      });
-      results.push({
-        crmStudentId: check.crmStudentId,
-        points: 0,
-        coins: 0,
-        xp: awardedXp,
-        planTopics: 0,
-      });
-      continue;
-    }
-
-    const updates = Array.isArray(check.planTopicUpdates)
-      ? check.planTopicUpdates as StoredPlanTopicUpdate[]
-      : [];
-    let appliedPlanTopics = 0;
-    let completedPlanId: string | null = null;
-    const completedPlanTopics: Array<{ id: string; title: string }> = [];
-
-    if (check.monthlyPlanId && updates.length) {
-      const plan = await prisma.studentMonthlyPlan.findFirst({
-        where: {
-          id: check.monthlyPlanId,
-          crmStudentId: check.crmStudentId,
-        },
-      });
-      if (plan) {
-        completedPlanId = plan.id;
-        const byId = new Map(updates.map((item) => [item.itemId, item.status]));
-        const items = (Array.isArray(plan.items) ? plan.items : []) as StoredMonthlyPlanItem[];
-        const nextItems = items.map((item) => {
-          const nextStatus = byId.get(item.id);
-          if (!nextStatus || item.status === "moved") return item;
-          appliedPlanTopics += 1;
-          if (nextStatus === "completed" && item.status !== "completed") {
-            completedPlanTopics.push({ id: item.id, title: item.title });
-          }
-          return {
-            ...item,
-            status: item.status === "completed" ? "completed" : nextStatus,
-          };
-        });
-        const nextRevision = plan.draftRevision + 1;
-        const publishedSnapshot = plan.publishedAt && plan.publishedSnapshot
-          ? buildMonthlyPlanSnapshot({ ...plan, items: nextItems })
-          : null;
-        await prisma.studentMonthlyPlan.update({
-          where: { id: plan.id },
-          data: {
-            items: nextItems as Prisma.InputJsonValue,
-            draftRevision: nextRevision,
-            ...(publishedSnapshot ? {
-              publishedSnapshot: publishedSnapshot as unknown as Prisma.InputJsonValue,
-              publishedRevision: nextRevision,
-              publishedAt: new Date(),
-            } : {}),
-          },
-        });
-      }
-    }
-
-    const student = await prisma.user.findUnique({
-      where: { crmStudentId: check.crmStudentId },
-      select: { id: true },
-    });
-    let awardedPoints = 0;
-    let awardedCoins = 0;
-    let awardedXp = 0;
-
-    if (student) {
-      const xpResult = await awardLeagueXp({
-        studentId: student.id,
-        amount: 20,
-        sourceType: "offline_lesson",
-        sourceKey: `offline-lesson:${crmClassId}:${check.crmStudentId}`,
-        description: "Посещение урока с преподавателем",
-        awardedById: check.teacherUserId ?? approvedBy,
-      });
-      awardedXp = xpResult.awarded ? 20 : 0;
-      if (completedPlanId) {
-        for (const topic of completedPlanTopics) {
-          await awardLeagueXp({
-            studentId: student.id,
-            amount: 3,
-            sourceType: "monthly_plan",
-            sourceKey: `monthly-plan-topic:${completedPlanId}:${topic.id}`,
-            description: `Освоена тема плана «${topic.title}»`,
-            awardedById: check.teacherUserId ?? approvedBy,
-          });
-        }
-      }
-      const pointsResult = await awardManualPoints({
-        studentId: student.id,
-        amount: check.lessonPoints,
-        reason: "Урок с преподавателем",
-        awardedBy: check.teacherUserId ?? approvedBy,
-        idempotencyKey: `offline-lesson-points:${crmClassId}:${check.crmStudentId}`,
-      });
-      awardedPoints = pointsResult.awarded ? check.lessonPoints : 0;
-
-      const coinResult = await addMaestroCoins({
-        studentId: student.id,
-        amount: 1,
-        reason: "Посещение урока с преподавателем",
-        sourceType: "offline_lesson",
-        sourceId: check.id,
-        sourceKey: `offline-lesson:${crmClassId}:${check.crmStudentId}`,
-        createdBy: approvedBy,
-      });
-      awardedCoins = coinResult.awarded ? 1 : 0;
-      await evaluateAchievements(student.id);
-    }
-
-    await prisma.offlineLessonStudentCheck.update({
-      where: { id: check.id },
-      data: { rewardsAppliedAt: new Date() },
-    });
-    results.push({
-      crmStudentId: check.crmStudentId,
-      points: awardedPoints,
-      coins: awardedCoins,
-      xp: awardedXp,
-      planTopics: appliedPlanTopics,
-    });
-  }
-
-  return results;
 }
 
 async function getLessonWithAssignedTeacher(crmClassId: string) {
@@ -340,10 +149,18 @@ export async function getAdminOfflineClassStudents(actorUserId: string, crmClass
     teacherUserId: teacher?.id,
     month: lessonMonth(lesson),
   });
-  const learningV2 = await getLearningLessonV2Context(actorUserId, crmClassId);
+  const [learningV2, staged] = await Promise.all([
+    getLearningLessonV2Context(actorUserId, crmClassId),
+    lessonSyncV2Enabled()
+      ? getCurrentOfflineLessonLearningResultsV2(crmClassId)
+      : Promise.resolve(null),
+  ]);
+  const learningV2WithPending = learningV2
+    ? { ...learningV2, pendingResults: staged?.learningResultsV2 ?? null }
+    : null;
   return {
     ...merged,
-    ...(learningV2 ? { learningV2 } : {}),
+    ...(learningV2WithPending ? { learningV2: learningV2WithPending } : {}),
     ...(lessonSyncV2Enabled()
       ? { integration: await getOfflineLessonSyncSummary(crmClassId, projectedRoster.source) }
       : {}),
@@ -358,8 +175,11 @@ export async function adminOfflineStart(crmClassId: string) {
 export async function adminOfflineSubmit(
   actorUserId: string,
   crmClassId: string,
-  payload: Omit<TeacherSubmitPayload, "crmTeacherId">,
+  payload: Omit<TeacherSubmitPayload, "crmTeacherId"> & {
+    learningResultsV2?: LearningLessonV2ResultsInput;
+  },
 ) {
+  const { learningResultsV2, ...crmPayload } = payload;
   const { lesson, crmTeacherId } = await getLessonWithAssignedTeacher(crmClassId);
   const projectedRoster = lessonSyncV2Enabled()
     ? await fetchOfflineRosterWithProjection(crmClassId, lesson)
@@ -372,24 +192,19 @@ export async function adminOfflineSubmit(
   const presentStudentIds = new Set(roster.students
     .filter((student) => ["present", "late"].includes(String(student.attendanceStatus ?? "")))
     .map((student) => String(student.crmStudentId ?? "")));
-  const pendingLearningHomework = learningV2?.available
-    ? learningV2.students.reduce(
-        (total, student) => total + (presentStudentIds.has(student.crmStudentId)
-          ? student.pendingHomework.length
-          : 0),
-        0,
-      )
-    : 0;
-  if (pendingLearningHomework > 0) {
-    throw new BadRequestError(
-      "Проверьте прошлое домашнее задание у всех присутствующих учеников.",
-      "LESSON_HOMEWORK_REVIEW_REQUIRED",
+  const stagedLearningResults = learningResultsV2 ?? { homeworkDecisions: [], topicUpdates: [] };
+  if (learningV2?.enabled) {
+    await validateLearningLessonV2ResultsForSubmission(
+      actorUserId,
+      crmClassId,
+      stagedLearningResults,
+      presentStudentIds,
     );
   }
   const validation = validateOfflineLessonSubmission({
     lesson,
     students: roster.students,
-    payload,
+    payload: crmPayload,
     requiresLegacyHomeworkReview: !learningV2?.enabled,
   });
   if (!validation.valid) {
@@ -397,7 +212,7 @@ export async function adminOfflineSubmit(
   }
 
   const fullPayload = {
-    ...payload,
+    ...crmPayload,
     teacherOutcomeHint: validation.outcome,
   };
   if (lessonSyncV2Enabled()) {
@@ -406,6 +221,7 @@ export async function adminOfflineSubmit(
       authorUserId: actorUserId,
       crmTeacherId,
       payload: fullPayload,
+      learningResultsV2: learningV2?.enabled ? stagedLearningResults : undefined,
     });
   }
   return postTeacherSubmit(crmClassId, { ...fullPayload, crmTeacherId });
@@ -503,10 +319,65 @@ export async function adminOfflineApprove(
     materials?: Array<{ type?: string; url?: string; title?: string; description?: string | null; mimeType?: string | null }>;
     teacherComment?: string;
     trialReport?: Record<string, unknown>;
+    learningResultsV2?: LearningLessonV2ResultsInput;
   },
 ) {
+  const { learningResultsV2, ...crmPayload } = payload;
   if (lessonSyncV2Enabled()) {
     await flushCrmOutboxForLesson(crmClassId);
+    const approvalState = await getCurrentOfflineLessonApprovalState(crmClassId);
+    const { report, version } = approvalState;
+    if (!report || !version || report.currentVersion === 0) {
+      throw new BadRequestError(
+        "Отправленная версия отчёта не найдена.",
+        "LESSON_REPORT_NOT_FOUND",
+      );
+    }
+    const expectedVersion = report.currentVersion;
+    const currentLearningResults = readOfflineLessonLearningResultsV2(version.payload);
+    let approvalEvent = approvalState.event;
+    if (report.crmConfirmedAt) {
+      if (approvalEvent && ["pending", "failed"].includes(approvalEvent.status)) {
+        approvalEvent = await processCrmOutboxEvent(approvalEvent.id);
+      }
+      if (approvalEvent?.status === "succeeded") {
+        const responsePayload = approvalEvent.responsePayload;
+        if (responsePayload && typeof responsePayload === "object" && !Array.isArray(responsePayload)) {
+          const response = responsePayload as Record<string, unknown>;
+          if (Object.prototype.hasOwnProperty.call(response, "learningRewards")) {
+            return { ...response, idempotent: true };
+          }
+          await assertCurrentOfflineLessonApprovalForFinalization(crmClassId, expectedVersion);
+          const learningRewards = await finalizeOfflineLessonApproval({
+            crmClassId,
+            approvedBy: readOfflineLessonApprovedBy(version.payload)
+              ?? version.authorUserId
+              ?? approvedBy,
+            learningResultsV2: currentLearningResults,
+            reportVersion: expectedVersion,
+          });
+          return { ...response, idempotent: true, learningRewards };
+        }
+      }
+      if (approvalEvent && approvalEvent.status !== "succeeded") {
+        throw new BadRequestError(
+          approvalEvent.lastError
+            ?? "Подтверждение принято CRM, но локальное завершение ещё выполняется.",
+          approvalEvent.status === "conflict" ? "CRM_SYNC_CONFLICT" : "CRM_SYNC_PENDING",
+        );
+      }
+      await assertCurrentOfflineLessonApprovalForFinalization(crmClassId, expectedVersion);
+      const learningRewards = await finalizeOfflineLessonApproval({
+        crmClassId,
+        approvedBy: readOfflineLessonApprovedBy(version.payload)
+          ?? version.authorUserId
+          ?? approvedBy,
+        learningResultsV2: currentLearningResults,
+        reportVersion: expectedVersion,
+      });
+      return { crmClassId, status: "completed", idempotent: true, learningRewards };
+    }
+
     const sync = await getOfflineLessonSyncSummary(crmClassId);
     if (sync.pendingCount || sync.conflictCount) {
       throw new BadRequestError(
@@ -516,36 +387,95 @@ export async function adminOfflineApprove(
         sync.conflictCount ? "CRM_SYNC_CONFLICT" : "CRM_SYNC_PENDING",
       );
     }
-  }
-  const lesson = await fetchClassCard(crmClassId) as AdminOfflineLesson;
-  const crmResult = await postAdminApproveClass(crmClassId, payload);
-  if (lessonSyncV2Enabled()) {
-    await markOfflineLessonReportConfirmed(crmClassId);
-    const responseClass = (crmResult as { class?: Record<string, unknown> }).class;
-    if (responseClass) {
-      await projectOfflineAgenda([responseClass]);
+    const stagedLearningResults = learningResultsV2
+      ?? currentLearningResults
+      ?? { homeworkDecisions: [], topicUpdates: [] };
+    const checks = await prisma.offlineLessonStudentCheck.findMany({
+      where: { crmClassId },
+      select: { crmStudentId: true, attendanceStatus: true },
+    });
+    const presentStudentIds = new Set(checks
+      .filter((check) => ["present", "late"].includes(check.attendanceStatus))
+      .map((check) => check.crmStudentId));
+    const context = await getLearningLessonV2Context(approvedBy, crmClassId);
+    if (context?.enabled) {
+      await validateLearningLessonV2ResultsForSubmission(
+        approvedBy,
+        crmClassId,
+        stagedLearningResults,
+        presentStudentIds,
+      );
     }
+
+    const approval = await prepareOfflineLessonApproval({
+      crmClassId,
+      expectedVersion,
+      crmPayload,
+      learningResultsV2: stagedLearningResults,
+      approvedBy,
+    });
+    const delivered = await processCrmOutboxEvent(approval.id);
+    if (!delivered || delivered.status !== "succeeded") {
+      throw new BadRequestError(
+        delivered?.lastError
+          ?? "Подтверждение ещё передаётся в CRM. Повторите через несколько секунд.",
+        delivered?.status === "conflict" ? "CRM_SYNC_CONFLICT" : "CRM_SYNC_PENDING",
+      );
+    }
+    const responsePayload = delivered.responsePayload;
+    if (!responsePayload || typeof responsePayload !== "object" || Array.isArray(responsePayload)) {
+      throw new ConflictError(
+        "CRM подтвердила урок, но сохранённый ответ недоступен для завершения операции.",
+        "LESSON_APPROVAL_RESPONSE_MISSING",
+      );
+    }
+    return responsePayload as Awaited<ReturnType<typeof postAdminApproveClass>> & {
+      learningRewards?: unknown;
+    };
   }
-  const learningRewards = await applyOfflineLessonLearningResults(crmClassId, approvedBy, lesson);
+
+  const crmResult = await postAdminApproveClass(crmClassId, crmPayload);
+  const lesson = await fetchClassCard(crmClassId) as AdminOfflineLesson;
+  const learningRewards = await finalizeOfflineLessonApproval({
+    crmClassId,
+    approvedBy,
+    lesson,
+  });
   return { ...crmResult, learningRewards };
 }
 
 export async function adminOfflineReturn(actorUserId: string, crmClassId: string, reason?: string) {
-  const result = await postAdminReturnClass(crmClassId, reason);
-  if (lessonSyncV2Enabled() && reason) {
-    await reopenOfflineLessonReport(crmClassId, actorUserId, reason);
+  if (!lessonSyncV2Enabled()) return postAdminReturnClass(crmClassId, reason);
+  if (!reason?.trim()) {
+    throw new BadRequestError(
+      "Укажите причину возврата отчёта преподавателю.",
+      "LESSON_CORRECTION_REASON_REQUIRED",
+    );
   }
+
+  const reservation = await reserveOfflineLessonCorrection(crmClassId, actorUserId, reason);
+  const result = await postAdminReturnClass(crmClassId, reason);
+  await completeOfflineLessonCorrection(reservation);
   return result;
 }
 
 export async function adminOfflineReopen(actorUserId: string, crmClassId: string, reason?: string) {
-  const report = lessonSyncV2Enabled()
-    ? await prisma.offlineLessonReport.findUnique({ where: { crmClassId } })
-    : null;
-  const correction = report && reason ? {
-    reportId: report.id,
-    reportVersion: report.currentVersion,
-    reason,
+  if (!lessonSyncV2Enabled()) {
+    const result = await postAdminReopenClass(crmClassId, reason);
+    return { ...result, correction: null };
+  }
+  if (!reason?.trim()) {
+    throw new BadRequestError(
+      "Укажите причину переоткрытия отчёта.",
+      "LESSON_CORRECTION_REASON_REQUIRED",
+    );
+  }
+
+  const reservation = await reserveOfflineLessonCorrection(crmClassId, actorUserId, reason);
+  const correction = reservation ? {
+    reportId: reservation.reportId,
+    reportVersion: reservation.reportVersion,
+    reason: reservation.reason,
   } : undefined;
   const result = await postAdminReopenClass(
     crmClassId,
@@ -553,8 +483,6 @@ export async function adminOfflineReopen(actorUserId: string, crmClassId: string
     correction,
     correction ? `lesson-correction:${crmClassId}:v${correction.reportVersion}` : undefined,
   );
-  if (lessonSyncV2Enabled() && reason) {
-    await reopenOfflineLessonReport(crmClassId, actorUserId, reason);
-  }
+  await completeOfflineLessonCorrection(reservation);
   return { ...result, correction: correction ?? null };
 }

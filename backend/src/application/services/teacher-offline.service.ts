@@ -20,7 +20,11 @@ import {
 import { validateOfflineLessonSubmission } from "./offline-lesson-submission-policy.js";
 import { aqtobeMonthKey } from "../../lib/aqtobe-month.js";
 import { normalizeTeacherAttendanceStatus } from "./teacher-attendance-policy.js";
-import { getLearningLessonV2Context } from "./learning-lesson-v2.service.js";
+import {
+  getLearningLessonV2Context,
+  validateLearningLessonV2ResultsForSubmission,
+  type LearningLessonV2ResultsInput,
+} from "./learning-lesson-v2.service.js";
 import { productFeatureConfig } from "../../config/product-features.js";
 import {
   fetchOfflineLessonWithProjection,
@@ -36,6 +40,7 @@ import {
   processCrmOutboxEvent,
 } from "./crm-outbox.service.js";
 import {
+  getCurrentOfflineLessonLearningResultsV2,
   submitOfflineLessonReportVersion,
   withdrawOfflineLessonReport,
 } from "./offline-lesson-report.service.js";
@@ -172,10 +177,18 @@ export async function getTeacherOfflineClassStudents(appUserId: string, crmClass
     teacherUserId: appUserId,
     month: lessonMonth(lesson),
   });
-  const learningV2 = await getLearningLessonV2Context(appUserId, crmClassId);
+  const [learningV2, staged] = await Promise.all([
+    getLearningLessonV2Context(appUserId, crmClassId),
+    lessonSyncV2Enabled()
+      ? getCurrentOfflineLessonLearningResultsV2(crmClassId)
+      : Promise.resolve(null),
+  ]);
+  const learningV2WithPending = learningV2
+    ? { ...learningV2, pendingResults: staged?.learningResultsV2 ?? null }
+    : null;
   return {
     ...merged,
-    ...(learningV2 ? { learningV2 } : {}),
+    ...(learningV2WithPending ? { learningV2: learningV2WithPending } : {}),
     ...(lessonSyncV2Enabled()
       ? { integration: await getOfflineLessonSyncSummary(crmClassId, projectedRoster.source) }
       : {}),
@@ -228,8 +241,11 @@ export async function teacherOfflineFinish(
 export async function teacherOfflineSubmit(
   appUserId: string,
   crmClassId: string,
-  payload: Omit<TeacherSubmitPayload, "crmTeacherId">,
+  payload: Omit<TeacherSubmitPayload, "crmTeacherId"> & {
+    learningResultsV2?: LearningLessonV2ResultsInput;
+  },
 ) {
+  const { learningResultsV2, ...crmPayload } = payload;
   const crmTeacherId = await requireCrmTeacherId(appUserId);
   const lesson = await getTeacherOfflineClass(appUserId, crmClassId);
   const projectedRoster = lessonSyncV2Enabled()
@@ -243,18 +259,13 @@ export async function teacherOfflineSubmit(
   const presentStudentIds = new Set(roster.students
     .filter((student) => ["present", "late"].includes(String(student.attendanceStatus ?? "")))
     .map((student) => String(student.crmStudentId ?? "")));
-  const pendingLearningHomework = learningV2?.available
-    ? learningV2.students.reduce(
-        (total, student) => total + (presentStudentIds.has(student.crmStudentId)
-          ? student.pendingHomework.length
-          : 0),
-        0,
-      )
-    : 0;
-  if (pendingLearningHomework > 0) {
-    throw new BadRequestError(
-      "Проверьте прошлое домашнее задание у всех присутствующих учеников.",
-      "LESSON_HOMEWORK_REVIEW_REQUIRED",
+  const stagedLearningResults = learningResultsV2 ?? { homeworkDecisions: [], topicUpdates: [] };
+  if (learningV2?.enabled) {
+    await validateLearningLessonV2ResultsForSubmission(
+      appUserId,
+      crmClassId,
+      stagedLearningResults,
+      presentStudentIds,
     );
   }
   const validation = validateOfflineLessonSubmission({
@@ -265,7 +276,7 @@ export async function teacherOfflineSubmit(
       group: (lesson as Record<string, unknown>).group,
     },
     students: roster.students,
-    payload,
+    payload: crmPayload,
     requiresLegacyHomeworkReview: !learningV2?.enabled,
   });
   if (!validation.valid) {
@@ -273,7 +284,7 @@ export async function teacherOfflineSubmit(
   }
 
   const fullPayload = {
-    ...payload,
+    ...crmPayload,
     teacherOutcomeHint: validation.outcome,
   };
   if (lessonSyncV2Enabled()) {
@@ -282,6 +293,7 @@ export async function teacherOfflineSubmit(
       authorUserId: appUserId,
       crmTeacherId,
       payload: fullPayload,
+      learningResultsV2: learningV2?.enabled ? stagedLearningResults : undefined,
     });
   }
   return postTeacherSubmit(crmClassId, { ...fullPayload, crmTeacherId });

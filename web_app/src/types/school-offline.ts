@@ -41,6 +41,22 @@ export type SchoolOfflineLesson = {
     title: string;
     status: "in_progress" | "completed";
   }>;
+  learningTopicResults?: Array<{
+    topicId: string;
+    title: string;
+    fromPercent: number | null;
+    toPercent: number;
+    comment: string | null;
+    occurredAt: string;
+    mastered: boolean;
+    masteryPointsAwarded: number;
+  }>;
+  learningPlanCompletionResults?: Array<{
+    planId: string;
+    month: string;
+    completedAt: string;
+    pointsAwarded: number;
+  }>;
 };
 
 export type SchoolOfflineMembership = {

@@ -71,6 +71,26 @@ export type ReviewLearningHomeworkInput = {
   idempotencyKey: string;
 };
 
+export function sameLearningHomeworkReviewRequest(
+  review: {
+    recipientId: string;
+    reviewerId: string | null;
+    decision: LearningHomeworkReviewDecision;
+    comment: string | null;
+  },
+  request: {
+    recipientId: string;
+    reviewerUserId: string;
+    decision: LearningHomeworkReviewDecision;
+    comment: string | null;
+  },
+) {
+  return review.recipientId === request.recipientId
+    && review.reviewerId === request.reviewerUserId
+    && review.decision === request.decision
+    && review.comment === request.comment;
+}
+
 const assignmentInclude = {
   topic: { include: { direction: true } },
   createdBy: {
@@ -813,10 +833,12 @@ export async function reviewLearningHomework(input: ReviewLearningHomeworkInput)
     where: { idempotencyKey: input.idempotencyKey },
   });
   if (duplicate) {
-    const sameRequest = duplicate.recipientId === recipient.id
-      && duplicate.reviewerId === input.reviewerUserId
-      && duplicate.decision === decision
-      && duplicate.comment === normalizedComment;
+    const sameRequest = sameLearningHomeworkReviewRequest(duplicate, {
+      recipientId: recipient.id,
+      reviewerUserId: input.reviewerUserId,
+      decision,
+      comment: normalizedComment,
+    });
     if (!sameRequest) {
       throw new ConflictError(
         "Ключ запроса уже использован для другой проверки",
@@ -909,6 +931,28 @@ export async function reviewLearningHomework(input: ReviewLearningHomeworkInput)
     return { review, idempotent: false };
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      const duplicateAfterRace = await prisma.learningHomeworkReview.findUnique({
+        where: { idempotencyKey: input.idempotencyKey },
+      });
+      if (duplicateAfterRace && sameLearningHomeworkReviewRequest(duplicateAfterRace, {
+        recipientId: recipient.id,
+        reviewerUserId: input.reviewerUserId,
+        decision,
+        comment: normalizedComment,
+      })) {
+        if (duplicateAfterRace.decision !== LearningHomeworkReviewDecision.revision) {
+          await applyAcceptedLearningHomeworkXp({
+            recipientId: recipient.id,
+            studentUserId: recipient.studentUserId,
+            directionId: recipient.assignment.topic.directionId,
+            title: recipient.assignment.topic.title,
+            cycleNumber: duplicateAfterRace.cycleNumber,
+            reviewedAt: duplicateAfterRace.reviewedAt,
+            reviewerId: duplicateAfterRace.reviewerId,
+          });
+        }
+        return { review: duplicateAfterRace, idempotent: true };
+      }
       throw new ConflictError(
         "Эта версия ответа уже проверена",
         "HOMEWORK_REVIEW_ALREADY_RECORDED",

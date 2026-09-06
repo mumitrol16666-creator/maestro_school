@@ -40,7 +40,6 @@ import {
 import { listTeacherCrmDirections } from "../../application/services/crm-direction-projection.service.js";
 import { isSupportedMaterialUrl } from "../../domain/group-material.js";
 import { writeAuditLog } from "../../application/services/audit.service.js";
-import { applyLearningLessonV2Results } from "../../application/services/learning-lesson-v2.service.js";
 import {
   deleteOfflineLessonDraft,
   getOfflineLessonDraft,
@@ -497,33 +496,6 @@ export async function teacherOfflineRoutes(app: FastifyInstance) {
   );
 
   app.post(
-    "/teachers/me/offline-lessons/:crmClassId/learning-results",
-    { preHandler: writeGuards },
-    async (request) => {
-      const { crmClassId } = z.object({ crmClassId: z.string().min(1) }).parse(request.params);
-      await getTeacherOfflineClass(request.user!.id, crmClassId);
-      const body = learningLessonResultsSchema.parse(request.body ?? {});
-      const result = await applyLearningLessonV2Results(
-        request.user!.id,
-        crmClassId,
-        body,
-      );
-      await writeAuditLog({
-        entityType: "offline_lesson",
-        entityId: crmClassId,
-        action: "update",
-        actorId: request.user!.id,
-        payload: {
-          event: "learning_lesson_results_applied",
-          homeworkDecisionCount: body.homeworkDecisions.length,
-          topicUpdateCount: body.topicUpdates.length,
-        },
-      });
-      return { data: result };
-    },
-  );
-
-  app.post(
     "/teachers/me/offline-lessons/:crmClassId/finish",
     { preHandler: writeGuards },
     async (request) => {
@@ -554,6 +526,7 @@ export async function teacherOfflineRoutes(app: FastifyInstance) {
           description: z.string().max(2000).nullable().optional(),
           mimeType: z.string().max(255).nullable().optional(),
         })).optional(),
+        learningResultsV2: learningLessonResultsSchema.optional(),
       }).parse(request.body ?? {});
       return { data: await teacherOfflineSubmit(request.user!.id, crmClassId, body) };
     },

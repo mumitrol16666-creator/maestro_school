@@ -9,6 +9,20 @@ import {
 
 type JsonRecord = Record<string, unknown>;
 
+type OfflineLessonSyncEventSnapshot = {
+  eventType: string;
+  payload: unknown;
+  status: string;
+  attempts: number;
+  lastError: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+type OfflineLessonSyncConflictSnapshot = {
+  outboxEvent: Pick<OfflineLessonSyncEventSnapshot, "eventType" | "payload"> | null;
+};
+
 function asJson(value: unknown) {
   return value as Prisma.InputJsonValue;
 }
@@ -45,6 +59,61 @@ function stableRosterVersion(roster: unknown) {
     }))
     .sort((left, right) => left.id.localeCompare(right.id));
   return createHash("sha256").update(JSON.stringify(stable)).digest("hex");
+}
+
+function reportVersionIdFromOutboxPayload(payload: unknown) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  const reportVersionId = (payload as JsonRecord).reportVersionId;
+  return typeof reportVersionId === "string" && reportVersionId.trim()
+    ? reportVersionId
+    : null;
+}
+
+/**
+ * Attendance and other lesson events are independent from report revisions.
+ * An approval, however, belongs only to the report version that produced it.
+ */
+export function isOfflineLessonSyncEventInCurrentChain(
+  event: Pick<OfflineLessonSyncEventSnapshot, "eventType" | "payload">,
+  currentReportVersionId: string | null,
+  reportStatus: string | null,
+) {
+  if (event.eventType !== "admin_approve") return true;
+  if (reportStatus === "editing" || reportStatus === "correcting") return false;
+
+  const eventReportVersionId = reportVersionIdFromOutboxPayload(event.payload);
+  // Keep malformed current events visible so an integration problem is not hidden.
+  if (!eventReportVersionId) return true;
+  return currentReportVersionId !== null && eventReportVersionId === currentReportVersionId;
+}
+
+export function summarizeOfflineLessonSyncChain(params: {
+  events: OfflineLessonSyncEventSnapshot[];
+  conflicts: OfflineLessonSyncConflictSnapshot[];
+  currentReportVersionId: string | null;
+  reportStatus: string | null;
+}) {
+  const eventIsCurrent = (event: Pick<OfflineLessonSyncEventSnapshot, "eventType" | "payload">) => (
+    isOfflineLessonSyncEventInCurrentChain(
+      event,
+      params.currentReportVersionId,
+      params.reportStatus,
+    )
+  );
+  const currentEvents = params.events
+    .filter(eventIsCurrent)
+    .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
+  const lastEvent = currentEvents[0] ?? null;
+
+  return {
+    pendingCount: currentEvents.filter((event) => (
+      ["pending", "processing", "failed"].includes(event.status)
+    )).length,
+    conflictCount: params.conflicts.filter((conflict) => (
+      !conflict.outboxEvent || eventIsCurrent(conflict.outboxEvent)
+    )).length,
+    lastEvent,
+  };
 }
 
 async function recordAttendanceConflicts(crmClassId: string, roster: JsonRecord) {
@@ -234,7 +303,7 @@ export async function fetchOfflineRosterWithProjection(
 }
 
 export async function getOfflineLessonSyncSummary(crmClassId: string, source?: "crm" | "projection") {
-  const [projection, report, pendingCount, conflictCount, lastEvent] = await Promise.all([
+  const [projection, report, events, conflicts] = await Promise.all([
     prisma.offlineLessonProjection.findUnique({ where: { crmClassId } }),
     prisma.offlineLessonReport.findUnique({
       where: { crmClassId },
@@ -243,22 +312,46 @@ export async function getOfflineLessonSyncSummary(crmClassId: string, source?: "
         currentVersion: true,
         confirmedVersion: true,
         crmConfirmedAt: true,
+        versions: {
+          select: { id: true, version: true },
+        },
       },
     }),
-    prisma.crmOutboxEvent.count({
+    prisma.crmOutboxEvent.findMany({
       where: {
         aggregateType: "offline_lesson",
         aggregateId: crmClassId,
-        status: { in: ["pending", "processing", "failed"] },
+      },
+      orderBy: { createdAt: "desc" },
+      select: {
+        eventType: true,
+        payload: true,
+        status: true,
+        attempts: true,
+        lastError: true,
+        createdAt: true,
+        updatedAt: true,
       },
     }),
-    prisma.crmSyncConflict.count({ where: { crmClassId, status: "open" } }),
-    prisma.crmOutboxEvent.findFirst({
-      where: { aggregateType: "offline_lesson", aggregateId: crmClassId },
-      orderBy: { createdAt: "desc" },
-      select: { attempts: true, lastError: true, status: true, updatedAt: true },
+    prisma.crmSyncConflict.findMany({
+      where: { crmClassId, status: "open" },
+      select: {
+        outboxEvent: {
+          select: { eventType: true, payload: true },
+        },
+      },
     }),
   ]);
+
+  const currentReportVersionId = report?.versions.find((version) => (
+    version.version === report.currentVersion
+  ))?.id ?? null;
+  const { pendingCount, conflictCount, lastEvent } = summarizeOfflineLessonSyncChain({
+    events,
+    conflicts,
+    currentReportVersionId,
+    reportStatus: report?.status ?? null,
+  });
 
   const state = conflictCount > 0
     ? "conflict"
@@ -275,7 +368,9 @@ export async function getOfflineLessonSyncSummary(crmClassId: string, source?: "
     lastError: lastEvent?.lastError ?? projection?.lastSyncError ?? null,
     lastSyncedAt: projection?.lastSyncedAt?.toISOString() ?? null,
     report: report ? {
-      ...report,
+      status: report.status,
+      currentVersion: report.currentVersion,
+      confirmedVersion: report.confirmedVersion,
       crmConfirmedAt: report.crmConfirmedAt?.toISOString() ?? null,
     } : null,
   };

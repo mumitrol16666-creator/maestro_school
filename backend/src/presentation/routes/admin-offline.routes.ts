@@ -23,7 +23,6 @@ import {
   learningLessonResultsSchema,
   offlineLessonStudentCheckSchema,
 } from "./offline-lesson.schemas.js";
-import { applyLearningLessonV2Results } from "../../application/services/learning-lesson-v2.service.js";
 import { writeAuditLog } from "../../application/services/audit.service.js";
 import {
   listCrmSyncJournal,
@@ -61,6 +60,7 @@ const teacherReportSchema = z.object({
     description: z.string().max(2000).nullable().optional(),
     mimeType: z.string().max(255).nullable().optional(),
   })).optional(),
+  learningResultsV2: learningLessonResultsSchema.optional(),
 });
 
 export async function adminOfflineRoutes(app: FastifyInstance) {
@@ -222,32 +222,6 @@ export async function adminOfflineRoutes(app: FastifyInstance) {
   );
 
   app.post(
-    "/admin/offline-lessons/:crmClassId/learning-results",
-    { preHandler: writeGuards },
-    async (request) => {
-      const { crmClassId } = z.object({ crmClassId: z.string().min(1) }).parse(request.params);
-      const body = learningLessonResultsSchema.parse(request.body ?? {});
-      const result = await applyLearningLessonV2Results(
-        request.user!.id,
-        crmClassId,
-        body,
-      );
-      await writeAuditLog({
-        entityType: "offline_lesson",
-        entityId: crmClassId,
-        action: "update",
-        actorId: request.user!.id,
-        payload: {
-          event: "learning_lesson_results_applied",
-          homeworkDecisionCount: body.homeworkDecisions.length,
-          topicUpdateCount: body.topicUpdates.length,
-        },
-      });
-      return { data: result };
-    },
-  );
-
-  app.post(
     "/admin/offline-lessons/:crmClassId/start-for-teacher",
     { preHandler: actForTeacherGuards },
     async (request) => {
@@ -297,6 +271,7 @@ export async function adminOfflineRoutes(app: FastifyInstance) {
           description: z.string().max(2000).nullable().optional(),
           mimeType: z.string().max(255).nullable().optional(),
         })).optional(),
+        learningResultsV2: learningLessonResultsSchema.optional(),
       }).parse(request.body ?? {});
       return { data: await adminOfflineApprove(request.user!.id, crmClassId, body) };
     },

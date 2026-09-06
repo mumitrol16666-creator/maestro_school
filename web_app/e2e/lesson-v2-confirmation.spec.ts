@@ -108,6 +108,7 @@ test("итог урока разделяет баллы темы и недель
   await expect(dialog.getByText(/100 баллов/)).toBeVisible();
   await expect(dialog.getByText(/100 XP/)).toHaveCount(0);
   await expect(dialog.getByText("+20 XP после подтверждения урока", { exact: true })).toBeVisible();
+  await expect(dialog.getByTestId("plan-completion-reward-preview")).toHaveCount(0);
   expect(await dialog.evaluate((element) => element.scrollTop)).toBe(0);
 
   for (const width of [320, 375, 430, 768]) {
@@ -133,7 +134,7 @@ test("групповой урок оставляет тему общей, а п�
 
   const topicButton = page.getByRole("button", { name: /Единый ритм группы/ }).first();
   await topicButton.click();
-  await page.getByRole("button", { name: "75%" }).click();
+  await page.getByRole("button", { name: "100% · Освоено" }).click();
 
   const homeworkSection = page.getByText("Решение по ожидающему ДЗ").locator("..", { hasText: "Казыбаев Камбар" });
   const decisionRows = homeworkSection.locator("div.border-t.border-stone-200.py-4");
@@ -150,7 +151,10 @@ test("групповой урок оставляет тему общей, а п�
   const dialog = page.getByRole("dialog", { name: "Отправить урок на проверку?" });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByText("Принять: 1 · На доработку: 1", { exact: true })).toBeVisible();
-  await expect(dialog.getByText(/0% → 75%/)).toBeVisible();
+  await expect(dialog.getByText(/0% → 100%/)).toBeVisible();
+  await expect(dialog.getByTestId("plan-completion-reward-preview")).toContainText(
+    "+250 учебных баллов",
+  );
 
   for (const width of [320, 375, 430, 768]) {
     await page.setViewportSize({ width, height: 900 });

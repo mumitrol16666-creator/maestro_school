@@ -67,4 +67,23 @@ export const learningLessonResultsSchema = z.object({
     toPercent: z.number().int().min(0).max(100),
     comment: z.string().max(5000).nullable().optional(),
   })).max(20).default([]),
+}).superRefine((results, context) => {
+  const homeworkKeys = results.homeworkDecisions.map(
+    (item) => `${item.recipientId}:${item.cycleNumber}`,
+  );
+  if (new Set(homeworkKeys).size !== homeworkKeys.length) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["homeworkDecisions"],
+      message: "Одно домашнее задание указано несколько раз",
+    });
+  }
+  const topicIds = results.topicUpdates.map((item) => item.topicId);
+  if (new Set(topicIds).size !== topicIds.length) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["topicUpdates"],
+      message: "Одна тема указана несколько раз",
+    });
+  }
 });

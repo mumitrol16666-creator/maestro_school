@@ -1,4 +1,5 @@
 import type { UserNotificationType } from "@prisma/client";
+import { createHash } from "node:crypto";
 import { prisma, notDeleted } from "../../infrastructure/database/prisma.js";
 import { NotFoundError } from "../../domain/errors.js";
 import { formatFio } from "../../domain/name.js";
@@ -208,12 +209,25 @@ function familyNotificationUrl(
   return `/family?${query.toString()}`;
 }
 
+function offlineLessonNotificationDedupeKey(
+  identity: string | undefined,
+  audience: "teacher" | "student" | "parent",
+  userId: string,
+) {
+  if (!identity) return undefined;
+  const digest = createHash("sha256")
+    .update(`${identity}:${audience}:${userId}`)
+    .digest("hex");
+  return `offline-lesson:${digest}`;
+}
+
 async function notifyParentsAboutApprovedLesson(params: {
   student: NonNullable<Awaited<ReturnType<typeof findUserByCrmStudentId>>>;
   parentUserIds: string[];
   crmClassId: string;
   lessonTitle: string;
   context: string;
+  dedupeIdentity?: string;
 }) {
   let summary: ParentOfflineSummary | null = null;
   const localCheck = params.student.crmStudentId
@@ -293,6 +307,11 @@ async function notifyParentsAboutApprovedLesson(params: {
         params.crmClassId,
       ),
       tag: `parent-lesson-${params.crmClassId}-${params.student.id}`,
+      dedupeKey: offlineLessonNotificationDedupeKey(
+        params.dedupeIdentity,
+        "parent",
+        parentUserId,
+      ),
       dedupeWindowMs: 14 * 24 * 60 * 60 * 1000,
     })));
   }
@@ -328,6 +347,8 @@ export async function notifyOfflineLessonEvent(params: {
   deliveryFormat?: "offline" | "online";
   meetingUrl?: string | null;
   message?: string | null;
+  /** Stable delivery identity used by durable CRM callback retries. */
+  dedupeIdentity?: string;
 }) {
   const teacher = params.crmTeacherId
     ? await findUserByCrmTeacherId(params.crmTeacherId)
@@ -372,6 +393,11 @@ export async function notifyOfflineLessonEvent(params: {
         body: teacherCopy.body,
         url,
         tag: `${teacherCopy.tag}-${params.crmClassId}`,
+        dedupeKey: offlineLessonNotificationDedupeKey(
+          params.dedupeIdentity,
+          "teacher",
+          teacher.id,
+        ),
         dedupeWindowMs: 10 * 60 * 1000,
       })
     : null;
@@ -397,6 +423,11 @@ export async function notifyOfflineLessonEvent(params: {
     body: studentCopy.body,
     url: studentUrl,
     tag: `${teacherCopy.tag}-${params.crmClassId}-${student.id}`,
+    dedupeKey: offlineLessonNotificationDedupeKey(
+      params.dedupeIdentity,
+      "student",
+      student.id,
+    ),
     dedupeWindowMs: 10 * 60 * 1000,
   }).catch(() => undefined)));
 
@@ -433,6 +464,7 @@ export async function notifyOfflineLessonEvent(params: {
           crmClassId: params.crmClassId,
           lessonTitle,
           context,
+          dedupeIdentity: params.dedupeIdentity,
         });
         return;
       }

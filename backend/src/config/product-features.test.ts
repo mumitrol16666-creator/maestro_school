@@ -23,6 +23,36 @@ test("product feature switches accept explicit boolean values", () => {
   assert.equal(config.flags.roleNavigationV2, false);
 });
 
+test("unified lesson v2 is unavailable without lesson sync v2", () => {
+  const config = loadProductFeatureConfig({
+    FEATURE_UNIFIED_LESSON_V2: "true",
+    FEATURE_LESSON_SYNC_V2: "false",
+  });
+
+  assert.equal(config.flags.lessonSyncV2, false);
+  assert.equal(config.flags.unifiedLessonV2, false);
+});
+
+test("unified lesson v2 stays enabled when lesson sync v2 is enabled", () => {
+  const config = loadProductFeatureConfig({
+    FEATURE_UNIFIED_LESSON_V2: "true",
+    FEATURE_LESSON_SYNC_V2: "true",
+  });
+
+  assert.equal(config.flags.lessonSyncV2, true);
+  assert.equal(config.flags.unifiedLessonV2, true);
+});
+
+test("lesson sync v2 does not enable unified lesson v2 by itself", () => {
+  const config = loadProductFeatureConfig({
+    FEATURE_UNIFIED_LESSON_V2: "false",
+    FEATURE_LESSON_SYNC_V2: "true",
+  });
+
+  assert.equal(config.flags.lessonSyncV2, true);
+  assert.equal(config.flags.unifiedLessonV2, false);
+});
+
 test("invalid feature configuration fails during startup", () => {
   assert.throws(
     () => loadProductFeatureConfig({ FEATURE_REWARD_ECONOMY_V2: "sometimes" }),

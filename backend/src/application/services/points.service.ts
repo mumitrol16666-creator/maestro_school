@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "../../infrastructure/database/prisma.js";
 import { ConflictError } from "../../domain/errors.js";
 import { rewardEconomyV2AppliesToEvent } from "../../config/product-features.js";
@@ -298,6 +299,76 @@ export async function awardManualPoints(params: {
 }
 
 /** Awards points from an automated product action exactly once per source key. */
+type SystemPointsTransactionReceipt = {
+  id: string;
+  studentId: string;
+  amount: number;
+  reason: string;
+};
+
+type SystemPointsTransactionPersistence = {
+  findBySourceKey(sourceKey: string): Promise<SystemPointsTransactionReceipt | null>;
+  create(params: {
+    economicEpochId: string | null;
+    studentId: string;
+    amount: number;
+    reason: string;
+    sourceKey: string;
+    createdAt: Date;
+  }): Promise<SystemPointsTransactionReceipt>;
+};
+
+function assertMatchingSystemPointsReceipt(
+  receipt: SystemPointsTransactionReceipt,
+  params: { studentId: string; amount: number; reason: string },
+) {
+  if (
+    receipt.studentId !== params.studentId
+    || receipt.amount !== params.amount
+    || receipt.reason !== params.reason
+  ) {
+    throw new ConflictError(
+      "Ключ автоматического начисления уже использован с другими данными",
+      "POINTS_SOURCE_KEY_CONFLICT",
+    );
+  }
+}
+
+/**
+ * Persists one automated award and recovers an idempotent duplicate-create race.
+ * A reused source key is accepted only when the complete business payload matches.
+ */
+export async function ensureSystemPointsTransaction(
+  persistence: SystemPointsTransactionPersistence,
+  params: {
+    economicEpochId: string | null;
+    studentId: string;
+    amount: number;
+    reason: string;
+    sourceKey: string;
+    createdAt: Date;
+  },
+): Promise<{ awarded: boolean; transaction: SystemPointsTransactionReceipt }> {
+  const existing = await persistence.findBySourceKey(params.sourceKey);
+  if (existing) {
+    assertMatchingSystemPointsReceipt(existing, params);
+    return { awarded: false, transaction: existing };
+  }
+
+  try {
+    const transaction = await persistence.create(params);
+    return { awarded: true, transaction };
+  } catch (error) {
+    if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") {
+      throw error;
+    }
+    const racedTransaction = await persistence.findBySourceKey(params.sourceKey);
+    if (!racedTransaction) throw error;
+    assertMatchingSystemPointsReceipt(racedTransaction, params);
+    return { awarded: false, transaction: racedTransaction };
+  }
+}
+
 export async function awardSystemPoints(params: {
   studentId: string;
   amount: number;
@@ -313,40 +384,44 @@ export async function awardSystemPoints(params: {
   const economicEpoch = rewardEconomyV2AppliesToEvent(eventAt)
     ? await requireActiveEconomicEpochForEvent(eventAt)
     : null;
-  const existing = await prisma.pointsTransaction.findUnique({
-    where: { sourceKey: params.sourceKey },
-  });
-  if (existing) {
-    await notifyPointsAwarded({
-      studentId: existing.studentId,
-      amount: existing.amount,
-      reason: existing.reason,
-      transactionId: existing.id,
-    });
-    return { awarded: false, transactionId: existing.id };
-  }
-
-  const tx = await prisma.pointsTransaction.create({
-    data: {
-      economicEpochId: economicEpoch?.id ?? null,
-      studentId: params.studentId,
-      amount: params.amount,
-      reason: params.reason,
-      sourceKey: params.sourceKey,
-      lessonId: null,
-      awardedBy: null,
-      createdAt: eventAt,
-    },
-  });
-
-  await notifyPointsAwarded({
+  const result = await ensureSystemPointsTransaction({
+    findBySourceKey: (sourceKey) => prisma.pointsTransaction.findUnique({
+      where: { sourceKey },
+      select: { id: true, studentId: true, amount: true, reason: true },
+    }),
+    create: (input) => prisma.pointsTransaction.create({
+      data: {
+        economicEpochId: input.economicEpochId,
+        studentId: input.studentId,
+        amount: input.amount,
+        reason: input.reason,
+        sourceKey: input.sourceKey,
+        lessonId: null,
+        awardedBy: null,
+        createdAt: input.createdAt,
+      },
+      select: { id: true, studentId: true, amount: true, reason: true },
+    }),
+  }, {
+    economicEpochId: economicEpoch?.id ?? null,
     studentId: params.studentId,
     amount: params.amount,
     reason: params.reason,
-    transactionId: tx.id,
+    sourceKey: params.sourceKey,
+    createdAt: eventAt,
   });
 
-  return { awarded: true, transactionId: tx.id };
+  await notifyPointsAwarded({
+    studentId: result.transaction.studentId,
+    amount: result.transaction.amount,
+    reason: result.transaction.reason,
+    transactionId: result.transaction.id,
+  });
+
+  return {
+    awarded: result.awarded,
+    transactionId: result.transaction.id,
+  };
 }
 
 export async function assertLessonPointsNotAwarded(

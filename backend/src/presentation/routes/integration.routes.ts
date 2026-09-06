@@ -16,14 +16,12 @@ import { provisionTeacherFromCrm } from "../../application/services/teacher-prov
 import { provisionStudentFromCrm } from "../../application/services/student-provision.service.js";
 import { syncOnlineLessonFromCrm } from "../../application/services/online-lessons.service.js";
 import {
-  notifyOfflineLessonApproved,
   notifyOfflineLessonEvent,
   notifyStaffTaskAssigned,
 } from "../../application/services/notification.service.js";
+import { queueOfflineLessonApprovedNotification } from "../../application/services/crm-outbox.service.js";
 import { generateWhatsappHomeworkDrafts } from "../../application/services/whatsapp-homework-message.service.js";
 import { archiveStudentAccess } from "../../application/services/student-access-archive.service.js";
-import { applyOfflineLessonLearningResults } from "../../application/services/admin-offline.service.js";
-import { markOfflineLessonReportConfirmed } from "../../application/services/offline-lesson-report.service.js";
 import { createWeeklyStreakProtection } from "../../application/services/weekly-league.service.js";
 import { recordStudentLogin } from "../../application/services/app-usage.service.js";
 import {
@@ -94,6 +92,7 @@ const onlineLessonSyncSchema = z.discriminatedUnion("action", [
 const offlineLessonApprovedSchema = z.object({
   crmClassId: z.string().min(1).max(128),
   crmTeacherId: z.string().min(1).max(64),
+  reportVersion: z.coerce.number().int().positive().optional(),
   crmStudentIds: z.array(z.string().min(1).max(64)).max(100).optional(),
   lessonTitle: z.string().trim().max(500).optional().nullable(),
   date: z.string().trim().max(64).optional().nullable(),
@@ -273,16 +272,9 @@ export async function integrationRoutes(app: FastifyInstance) {
 
   app.post("/notifications/offline-lesson-approved", async (request) => {
     const body = offlineLessonApprovedSchema.parse(request.body);
-    const teacher = await findUserByCrmTeacherId(body.crmTeacherId);
-    const approvedBy = teacher?.id ?? "system";
-    const [notification, learningRewards] = await Promise.all([
-      notifyOfflineLessonApproved(body),
-      applyOfflineLessonLearningResults(body.crmClassId, approvedBy).catch(() => null),
-      markOfflineLessonReportConfirmed(body.crmClassId).catch(() => null),
-    ]);
     return {
       success: true,
-      data: { ...notification, learningRewards },
+      data: await queueOfflineLessonApprovedNotification(body),
     };
   });
 

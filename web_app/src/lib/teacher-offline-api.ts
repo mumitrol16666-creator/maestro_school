@@ -64,6 +64,7 @@ export const teacherOfflineApi = {
       teacherOutcomeHint?: "held" | "not_held" | "no_submission";
       trialReport?: TrialLessonReport;
       comment?: string;
+      learningResultsV2?: LearningLessonV2ResultsInput;
     },
   ) =>
     apiRequest<Record<string, unknown>>(
@@ -120,10 +121,5 @@ export const teacherOfflineApi = {
     apiRequest<{ savedCount: number }>(
       `/teachers/me/offline-lessons/${encodeURIComponent(crmClassId)}/attendance-batch`,
       { method: "POST", body: JSON.stringify({ checks }) },
-    ),
-  learningResults: (crmClassId: string, body: LearningLessonV2ResultsInput) =>
-    apiRequest<Record<string, unknown>>(
-      `/teachers/me/offline-lessons/${encodeURIComponent(crmClassId)}/learning-results`,
-      { method: "POST", body: JSON.stringify(body) },
     ),
 };

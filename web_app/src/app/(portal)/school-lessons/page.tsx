@@ -250,6 +250,11 @@ function LessonCard({
   const [open, setOpen] = useState(defaultOpen ?? false);
   const statusLabel = statusLabels[lesson.status] ?? lesson.status;
   const isOnline = lesson.deliveryFormat === "online";
+  const hasLearningResults =
+    (lesson.lessonPoints ?? 0) > 0 ||
+    (lesson.planTopicResults?.length ?? 0) > 0 ||
+    (lesson.learningTopicResults?.length ?? 0) > 0 ||
+    (lesson.learningPlanCompletionResults?.length ?? 0) > 0;
 
   const hasDetails =
     lesson.topic ||
@@ -257,7 +262,8 @@ function LessonCard({
     lesson.lessonSummary ||
     lesson.nextLessonFocus ||
     lesson.homework ||
-    lesson.materials.length > 0;
+    lesson.materials.length > 0 ||
+    hasLearningResults;
 
   return (
     <article
@@ -386,11 +392,77 @@ function LessonCard({
             </div>
           )}
 
-          {lesson.status === "completed" && ((lesson.lessonPoints ?? 0) > 0 || (lesson.planTopicResults?.length ?? 0) > 0) ? (
+          {lesson.status === "completed" && hasLearningResults ? (
             <div className="rounded-2xl border border-violet-100 bg-violet-50/60 p-4">
               <p className="text-xs font-bold uppercase tracking-wider text-violet-700">Учебный результат</p>
               {(lesson.lessonPoints ?? 0) > 0 ? (
                 <p className="mt-2 text-sm font-bold text-violet-950">+{lesson.lessonPoints} учебных баллов</p>
+              ) : null}
+              {lesson.learningTopicResults?.length ? (
+                <div className="mt-3 space-y-2">
+                  {lesson.learningTopicResults.map((item) => (
+                    <div
+                      key={`${item.topicId}-${item.occurredAt}`}
+                      data-testid="learning-topic-result"
+                      className="rounded-xl border border-violet-100 bg-white/80 p-3"
+                    >
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                        <p className="min-w-0 text-sm font-bold leading-5 text-violet-950">
+                          {item.title}
+                        </p>
+                        <span
+                          className={`shrink-0 self-start rounded-full px-2.5 py-1 text-[11px] font-bold ${
+                            item.mastered
+                              ? "bg-emerald-100 text-emerald-800"
+                              : "bg-amber-100 text-amber-900"
+                          }`}
+                        >
+                          {item.mastered ? "Освоено" : "В работе"}
+                        </span>
+                      </div>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <span className="rounded-lg bg-violet-100 px-2.5 py-1 text-xs font-black text-violet-900">
+                          {item.fromPercent == null ? "—" : `${item.fromPercent}%`} → {item.toPercent}%
+                        </span>
+                        {item.masteryPointsAwarded > 0 ? (
+                          <span className="rounded-lg bg-gold/20 px-2.5 py-1 text-xs font-black text-amber-950">
+                            +{item.masteryPointsAwarded} учебных баллов
+                          </span>
+                        ) : null}
+                      </div>
+                      {item.comment ? (
+                        <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-stone-600">
+                          {item.comment}
+                        </p>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              {lesson.learningPlanCompletionResults?.length ? (
+                <div className="mt-3 space-y-2">
+                  {lesson.learningPlanCompletionResults.map((item) => (
+                    <div
+                      key={`${item.planId}-${item.completedAt}`}
+                      data-testid="learning-plan-completion-result"
+                      className="rounded-xl border border-gold/40 bg-gold/10 p-3"
+                    >
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold uppercase tracking-wider text-amber-800">
+                            Учебный план · {formatMonthTitle(item.month)}
+                          </p>
+                          <p className="mt-1 text-sm font-bold text-amber-950">
+                            План месяца завершён
+                          </p>
+                        </div>
+                        <span className="shrink-0 self-start rounded-lg bg-gold/25 px-2.5 py-1 text-xs font-black text-amber-950 sm:self-auto">
+                          +{item.pointsAwarded} учебных баллов
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               ) : null}
               {lesson.planTopicResults?.length ? (
                 <div className="mt-3 flex flex-wrap gap-2">

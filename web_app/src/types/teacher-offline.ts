@@ -271,6 +271,7 @@ export type LearningLessonV2Context = {
       masteryCriteria: string;
       progressPercent: number;
       masteredAt: string | null;
+      planCompletionRewardPoints: number;
     }>;
   }>;
   students: Array<{
@@ -295,6 +296,7 @@ export type LearningLessonV2Context = {
     sourceKey: string;
     weekKey: string;
   }>;
+  pendingResults?: LearningLessonV2ResultsInput | null;
 };
 
 export type LearningLessonV2ResultsInput = {
