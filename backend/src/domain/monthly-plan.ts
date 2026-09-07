@@ -32,6 +32,15 @@ export function normalizeMonthlyPlanItems(value: unknown): MonthlyPlanItem[] {
   for (const entry of value) {
     if (!entry || typeof entry !== "object") continue;
     const raw = entry as Record<string, unknown>;
+    const state = typeof raw.state === "string" ? raw.state : "";
+    if (
+      raw.status === "moved"
+      || state === "moved"
+      || state === "transferred"
+      || state === "replaced"
+    ) {
+      continue;
+    }
     const id = typeof raw.id === "string" ? raw.id.trim() : "";
     const title = typeof raw.title === "string" ? raw.title.trim() : "";
     if (!id || !title || seen.has(id)) continue;

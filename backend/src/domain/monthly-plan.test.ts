@@ -7,13 +7,15 @@ import {
   normalizeMonthlyPlanItems,
 } from "./monthly-plan.js";
 
-test("monthly plan normalizes legacy moved status and duplicate ids", () => {
+test("monthly plan excludes transferred topics and duplicate ids", () => {
   assert.deepEqual(normalizeMonthlyPlanItems([
     { id: "a", title: "  Аккорды ", status: "moved" },
     { id: "a", title: "Дубликат", status: "completed" },
     { id: "b", title: "Ритм", status: "in_progress" },
+    { id: "c", title: "Перенесено", status: "planned", state: "transferred" },
+    { id: "d", title: "Заменено", status: "planned", state: "replaced" },
   ]), [
-    { id: "a", title: "Аккорды", status: "planned" },
+    { id: "a", title: "Дубликат", status: "completed" },
     { id: "b", title: "Ритм", status: "in_progress" },
   ]);
 });
@@ -48,6 +50,7 @@ test("monthly plan aggregate combines every published plan", () => {
     { items: [
       { id: "b", title: "Ритм", status: "in_progress" },
       { id: "c", title: "Песня", status: "planned" },
+      { id: "d", title: "Перенесено", status: "moved", state: "transferred" },
     ] },
   ]), {
     completed: 1,

@@ -47,7 +47,7 @@ export default function LearningWorkspacePage() {
   const activeTasks = tasks.data.items.filter((task) => task.actionRequired).slice(0, 4);
   const activeTopics = plans.plans
     .flatMap((plan) => plan.items
-      .filter((item) => item.state !== "moved" && item.status !== "completed")
+      .filter((item) => (!item.state || item.state === "active") && item.status !== "completed")
       .map((item) => ({
         ...item,
         planId: plan.id,

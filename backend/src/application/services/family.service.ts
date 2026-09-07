@@ -3,14 +3,17 @@ import { prisma, notDeleted } from "../../infrastructure/database/prisma.js";
 import {
   BadRequestError,
   ConflictError,
+  ForbiddenError,
   NotFoundError,
 } from "../../domain/errors.js";
+import { calculateAggregateMonthlyPlanProgress } from "../../domain/monthly-plan.js";
 import { formatFio } from "../../domain/name.js";
 import { buildFamilyOfflineSummary } from "../../domain/family-view.js";
 import { isValidLogin, normalizeLogin } from "../../lib/login.js";
 import { isValidPhone, normalizePhoneDigits } from "../../lib/phone.js";
 import { getStudentSchoolOfflineSummary } from "./school-offline.service.js";
 import { getStudentAchievementsOverview } from "./achievement.service.js";
+import { getPublishedMonthlyPlansForStudent } from "./student-home.service.js";
 import { getParentVisibility } from "./parent-visibility.service.js";
 import {
   curatorWorkspaceV2Enabled,
@@ -388,5 +391,25 @@ export async function getParentChildOfflineSummary(
     },
     visibility,
     summary,
+  };
+}
+
+export async function getParentChildMonthlyPlans(
+  parentUserId: string,
+  studentUserId: string,
+  month: string,
+) {
+  await assertParentChildLink(parentUserId, studentUserId);
+  const visibility = await getParentVisibility(studentUserId);
+  if (!visibility.showPlanProgress) {
+    throw new ForbiddenError("Учебный план скрыт настройками семейного доступа");
+  }
+  const plans = await getPublishedMonthlyPlansForStudent(studentUserId, month, {
+    requireLinkedProfile: true,
+  });
+  return {
+    month,
+    plans,
+    aggregateProgress: calculateAggregateMonthlyPlanProgress(plans),
   };
 }

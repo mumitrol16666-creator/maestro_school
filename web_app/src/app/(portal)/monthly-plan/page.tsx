@@ -10,15 +10,23 @@ import {
   Target,
 } from "lucide-react";
 import Link from "next/link";
+import { useState } from "react";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
+import { PlanMonthField } from "@/components/plan-month-field";
 import { ProgressBar } from "@/components/progress-bar";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { api } from "@/lib/api-client";
+import { aqtobeMonthKey, shiftMonthKey } from "@/lib/school-month";
 import type { StudentHomeMonthlyPlan } from "@/types/api";
 
 const monthNames = [
   "январь", "февраль", "март", "апрель", "май", "июнь",
   "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь",
+];
+
+const monthNamesGenitive = [
+  "января", "февраля", "марта", "апреля", "мая", "июня",
+  "июля", "августа", "сентября", "октября", "ноября", "декабря",
 ];
 
 const itemStatus = {
@@ -30,6 +38,10 @@ const itemStatus = {
 
 function monthTitle(month: string) {
   return monthNames[Number(month.slice(5, 7)) - 1] ?? "месяц";
+}
+
+function monthFromTitle(month: string) {
+  return monthNamesGenitive[Number(month.slice(5, 7)) - 1] ?? "предыдущего месяца";
 }
 
 function publishedAt(value: string) {
@@ -55,32 +67,12 @@ function supportedMaterialUrl(value: string) {
 }
 
 export default function MonthlyPlanPage() {
-  const resource = useApiResource(() => api.studentMonthlyPlans(), []);
+  const [selectedMonth, setSelectedMonth] = useState(aqtobeMonthKey());
+  const resource = useApiResource(() => api.studentMonthlyPlans(selectedMonth), [selectedMonth]);
 
-  if (resource.loading) {
-    return <LoadingState label="Открываем ваш план месяца" />;
-  }
-  if (resource.error || !resource.data) {
-    const message = resource.errorCode === "CRM_NOT_LINKED"
-      ? "Профиль школы не подключён. Обратитесь к администратору Maestro."
-      : resource.error ?? "Не удалось загрузить план месяца";
-    return <ErrorState message={message} retry={resource.reload} />;
-  }
-
-  const { month, plans, aggregateProgress } = resource.data;
-  if (!plans.length) {
-    return (
-      <EmptyState
-        title={`План на ${monthTitle(month)} ещё не опубликован`}
-        description="Преподаватель ещё не опубликовал план на этот месяц."
-        action={(
-          <Link href="/dashboard" className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-ink px-4 text-sm font-bold text-white">
-            <ArrowLeft size={16} /> На главную
-          </Link>
-        )}
-      />
-    );
-  }
+  const month = resource.data?.month ?? selectedMonth;
+  const plans = resource.data?.plans ?? [];
+  const aggregateProgress = resource.data?.aggregateProgress ?? { completed: 0, total: 0, percent: 0 };
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -95,19 +87,53 @@ export default function MonthlyPlanPage() {
           </h1>
         </div>
         <div className="min-w-[220px] max-w-sm flex-1 sm:flex-none">
-          <div className="flex items-end justify-between gap-4">
-            <span className="text-sm font-bold text-stone-600">
-              {aggregateProgress.completed} из {aggregateProgress.total} выполнено
-            </span>
-            <strong className="text-2xl text-ink">{aggregateProgress.percent}%</strong>
-          </div>
-          <div className="mt-3"><ProgressBar value={aggregateProgress.percent} /></div>
+          <PlanMonthField value={selectedMonth} onChange={setSelectedMonth} />
+          {resource.data && plans.length ? (
+            <>
+              <div className="mt-4 flex items-end justify-between gap-4">
+                <span className="text-sm font-bold text-stone-600">
+                  {aggregateProgress.completed} из {aggregateProgress.total} выполнено
+                </span>
+                <strong className="text-2xl text-ink">{aggregateProgress.percent}%</strong>
+              </div>
+              <div className="mt-3"><ProgressBar value={aggregateProgress.percent} /></div>
+            </>
+          ) : null}
         </div>
       </header>
 
-      <div className="mt-7 grid gap-5">
-        {plans.map((plan) => <PlanDetails key={plan.id} plan={plan} />)}
-      </div>
+      {resource.loading ? (
+        <div className="mt-7"><LoadingState label="Открываем план месяца" /></div>
+      ) : resource.error || !resource.data ? (
+        <div className="mt-7">
+          <ErrorState
+            message={resource.errorCode === "CRM_NOT_LINKED"
+              ? "Профиль школы не подключён. Обратитесь к администратору Maestro."
+              : resource.error ?? "Не удалось загрузить план месяца"}
+            retry={resource.reload}
+          />
+        </div>
+      ) : !plans.length ? (
+        <div className="mt-7">
+          <EmptyState
+            title={`План на ${monthTitle(month)} ещё не опубликован`}
+            description="Можно выбрать предыдущий месяц и посмотреть историю обучения."
+            action={selectedMonth !== aqtobeMonthKey() ? (
+              <button
+                type="button"
+                onClick={() => setSelectedMonth(aqtobeMonthKey())}
+                className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-ink px-4 text-sm font-bold text-white"
+              >
+                Вернуться к текущему месяцу
+              </button>
+            ) : undefined}
+          />
+        </div>
+      ) : (
+        <div className="mt-7 grid gap-5">
+          {plans.map((plan) => <PlanDetails key={plan.id} plan={plan} />)}
+        </div>
+      )}
     </div>
   );
 }
@@ -151,10 +177,16 @@ function PlanDetails({ plan }: { plan: StudentHomeMonthlyPlan }) {
         {plan.items.map((item) => {
           const status = itemStatus[item.status] ?? itemStatus.planned;
           const Icon = status.icon;
+          const transferred = item.state === "transferred" || item.state === "replaced";
           return (
-            <div key={item.id} className="flex items-start gap-3 py-4">
+            <div key={item.id} className={`flex items-start gap-3 py-4 ${transferred ? "opacity-60" : ""}`}>
               <Icon size={20} className={`mt-0.5 shrink-0 ${status.className}`} aria-hidden="true" />
               <div className="min-w-0 flex-1">
+                {item.continuedFromMonth ? (
+                  <p className="mb-1 text-[10px] font-black uppercase tracking-[0.12em] text-amber-700">
+                    Продолжение с {monthFromTitle(item.continuedFromMonth)}
+                  </p>
+                ) : null}
                 <p className="break-words text-sm font-bold leading-6 text-stone-800">{item.title}</p>
                 {item.masteryCriteria ? (
                   <p className="mt-1 break-words text-xs leading-5 text-stone-500">{item.masteryCriteria}</p>
@@ -164,7 +196,9 @@ function PlanDetails({ plan }: { plan: StudentHomeMonthlyPlan }) {
                 {typeof item.progressPercent === "number" ? (
                   <strong className={`block text-sm ${status.className}`}>{item.progressPercent}%</strong>
                 ) : null}
-                <span className={`text-xs font-bold ${status.className}`}>{status.label}</span>
+                <span className={`text-xs font-bold ${status.className}`}>
+                  {transferred ? `Перенесено в ${monthTitle(shiftMonthKey(plan.month, 1))}` : status.label}
+                </span>
               </div>
             </div>
           );

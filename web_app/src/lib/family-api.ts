@@ -7,12 +7,17 @@ import type {
   ParentVisibilityRequest,
   ParentVisibilityWorkspace,
 } from "@/types/family";
+import type { StudentMonthlyPlansResponse } from "@/types/api";
 
 export const familyApi = {
   children: () => apiRequest<FamilyChild[]>("/parents/me/children"),
   childOverview: (studentId: string) =>
     apiRequest<FamilyChildOverview>(
       `/parents/me/children/${encodeURIComponent(studentId)}/offline-summary`,
+    ),
+  childMonthlyPlans: (studentId: string, month: string) =>
+    apiRequest<StudentMonthlyPlansResponse>(
+      `/parents/me/children/${encodeURIComponent(studentId)}/monthly-plans?month=${encodeURIComponent(month)}`,
     ),
   news: (limit = 5) => apiRequest<FamilyNewsPost[]>(`/parents/me/news?limit=${limit}`),
   myVisibility: () => apiRequest<ParentVisibilityWorkspace>("/students/me/parent-visibility"),

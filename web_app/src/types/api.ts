@@ -254,9 +254,17 @@ export interface StudentHomeMonthlyPlan {
     masteryCriteria?: string;
     status: "planned" | "in_progress" | "completed" | "moved";
     progressPercent?: number | null;
-    state?: "active" | "moved";
+    state?: "active" | "transferred" | "replaced";
+    continuedFromMonth?: string | null;
   }>;
-  progress: { completed: number; inProgress: number; total: number; percent: number };
+  progress: {
+    completed: number;
+    inProgress: number;
+    total: number;
+    percent: number;
+    transferred?: number;
+    originalTotal?: number;
+  };
   publishedAt: string;
 }
 

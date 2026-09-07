@@ -124,7 +124,7 @@ export type MonthlyPlanItem = {
   status: MonthlyPlanItemStatus;
   masteryCriteria?: string;
   progressPercent?: number | null;
-  state?: "active" | "moved";
+  state?: "active" | "transferred" | "replaced";
 };
 
 export type TeacherCrmDirection = {
@@ -158,7 +158,14 @@ export type StudentMonthlyPlan = {
   checkpoint: string;
   note: string;
   items: MonthlyPlanItem[];
-  progress?: { completed: number; inProgress: number; total: number; percent: number };
+  progress?: {
+    completed: number;
+    inProgress: number;
+    total: number;
+    percent: number;
+    transferred?: number;
+    originalTotal?: number;
+  };
   publication?: {
     isPublished: boolean;
     publishedAt: string | null;
@@ -202,6 +209,34 @@ export type GroupMonthlyPlanResponse = {
   direction?: { crmDirectionId: string; title: string };
   month: string;
   plan: GroupMonthlyPlan | null;
+};
+
+export type LearningPlanCarryoverCandidate = {
+  topicId: string;
+  sourceMonth: string;
+  title: string;
+  masteryCriteria: string;
+  progressPercent: number;
+  status: Exclude<MonthlyPlanItemStatus, "moved">;
+};
+
+export type LearningPlanCarryoverPreview = {
+  sourceMonth: string;
+  targetMonth: string;
+  sourcePlanId: string | null;
+  sourceHasUnpublishedChanges: boolean;
+  targetPlanId: string | null;
+  targetVersion: number;
+  candidates: LearningPlanCarryoverCandidate[];
+  continuedTopics: LearningPlanCarryoverCandidate[];
+};
+
+export type LearningPlanCarryoverResult<TPlan extends StudentMonthlyPlan = StudentMonthlyPlan> = {
+  sourceMonth: string;
+  targetMonth: string;
+  addedTopicIds: string[];
+  idempotent: boolean;
+  plan: TPlan;
 };
 
 export type LearningTopicDetail = {

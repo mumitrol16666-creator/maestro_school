@@ -4,6 +4,7 @@ import { AppError } from "../../domain/errors.js";
 import {
   assertExpectedLearningPlanVersion,
   learningTopicStatus,
+  previousLearningPlanMonth,
   topicRewardCrmStudentIds,
   validateOutsideLessonTopicProgress,
 } from "./learning-plan-v2.service.js";
@@ -32,6 +33,13 @@ test("plan writes require the current optimistic version", () => {
     "MONTHLY_PLAN_STALE_DRAFT",
     () => assertExpectedLearningPlanVersion(3, 2),
   );
+});
+
+test("carryover looks only at the immediately previous calendar month", () => {
+  assert.equal(previousLearningPlanMonth("2026-09"), "2026-08");
+  assert.equal(previousLearningPlanMonth("2026-01"), "2025-12");
+  expectAppError("MONTHLY_PLAN_MONTH_INVALID", () => previousLearningPlanMonth("2026-13"));
+  expectAppError("MONTHLY_PLAN_MONTH_INVALID", () => previousLearningPlanMonth("September"));
 });
 
 test("outside a lesson a teacher can set only 0-99 percent", () => {

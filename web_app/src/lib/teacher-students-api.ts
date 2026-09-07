@@ -3,6 +3,8 @@ import { ApiError } from "@/lib/api-client";
 import type {
   GroupMonthlyPlan,
   GroupMonthlyPlanResponse,
+  LearningPlanCarryoverPreview,
+  LearningPlanCarryoverResult,
   LearningPlanMode,
   LearningTopicDetail,
   StudentMonthlyPlan,
@@ -52,6 +54,20 @@ export const teacherStudentsApi = {
       `/teachers/me/students/${encodeURIComponent(crmStudentId)}/monthly-plan/publish`,
       { method: "POST", body: JSON.stringify({ month, expectedDraftRevision, crmDirectionId }) },
     ),
+  monthlyPlanCarryover: (crmStudentId: string, month: string, crmDirectionId: string) =>
+    apiRequest<LearningPlanCarryoverPreview>(
+      `/teachers/me/students/${encodeURIComponent(crmStudentId)}/monthly-plan/carryover?${new URLSearchParams({
+        month,
+        crmDirectionId,
+      }).toString()}`,
+    ),
+  carryOverMonthlyPlanTopics: (
+    crmStudentId: string,
+    body: { month: string; crmDirectionId: string; topicIds: string[]; expectedTargetVersion: number },
+  ) => apiRequest<LearningPlanCarryoverResult>(
+    `/teachers/me/students/${encodeURIComponent(crmStudentId)}/monthly-plan/carryover`,
+    { method: "POST", body: JSON.stringify(body) },
+  ),
   groups: () => apiRequest<TeacherGroupsResponse>("/teachers/me/groups"),
   groupMonthlyPlan: (crmGroupId: string, month: string, crmDirectionId?: string) =>
     apiRequest<GroupMonthlyPlanResponse>(
@@ -75,6 +91,20 @@ export const teacherStudentsApi = {
       `/teachers/me/groups/${encodeURIComponent(crmGroupId)}/monthly-plan/publish`,
       { method: "POST", body: JSON.stringify({ month, expectedDraftRevision, crmDirectionId }) },
     ),
+  groupMonthlyPlanCarryover: (crmGroupId: string, month: string, crmDirectionId: string) =>
+    apiRequest<LearningPlanCarryoverPreview>(
+      `/teachers/me/groups/${encodeURIComponent(crmGroupId)}/monthly-plan/carryover?${new URLSearchParams({
+        month,
+        crmDirectionId,
+      }).toString()}`,
+    ),
+  carryOverGroupMonthlyPlanTopics: (
+    crmGroupId: string,
+    body: { month: string; crmDirectionId: string; topicIds: string[]; expectedTargetVersion: number },
+  ) => apiRequest<LearningPlanCarryoverResult<GroupMonthlyPlan>>(
+    `/teachers/me/groups/${encodeURIComponent(crmGroupId)}/monthly-plan/carryover`,
+    { method: "POST", body: JSON.stringify(body) },
+  ),
   learningTopic: (topicId: string) =>
     apiRequest<LearningTopicDetail>(`/teachers/me/learning-topics/${encodeURIComponent(topicId)}`),
   updateLearningTopicProgress: (

@@ -48,6 +48,11 @@ export type LearningPlanV2Input = {
   expectedVersion?: number;
 };
 
+export type LearningPlanCarryoverInput = {
+  topicIds: string[];
+  expectedTargetVersion?: number;
+};
+
 type ResolvedScope = {
   owner: PlanOwner;
   direction: Awaited<ReturnType<typeof syncCrmDirectionProjection>>;
@@ -177,7 +182,8 @@ function versionDto(plan: PlanWithVersions, versionNumber = plan.currentVersionN
     progressPercent: link.topic.progressPercent,
     state: link.state,
   }));
-  const progress = calculateMonthlyPlanProgress(items.map((item) => ({
+  const activeItems = items.filter((item) => item.state === LearningPlanTopicState.active);
+  const progress = calculateMonthlyPlanProgress(activeItems.map((item) => ({
     id: item.id,
     title: item.title,
     status: item.status === "moved" ? "planned" : item.status,
@@ -204,7 +210,11 @@ function versionDto(plan: PlanWithVersions, versionNumber = plan.currentVersionN
     note: version.note,
     materials: Array.isArray(version.materials) ? version.materials : [],
     items,
-    progress,
+    progress: {
+      ...progress,
+      transferred: items.length - activeItems.length,
+      originalTotal: items.length,
+    },
     updatedAt: plan.updatedAt,
     publication: {
       isPublished: plan.publishedVersionNumber !== null,
@@ -225,6 +235,18 @@ function versionDto(plan: PlanWithVersions, versionNumber = plan.currentVersionN
   };
 }
 
+export function previousLearningPlanMonth(month: string) {
+  const match = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(month);
+  if (!match) {
+    throw new BadRequestError("Некорректный месяц учебного плана", "MONTHLY_PLAN_MONTH_INVALID");
+  }
+  const year = Number(match[1]);
+  const monthNumber = Number(match[2]);
+  const previousYear = monthNumber === 1 ? year - 1 : year;
+  const previousMonth = monthNumber === 1 ? 12 : monthNumber - 1;
+  return `${previousYear}-${String(previousMonth).padStart(2, "0")}`;
+}
+
 async function loadPlan(planId: string) {
   const plan = await prisma.learningPlan.findUnique({
     where: { id: planId },
@@ -243,6 +265,246 @@ async function findPlan(scope: ResolvedScope, month: string) {
     },
     include: planInclude,
   });
+}
+
+function carryoverCandidateDto(
+  sourceMonth: string,
+  link: PlanWithVersions["versions"][number]["topics"][number],
+) {
+  return {
+    topicId: link.topic.id,
+    sourceMonth,
+    title: link.titleSnapshot,
+    masteryCriteria: link.masteryCriteriaSnapshot,
+    progressPercent: link.topic.progressPercent ?? 0,
+    status: learningTopicStatus(link.topic.progressPercent),
+  };
+}
+
+async function getCarryoverPreview(scope: ResolvedScope, targetMonth: string) {
+  const sourceMonth = previousLearningPlanMonth(targetMonth);
+  const [sourcePlan, targetPlan] = await Promise.all([
+    findPlan(scope, sourceMonth),
+    findPlan(scope, targetMonth),
+  ]);
+  const sourceVersion = sourcePlan?.publishedVersionNumber
+    ? sourcePlan.versions.find((version) => version.version === sourcePlan.publishedVersionNumber)
+    : null;
+  const targetVersion = targetPlan?.versions.find(
+    (version) => version.version === targetPlan.currentVersionNumber,
+  );
+  const targetTopicIds = new Set(targetVersion?.topics.map((link) => link.topicId) ?? []);
+  const sourceIncompleteLinks = (sourceVersion?.topics ?? [])
+    .filter((link) => (
+      !link.topic.archivedAt
+      && (link.topic.progressPercent ?? 0) < 100
+    ));
+  const candidates = sourceIncompleteLinks
+    .filter((link) => link.state === LearningPlanTopicState.active)
+    .filter((link) => !targetTopicIds.has(link.topicId))
+    .map((link) => carryoverCandidateDto(sourceMonth, link));
+  const continuedTopics = sourceIncompleteLinks
+    .filter((link) => targetTopicIds.has(link.topicId))
+    .map((link) => carryoverCandidateDto(sourceMonth, link));
+
+  return {
+    sourceMonth,
+    targetMonth,
+    sourcePlanId: sourcePlan?.id ?? null,
+    sourceHasUnpublishedChanges: Boolean(
+      sourcePlan
+      && sourcePlan.currentVersionNumber !== sourcePlan.publishedVersionNumber,
+    ),
+    targetPlanId: targetPlan?.id ?? null,
+    targetVersion: targetPlan?.currentVersionNumber ?? 0,
+    candidates,
+    continuedTopics,
+  };
+}
+
+async function carryOverTopics(
+  teacherUserId: string,
+  scope: ResolvedScope,
+  targetMonth: string,
+  input: LearningPlanCarryoverInput,
+) {
+  const topicIds = [...new Set(input.topicIds.map((topicId) => topicId.trim()))];
+  if (!topicIds.length) {
+    throw new BadRequestError(
+      "Выберите хотя бы одну незавершённую тему",
+      "MONTHLY_PLAN_CARRYOVER_TOPICS_REQUIRED",
+    );
+  }
+  if (topicIds.some((topicId) => !UUID_PATTERN.test(topicId))) {
+    throw new BadRequestError(
+      "Некорректный идентификатор темы",
+      "MONTHLY_PLAN_CARRYOVER_TOPIC_INVALID",
+    );
+  }
+
+  const sourceMonth = previousLearningPlanMonth(targetMonth);
+  let result: { planId: string; addedTopicIds: string[]; idempotent: boolean };
+  try {
+    result = await prisma.$transaction(async (tx) => {
+      const sourcePlan = await tx.learningPlan.findFirst({
+        where: {
+          directionId: scope.direction.id,
+          month: sourceMonth,
+          publishedVersionNumber: { not: null },
+          ...ownerWhere(scope.owner),
+        },
+        include: planInclude,
+      });
+      if (!sourcePlan?.publishedVersionNumber) {
+        throw new BadRequestError(
+          `Опубликованный план за ${sourceMonth} не найден`,
+          "MONTHLY_PLAN_CARRYOVER_SOURCE_NOT_FOUND",
+        );
+      }
+      if (sourcePlan.currentVersionNumber !== sourcePlan.publishedVersionNumber) {
+        throw new ConflictError(
+          `В плане за ${sourceMonth} есть неопубликованные изменения. Опубликуйте или отмените их перед переносом.`,
+          "MONTHLY_PLAN_SOURCE_HAS_UNPUBLISHED_CHANGES",
+        );
+      }
+      const sourceVersion = sourcePlan.versions.find(
+        (version) => version.version === sourcePlan.publishedVersionNumber,
+      );
+      if (!sourceVersion) {
+        throw new ConflictError(
+          "Опубликованная версия прошлого плана не найдена",
+          "MONTHLY_PLAN_VERSION_MISSING",
+        );
+      }
+
+      let targetPlan = await tx.learningPlan.findFirst({
+        where: {
+          directionId: scope.direction.id,
+          month: targetMonth,
+          ...ownerWhere(scope.owner),
+        },
+        include: planInclude,
+      });
+      const currentTargetVersion = targetPlan?.versions.find(
+        (version) => version.version === targetPlan?.currentVersionNumber,
+      ) ?? null;
+      assertExpectedLearningPlanVersion(
+        targetPlan?.currentVersionNumber ?? 0,
+        input.expectedTargetVersion,
+      );
+      if (targetPlan?.lockedAt) {
+        throw new ConflictError(
+          "Завершённый план заблокирован для изменения состава",
+          "MONTHLY_PLAN_LOCKED",
+        );
+      }
+
+      const existingTopicIds = new Set(
+        currentTargetVersion?.topics.map((link) => link.topicId) ?? [],
+      );
+      const sourceLinks = new Map(
+        sourceVersion.topics
+          .filter((link) => (
+            link.state === LearningPlanTopicState.active
+            && !link.topic.archivedAt
+            && (link.topic.progressPercent ?? 0) < 100
+          ))
+          .map((link) => [link.topicId, link]),
+      );
+      const invalidTopicIds = topicIds.filter(
+        (topicId) => !existingTopicIds.has(topicId) && !sourceLinks.has(topicId),
+      );
+      if (invalidTopicIds.length) {
+        throw new BadRequestError(
+          "Одна из выбранных тем уже завершена или отсутствует в прошлом плане",
+          "MONTHLY_PLAN_CARRYOVER_TOPIC_UNAVAILABLE",
+        );
+      }
+      const addedTopicIds = topicIds.filter((topicId) => !existingTopicIds.has(topicId));
+      if (!addedTopicIds.length && targetPlan) {
+        return { planId: targetPlan.id, addedTopicIds: [], idempotent: true };
+      }
+
+      if (!targetPlan) {
+        targetPlan = await tx.learningPlan.create({
+          data: {
+            id: randomUUID(),
+            directionId: scope.direction.id,
+            month: targetMonth,
+            createdById: teacherUserId,
+            ...ownerWhere(scope.owner),
+          },
+          include: planInclude,
+        });
+      }
+
+      const carriedTopics = addedTopicIds.map((topicId, sortOrder) => {
+        const link = sourceLinks.get(topicId)!;
+        return {
+          topicId,
+          titleSnapshot: link.titleSnapshot,
+          masteryCriteriaSnapshot: link.masteryCriteriaSnapshot,
+          state: LearningPlanTopicState.active,
+          sortOrder,
+        };
+      });
+      const existingTopics = (currentTargetVersion?.topics ?? []).map((link, index) => ({
+        topicId: link.topicId,
+        titleSnapshot: link.titleSnapshot,
+        masteryCriteriaSnapshot: link.masteryCriteriaSnapshot,
+        state: link.state,
+        replacementTopicId: link.replacementTopicId,
+        sortOrder: carriedTopics.length + index,
+      }));
+      const nextVersion = targetPlan.currentVersionNumber + 1;
+      await tx.learningPlanVersion.create({
+        data: {
+          planId: targetPlan.id,
+          version: nextVersion,
+          goal: currentTargetVersion?.goal ?? "",
+          expectedResult: currentTargetVersion?.expectedResult ?? "",
+          skills: currentTargetVersion?.skills ?? "",
+          checkpoint: currentTargetVersion?.checkpoint ?? "",
+          note: currentTargetVersion?.note ?? "",
+          materials: (currentTargetVersion?.materials ?? []) as Prisma.InputJsonValue,
+          createdById: teacherUserId,
+          sourceRevision: sourceVersion.version,
+          topics: { create: [...carriedTopics, ...existingTopics] },
+        },
+      });
+      const updated = await tx.learningPlan.updateMany({
+        where: {
+          id: targetPlan.id,
+          currentVersionNumber: targetPlan.currentVersionNumber,
+          lockedAt: null,
+        },
+        data: { currentVersionNumber: nextVersion },
+      });
+      if (updated.count !== 1) {
+        throw new ConflictError(
+          "План изменился. Обновите страницу и повторите перенос.",
+          "MONTHLY_PLAN_STALE_DRAFT",
+        );
+      }
+      return { planId: targetPlan.id, addedTopicIds, idempotent: false };
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      throw new ConflictError(
+        "План изменился во время переноса. Обновите страницу и повторите действие.",
+        "MONTHLY_PLAN_STALE_DRAFT",
+      );
+    }
+    throw error;
+  }
+
+  return {
+    sourceMonth,
+    targetMonth,
+    addedTopicIds: result.addedTopicIds,
+    idempotent: result.idempotent,
+    plan: versionDto(await loadPlan(result.planId)),
+  };
 }
 
 export function assertExpectedLearningPlanVersion(
@@ -312,6 +574,16 @@ async function savePlan(
       }
     }
 
+    const currentVersion = plan.currentVersionNumber > 0
+      ? await tx.learningPlanVersion.findUnique({
+          where: { planId_version: { planId: plan.id, version: plan.currentVersionNumber } },
+          include: { topics: { orderBy: { sortOrder: "asc" } } },
+        })
+      : null;
+    const currentLinksByTopicId = new Map(
+      (currentVersion?.topics ?? []).map((link) => [link.topicId, link]),
+    );
+
     const requestedIds = normalized.items
       .map((item) => item.id)
       .filter((id) => UUID_PATTERN.test(id));
@@ -336,6 +608,7 @@ async function savePlan(
 
     for (const [sortOrder, item] of normalized.items.entries()) {
       let topic = byId.get(item.id) ?? bySource.get(topicSourceKey(plan.id, item.id));
+      const currentLink = topic ? currentLinksByTopicId.get(topic.id) : undefined;
       if (topic && (
         topic.directionId !== scope.direction.id
         || topic.crmStudentId !== (scope.owner.kind === "student" ? scope.owner.crmStudentId : null)
@@ -377,7 +650,7 @@ async function savePlan(
             },
           },
         });
-      } else {
+      } else if (currentLink?.state === LearningPlanTopicState.active || !currentLink) {
         if (learningTopicStatus(topic.progressPercent) !== item.status) {
           throw new BadRequestError(
             "Прогресс темы меняется отдельной командой",
@@ -402,19 +675,16 @@ async function savePlan(
 
       topicSnapshots.push({
         topicId: topic.id,
-        title: item.title,
-        masteryCriteria: item.masteryCriteria,
-        state: LearningPlanTopicState.active,
+        title: currentLink && currentLink.state !== LearningPlanTopicState.active
+          ? currentLink.titleSnapshot
+          : item.title,
+        masteryCriteria: currentLink && currentLink.state !== LearningPlanTopicState.active
+          ? currentLink.masteryCriteriaSnapshot
+          : item.masteryCriteria,
+        state: currentLink?.state ?? LearningPlanTopicState.active,
         sortOrder,
       });
     }
-
-    const currentVersion = plan.currentVersionNumber > 0
-      ? await tx.learningPlanVersion.findUnique({
-          where: { planId_version: { planId: plan.id, version: plan.currentVersionNumber } },
-          include: { topics: { orderBy: { sortOrder: "asc" } } },
-        })
-      : null;
     const unchanged = currentVersion
       && currentVersion.goal === normalized.goal
       && currentVersion.expectedResult === normalized.expectedResult
@@ -486,6 +756,106 @@ async function savePlan(
   return { ...versionDto(await loadPlan(result.planId)), idempotent: result.idempotent };
 }
 
+async function markPublishedTopicsTransferredFromPreviousMonth(
+  tx: Prisma.TransactionClient,
+  teacherUserId: string,
+  scope: ResolvedScope,
+  targetMonth: string,
+  targetTopicIds: Set<string>,
+  publishedAt: Date,
+) {
+  if (!targetTopicIds.size) return [];
+  const sourceMonth = previousLearningPlanMonth(targetMonth);
+  const sourcePlan = await tx.learningPlan.findFirst({
+    where: {
+      directionId: scope.direction.id,
+      month: sourceMonth,
+      publishedVersionNumber: { not: null },
+      ...ownerWhere(scope.owner),
+    },
+    include: planInclude,
+  });
+  if (!sourcePlan?.publishedVersionNumber) return [];
+  const sourceVersion = sourcePlan.versions.find(
+    (version) => version.version === sourcePlan.publishedVersionNumber,
+  );
+  if (!sourceVersion) {
+    throw new ConflictError(
+      "Опубликованная версия прошлого плана не найдена",
+      "MONTHLY_PLAN_VERSION_MISSING",
+    );
+  }
+  const transferredTopicIds = sourceVersion.topics
+    .filter((link) => (
+      link.state === LearningPlanTopicState.active
+      && targetTopicIds.has(link.topicId)
+      && (link.topic.progressPercent ?? 0) < 100
+    ))
+    .map((link) => link.topicId);
+  if (!transferredTopicIds.length) return [];
+  if (sourcePlan.currentVersionNumber !== sourcePlan.publishedVersionNumber) {
+    throw new ConflictError(
+      `В плане за ${sourceMonth} есть неопубликованные изменения. Опубликуйте или отмените их перед переносом.`,
+      "MONTHLY_PLAN_SOURCE_HAS_UNPUBLISHED_CHANGES",
+    );
+  }
+  if (sourcePlan.lockedAt) {
+    throw new ConflictError(
+      `План за ${sourceMonth} уже завершён и заблокирован`,
+      "MONTHLY_PLAN_CARRYOVER_SOURCE_LOCKED",
+    );
+  }
+
+  const transferredSet = new Set(transferredTopicIds);
+  const nextVersion = sourcePlan.currentVersionNumber + 1;
+  await tx.learningPlanVersion.create({
+    data: {
+      planId: sourcePlan.id,
+      version: nextVersion,
+      goal: sourceVersion.goal,
+      expectedResult: sourceVersion.expectedResult,
+      skills: sourceVersion.skills,
+      checkpoint: sourceVersion.checkpoint,
+      note: sourceVersion.note,
+      materials: sourceVersion.materials as Prisma.InputJsonValue,
+      createdById: teacherUserId,
+      sourceRevision: sourceVersion.version,
+      publishedAt,
+      topics: {
+        create: sourceVersion.topics.map((link) => ({
+          topicId: link.topicId,
+          titleSnapshot: link.titleSnapshot,
+          masteryCriteriaSnapshot: link.masteryCriteriaSnapshot,
+          state: transferredSet.has(link.topicId)
+            ? LearningPlanTopicState.transferred
+            : link.state,
+          replacementTopicId: link.replacementTopicId,
+          sortOrder: link.sortOrder,
+        })),
+      },
+    },
+  });
+  const updated = await tx.learningPlan.updateMany({
+    where: {
+      id: sourcePlan.id,
+      currentVersionNumber: sourcePlan.currentVersionNumber,
+      publishedVersionNumber: sourcePlan.publishedVersionNumber,
+      lockedAt: null,
+    },
+    data: {
+      currentVersionNumber: nextVersion,
+      publishedVersionNumber: nextVersion,
+    },
+  });
+  if (updated.count !== 1) {
+    throw new ConflictError(
+      `План за ${sourceMonth} изменился. Обновите страницу и повторите публикацию.`,
+      "MONTHLY_PLAN_STALE_DRAFT",
+    );
+  }
+  return transferredTopicIds;
+}
+
 async function publishPlan(
   teacherUserId: string,
   scope: ResolvedScope,
@@ -497,7 +867,9 @@ async function publishPlan(
   assertExpectedLearningPlanVersion(plan.currentVersionNumber, expectedVersion);
   const current = versionDto(plan);
   if (!current.goal) throw new BadRequestError("Заполните фокус месяца", "MONTHLY_PLAN_GOAL_REQUIRED");
-  if (!current.items.length) throw new BadRequestError("Добавьте хотя бы одну тему", "MONTHLY_PLAN_ITEMS_REQUIRED");
+  if (!current.items.some((item) => item.state === LearningPlanTopicState.active)) {
+    throw new BadRequestError("Добавьте хотя бы одну тему", "MONTHLY_PLAN_ITEMS_REQUIRED");
+  }
   if (plan.publishedVersionNumber === plan.currentVersionNumber) {
     return { ...current, idempotent: true, publicationEvent: null };
   }
@@ -507,7 +879,26 @@ async function publishPlan(
 
   const wasPublished = plan.publishedVersionNumber !== null;
   const publishedAt = new Date();
+  const currentVersion = plan.versions.find(
+    (version) => version.version === plan.currentVersionNumber,
+  );
+  if (!currentVersion) {
+    throw new ConflictError("Версия учебного плана не найдена", "MONTHLY_PLAN_VERSION_MISSING");
+  }
+  const currentTopicIds = new Set(
+    currentVersion.topics
+      .filter((link) => link.state === LearningPlanTopicState.active)
+      .map((link) => link.topicId),
+  );
   await prisma.$transaction(async (tx) => {
+    await markPublishedTopicsTransferredFromPreviousMonth(
+      tx,
+      teacherUserId,
+      scope,
+      month,
+      currentTopicIds,
+      publishedAt,
+    );
     const updated = await tx.learningPlan.updateMany({
       where: {
         id: plan.id,
@@ -578,6 +969,27 @@ export async function getStudentLearningPlanV2(
   };
 }
 
+export async function getStudentLearningPlanCarryoverV2(
+  teacherUserId: string,
+  crmStudentId: string,
+  crmDirectionId: string,
+  targetMonth: string,
+) {
+  const scope = await resolveStudentScope(teacherUserId, crmStudentId, crmDirectionId);
+  return getCarryoverPreview(scope, targetMonth);
+}
+
+export async function carryOverStudentLearningPlanTopicsV2(
+  teacherUserId: string,
+  crmStudentId: string,
+  crmDirectionId: string,
+  targetMonth: string,
+  input: LearningPlanCarryoverInput,
+) {
+  const scope = await resolveStudentScope(teacherUserId, crmStudentId, crmDirectionId);
+  return carryOverTopics(teacherUserId, scope, targetMonth, input);
+}
+
 export async function saveStudentLearningPlanV2(
   teacherUserId: string,
   crmStudentId: string,
@@ -619,6 +1031,27 @@ export async function getGroupLearningPlanV2(
   };
 }
 
+export async function getGroupLearningPlanCarryoverV2(
+  teacherUserId: string,
+  crmGroupId: string,
+  crmDirectionId: string,
+  targetMonth: string,
+) {
+  const scope = await resolveGroupScope(teacherUserId, crmGroupId, crmDirectionId);
+  return getCarryoverPreview(scope, targetMonth);
+}
+
+export async function carryOverGroupLearningPlanTopicsV2(
+  teacherUserId: string,
+  crmGroupId: string,
+  crmDirectionId: string,
+  targetMonth: string,
+  input: LearningPlanCarryoverInput,
+) {
+  const scope = await resolveGroupScope(teacherUserId, crmGroupId, crmDirectionId);
+  return carryOverTopics(teacherUserId, scope, targetMonth, input);
+}
+
 export async function saveGroupLearningPlanV2(
   teacherUserId: string,
   crmGroupId: string,
@@ -646,18 +1079,37 @@ export async function listPublishedLearningPlansV2(
   crmGroupIds: readonly string[],
   month: string,
 ) {
-  const plans = await prisma.learningPlan.findMany({
-    where: {
-      month,
-      publishedVersionNumber: { not: null },
-      OR: [
-        { crmStudentId, crmGroupId: null },
-        ...(crmGroupIds.length ? [{ crmStudentId: null, crmGroupId: { in: [...crmGroupIds] } }] : []),
-      ],
-    },
-    include: planInclude,
-    orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
-  });
+  const previousMonth = previousLearningPlanMonth(month);
+  const ownerScope = [
+    { crmStudentId, crmGroupId: null },
+    ...(crmGroupIds.length ? [{ crmStudentId: null, crmGroupId: { in: [...crmGroupIds] } }] : []),
+  ];
+  const [plans, previousPlans] = await Promise.all([
+    prisma.learningPlan.findMany({
+      where: {
+        month,
+        publishedVersionNumber: { not: null },
+        OR: ownerScope,
+      },
+      include: planInclude,
+      orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
+    }),
+    prisma.learningPlan.findMany({
+      where: {
+        month: previousMonth,
+        publishedVersionNumber: { not: null },
+        OR: ownerScope,
+      },
+      include: planInclude,
+    }),
+  ]);
+  const previousTopicKeys = new Set(previousPlans.flatMap((plan) => {
+    if (!plan.publishedVersionNumber) return [];
+    const version = plan.versions.find((item) => item.version === plan.publishedVersionNumber);
+    return (version?.topics ?? [])
+      .filter((link) => link.state === LearningPlanTopicState.transferred)
+      .map((link) => `${plan.directionId}:${link.topicId}`);
+  }));
 
   return plans.flatMap((plan) => {
     if (!plan.publishedVersionNumber) return [];
@@ -673,7 +1125,13 @@ export async function listPublishedLearningPlansV2(
       expectedResult: dto.expectedResult,
       skills: dto.skills,
       materials: dto.materials,
-      items: dto.items,
+      items: dto.items.map((item) => ({
+        ...item,
+        continuedFromMonth: item.state === LearningPlanTopicState.active
+          && previousTopicKeys.has(`${plan.directionId}:${item.id}`)
+          ? previousMonth
+          : null,
+      })),
       progress: dto.progress,
       publishedAt: dto.publication.publishedAt,
     }];

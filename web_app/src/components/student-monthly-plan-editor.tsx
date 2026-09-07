@@ -8,11 +8,16 @@ import { teacherStudentsApi } from "@/lib/teacher-students-api";
 import { currentAqtobeMonth } from "@/lib/aqtobe-month";
 import { LearningTopicProgressEditor } from "@/components/learning-topic-progress-editor";
 import { LearningHomeworkAssignmentComposer } from "@/components/learning-homework-assignment-composer";
+import {
+  formatLearningPlanMonth,
+  LearningPlanCarryoverPanel,
+} from "@/components/learning-plan-carryover-panel";
 import { PlanMonthField } from "@/components/plan-month-field";
 import { ProgressBar } from "@/components/progress-bar";
 import { learningHomeworkApi } from "@/lib/learning-homework-api";
 import type {
   LearningPlanMode,
+  LearningPlanCarryoverPreview,
   MonthlyPlanItemStatus,
   StudentMonthlyPlan,
   TeacherCrmDirection,
@@ -97,6 +102,12 @@ function StudentMonthlyPlanEditorContent({
     () => teacherStudentsApi.monthlyPlan(crmStudentId, month, crmDirectionId || undefined),
     [crmStudentId, month, crmDirectionId],
   );
+  const carryoverResource = useApiResource<LearningPlanCarryoverPreview | null>(
+    () => mode.mode === "v2" && crmDirectionId
+      ? teacherStudentsApi.monthlyPlanCarryover(crmStudentId, month, crmDirectionId)
+      : Promise.resolve(null),
+    [mode.mode, crmStudentId, month, crmDirectionId],
+  );
   const homeworkFlowResource = useApiResource(() => learningHomeworkApi.teacherAvailability(), []);
   const [draft, setDraft] = useState<StudentMonthlyPlan>(() => emptyPlan(month));
   const [saving, setSaving] = useState(false);
@@ -104,6 +115,8 @@ function StudentMonthlyPlanEditorContent({
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [staleDraft, setStaleDraft] = useState(false);
+  const [selectedCarryoverTopicIds, setSelectedCarryoverTopicIds] = useState<string[]>([]);
+  const [transferring, setTransferring] = useState(false);
 
   useEffect(() => {
     if (resource.data) {
@@ -111,6 +124,12 @@ function StudentMonthlyPlanEditorContent({
       setSaved(Boolean(resource.data.plan));
     }
   }, [resource.data, month]);
+
+  useEffect(() => {
+    setSelectedCarryoverTopicIds(
+      carryoverResource.data?.candidates.map((topic) => topic.topicId) ?? [],
+    );
+  }, [carryoverResource.data]);
 
   function setField<K extends keyof StudentMonthlyPlan>(
     key: K,
@@ -133,6 +152,35 @@ function StudentMonthlyPlanEditorContent({
     setStaleDraft(false);
   }
 
+  async function carryOverSelectedTopics() {
+    if (!crmDirectionId || !selectedCarryoverTopicIds.length || transferring) return;
+    setTransferring(true);
+    setError(null);
+    setStaleDraft(false);
+    try {
+      const result = await teacherStudentsApi.carryOverMonthlyPlanTopics(crmStudentId, {
+        month,
+        crmDirectionId,
+        topicIds: selectedCarryoverTopicIds,
+        expectedTargetVersion: draft.version ?? 0,
+      });
+      setDraft(result.plan);
+      setSaved(true);
+      await Promise.all([resource.reload(), carryoverResource.reload()]);
+    } catch (reason) {
+      if (reason instanceof ApiError && reason.code === "MONTHLY_PLAN_STALE_DRAFT") {
+        setError("План уже изменился. Обновите данные и повторите перенос.");
+        setStaleDraft(true);
+      } else if (reason instanceof ApiError) {
+        setError(reason.message);
+      } else {
+        setError("Не удалось перенести темы. Повторите попытку.");
+      }
+    } finally {
+      setTransferring(false);
+    }
+  }
+
   async function save() {
     setSaving(true);
     setError(null);
@@ -142,7 +190,11 @@ function StudentMonthlyPlanEditorContent({
         ...draft,
         month,
         expectedVersion: mode.mode === "v2" ? draft.version ?? 0 : undefined,
-        items: draft.items.filter((item) => item.title.trim()),
+        items: draft.items
+          .filter((item) => item.title.trim())
+          .map((item) => item.state && item.state !== "active"
+            ? { ...item, status: "planned" as const }
+            : item),
       }, crmDirectionId || undefined);
       setDraft(plan);
       setSaved(true);
@@ -187,6 +239,8 @@ function StudentMonthlyPlanEditorContent({
       if (reason instanceof ApiError && reason.code === "MONTHLY_PLAN_STALE_DRAFT") {
         setError("План уже изменился в другой вкладке. Обновите данные перед публикацией.");
         setStaleDraft(true);
+      } else if (reason instanceof ApiError) {
+        setError(reason.message);
       } else {
         setError("Не удалось опубликовать план ученику. Проверьте цель и темы.");
       }
@@ -199,7 +253,9 @@ function StudentMonthlyPlanEditorContent({
     return <p className="py-6 text-sm text-stone-500">Загружаем учебный план…</p>;
   }
 
-  const activeItems = draft.items.filter((item) => item.title.trim());
+  const activeItems = draft.items.filter((item) => (
+    item.title.trim() && (!item.state || item.state === "active")
+  ));
   const completedItems = activeItems.filter((item) => item.status === "completed").length;
   const progressPercent = activeItems.length
     ? Math.round((completedItems / activeItems.length) * 100)
@@ -275,6 +331,26 @@ function StudentMonthlyPlanEditorContent({
         />
       </div>
 
+      {mode.mode === "v2" ? (
+        <LearningPlanCarryoverPanel
+          preview={carryoverResource.data}
+          loading={carryoverResource.loading}
+          transferring={transferring}
+          selectedTopicIds={selectedCarryoverTopicIds}
+          onToggle={(topicId) => setSelectedCarryoverTopicIds((current) => (
+            current.includes(topicId)
+              ? current.filter((id) => id !== topicId)
+              : [...current, topicId]
+          ))}
+          onSelectAll={() => {
+            const candidates = carryoverResource.data?.candidates ?? [];
+            const allSelected = candidates.every((topic) => selectedCarryoverTopicIds.includes(topic.topicId));
+            setSelectedCarryoverTopicIds(allSelected ? [] : candidates.map((topic) => topic.topicId));
+          }}
+          onTransfer={() => void carryOverSelectedTopics()}
+        />
+      ) : null}
+
       {/* 2. Темы и произведения по порядку */}
       <div className="mt-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -295,10 +371,21 @@ function StudentMonthlyPlanEditorContent({
         </div>
 
         <div className="mt-3 space-y-2.5">
-          {draft.items.map((item, index) => (
-            <div key={item.id} className="grid gap-2 rounded-2xl border border-stone-200 bg-white p-3 shadow-xs sm:grid-cols-[minmax(0,1fr)_180px_40px]">
+          {draft.items.map((item, index) => {
+            const transferred = Boolean(item.state && item.state !== "active");
+            const continued = carryoverResource.data?.continuedTopics.some((topic) => topic.topicId === item.id);
+            return (
+            <div key={item.id} className={`grid gap-2 rounded-2xl border p-3 shadow-xs sm:grid-cols-[minmax(0,1fr)_180px_40px] ${transferred ? "border-stone-200 bg-stone-50" : "border-stone-200 bg-white"}`}>
               <div className="min-w-0 space-y-2">
+                {transferred ? (
+                  <p className="text-[10px] font-black uppercase tracking-wider text-stone-500">Перенесено в следующий месяц</p>
+                ) : continued && carryoverResource.data ? (
+                  <p className="text-[10px] font-black uppercase tracking-wider text-amber-800">
+                    Продолжение с {formatLearningPlanMonth(carryoverResource.data.sourceMonth)}
+                  </p>
+                ) : null}
                 <input
+                  disabled={transferred}
                   value={item.title}
                   onChange={(event) => {
                     const title = event.target.value;
@@ -314,6 +401,7 @@ function StudentMonthlyPlanEditorContent({
                 />
                 {mode.mode === "v2" ? (
                   <input
+                    disabled={transferred}
                     value={item.masteryCriteria ?? ""}
                     onChange={(event) => {
                       const masteryCriteria = event.target.value;
@@ -329,7 +417,7 @@ function StudentMonthlyPlanEditorContent({
                   />
                 ) : null}
               </div>
-              {mode.mode === "v2" ? (
+              {mode.mode === "v2" && !transferred ? (
                 <LearningTopicProgressEditor
                   topicId={item.id}
                   progressPercent={item.progressPercent}
@@ -341,7 +429,7 @@ function StudentMonthlyPlanEditorContent({
                     void resource.reload();
                   }}
                 />
-              ) : (
+              ) : mode.mode !== "v2" ? (
                 <select
                   value={item.status}
                   onChange={(event) => {
@@ -365,8 +453,12 @@ function StudentMonthlyPlanEditorContent({
                     <option key={status.value} value={status.value}>{status.label}</option>
                   ))}
                 </select>
+              ) : (
+                <div className="flex h-10 items-center justify-center rounded-xl bg-stone-200 px-2 text-center text-[11px] font-bold text-stone-600">
+                  История сохранена
+                </div>
               )}
-              <button
+              {!transferred ? <button
                 type="button"
                 aria-label="Удалить тему"
                 onClick={() => {
@@ -377,14 +469,14 @@ function StudentMonthlyPlanEditorContent({
                 className="grid h-10 w-10 place-items-center rounded-xl text-stone-400 hover:bg-red-50 hover:text-red-700 transition"
               >
                 <Trash2 size={16} />
-              </button>
-              {mode.mode === "v2" && homeworkFlowResource.data && item.progressPercent !== undefined && item.title.trim() ? (
+              </button> : <span />}
+              {mode.mode === "v2" && !transferred && homeworkFlowResource.data && item.progressPercent !== undefined && item.title.trim() ? (
                 <div className="min-w-0 sm:col-span-3">
                   <LearningHomeworkAssignmentComposer topicId={item.id} topicTitle={item.title} />
                 </div>
               ) : null}
             </div>
-          ))}
+          );})}
           {!draft.items.length ? (
             <p className="rounded-xl border border-dashed border-stone-300 p-4 text-center text-xs text-stone-500">
               Нажмите «+ Добавить тему», чтобы указать песни или техники на этот месяц.

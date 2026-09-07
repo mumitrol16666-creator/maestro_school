@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import {
   getParentChildOfflineSummary,
+  getParentChildMonthlyPlans,
   listParentChildren,
 } from "../../application/services/family.service.js";
 import {
@@ -9,6 +10,7 @@ import {
   submitParentVisibilityRequest,
 } from "../../application/services/parent-visibility.service.js";
 import { listPublishedNews } from "../../application/repositories/news.repository.js";
+import { aqtobeMonthKey } from "../../lib/aqtobe-month.js";
 import {
   authenticate,
   requireParent,
@@ -53,6 +55,26 @@ export async function familyRoutes(app: FastifyInstance) {
       }).parse(request.params);
       return {
         data: await getParentChildOfflineSummary(request.user!.id, studentId),
+      };
+    },
+  );
+
+  app.get(
+    "/parents/me/children/:studentId/monthly-plans",
+    { preHandler: guards },
+    async (request) => {
+      const { studentId } = z.object({
+        studentId: z.string().uuid(),
+      }).parse(request.params);
+      const { month } = z.object({
+        month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional(),
+      }).parse(request.query ?? {});
+      return {
+        data: await getParentChildMonthlyPlans(
+          request.user!.id,
+          studentId,
+          month ?? aqtobeMonthKey(),
+        ),
       };
     },
   );
