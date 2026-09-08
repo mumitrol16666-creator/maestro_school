@@ -165,11 +165,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-cream">
-      <div className="fixed inset-y-0 left-0 hidden w-[272px] lg:block">{sidebar}</div>
-      {open && <div className="fixed inset-y-0 left-0 z-50 w-[min(86vw,320px)] shadow-2xl lg:hidden">{sidebar}</div>}
-      {open && <button className="fixed inset-0 z-40 bg-black/45 backdrop-blur-[2px] lg:hidden" onClick={() => setOpen(false)} aria-label="Закрыть меню по фону" />}
-      <div className="lg:pl-[272px]">
-        <header className="sticky top-0 z-30 flex h-[calc(68px+env(safe-area-inset-top,0px))] items-center gap-3 border-b border-stone-200/70 bg-cream/90 px-4 pt-[env(safe-area-inset-top,0px)] backdrop-blur-xl sm:px-8">
+      <div className="fixed inset-y-0 left-0 hidden w-[272px] lg:block print:hidden">{sidebar}</div>
+      {open && <div className="fixed inset-y-0 left-0 z-50 w-[min(86vw,320px)] shadow-2xl lg:hidden print:hidden">{sidebar}</div>}
+      {open && <button className="fixed inset-0 z-40 bg-black/45 backdrop-blur-[2px] lg:hidden print:hidden" onClick={() => setOpen(false)} aria-label="Закрыть меню по фону" />}
+      <div className="lg:pl-[272px] print:pl-0">
+        <header className="sticky top-0 z-30 flex h-[calc(68px+env(safe-area-inset-top,0px))] items-center gap-3 border-b border-stone-200/70 bg-cream/90 px-4 pt-[env(safe-area-inset-top,0px)] backdrop-blur-xl sm:px-8 print:hidden">
           {student ? (
             <div className="flex items-center gap-2 lg:hidden">
               <Brand compact />
@@ -198,11 +198,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <UserMenu />
           </div>
         </header>
-        <main className={`mobile-safe mx-auto max-w-[1500px] p-4 sm:p-8 lg:p-10 ${
+        <main className={`mobile-safe mx-auto max-w-[1500px] p-4 sm:p-8 lg:p-10 print:max-w-none print:p-0 ${
           student ? "pb-[calc(6.75rem+env(safe-area-inset-bottom,0px))] sm:pb-[calc(6.75rem+env(safe-area-inset-bottom,0px))] lg:pb-10" : ""
         }`}>
           {roleNavigationV2 ? (
-            <div className={student && pathname.startsWith("/messages") ? "hidden md:block" : ""}>
+            <div className={`${student && pathname.startsWith("/messages") ? "hidden md:block" : ""} print:hidden`}>
               <StudentWorkspaceContextNavigation />
             </div>
           ) : null}
@@ -213,7 +213,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <nav
           data-testid="student-mobile-navigation"
           data-mobile-app-navigation
-          className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-stone-200/90 bg-paper/95 px-2 pb-[env(safe-area-inset-bottom,0px)] shadow-[0_-12px_35px_rgba(37,33,25,0.08)] backdrop-blur-xl lg:hidden"
+          className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-stone-200/90 bg-paper/95 px-2 pb-[env(safe-area-inset-bottom,0px)] shadow-[0_-12px_35px_rgba(37,33,25,0.08)] backdrop-blur-xl lg:hidden print:hidden"
           aria-label="Основная навигация"
         >
           {mobileNavigation.filter((item) => !item.messagesOnly || messagesAvailable).map(({ href, label, icon: Icon }) => {

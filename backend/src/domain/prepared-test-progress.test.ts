@@ -5,6 +5,8 @@ import {
   bestPreparedTestScore,
   buildPreparedTestReview,
   isPreparedTestUnlocked,
+  preparedTestDailyState,
+  preparedTestDayKey,
   shufflePreparedTestOptions,
   validatePreparedTestDraft,
 } from "./prepared-test-progress.js";
@@ -64,5 +66,53 @@ describe("prepared test progress", () => {
     assert.deepEqual(new Set(first[0]?.options.map((option) => option.id)), new Set(["a", "b", "c", "d"]));
     assert.notDeepEqual(first[0]?.options, nextAttempt[0]?.options);
     assert.equal(source[0]?.options[0]?.id, "a");
+  });
+
+  it("allows two attempts on the same test during an Aqtobe calendar day", () => {
+    const todayAttempts = [
+      { testId: "one", createdAt: new Date("2026-09-08T05:00:00.000Z") },
+    ];
+    assert.deepEqual(
+      preparedTestDailyState(todayAttempts, "one", new Date("2026-09-08T12:00:00.000Z")),
+      {
+        activeTestIdToday: "one",
+        attemptsUsedToday: 1,
+        attemptsRemaining: 1,
+        dailyLocked: false,
+      },
+    );
+  });
+
+  it("locks another test after a module has been attempted today", () => {
+    const todayAttempts = [
+      { testId: "one", createdAt: new Date("2026-09-08T05:00:00.000Z") },
+    ];
+    const state = preparedTestDailyState(todayAttempts, "two", new Date("2026-09-08T12:00:00.000Z"));
+    assert.equal(state.dailyLocked, true);
+    assert.equal(state.attemptsRemaining, 0);
+  });
+
+  it("keeps the first selected test active even when attempts are unordered", () => {
+    const todayAttempts = [
+      { testId: "two", createdAt: new Date("2026-09-08T08:00:00.000Z") },
+      { testId: "one", createdAt: new Date("2026-09-08T05:00:00.000Z") },
+    ];
+    const state = preparedTestDailyState(todayAttempts, "one", new Date("2026-09-08T12:00:00.000Z"));
+    assert.equal(state.activeTestIdToday, "one");
+    assert.equal(state.dailyLocked, false);
+    assert.equal(state.attemptsUsedToday, 1);
+  });
+
+  it("resets the daily limits at midnight in Aqtobe", () => {
+    const beforeMidnight = new Date("2026-09-08T18:59:00.000Z");
+    const afterMidnight = new Date("2026-09-08T19:01:00.000Z");
+    assert.notEqual(preparedTestDayKey(beforeMidnight), preparedTestDayKey(afterMidnight));
+    const state = preparedTestDailyState(
+      [{ testId: "one", createdAt: beforeMidnight }],
+      "two",
+      afterMidnight,
+    );
+    assert.equal(state.dailyLocked, false);
+    assert.equal(state.attemptsRemaining, 2);
   });
 });

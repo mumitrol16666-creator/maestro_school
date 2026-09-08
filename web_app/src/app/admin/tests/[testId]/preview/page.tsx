@@ -1,11 +1,12 @@
 "use client";
 
-import { ArrowLeft, ArrowRight, Check, ChevronLeft, Eye, Flame } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronLeft, Eye, Flame } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import { ErrorState, LoadingState } from "@/components/data-states";
 import { PageHeader } from "@/components/page-header";
+import { PreparedTheoryMaterialView } from "@/components/prepared-theory-material";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { api } from "@/lib/api-client";
 
@@ -14,6 +15,7 @@ export default function AdminTestPreviewPage() {
   const resource = useApiResource(() => api.preparedTestAdminPreview(testId), [testId]);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [view, setView] = useState<"theory" | "test">("theory");
 
   if (resource.loading) return <LoadingState label="Открываем предпросмотр" />;
   if (resource.error) return <ErrorState message={resource.error} retry={resource.reload} />;
@@ -45,14 +47,26 @@ export default function AdminTestPreviewPage() {
         <p><strong>Режим администратора.</strong> Ответы здесь не сохраняются и не попадают в статистику.</p>
       </div>
 
+      {test.theory ? (
+        <div className="mb-5 flex rounded-2xl border border-stone-200 bg-paper p-1" data-print-hide>
+          <button type="button" onClick={() => setView("theory")} className={`flex-1 rounded-xl px-4 py-2.5 text-sm font-bold ${view === "theory" ? "bg-ink text-white" : "text-stone-600"}`}><BookOpen size={16} className="mr-2 inline" />Материал</button>
+          <button type="button" onClick={() => setView("test")} className={`flex-1 rounded-xl px-4 py-2.5 text-sm font-bold ${view === "test" ? "bg-ink text-white" : "text-stone-600"}`}>Вопросы теста</button>
+        </div>
+      ) : null}
+
+      {view === "theory" && test.theory ? (
+        <PreparedTheoryMaterialView material={test.theory} onContinue={() => setView("test")} continueLabel="Посмотреть вопросы" />
+      ) : (
+        <>
+
       <div className="mb-5 grid gap-3 sm:grid-cols-3">
         <div className="rounded-2xl border border-stone-200 bg-paper p-4">
           <p className="text-xs text-stone-500">Проходной результат</p>
           <p className="mt-1 font-display text-2xl">{test.passingScore}%</p>
         </div>
         <div className="rounded-2xl border border-stone-200 bg-paper p-4">
-          <p className="text-xs text-stone-500">Попыток ученику</p>
-          <p className="mt-1 font-display text-2xl">{test.maxAttempts ?? "Без лимита"}</p>
+          <p className="text-xs text-stone-500">Попыток на один тест в день</p>
+          <p className="mt-1 font-display text-2xl">{test.dailyRules.attemptLimit}</p>
         </div>
         <div className="rounded-2xl border border-stone-200 bg-paper p-4">
           <p className="text-xs text-stone-500">Недельный XP за успех</p>
@@ -124,6 +138,8 @@ export default function AdminTestPreviewPage() {
           Дальше <ArrowRight size={17} />
         </button>
       </div>
+        </>
+      )}
     </>
   );
 }

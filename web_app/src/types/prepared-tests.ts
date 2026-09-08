@@ -18,6 +18,28 @@ export interface PreparedTestReviewItem {
   correctOptionText: string | null;
 }
 
+export interface PreparedTheorySection {
+  title: string;
+  paragraphs: string[];
+  points?: string[];
+}
+
+export interface PreparedTheoryMaterial {
+  testId: string;
+  title: string;
+  introduction: string;
+  readingMinutes: number;
+  sections: PreparedTheorySection[];
+  remember: string[];
+  practice: string[];
+}
+
+export interface PreparedTestDailyRules {
+  testLimit: number;
+  attemptLimit: number;
+  timeZone: string;
+}
+
 export interface PreparedTestProgressItem {
   id: string;
   title: string;
@@ -28,12 +50,14 @@ export interface PreparedTestProgressItem {
   passingScore: number;
   maxAttempts: number | null;
   locked: boolean;
+  dailyLocked: boolean;
   available: boolean;
   exhausted: boolean;
   passed: boolean;
   bestScore: number | null;
   latestScore: number | null;
   attemptsUsed: number;
+  attemptsUsedToday: number;
   attemptsRemaining: number | null;
   lastAttemptAt: string | null;
 }
@@ -42,6 +66,7 @@ export interface PreparedTestsResponse {
   tests: PreparedTestProgressItem[];
   total: number;
   completedCount: number;
+  dailyRules: PreparedTestDailyRules;
   xpRules: PreparedTestXpRules;
 }
 
@@ -60,15 +85,21 @@ export interface PreparedTestDetail {
   questionCount: number;
   passingScore: number;
   maxAttempts: number | null;
+  dailyRules: PreparedTestDailyRules;
+  theory: PreparedTheoryMaterial | null;
   xpRules: PreparedTestXpRules;
   earnedXp: number;
   questions: PreparedTestQuestion[];
   passed: boolean;
+  available: boolean;
+  dailyLocked: boolean;
   exhausted: boolean;
   bestScore: number | null;
   attemptsUsed: number;
+  attemptsUsedToday: number;
   attemptsRemaining: number | null;
   nextTest: { id: string; title: string } | null;
+  nextTestAvailableToday: boolean;
   draft: {
     answers: Record<string, string>;
     currentQuestion: number;
@@ -96,11 +127,13 @@ export interface PreparedTestAttemptResponse {
   passed: boolean;
   passingScore: number;
   attemptsRemaining: number | null;
+  exhausted: boolean;
   xpAwarded: number;
   xpStatus: "awarded" | "already_awarded" | "weekly_limit" | "not_eligible" | "not_passed";
   review: PreparedTestReviewItem[];
   topicsToRepeat: string[];
   nextTest: { id: string; title: string } | null;
+  nextTestAvailableToday: boolean;
   createdAt: string;
 }
 
@@ -142,6 +175,8 @@ export interface PreparedTestAdminPreview {
   totalTests: number;
   passingScore: number;
   maxAttempts: number | null;
+  dailyRules: PreparedTestDailyRules;
+  theory: PreparedTheoryMaterial | null;
   xpRules: PreparedTestXpRules;
   questions: Required<PreparedTestQuestion>[];
 }

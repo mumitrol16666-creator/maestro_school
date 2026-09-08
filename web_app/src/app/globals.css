@@ -365,3 +365,35 @@ button.card-hover:focus-visible {
     opacity: 0.8;
   }
 }
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 14mm;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+    color: #171713 !important;
+  }
+
+  [data-print-hide] {
+    display: none !important;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  [data-theory-print],
+  [data-theory-print] * {
+    visibility: visible;
+  }
+
+  [data-theory-print] {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+  }
+}

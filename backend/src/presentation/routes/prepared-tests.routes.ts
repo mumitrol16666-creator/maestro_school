@@ -19,11 +19,15 @@ import {
   buildPreparedTestReview,
   hasPassedPreparedTest,
   isPreparedTestUnlocked,
+  preparedTestDailyState,
+  PREPARED_TEST_DAILY_TEST_LIMIT,
   PREPARED_TEST_MAX_ATTEMPTS,
   PREPARED_TEST_PASSING_SCORE,
+  PREPARED_TEST_TIME_ZONE,
   shufflePreparedTestOptions,
   validatePreparedTestDraft,
 } from "../../domain/prepared-test-progress.js";
+import { getPreparedTestTheory } from "../../domain/prepared-test-theory.js";
 import { listPreparedTestTemplates } from "../../domain/prepared-tests.js";
 import { prisma } from "../../infrastructure/database/prisma.js";
 import {
@@ -43,6 +47,12 @@ const draftSchema = z.object({
 });
 
 type Attempt = Awaited<ReturnType<typeof listAttempts>>[number];
+
+const dailyRules = {
+  testLimit: PREPARED_TEST_DAILY_TEST_LIMIT,
+  attemptLimit: PREPARED_TEST_MAX_ATTEMPTS,
+  timeZone: PREPARED_TEST_TIME_ZONE,
+};
 
 async function listAttempts(studentId: string) {
   return prisma.preparedTestAttempt.findMany({
@@ -70,8 +80,18 @@ function assertTestAccess(testId: string, attempts: Attempt[]) {
   return index;
 }
 
-function attemptsRemaining() {
-  return null;
+function assertDailyAttemptAccess(testId: string, attempts: Attempt[]) {
+  if (hasPassedPreparedTest(attempts, testId)) {
+    throw new ForbiddenError("Тест уже пройден. Разбор ответов остаётся доступен.");
+  }
+  const daily = preparedTestDailyState(attempts, testId);
+  if (daily.dailyLocked) {
+    throw new ForbiddenError("Сегодня уже выбран другой тест. Следующий тест откроется завтра.");
+  }
+  if (daily.attemptsRemaining <= 0) {
+    throw new ForbiddenError("Две попытки на сегодня использованы. Повторите этот тест завтра.");
+  }
+  return daily;
 }
 
 function buildProgress(attempts: Attempt[]) {
@@ -82,7 +102,7 @@ function buildProgress(attempts: Attempt[]) {
     const latest = latestAttempt(attempts, template.id);
     const passed = hasPassedPreparedTest(attempts, template.id);
     const unlocked = isPreparedTestUnlocked(index, orderedIds, attempts);
-    const remaining = attemptsRemaining();
+    const daily = preparedTestDailyState(attempts, template.id);
     return {
       id: template.id,
       title: template.title,
@@ -93,13 +113,15 @@ function buildProgress(attempts: Attempt[]) {
       passingScore: PREPARED_TEST_PASSING_SCORE,
       maxAttempts: PREPARED_TEST_MAX_ATTEMPTS,
       locked: !unlocked,
-      available: unlocked,
-      exhausted: false,
+      dailyLocked: unlocked && !passed && daily.dailyLocked,
+      available: unlocked && !passed && !daily.dailyLocked && daily.attemptsRemaining > 0,
+      exhausted: unlocked && !passed && !daily.dailyLocked && daily.attemptsRemaining === 0,
       passed,
       bestScore: bestPreparedTestScore(attempts, template.id),
       latestScore: latest?.score ?? null,
       attemptsUsed: testAttempts.length,
-      attemptsRemaining: remaining,
+      attemptsUsedToday: daily.attemptsUsedToday,
+      attemptsRemaining: daily.attemptsRemaining,
       lastAttemptAt: latest?.createdAt ?? null,
     };
   });
@@ -129,6 +151,7 @@ export async function preparedTestsRoutes(app: FastifyInstance) {
           tests,
           total: tests.length,
           completedCount: tests.filter((test) => test.passed).length,
+          dailyRules,
           xpRules: {
             firstAttempt: WEEKLY_PREPARED_TEST_FIRST_ATTEMPT_XP,
             retry: WEEKLY_PREPARED_TEST_RETRY_XP,
@@ -157,9 +180,12 @@ export async function preparedTestsRoutes(app: FastifyInstance) {
       const index = assertTestAccess(testId, attempts);
       const latest = latestAttempt(attempts, testId);
       const passed = hasPassedPreparedTest(attempts, testId);
-      const remaining = attemptsRemaining();
+      const daily = preparedTestDailyState(attempts, testId);
       const latestAnswers = (latest?.answers ?? {}) as HomeworkTestAnswerMap;
       const nextTemplate = passed ? listPreparedTestTemplates()[index + 1] ?? null : null;
+      const nextDaily = nextTemplate
+        ? preparedTestDailyState(attempts, nextTemplate.id)
+        : null;
       return {
         data: {
           id: template.id,
@@ -170,6 +196,8 @@ export async function preparedTestsRoutes(app: FastifyInstance) {
           questionCount: template.questions.length,
           passingScore: PREPARED_TEST_PASSING_SCORE,
           maxAttempts: PREPARED_TEST_MAX_ATTEMPTS,
+          dailyRules,
+          theory: getPreparedTestTheory(testId),
           xpRules: {
             firstAttempt: WEEKLY_PREPARED_TEST_FIRST_ATTEMPT_XP,
             retry: WEEKLY_PREPARED_TEST_RETRY_XP,
@@ -181,11 +209,15 @@ export async function preparedTestsRoutes(app: FastifyInstance) {
             `${studentId}:${testId}:${attemptsForTest(attempts, testId).length + 1}`,
           ),
           passed,
-          exhausted: false,
+          available: !passed && !daily.dailyLocked && daily.attemptsRemaining > 0,
+          dailyLocked: !passed && daily.dailyLocked,
+          exhausted: !passed && !daily.dailyLocked && daily.attemptsRemaining === 0,
           bestScore: bestPreparedTestScore(attempts, testId),
           attemptsUsed: attemptsForTest(attempts, testId).length,
-          attemptsRemaining: remaining,
+          attemptsUsedToday: daily.attemptsUsedToday,
+          attemptsRemaining: daily.attemptsRemaining,
           nextTest: nextTemplate ? { id: nextTemplate.id, title: nextTemplate.title } : null,
+          nextTestAvailableToday: Boolean(nextTemplate && nextDaily && !nextDaily.dailyLocked),
           draft: draft
             ? {
                 answers: draft.answers,
@@ -220,6 +252,7 @@ export async function preparedTestsRoutes(app: FastifyInstance) {
       const studentId = request.user!.id;
       const attempts = await listAttempts(studentId);
       assertTestAccess(testId, attempts);
+      assertDailyAttemptAccess(testId, attempts);
       validateDraftOrThrow(template.questions, body.answers, body.currentQuestion);
 
       const draft = await prisma.preparedTestDraft.upsert({
@@ -255,7 +288,7 @@ export async function preparedTestsRoutes(app: FastifyInstance) {
       const studentId = request.user!.id;
       const attempts = await listAttempts(studentId);
       const index = assertTestAccess(testId, attempts);
-      const wasAlreadyPassed = hasPassedPreparedTest(attempts, testId);
+      assertDailyAttemptAccess(testId, attempts);
       const testAttempts = attemptsForTest(attempts, testId);
 
       validateDraftOrThrow(template.questions, body.answers as HomeworkTestAnswerMap, 0);
@@ -297,9 +330,13 @@ export async function preparedTestsRoutes(app: FastifyInstance) {
         });
         await evaluateAchievements(studentId);
       }
-      const remaining = null;
-      const nextTest = passed || wasAlreadyPassed
+      const attemptsAfterSubmission = [attempt, ...attempts];
+      const daily = preparedTestDailyState(attemptsAfterSubmission, testId, attempt.createdAt);
+      const nextTest = passed
         ? listPreparedTestTemplates()[index + 1] ?? null
+        : null;
+      const nextDaily = nextTest
+        ? preparedTestDailyState(attemptsAfterSubmission, nextTest.id, attempt.createdAt)
         : null;
       return reply.status(201).send({
         data: {
@@ -311,7 +348,8 @@ export async function preparedTestsRoutes(app: FastifyInstance) {
           totalQuestions: result.totalQuestions,
           passed,
           passingScore: PREPARED_TEST_PASSING_SCORE,
-          attemptsRemaining: remaining,
+          attemptsRemaining: daily.attemptsRemaining,
+          exhausted: !passed && daily.attemptsRemaining === 0,
           xpAwarded: xpResult?.awarded ? xpResult.amount : 0,
           xpStatus: xpResult?.status ?? "not_passed",
           review: buildPreparedTestReview(
@@ -320,6 +358,7 @@ export async function preparedTestsRoutes(app: FastifyInstance) {
           ),
           topicsToRepeat: passed ? [] : [template.description],
           nextTest: nextTest ? { id: nextTest.id, title: nextTest.title } : null,
+          nextTestAvailableToday: Boolean(nextTest && nextDaily && !nextDaily.dailyLocked),
           createdAt: attempt.createdAt,
         },
       });
@@ -425,6 +464,8 @@ export async function preparedTestsRoutes(app: FastifyInstance) {
           totalTests: listPreparedTestTemplates().length,
           passingScore: PREPARED_TEST_PASSING_SCORE,
           maxAttempts: PREPARED_TEST_MAX_ATTEMPTS,
+          dailyRules,
+          theory: getPreparedTestTheory(testId),
           xpRules: {
             firstAttempt: WEEKLY_PREPARED_TEST_FIRST_ATTEMPT_XP,
             retry: WEEKLY_PREPARED_TEST_RETRY_XP,

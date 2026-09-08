@@ -9,6 +9,7 @@ import {
   ChevronRight,
   Clock3,
   Flame,
+  BookOpen,
   RotateCcw,
   Save,
   Send,
@@ -20,6 +21,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { ErrorState, LoadingState } from "@/components/data-states";
 import { PageHeader } from "@/components/page-header";
+import { PreparedTheoryMaterialView } from "@/components/prepared-theory-material";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { api } from "@/lib/api-client";
 import type { PreparedTestAttemptResponse, PreparedTestReviewItem } from "@/types/prepared-tests";
@@ -38,6 +40,7 @@ export default function PreparedTestPage() {
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [hydratedTestId, setHydratedTestId] = useState<string | null>(null);
   const [retakeMode, setRetakeMode] = useState(false);
+  const [view, setView] = useState<"theory" | "test">("theory");
 
   useEffect(() => {
     const test = resource.data;
@@ -45,13 +48,14 @@ export default function PreparedTestPage() {
     setAnswers(test.draft?.answers ?? {});
     setCurrentQuestion(Math.min(test.draft?.currentQuestion ?? 0, test.questions.length - 1));
     setHydratedTestId(test.id);
-    setRetakeMode(Boolean(test.draft));
+    setRetakeMode(Boolean(test.draft && test.available));
+    setView((test.draft && test.available) || test.passed || test.exhausted ? "test" : "theory");
     setSaveState(test.draft ? "saved" : "idle");
   }, [hydratedTestId, resource.data]);
 
   useEffect(() => {
     const test = resource.data;
-    if (!test || hydratedTestId !== test.id || result || (test.passed && !retakeMode)) return;
+    if (!test || hydratedTestId !== test.id || result || view !== "test" || !test.available || (test.passed && !retakeMode)) return;
     setSaveState("saving");
     const timer = window.setTimeout(() => {
       void api.savePreparedTestDraft(test.id, answers, currentQuestion)
@@ -59,7 +63,7 @@ export default function PreparedTestPage() {
         .catch(() => setSaveState("error"));
     }, 650);
     return () => window.clearTimeout(timer);
-  }, [answers, currentQuestion, hydratedTestId, resource.data, result, retakeMode]);
+  }, [answers, currentQuestion, hydratedTestId, resource.data, result, retakeMode, view]);
 
   const answeredCount = Object.keys(answers).length;
   const test = resource.data;
@@ -82,6 +86,28 @@ export default function PreparedTestPage() {
       const submittedResult = await api.submitPreparedTest(testId, answers);
       setResult(submittedResult);
       setRetakeMode(false);
+      resource.setData((current) => current ? {
+        ...current,
+        passed: current.passed || submittedResult.passed,
+        available: !submittedResult.passed && !submittedResult.exhausted && (submittedResult.attemptsRemaining ?? 0) > 0,
+        exhausted: submittedResult.exhausted,
+        bestScore: Math.max(current.bestScore ?? 0, submittedResult.score),
+        attemptsUsed: current.attemptsUsed + 1,
+        attemptsUsedToday: current.attemptsUsedToday + 1,
+        attemptsRemaining: submittedResult.attemptsRemaining,
+        earnedXp: current.earnedXp + submittedResult.xpAwarded,
+        nextTest: submittedResult.nextTest,
+        nextTestAvailableToday: submittedResult.nextTestAvailableToday,
+        latestAttempt: {
+          score: submittedResult.score,
+          correctAnswers: submittedResult.correctAnswers,
+          totalQuestions: submittedResult.totalQuestions,
+          passed: submittedResult.passed,
+          attemptNumber: submittedResult.attemptNumber,
+          createdAt: submittedResult.createdAt,
+          review: submittedResult.review,
+        },
+      } : current);
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "Не удалось отправить ответы");
@@ -97,9 +123,10 @@ export default function PreparedTestPage() {
     setCurrentQuestion(0);
     setSubmitError(null);
     setSaveState("idle");
+    setView(test?.theory ? "theory" : "test");
   }
 
-  const completed = result ?? (!retakeMode && (test.passed || test.exhausted) ? {
+  const completed = result ?? (!retakeMode && view !== "theory" && (test.passed || test.exhausted) ? {
     id: "latest",
     testId: test.id,
     attemptNumber: test.latestAttempt?.attemptNumber ?? test.attemptsUsed,
@@ -114,8 +141,15 @@ export default function PreparedTestPage() {
     review,
     topicsToRepeat: (test.latestAttempt?.passed ?? test.passed) ? [] : [test.description],
     nextTest: test.nextTest,
+    nextTestAvailableToday: test.nextTestAvailableToday,
     createdAt: test.latestAttempt?.createdAt ?? "",
   } : null);
+
+  const blockedMessage = test.dailyLocked
+    ? "Сегодня уже проходили другой тест. Этот тест откроется завтра."
+    : test.exhausted
+      ? "Две попытки использованы. Новые попытки откроются завтра."
+      : null;
 
   return (
     <>
@@ -183,7 +217,7 @@ export default function PreparedTestPage() {
                             ? "Уже учтён"
                             : "Не начислен"}
                       </span>
-                ) : <span className="text-xl">Без лимита</span>}
+                ) : <span className="text-xl">{completed.attemptsRemaining} из {test.dailyRules.attemptLimit} сегодня</span>}
               </p>
             </div>
           </div>
@@ -236,17 +270,24 @@ export default function PreparedTestPage() {
                 href={`/tests/${completed.nextTest.id}`}
                 className="inline-flex items-center justify-center gap-2 rounded-2xl bg-ink px-5 py-3.5 text-sm font-bold text-white transition hover:bg-gold hover:text-ink"
               >
-                Следующий тест
+                {completed.nextTestAvailableToday ? "Следующий тест" : "Следующий урок"}
                 <ChevronRight size={16} />
               </Link>
             ) : null}
-            <button
-              type="button"
-              onClick={retry}
-              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-stone-300 bg-white px-5 py-3.5 text-sm font-bold transition hover:border-gold"
-            >
-              <RotateCcw size={16} /> Пройти ещё раз
-            </button>
+            {!completed.passed && (completed.attemptsRemaining ?? 0) > 0 ? (
+              <button
+                type="button"
+                onClick={retry}
+                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-stone-300 bg-white px-5 py-3.5 text-sm font-bold transition hover:border-gold"
+              >
+                <RotateCcw size={16} /> Повторить материал и тест
+              </button>
+            ) : null}
+            {test.theory ? (
+              <button type="button" onClick={() => { setResult(null); setView("theory"); }} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-stone-300 bg-white px-5 py-3.5 text-sm font-bold transition hover:border-gold">
+                <BookOpen size={16} /> Открыть материал
+              </button>
+            ) : null}
             <Link
               href="/tests"
               className="inline-flex items-center justify-center gap-2 rounded-2xl border border-stone-300 bg-white px-5 py-3.5 text-sm font-bold"
@@ -254,6 +295,21 @@ export default function PreparedTestPage() {
               Вернуться к тестам
             </Link>
           </div>
+        </section>
+      ) : view === "theory" && test.theory ? (
+        <PreparedTheoryMaterialView
+          material={test.theory}
+          onContinue={test.passed ? undefined : () => { setRetakeMode(true); setView("test"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+          continueDisabled={!test.available}
+          disabledMessage={blockedMessage}
+          continueLabel={test.attemptsUsedToday > 0 ? "Вторая попытка" : "Перейти к тесту"}
+        />
+      ) : blockedMessage ? (
+        <section className="rounded-[30px] border border-amber-200 bg-amber-50 p-6 shadow-soft sm:p-8">
+          <TriangleAlert className="text-amber-700" size={28} />
+          <h2 className="mt-4 font-display text-3xl">Тест пока недоступен</h2>
+          <p className="mt-2 text-stone-700">{blockedMessage}</p>
+          <Link href="/tests" className="mt-5 inline-flex rounded-2xl bg-ink px-5 py-3 text-sm font-bold text-white">К списку тестов</Link>
         </section>
       ) : (
         <>
@@ -343,7 +399,7 @@ export default function PreparedTestPage() {
               <button
                 type="button"
                 onClick={submit}
-                disabled={submitting || answeredCount < test.questionCount}
+                disabled={submitting || !test.available || answeredCount < test.questionCount}
                 className="inline-flex items-center gap-2 rounded-2xl bg-ink px-5 py-3 text-sm font-bold text-white transition hover:bg-gold hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <Send size={16} /> {submitting ? "Проверяем…" : "Завершить"}
