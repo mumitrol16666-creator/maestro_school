@@ -15,6 +15,7 @@ import { startWeeklyLeagueFinalizerJob } from "./application/services/weekly-lea
 import { getProductFeatureSnapshot } from "./config/product-features.js";
 import { productFeatureConfig } from "./config/product-features.js";
 import { startCrmOutboxWorker } from "./application/services/crm-outbox.service.js";
+import { startPendingCrmApprovalReconciliationJob } from "./application/services/crm-approval-reconciliation.service.js";
 import { startLearningDialogRetentionJob } from "./application/services/learning-dialog-retention.service.js";
 import { isCorsOriginAllowed } from "./config/cors-origin.js";
 
@@ -92,6 +93,7 @@ async function bootstrap() {
   startWeeklyLeagueFinalizerJob();
   if (productFeatureConfig.flags.lessonSyncV2) {
     startCrmOutboxWorker();
+    startPendingCrmApprovalReconciliationJob();
   }
   if (productFeatureConfig.flags.learningDialogsV2) {
     startLearningDialogRetentionJob();
