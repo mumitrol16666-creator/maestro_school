@@ -200,6 +200,41 @@ test("an explicit empty homework assignment is not replaced from legacy text", (
   );
 });
 
+test("a historical singleton topicIds assignment is normalized for finalization", () => {
+  const result = withInferredTopicHomeworkAssignment(
+    { homeworkDraft: "Старый текст" },
+    {
+      homeworkAssignment: {
+        topicIds: ["topic-1"],
+        instructions: "  Выучить слова и аккорды  ",
+      },
+      homeworkDecisions: [],
+      topicUpdates: [{ topicId: "topic-1", expectedPercent: 0, toPercent: 90 }],
+    } as unknown as Parameters<typeof withInferredTopicHomeworkAssignment>[1],
+  );
+
+  assert.deepEqual(result.homeworkAssignment, {
+    topicId: "topic-1",
+    instructions: "Выучить слова и аккорды",
+  });
+});
+
+test("a historical empty topicIds assignment is treated as no V2 assignment", () => {
+  const result = withInferredTopicHomeworkAssignment(
+    { homeworkDraft: "Отработать материал дома" },
+    {
+      homeworkAssignment: {
+        topicIds: [],
+        instructions: "Отработать материал дома",
+      },
+      homeworkDecisions: [],
+      topicUpdates: [],
+    } as unknown as Parameters<typeof withInferredTopicHomeworkAssignment>[1],
+  );
+
+  assert.equal(result.homeworkAssignment, null);
+});
+
 test("submission rejects a new homework assignment when nobody attended", () => {
   assert.throws(
     () => validateLearningHomeworkAssignmentRecipients({

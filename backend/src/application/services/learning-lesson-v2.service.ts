@@ -90,7 +90,27 @@ export function withInferredTopicHomeworkAssignment(
   reportPayload: unknown,
   input: LearningLessonV2ResultsInput,
 ): LearningLessonV2ResultsInput {
-  if (Object.prototype.hasOwnProperty.call(input, "homeworkAssignment")) return input;
+  if (Object.prototype.hasOwnProperty.call(input, "homeworkAssignment")) {
+    const assignment = (input as unknown as Record<string, unknown>).homeworkAssignment;
+    if (!assignment || typeof assignment !== "object" || Array.isArray(assignment)) return input;
+    const legacyTopicIds = (assignment as Record<string, unknown>).topicIds;
+    if (!Array.isArray(legacyTopicIds)) return input;
+    const topicIds = [...new Set(legacyTopicIds.filter(
+      (topicId): topicId is string => typeof topicId === "string" && Boolean(topicId.trim()),
+    ).map((topicId) => topicId.trim()))];
+    if (!topicIds.length) {
+      return { ...input, homeworkAssignment: null };
+    }
+    const instructionsValue = (assignment as Record<string, unknown>).instructions;
+    const instructions = typeof instructionsValue === "string" ? instructionsValue.trim() : "";
+    if (topicIds.length === 1 && instructions) {
+      return {
+        ...input,
+        homeworkAssignment: { topicId: topicIds[0], instructions },
+      };
+    }
+    return input;
+  }
   if (!reportPayload || typeof reportPayload !== "object" || Array.isArray(reportPayload)) {
     return input;
   }
