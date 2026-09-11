@@ -1,5 +1,3 @@
-import type { NextConfig } from "next";
-
 const isDevelopment = process.env.NODE_ENV !== "production";
 const apiProxyTarget = process.env.API_PROXY_TARGET?.replace(/\/$/, "");
 const contentSecurityPolicy = [
@@ -28,7 +26,8 @@ const securityHeaders = [
   { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
 ];
 
-const nextConfig: NextConfig = {
+/** @type {import("next").NextConfig} */
+const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   async rewrites() {
