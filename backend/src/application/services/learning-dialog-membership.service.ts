@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { Prisma, type LearningConversationMemberRole } from "@prisma/client";
 import { BadRequestError, ConflictError, NotFoundError } from "../../domain/errors.js";
+import { normalizeCrmDirectionTitle } from "../../domain/crm-direction-title.js";
 import { getLearningConversationRetention } from "../../domain/learning-dialog-policy.js";
 import {
   fetchCrmDirections,
@@ -499,9 +500,10 @@ function uniqueDirectionByTitle(
 ) {
   const grouped = new Map<string, Array<{ crmDirectionId: string; title: string }>>();
   for (const direction of directions.filter((item) => item.isActive)) {
-    const current = grouped.get(direction.title) ?? [];
+    const key = normalizeCrmDirectionTitle(direction.title);
+    const current = grouped.get(key) ?? [];
     current.push(direction);
-    grouped.set(direction.title, current);
+    grouped.set(key, current);
   }
   return new Map([...grouped.entries()].flatMap(([title, matches]) => (
     matches.length === 1 ? [[title, matches[0]] as const] : []
@@ -563,7 +565,7 @@ export async function syncTeacherLearningDialogsFromCrm(teacherUserId: string) {
     const studentUserId = studentByCrmId.get(student.crmStudentId);
     if (!studentUserId) continue;
     for (const directionTitle of student.directions) {
-      const direction = directionByTitle.get(directionTitle);
+      const direction = directionByTitle.get(normalizeCrmDirectionTitle(directionTitle));
       if (!direction) {
         unmappedDirections.add(directionTitle);
         continue;
@@ -579,7 +581,7 @@ export async function syncTeacherLearningDialogsFromCrm(teacherUserId: string) {
   }
 
   const groups: LearningGroupProjection[] = groupRoster.groups.map((group) => {
-    const direction = directionByTitle.get(group.direction);
+    const direction = directionByTitle.get(normalizeCrmDirectionTitle(group.direction));
     if (!direction) unmappedDirections.add(group.direction);
     return {
       crmGroupId: group.crmGroupId,

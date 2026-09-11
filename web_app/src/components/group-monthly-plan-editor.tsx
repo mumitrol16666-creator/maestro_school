@@ -23,6 +23,7 @@ import { ApiError } from "@/lib/api-client";
 import { learningHomeworkApi } from "@/lib/learning-homework-api";
 import { teacherStudentsApi } from "@/lib/teacher-students-api";
 import { currentAqtobeMonth } from "@/lib/aqtobe-month";
+import { crmDirectionTitlesMatch } from "@/lib/crm-direction-title";
 import type {
   GroupMonthlyPlan,
   LearningPlanCarryoverPreview,
@@ -76,7 +77,7 @@ export function GroupMonthlyPlanEditor({
     return <p className="mt-5 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700">{modeResource.error ?? "Не удалось загрузить направления"}</p>;
   }
   const directions = modeResource.data.mode === "v2"
-    ? modeResource.data.directions.filter((direction) => direction.title === directionTitle)
+    ? modeResource.data.directions.filter((direction) => crmDirectionTitlesMatch(direction.title, directionTitle))
     : [];
   if (modeResource.data.mode === "v2" && !directions.length) {
     return <p className="mt-5 rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-900">Для группы не выбрано направление обучения.</p>;

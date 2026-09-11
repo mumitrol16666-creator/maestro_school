@@ -6,6 +6,7 @@ import { useApiResource } from "@/hooks/use-api-resource";
 import { ApiError } from "@/lib/api-client";
 import { teacherStudentsApi } from "@/lib/teacher-students-api";
 import { currentAqtobeMonth } from "@/lib/aqtobe-month";
+import { normalizeCrmDirectionTitle } from "@/lib/crm-direction-title";
 import { LearningTopicProgressEditor } from "@/components/learning-topic-progress-editor";
 import { LearningHomeworkAssignmentComposer } from "@/components/learning-homework-assignment-composer";
 import {
@@ -71,8 +72,9 @@ export function StudentMonthlyPlanEditor({
     return <p className="mt-5 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700">{modeResource.error ?? "Не удалось загрузить направления"}</p>;
   }
 
+  const normalizedDirectionTitles = new Set(directionTitles.map(normalizeCrmDirectionTitle));
   const directions = modeResource.data.mode === "v2"
-    ? modeResource.data.directions.filter((direction) => directionTitles.includes(direction.title))
+    ? modeResource.data.directions.filter((direction) => normalizedDirectionTitles.has(normalizeCrmDirectionTitle(direction.title)))
     : [];
   if (modeResource.data.mode === "v2" && !directions.length) {
     return <p className="mt-5 rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-900">Для ученика не выбрано направление обучения.</p>;

@@ -2,10 +2,12 @@ import { createHash } from "node:crypto";
 import type { CrmDirectionRef } from "../../infrastructure/crm/crm-client.js";
 import {
   fetchCrmDirections,
+  fetchTeacherGroups,
   fetchTeacherStudents,
 } from "../../infrastructure/crm/crm-client.js";
 import { prisma } from "../../infrastructure/database/prisma.js";
 import { BadRequestError, ConflictError } from "../../domain/errors.js";
+import { normalizeCrmDirectionTitle } from "../../domain/crm-direction-title.js";
 import { requireCrmTeacherId } from "./teacher-students.service.js";
 
 function projectionSlug(crmDirectionId: string) {
@@ -42,7 +44,8 @@ export async function requireCrmDirection(
       "CRM_DIRECTION_INACTIVE",
     );
   }
-  if (!allowedTitles.includes(direction.title)) {
+  const normalizedAllowedTitles = new Set(allowedTitles.map(normalizeCrmDirectionTitle));
+  if (!normalizedAllowedTitles.has(normalizeCrmDirectionTitle(direction.title))) {
     throw new BadRequestError(
       "Это направление не назначено преподавателю для выбранного ученика или группы",
       "CRM_DIRECTION_NOT_ASSIGNED",
@@ -137,13 +140,18 @@ export async function listAdminCrmDirectionProjection(input: {
 
 export async function listTeacherCrmDirections(teacherUserId: string) {
   const crmTeacherId = await requireCrmTeacherId(teacherUserId);
-  const [catalog, roster] = await Promise.all([
+  const [catalog, roster, groupRoster] = await Promise.all([
     fetchCrmDirections(),
     fetchTeacherStudents(crmTeacherId),
+    fetchTeacherGroups(crmTeacherId),
   ]);
-  const allowedTitles = new Set(roster.teacher?.directions ?? []);
+  const allowedTitles = new Set([
+    ...(roster.teacher?.directions ?? []),
+    ...roster.students.flatMap((student) => student.directions),
+    ...groupRoster.groups.map((group) => group.direction),
+  ].map(normalizeCrmDirectionTitle));
   const directions = catalog.directions.filter((direction) => (
-    direction.isActive && allowedTitles.has(direction.title)
+    direction.isActive && allowedTitles.has(normalizeCrmDirectionTitle(direction.title))
   ));
   const projections = await Promise.all(directions.map(syncCrmDirectionProjection));
   return projections.map((projection) => ({
