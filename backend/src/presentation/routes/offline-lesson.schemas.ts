@@ -70,7 +70,7 @@ export const learningLessonResultsSchema = z.object({
     expectedPercent: z.number().int().min(0).max(100).nullable(),
     toPercent: z.number().int().min(0).max(100),
     comment: z.string().max(5000).nullable().optional(),
-  })).max(20).default([]),
+  })).max(50).default([]),
 }).superRefine((results, context) => {
   const homeworkKeys = results.homeworkDecisions.map(
     (item) => `${item.recipientId}:${item.cycleNumber}`,

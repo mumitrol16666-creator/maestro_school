@@ -23,6 +23,7 @@ import { validateOfflineLessonSubmission } from "./offline-lesson-submission-pol
 import { aqtobeMonthKey } from "../../lib/aqtobe-month.js";
 import {
   getLearningLessonV2Context,
+  learningLessonV2ReferencedTopicIds,
   validateLearningLessonV2ResultsForSubmission,
   type LearningLessonV2ResultsInput,
 } from "./learning-lesson-v2.service.js";
@@ -410,6 +411,11 @@ export async function adminOfflineApprove(
         crmClassId,
         stagedLearningResults,
         presentStudentIds,
+        {
+          additionalAllowedTopicIds: learningLessonV2ReferencedTopicIds(
+            currentLearningResults,
+          ),
+        },
       );
     }
 

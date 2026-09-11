@@ -2,11 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   canApplyLearningLessonResults,
+  learningPlanCompletionRewardPoints,
   learningHomeworkAssignmentRecipientsForApproval,
+  learningLessonV2ReferencedTopicIds,
   missingLearningHomeworkDecisions,
   planCompletionRewardTopicId,
   validateLearningHomeworkAssignmentRecipients,
   validateLearningLessonV2ResultDuplicates,
+  validateLearningLessonV2TopicReferences,
   withInferredTopicHomeworkAssignment,
 } from "./learning-lesson-v2.service.js";
 import { LearningPlanTopicState } from "@prisma/client";
@@ -122,6 +125,18 @@ test("plan completion reward is not previewed without a unique unfinished topic"
   }), null);
 });
 
+test("lesson context exposes a plan reward only until that plan has paid it", () => {
+  assert.equal(learningPlanCompletionRewardPoints(null), 250);
+  assert.equal(
+    learningPlanCompletionRewardPoints("learning-plan-completion:plan-1"),
+    0,
+  );
+  assert.equal(
+    learningPlanCompletionRewardPoints("legacy-plan:completion:blocked-before-cutover"),
+    0,
+  );
+});
+
 test("an approved snapshot keeps only internal duplicate invariants", () => {
   assert.doesNotThrow(() => validateLearningLessonV2ResultDuplicates({
     homeworkDecisions: [{
@@ -149,6 +164,90 @@ test("an approved snapshot keeps only internal duplicate invariants", () => {
       && error !== null
       && "code" in error
       && error.code === "LESSON_TOPIC_DUPLICATE"
+    ),
+  );
+});
+
+test("admin review may retain only topic references from the immutable submitted snapshot", () => {
+  const immutableResults = {
+    homeworkAssignment: {
+      topicId: "removed-homework-topic",
+      instructions: "Повторить снятую тему",
+    },
+    homeworkDecisions: [],
+    topicUpdates: [{
+      topicId: "removed-progress-topic",
+      expectedPercent: 25,
+      toPercent: 60,
+    }],
+  };
+  const additionalAllowedTopicIds = learningLessonV2ReferencedTopicIds(immutableResults);
+  assert.deepEqual(
+    [...additionalAllowedTopicIds],
+    ["removed-progress-topic", "removed-homework-topic"],
+  );
+
+  assert.doesNotThrow(() => validateLearningLessonV2TopicReferences(
+    {
+      homeworkAssignment: immutableResults.homeworkAssignment,
+      homeworkDecisions: [],
+      topicUpdates: [
+        { topicId: "current-topic", expectedPercent: 0, toPercent: 50 },
+        immutableResults.topicUpdates[0],
+      ],
+    },
+    ["current-topic"],
+    additionalAllowedTopicIds,
+  ));
+
+  assert.throws(
+    () => validateLearningLessonV2TopicReferences(
+      {
+        homeworkDecisions: [],
+        topicUpdates: [{ topicId: "unrelated-topic", expectedPercent: 0, toPercent: 50 }],
+      },
+      ["current-topic"],
+      additionalAllowedTopicIds,
+    ),
+    (error: unknown) => (
+      typeof error === "object"
+      && error !== null
+      && "code" in error
+      && error.code === "FORBIDDEN"
+    ),
+  );
+
+  assert.throws(
+    () => validateLearningLessonV2TopicReferences(
+      {
+        homeworkAssignment: {
+          topicId: "unrelated-topic",
+          instructions: "Новое задание",
+        },
+        homeworkDecisions: [],
+        topicUpdates: [],
+      },
+      ["current-topic"],
+      additionalAllowedTopicIds,
+    ),
+    (error: unknown) => (
+      typeof error === "object"
+      && error !== null
+      && "code" in error
+      && error.code === "FORBIDDEN"
+    ),
+  );
+
+  assert.throws(
+    () => validateLearningLessonV2TopicReferences(
+      immutableResults,
+      ["current-topic"],
+    ),
+    (error: unknown) => (
+      typeof error === "object"
+      && error !== null
+      && "code" in error
+      && error.code === "FORBIDDEN"
     ),
   );
 });

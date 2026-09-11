@@ -71,6 +71,12 @@ async function prepareEditableLesson(
   }
 
   expect(["started", "not_filled"]).toContain(status);
+
+  const clearedTeacherDraft = await request.delete(
+    `/api/v1/teachers/me/offline-lessons/${crmClassId}/draft`,
+    { headers: { Authorization: `Bearer ${teacherSession.token}` } },
+  );
+  expect(clearedTeacherDraft.ok()).toBe(true);
 }
 
 async function loginTeacher(page: Page) {
@@ -99,6 +105,7 @@ test("итог урока разделяет баллы темы и недель
 
   await page.getByRole("button", { name: /Стабильный бой восьмыми/ }).click();
   await page.getByRole("button", { name: "100% · Освоено" }).click();
+  await page.getByPlaceholder("Что отработать дома до следующего урока?").fill("");
   await page.getByRole("button", { name: "Принять", exact: true }).click();
   await page.getByRole("button", { name: "Отправить на проверку" }).click();
 
@@ -123,6 +130,230 @@ test("итог урока разделяет баллы темы и недель
   }
 });
 
+test("один отчёт сохраняет независимый прогресс нескольких тем", async ({ page, request }) => {
+  await prepareEditableLesson(request, adminSession.token, INDIVIDUAL_LESSON_ID);
+  await loginTeacher(page);
+  await page.goto(`/admin/offline-lessons/${INDIVIDUAL_LESSON_ID}`);
+  await closeNotificationCenter(page);
+
+  const firstTopic = page.getByRole("button", { name: /Стабильный бой восьмыми/ });
+  const secondTopic = page.getByRole("button", { name: /Чистые переходы аккордов/ });
+  const progressInput = page.getByRole("spinbutton", { name: "Новый процент темы" });
+
+  await firstTopic.click();
+  await progressInput.fill("64");
+  await expect(firstTopic).toContainText("45% → 64%");
+
+  await secondTopic.click();
+  await progressInput.fill("75");
+  await expect(secondTopic).toContainText("0% → 75%");
+  await expect(page.getByLabel("Тема урока")).toHaveValue("Стабильный бой восьмыми");
+
+  const homeworkText = "Повторить переходы аккордов под метроном";
+  await page.getByPlaceholder("Что отработать дома до следующего урока?").fill(homeworkText);
+  const homeworkTopicSelect = page.getByLabel("Тема нового домашнего задания");
+  await expect(homeworkTopicSelect).toHaveValue("");
+  await expect(homeworkTopicSelect).toHaveAttribute("aria-invalid", "true");
+
+  await firstTopic.click();
+  await expect(progressInput).toHaveValue("64");
+  await expect(page.getByText(/Черновик сохранён автоматически/)).toBeVisible();
+
+  await page.reload();
+  await closeNotificationCenter(page);
+  await page.getByRole("button", { name: /Стабильный бой восьмыми/ }).click();
+  await expect(page.getByRole("spinbutton", { name: "Новый процент темы" })).toHaveValue("64");
+  await page.getByRole("button", { name: /Чистые переходы аккордов/ }).click();
+  await expect(page.getByRole("spinbutton", { name: "Новый процент темы" })).toHaveValue("75");
+  await expect(page.getByLabel("Тема нового домашнего задания")).toHaveValue("");
+
+  const homeworkTopicOption = page.getByLabel("Тема нового домашнего задания")
+    .locator("option")
+    .filter({ hasText: "Чистые переходы аккордов" });
+  const homeworkTopicId = await homeworkTopicOption.getAttribute("value");
+  expect(homeworkTopicId).toBeTruthy();
+  await page.getByLabel("Тема нового домашнего задания").selectOption(homeworkTopicId!);
+
+  await page.getByRole("button", { name: "Принять", exact: true }).click();
+  await page.getByRole("button", { name: "Отправить на проверку" }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Отправить урок на проверку?" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByText("45% → 64%", { exact: true })).toBeVisible();
+  await expect(dialog.getByText("0% → 75%", { exact: true })).toBeVisible();
+  const newHomeworkPreview = dialog.getByText("Новое ДЗ", { exact: true }).locator("..");
+  await expect(newHomeworkPreview.getByText("Чистые переходы аккордов", { exact: true })).toBeVisible();
+  await expect(newHomeworkPreview.getByText(homeworkText, { exact: true })).toBeVisible();
+
+  const submitResponsePromise = page.waitForResponse((incoming) => (
+    incoming.request().method() === "POST"
+    && incoming.url().endsWith(`/api/v1/teachers/me/offline-lessons/${INDIVIDUAL_LESSON_ID}/submit`)
+  ));
+  const teacherDraftDeletePromise = page.waitForResponse((incoming) => (
+    incoming.request().method() === "DELETE"
+    && incoming.url().endsWith(`/api/v1/teachers/me/offline-lessons/${INDIVIDUAL_LESSON_ID}/draft`)
+  ));
+  await dialog.getByRole("button", { name: "Отправить на проверку" }).click();
+  const submitResponse = await submitResponsePromise;
+  expect(submitResponse.ok()).toBe(true);
+  expect((await teacherDraftDeletePromise).ok()).toBe(true);
+  const submitted = submitResponse.request().postDataJSON() as {
+    learningResultsV2?: {
+      homeworkAssignment?: { topicId: string; instructions: string };
+      topicUpdates: Array<{
+        topicId: string;
+        expectedPercent: number | null;
+        toPercent: number;
+      }>;
+    };
+  };
+  expect(submitted.learningResultsV2?.topicUpdates).toEqual([
+    expect.objectContaining({ expectedPercent: 45, toPercent: 64 }),
+    expect.objectContaining({ expectedPercent: 0, toPercent: 75 }),
+  ]);
+  expect(submitted.learningResultsV2?.homeworkAssignment).toEqual({
+    topicId: homeworkTopicId,
+    instructions: homeworkText,
+  });
+
+  const teacherDraftHeaders = { Authorization: `Bearer ${teacherSession.token}` };
+  const clearedTeacherDraft = await request.delete(
+    `/api/v1/teachers/me/offline-lessons/${INDIVIDUAL_LESSON_ID}/draft`,
+    { headers: teacherDraftHeaders },
+  );
+  expect(clearedTeacherDraft.ok()).toBe(true);
+  const staleTeacherDraft = await request.put(
+    `/api/v1/teachers/me/offline-lessons/${INDIVIDUAL_LESSON_ID}/draft`,
+    {
+      headers: teacherDraftHeaders,
+      data: {
+        expectedRevision: 0,
+        payload: {
+          form: {
+            learningV2ReportVersion: null,
+            learningV2Draft: {
+              topicId: submitted.learningResultsV2?.topicUpdates[0]?.topicId,
+              expectedPercent: 45,
+              toPercent: 64,
+              topicComment: "",
+              homeworkDecisions: {},
+            },
+          },
+        },
+      },
+    },
+  );
+  expect(staleTeacherDraft.ok()).toBe(true);
+
+  const legacyAdminDraft = await request.put(
+    `/api/v1/admin/offline-lessons/${INDIVIDUAL_LESSON_ID}/draft`,
+    {
+      headers: { Authorization: `Bearer ${adminSession.token}` },
+      data: {
+        expectedRevision: 0,
+        payload: {
+          form: {
+            learningV2Draft: {
+              topicId: submitted.learningResultsV2?.topicUpdates[0]?.topicId,
+              expectedPercent: 45,
+              toPercent: 64,
+              topicComment: "",
+              homeworkDecisions: {},
+            },
+          },
+        },
+      },
+    },
+  );
+  expect(legacyAdminDraft.ok()).toBe(true);
+
+  await page.route(
+    `**/api/v1/admin/offline-lessons/${INDIVIDUAL_LESSON_ID}/students`,
+    async (route) => {
+      const response = await route.fetch();
+      const body = await response.json() as {
+        data?: {
+          learningV2?: {
+            plans?: Array<{ topics?: Array<{ id: string }> }>;
+          };
+        };
+      };
+      for (const plan of body.data?.learningV2?.plans ?? []) {
+        plan.topics = plan.topics?.filter((topic) => topic.id !== homeworkTopicId);
+      }
+      await route.fulfill({
+        response,
+        contentType: "application/json",
+        body: JSON.stringify(body),
+      });
+    },
+  );
+
+  await page.evaluate((session) => {
+    window.localStorage.setItem("maestro_access_token", session.token);
+    window.localStorage.setItem("maestro_auth_user", JSON.stringify(session.user));
+  }, adminSession);
+  await page.goto(`/admin/offline-lessons/${INDIVIDUAL_LESSON_ID}`);
+  await closeNotificationCenter(page);
+
+  await page.getByRole("button", { name: /Стабильный бой восьмыми/ }).click();
+  await expect(page.getByRole("spinbutton", { name: "Новый процент темы" })).toHaveValue("64");
+  await expect(page.getByRole("button", { name: /Чистые переходы аккордов/ })).toHaveCount(0);
+  await expect(page.getByLabel("Тема нового домашнего задания")).toHaveValue(homeworkTopicId!);
+  await expect(page.getByLabel("Тема нового домашнего задания").locator(
+    `option[value="${homeworkTopicId}"]`,
+  )).toHaveText("Тема из отправленного отчёта");
+
+  await page.route(
+    `**/api/v1/admin/offline-lessons/${INDIVIDUAL_LESSON_ID}/approve`,
+    async (route) => {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ data: {} }) });
+    },
+  );
+  const approveResponsePromise = page.waitForResponse((incoming) => (
+    incoming.request().method() === "POST"
+    && incoming.url().endsWith(`/api/v1/admin/offline-lessons/${INDIVIDUAL_LESSON_ID}/approve`)
+  ));
+  await page.getByRole("button", { name: "Подтвердить урок" }).click();
+  const approveResponse = await approveResponsePromise;
+  expect(approveResponse.ok()).toBe(true);
+  await expect(page.getByText("Урок подтверждён", { exact: true })).toBeVisible();
+  const approved = approveResponse.request().postDataJSON() as {
+    learningResultsV2?: {
+      homeworkAssignment?: { topicId: string; instructions: string };
+      topicUpdates: Array<{ expectedPercent: number | null; toPercent: number }>;
+    };
+  };
+  expect(approved.learningResultsV2?.topicUpdates).toEqual([
+    expect.objectContaining({ expectedPercent: 45, toPercent: 64 }),
+    expect.objectContaining({ expectedPercent: 0, toPercent: 75 }),
+  ]);
+  expect(approved.learningResultsV2?.homeworkAssignment).toEqual({
+    topicId: homeworkTopicId,
+    instructions: homeworkText,
+  });
+
+  const returned = await request.post(
+    `/api/v1/admin/offline-lessons/${INDIVIDUAL_LESSON_ID}/return-to-teacher`,
+    {
+      headers: { Authorization: `Bearer ${adminSession.token}` },
+      data: { reason: "Завершение локальной multi-topic проверки" },
+    },
+  );
+  expect(returned.ok()).toBe(true);
+
+  await page.evaluate((session) => {
+    window.localStorage.setItem("maestro_access_token", session.token);
+    window.localStorage.setItem("maestro_auth_user", JSON.stringify(session.user));
+  }, teacherSession);
+  await page.goto(`/admin/offline-lessons/${INDIVIDUAL_LESSON_ID}`);
+  await closeNotificationCenter(page);
+  await page.getByRole("button", { name: /Стабильный бой восьмыми/ }).click();
+  await expect(page.getByRole("spinbutton", { name: "Новый процент темы" })).toHaveValue("64");
+  await page.getByRole("button", { name: /Чистые переходы аккордов/ }).click();
+  await expect(page.getByRole("spinbutton", { name: "Новый процент темы" })).toHaveValue("75");
+});
+
 test("групповой урок оставляет тему общей, а проверку ДЗ персональной", async ({ page, request }) => {
   await prepareEditableLesson(request, adminSession.token, GROUP_LESSON_ID);
   await loginTeacher(page);
@@ -135,6 +366,7 @@ test("групповой урок оставляет тему общей, а п�
   const topicButton = page.getByRole("button", { name: /Единый ритм группы/ }).first();
   await topicButton.click();
   await page.getByRole("button", { name: "100% · Освоено" }).click();
+  await page.getByPlaceholder("Что отработать дома до следующего урока?").fill("");
 
   const homeworkSection = page.getByText("Решение по ожидающему ДЗ").locator("..", { hasText: "Казыбаев Камбар" });
   const decisionRows = homeworkSection.locator("div.border-t.border-stone-200.py-4");

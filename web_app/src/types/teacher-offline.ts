@@ -260,6 +260,7 @@ export type LearningLessonV2Context = {
   plans: Array<{
     planId: string;
     month: string;
+    planCompletionRewardPoints: number;
     direction: {
       id: string;
       crmDirectionId: string | null;

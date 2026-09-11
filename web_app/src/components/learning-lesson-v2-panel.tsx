@@ -17,22 +17,75 @@ export type LearningLessonHomeworkDecisionDraft = {
   comment: string;
 };
 
+export type LearningLessonTopicProgressDraft = {
+  expectedPercent: number | null;
+  toPercent: number;
+  comment: string;
+};
+
 export type LearningLessonV2Draft = {
   topicId: string | null;
-  expectedPercent: number | null;
-  toPercent: number | null;
-  topicComment: string;
+  homeworkTopicId: string | null;
+  topicProgress: Record<string, LearningLessonTopicProgressDraft>;
   homeworkDecisions: Record<string, LearningLessonHomeworkDecisionDraft>;
 };
 
 export function emptyLearningLessonV2Draft(): LearningLessonV2Draft {
   return {
     topicId: null,
-    expectedPercent: null,
-    toPercent: null,
-    topicComment: "",
+    homeworkTopicId: null,
+    topicProgress: {},
     homeworkDecisions: {},
   };
+}
+
+export function normalizeLearningLessonV2Draft(value: unknown): LearningLessonV2Draft {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return emptyLearningLessonV2Draft();
+  }
+  const candidate = value as Record<string, unknown>;
+  const topicId = typeof candidate.topicId === "string" && candidate.topicId
+    ? candidate.topicId
+    : null;
+  const hasHomeworkTopicId = Object.prototype.hasOwnProperty.call(candidate, "homeworkTopicId");
+  const homeworkTopicId = hasHomeworkTopicId
+    ? typeof candidate.homeworkTopicId === "string" && candidate.homeworkTopicId
+      ? candidate.homeworkTopicId
+      : null
+    : topicId;
+  const homeworkDecisions = candidate.homeworkDecisions
+    && typeof candidate.homeworkDecisions === "object"
+    && !Array.isArray(candidate.homeworkDecisions)
+    ? candidate.homeworkDecisions as Record<string, LearningLessonHomeworkDecisionDraft>
+    : {};
+  const rawTopicProgress = candidate.topicProgress
+    && typeof candidate.topicProgress === "object"
+    && !Array.isArray(candidate.topicProgress)
+    ? candidate.topicProgress as Record<string, LearningLessonTopicProgressDraft>
+    : {};
+  const topicProgress = { ...rawTopicProgress };
+
+  // Older clients saved only one scalar topic update. Keep that unsent work
+  // when the application updates while a lesson report is still being edited.
+  const legacyToPercent = candidate.toPercent;
+  if (
+    topicId
+    && Number.isInteger(legacyToPercent)
+    && Number(legacyToPercent) >= 0
+    && Number(legacyToPercent) <= 100
+    && !topicProgress[topicId]
+  ) {
+    const legacyExpectedPercent = candidate.expectedPercent;
+    topicProgress[topicId] = {
+      expectedPercent: Number.isInteger(legacyExpectedPercent)
+        ? Number(legacyExpectedPercent)
+        : null,
+      toPercent: Number(legacyToPercent),
+      comment: typeof candidate.topicComment === "string" ? candidate.topicComment : "",
+    };
+  }
+
+  return { topicId, homeworkTopicId, topicProgress, homeworkDecisions };
 }
 
 export function pendingLearningHomeworkCount(context?: LearningLessonV2Context | null) {
@@ -152,7 +205,30 @@ export function LearningLessonV2Panel({
     plan.topics.map((topic) => ({ ...topic, directionTitle: plan.direction.title }))
   ));
   const selectedTopic = topics.find((topic) => topic.id === draft.topicId) ?? null;
+  const selectedTopicProgress = selectedTopic ? draft.topicProgress[selectedTopic.id] : null;
+  const selectedExpectedPercent = selectedTopicProgress?.expectedPercent
+    ?? selectedTopic?.progressPercent
+    ?? null;
+  const selectedToPercent = selectedTopicProgress?.toPercent
+    ?? selectedTopic?.progressPercent
+    ?? null;
   const pendingCount = pendingLearningHomeworkCount(context);
+
+  function setTopicProgress(topic: typeof topics[number], toPercent: number) {
+    const normalizedPercent = Math.max(0, Math.min(100, Math.round(toPercent)));
+    const current = draft.topicProgress[topic.id];
+    const topicProgress = { ...draft.topicProgress };
+    if (!current && normalizedPercent === topic.progressPercent) {
+      delete topicProgress[topic.id];
+    } else {
+      topicProgress[topic.id] = {
+        expectedPercent: current ? current.expectedPercent : topic.progressPercent,
+        toPercent: normalizedPercent,
+        comment: current?.comment ?? "",
+      };
+    }
+    onChange({ ...draft, topicProgress });
+  }
 
   return (
     <section className="mb-7 rounded-lg border border-stone-200 bg-white p-4 sm:p-6">
@@ -172,24 +248,23 @@ export function LearningLessonV2Panel({
       </div>
 
       <div className="mt-5 border-t border-stone-200 pt-5">
-        <p className="text-sm font-black text-ink">Прогресс темы</p>
+        <p className="text-sm font-black text-ink">Прогресс тем</p>
         {topics.length ? (
           <>
             <div className="mt-3 flex flex-wrap gap-2">
               {topics.map((topic) => {
                 const selected = topic.id === draft.topicId;
+                const topicDraft = draft.topicProgress[topic.id];
                 return (
                   <button
                     key={topic.id}
                     type="button"
                     disabled={disabled || topic.progressPercent === 100}
+                    aria-pressed={selected}
                     onClick={() => {
                       onChange({
                         ...draft,
                         topicId: topic.id,
-                        expectedPercent: topic.progressPercent,
-                        toPercent: topic.progressPercent,
-                        topicComment: "",
                       });
                       onTopicTitleChange?.(topic.title);
                     }}
@@ -201,7 +276,9 @@ export function LearningLessonV2Panel({
                   >
                     <span className="block">{topic.title}</span>
                     <span className="mt-0.5 block text-xs font-semibold opacity-65">
-                      {topic.directionTitle} · {topic.progressPercent}%
+                      {topic.directionTitle} · {topicDraft && topicDraft.toPercent !== topic.progressPercent
+                        ? `${topic.progressPercent}% → ${topicDraft.toPercent}%`
+                        : `${topic.progressPercent}%`}
                     </span>
                   </button>
                 );
@@ -213,7 +290,7 @@ export function LearningLessonV2Panel({
                   <div>
                     <p className="text-sm font-black text-ink">{selectedTopic.title}</p>
                     <p className="mt-1 text-xs font-semibold text-stone-500">
-                      Было {draft.expectedPercent ?? 0}% · будет {draft.toPercent ?? 0}%
+                      Было {selectedExpectedPercent ?? 0}% · будет {selectedToPercent ?? 0}%
                     </p>
                   </div>
                   <input
@@ -223,11 +300,11 @@ export function LearningLessonV2Panel({
                     step={1}
                     inputMode="numeric"
                     disabled={disabled}
-                    value={draft.toPercent ?? selectedTopic.progressPercent}
-                    onChange={(event) => onChange({
-                      ...draft,
-                      toPercent: Math.max(0, Math.min(100, Number(event.target.value) || 0)),
-                    })}
+                    value={selectedToPercent ?? selectedTopic.progressPercent}
+                    onChange={(event) => setTopicProgress(
+                      selectedTopic,
+                      Number(event.target.value) || 0,
+                    )}
                     className="h-11 w-24 rounded-lg border border-stone-300 bg-white px-3 text-center text-lg font-black text-ink"
                     aria-label="Новый процент темы"
                   />
@@ -238,11 +315,8 @@ export function LearningLessonV2Panel({
                   max={100}
                   step={1}
                   disabled={disabled}
-                  value={draft.toPercent ?? selectedTopic.progressPercent}
-                  onChange={(event) => onChange({
-                    ...draft,
-                    toPercent: Number(event.target.value),
-                  })}
+                  value={selectedToPercent ?? selectedTopic.progressPercent}
+                  onChange={(event) => setTopicProgress(selectedTopic, Number(event.target.value))}
                   className="mt-4 w-full accent-amber-600"
                   aria-label="Прогресс темы"
                 />
@@ -252,9 +326,10 @@ export function LearningLessonV2Panel({
                       key={value}
                       type="button"
                       disabled={disabled}
-                      onClick={() => onChange({ ...draft, toPercent: value })}
-                      className={`rounded-lg border px-3 py-1.5 text-xs font-bold ${
-                        draft.toPercent === value
+                      aria-pressed={selectedToPercent === value}
+                      onClick={() => setTopicProgress(selectedTopic, value)}
+                      className={`min-h-11 rounded-lg border px-3 py-2 text-xs font-bold ${
+                        selectedToPercent === value
                           ? "border-amber-700 bg-amber-700 text-white"
                           : "border-stone-200 bg-white text-stone-700"
                       }`}
@@ -271,7 +346,7 @@ export function LearningLessonV2Panel({
               </div>
             ) : (
               <p className="mt-3 text-sm text-stone-500">
-                Выберите тему, если меняете её прогресс или задаёте по ней новое домашнее задание.
+                Выберите тему, чтобы изменить её прогресс. Остальные изменения при переключении сохранятся.
               </p>
             )}
           </>

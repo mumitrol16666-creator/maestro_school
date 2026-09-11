@@ -16,7 +16,7 @@ import {
   createLearningHomeworkAssignmentForRecipients,
   reviewLearningHomework,
 } from "./learning-homework-v2.service.js";
-import { updateLearningTopicProgressFromLessonV2 } from "./learning-plan-v2.service.js";
+import { updateLearningTopicProgressBatchFromLessonV2 } from "./learning-plan-v2.service.js";
 import { requireCrmTeacherId } from "./teacher-students.service.js";
 import { previewOfflineLessonAttendanceXp } from "./weekly-league.service.js";
 import {
@@ -79,6 +79,35 @@ export type LearningLessonV2ResultsInput = {
   homeworkDecisions: LearningLessonHomeworkDecision[];
   topicUpdates: LearningLessonTopicUpdate[];
 };
+
+export function learningLessonV2ReferencedTopicIds(
+  input: LearningLessonV2ResultsInput | null | undefined,
+) {
+  const topicIds = new Set(input?.topicUpdates.map((update) => update.topicId) ?? []);
+  if (input?.homeworkAssignment?.topicId) {
+    topicIds.add(input.homeworkAssignment.topicId);
+  }
+  return topicIds;
+}
+
+export function validateLearningLessonV2TopicReferences(
+  input: LearningLessonV2ResultsInput,
+  currentTopicIds: readonly string[],
+  additionalAllowedTopicIds?: ReadonlySet<string>,
+) {
+  const allowedTopics = new Set(currentTopicIds);
+  for (const topicId of additionalAllowedTopicIds ?? []) {
+    allowedTopics.add(topicId);
+  }
+  for (const update of input.topicUpdates) {
+    if (!allowedTopics.has(update.topicId)) {
+      throw new ForbiddenError("Тема не принадлежит этому уроку");
+    }
+  }
+  if (input.homeworkAssignment && !allowedTopics.has(input.homeworkAssignment.topicId)) {
+    throw new ForbiddenError("Тема домашнего задания не принадлежит этому уроку");
+  }
+}
 
 /**
  * Reports created before topic-linked homework stored the same teacher text only
@@ -162,6 +191,10 @@ export function planCompletionRewardTopicId(plan: {
   return incompleteTopics.length === 1 && !incompleteTopics[0].topic.archivedAt
     ? incompleteTopics[0].topicId
     : null;
+}
+
+export function learningPlanCompletionRewardPoints(completionRewardSourceKey: string | null) {
+  return completionRewardSourceKey === null ? NON_EMPTY_PLAN_COMPLETION_POINTS : 0;
 }
 
 export function offlineLessonEventAt(lesson: LessonCard) {
@@ -346,6 +379,9 @@ async function lessonPlans(scope: LessonScope) {
     return [{
       planId: plan.id,
       month: plan.month,
+      planCompletionRewardPoints: learningPlanCompletionRewardPoints(
+        plan.completionRewardSourceKey,
+      ),
       direction: {
         id: plan.direction.id,
         crmDirectionId: plan.direction.crmDirectionId,
@@ -444,7 +480,11 @@ export async function getLearningLessonV2Context(actorUserId: string, crmClassId
 function validateLearningLessonV2Input(
   context: LearningLessonV2Context,
   input: LearningLessonV2ResultsInput,
-  options: { requireEditable: boolean; requirePendingHomework: boolean },
+  options: {
+    requireEditable: boolean;
+    requirePendingHomework: boolean;
+    additionalAllowedTopicIds?: ReadonlySet<string>;
+  },
 ) {
   if (!context.available) {
     if (
@@ -465,19 +505,15 @@ function validateLearningLessonV2Input(
     );
   }
   validateLearningLessonV2ResultDuplicates(input);
-  const allowedTopics = new Set(context.plans.flatMap((plan) => plan.topics.map((topic) => topic.id)));
+  validateLearningLessonV2TopicReferences(
+    input,
+    context.plans.flatMap((plan) => plan.topics.map((topic) => topic.id)),
+    options.additionalAllowedTopicIds,
+  );
   const pendingByRecipient = new Map(
     context.students.flatMap((student) => student.pendingHomework)
       .map((item) => [item.recipientId, item]),
   );
-  for (const update of input.topicUpdates) {
-    if (!allowedTopics.has(update.topicId)) {
-      throw new ForbiddenError("Тема не принадлежит этому уроку");
-    }
-  }
-  if (input.homeworkAssignment && !allowedTopics.has(input.homeworkAssignment.topicId)) {
-    throw new ForbiddenError("Тема домашнего задания не принадлежит этому уроку");
-  }
   if (options.requirePendingHomework) {
     for (const decision of input.homeworkDecisions) {
       const pending = pendingByRecipient.get(decision.recipientId);
@@ -534,6 +570,7 @@ export async function validateLearningLessonV2ResultsForSubmission(
   crmClassId: string,
   input: LearningLessonV2ResultsInput,
   presentStudentIds: ReadonlySet<string>,
+  options: { additionalAllowedTopicIds?: ReadonlySet<string> } = {},
 ) {
   if (!learningLessonV2Enabled()) return null;
   const context = await getLearningLessonV2Context(actorUserId, crmClassId);
@@ -541,6 +578,7 @@ export async function validateLearningLessonV2ResultsForSubmission(
   validateLearningLessonV2Input(context, input, {
     requireEditable: true,
     requirePendingHomework: true,
+    additionalAllowedTopicIds: options.additionalAllowedTopicIds,
   });
   validateLearningHomeworkAssignmentRecipients(input, presentStudentIds);
   if (!context.available) return context;
@@ -597,21 +635,20 @@ async function applyValidatedLearningLessonV2Results(
       idempotencyKey: `offline-lesson:${crmClassId}:homework:${decision.recipientId}:${decision.cycleNumber}`,
     }));
   }
-  const topicResults = [];
-  for (const update of input.topicUpdates) {
-    topicResults.push(await updateLearningTopicProgressFromLessonV2(
-      actorUserId,
-      update.topicId,
-      {
-        crmClassId,
-        expectedPercent: update.expectedPercent,
-        toPercent: update.toPercent,
-        comment: update.comment ?? undefined,
-        occurredAt: context.eventAt,
-        rewardRecipientCrmStudentIds: approval?.recipientCrmStudentIds,
-      },
-    ));
-  }
+  const topicResults = await updateLearningTopicProgressBatchFromLessonV2(
+    actorUserId,
+    crmClassId,
+    input.topicUpdates.map((update) => ({
+      topicId: update.topicId,
+      expectedPercent: update.expectedPercent,
+      toPercent: update.toPercent,
+      comment: update.comment ?? undefined,
+    })),
+    {
+      occurredAt: context.eventAt,
+      rewardRecipientCrmStudentIds: approval?.recipientCrmStudentIds,
+    },
+  );
   const homeworkAssignment = input.homeworkAssignment && approval && assignmentRecipients
     ? await createLearningHomeworkAssignmentForRecipients({
         createdByUserId: approval.createdByUserId,

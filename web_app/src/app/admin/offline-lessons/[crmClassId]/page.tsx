@@ -36,6 +36,7 @@ import { SuccessModal } from "@/components/success-modal";
 import {
   emptyLearningLessonV2Draft,
   LearningLessonV2Panel,
+  normalizeLearningLessonV2Draft,
   pendingLearningHomeworkCount,
   type LearningLessonV2Draft,
 } from "@/components/learning-lesson-v2-panel";
@@ -54,6 +55,7 @@ import type {
   OfflineHomeworkReview,
   TeacherOfflineClassStudents,
   TeacherOfflineStudent,
+  LearningLessonV2Context,
   LearningLessonV2ResultsInput,
   TrialLessonReport,
 } from "@/types/teacher-offline";
@@ -227,6 +229,17 @@ function formatClockTime(timestamp: number) {
   }).format(new Date(timestamp));
 }
 
+function formatRussianTopicCount(count: number) {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  const noun = mod10 === 1 && mod100 !== 11
+    ? "тема"
+    : mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)
+      ? "темы"
+      : "тем";
+  return `${count} ${noun}`;
+}
+
 type StudentLessonCheckDraft = {
   attendanceStatus: TeacherOfflineStudent["attendanceStatus"];
   teacherNote: string;
@@ -344,6 +357,7 @@ type OfflineLessonFormDraft = {
     trialReport: TrialLessonReport;
     studentCheckDrafts: Record<string, StudentLessonCheckDraft>;
     learningV2Draft?: LearningLessonV2Draft;
+    learningV2ReportVersion?: number | null;
     notHeldReason: string;
   };
 };
@@ -360,12 +374,17 @@ function learningResultsV2Draft(
   results?: LearningLessonV2ResultsInput | null,
 ): LearningLessonV2Draft {
   if (!results) return emptyLearningLessonV2Draft();
-  const topic = results.topicUpdates[0];
   return {
-    topicId: results.homeworkAssignment?.topicId ?? topic?.topicId ?? null,
-    expectedPercent: topic?.expectedPercent ?? null,
-    toPercent: topic?.toPercent ?? null,
-    topicComment: topic?.comment ?? "",
+    topicId: results.homeworkAssignment?.topicId ?? results.topicUpdates[0]?.topicId ?? null,
+    homeworkTopicId: results.homeworkAssignment?.topicId ?? null,
+    topicProgress: Object.fromEntries(results.topicUpdates.map((topic) => [
+      topic.topicId,
+      {
+        expectedPercent: topic.expectedPercent,
+        toPercent: topic.toPercent,
+        comment: topic.comment ?? "",
+      },
+    ])),
     homeworkDecisions: Object.fromEntries(results.homeworkDecisions.map((decision) => [
       decision.recipientId,
       {
@@ -374,6 +393,56 @@ function learningResultsV2Draft(
       },
     ])),
   };
+}
+
+function mergeLearningLessonV2Draft(
+  baseline: LearningLessonV2Draft,
+  saved: LearningLessonV2Draft,
+): LearningLessonV2Draft {
+  return {
+    ...saved,
+    topicProgress: { ...baseline.topicProgress, ...saved.topicProgress },
+    homeworkDecisions: { ...baseline.homeworkDecisions, ...saved.homeworkDecisions },
+  };
+}
+
+function learningTopicIdsForReport(
+  context: LearningLessonV2Context | null | undefined,
+  preservePendingResults: boolean,
+) {
+  if (!context) return [];
+  const currentTopicIds = context.plans.flatMap((plan) => plan.topics.map((topic) => topic.id));
+  const pendingTopicIds = preservePendingResults
+    ? [
+        ...(context.pendingResults?.topicUpdates.map((topic) => topic.topicId) ?? []),
+        ...(context.pendingResults?.homeworkAssignment?.topicId
+          ? [context.pendingResults.homeworkAssignment.topicId]
+          : []),
+      ]
+    : [];
+  return [...new Set([...currentTopicIds, ...pendingTopicIds])];
+}
+
+function learningTopicUpdatesForReport(
+  context: LearningLessonV2Context | null | undefined,
+  draft: LearningLessonV2Draft,
+  preservePendingResults: boolean,
+): LearningLessonV2ResultsInput["topicUpdates"] {
+  if (!context) return [];
+  const pendingByTopicId = new Map(
+    (context.pendingResults?.topicUpdates ?? []).map((topic) => [topic.topicId, topic]),
+  );
+  return learningTopicIdsForReport(context, preservePendingResults).flatMap((topicId) => {
+    const update = draft.topicProgress[topicId]
+      ?? (preservePendingResults ? pendingByTopicId.get(topicId) : undefined);
+    if (!update || update.toPercent === update.expectedPercent) return [];
+    return [{
+      topicId,
+      expectedPercent: update.expectedPercent,
+      toPercent: update.toPercent,
+      comment: update.comment?.trim() || null,
+    }];
+  });
 }
 
 function learningResultsV2Homework(
@@ -530,6 +599,14 @@ export default function AdminOfflineLessonDetailPage() {
   );
   const canEditAdminReview = isAdmin && effectiveLessonStatus === "pending_admin_review";
   const canEditReport = Boolean(canEditTeacherReport || canEditAdminReview);
+  const allowedLearningReportTopicIds = useMemo(
+    () => new Set(learningTopicIdsForReport(learningV2, canEditAdminReview)),
+    [canEditAdminReview, learningV2],
+  );
+  const hasValidLearningHomeworkTopic = Boolean(
+    learningV2Draft.homeworkTopicId
+      && allowedLearningReportTopicIds.has(learningV2Draft.homeworkTopicId),
+  );
   const canManageAttendance = canEditReport;
   const canApprove = isAdmin
     && effectiveLessonStatus === "pending_admin_review"
@@ -719,15 +796,17 @@ export default function AdminOfflineLessonDetailPage() {
     }
 
     const savedDraft = readOfflineLessonDraft(lessonDraftKey, crmClassId, user.id);
-    if (savedDraft) {
+    const currentReportVersion = integration?.report?.currentVersion ?? null;
+    const draftBelongsToPendingReport = canEditAdminReview || Boolean(learningV2?.pendingResults);
+    const savedDraftMatchesCurrentReport = !draftBelongsToPendingReport
+      || (savedDraft?.form.learningV2ReportVersion ?? null) === currentReportVersion;
+    if (savedDraft && savedDraftMatchesCurrentReport) {
       const saved = savedDraft.form;
       setTopic(saved.topic ?? "");
       setLessonGoals(saved.lessonGoals ?? "");
       setLessonSummary(saved.lessonSummary ?? "");
-      setHomework(learningResultsV2Homework(
-        learningV2?.pendingResults,
-        saved.homework ?? lesson.homeworkDraft,
-      ));
+      setHomework(saved.homework
+        ?? learningResultsV2Homework(learningV2?.pendingResults, lesson.homeworkDraft));
       setNextLessonFocus(saved.nextLessonFocus ?? "");
       setMaterialsText(saved.materialsText ?? "");
       setMaterialEntries(Array.isArray(saved.materialEntries) ? saved.materialEntries : []);
@@ -769,12 +848,13 @@ export default function AdminOfflineLessonDetailPage() {
         }
         return next;
       });
-      const savedLearningV2Draft = saved.learningV2Draft ?? emptyLearningLessonV2Draft();
-      setLearningV2Draft({
-        ...savedLearningV2Draft,
-        topicId: learningV2?.pendingResults?.homeworkAssignment?.topicId
-          ?? savedLearningV2Draft.topicId,
-      });
+      const savedLearningV2Draft = normalizeLearningLessonV2Draft(saved.learningV2Draft);
+      setLearningV2Draft(learningV2?.pendingResults
+        ? mergeLearningLessonV2Draft(
+            learningResultsV2Draft(learningV2?.pendingResults),
+            savedLearningV2Draft,
+          )
+        : savedLearningV2Draft);
       lastSavedDraftForm.current = JSON.stringify(saved);
       setDraftSaveStatus({ kind: "restored", updatedAt: savedDraft.updatedAt });
     } else {
@@ -808,6 +888,7 @@ export default function AdminOfflineLessonDetailPage() {
     }
     setHydratedLessonDraftKey(lessonDraftKey);
   }, [
+    canEditAdminReview,
     canEditReport,
     crmClassId,
     hydratedLessonDraftKey,
@@ -846,6 +927,9 @@ export default function AdminOfflineLessonDetailPage() {
       trialReport,
       studentCheckDrafts,
       learningV2Draft,
+      learningV2ReportVersion: canEditAdminReview || learningV2?.pendingResults
+        ? integration?.report?.currentVersion ?? null
+        : null,
       notHeldReason,
     };
     const serializedForm = JSON.stringify(form);
@@ -888,6 +972,7 @@ export default function AdminOfflineLessonDetailPage() {
     };
   }, [
     canEditReport,
+    canEditAdminReview,
     comment,
     crmClassId,
     homework,
@@ -897,6 +982,8 @@ export default function AdminOfflineLessonDetailPage() {
     lessonGoals,
     lessonSummary,
     isAdmin,
+    integration?.report?.currentVersion,
+    learningV2?.pendingResults,
     learningV2Draft,
     materialEntries,
     materialsText,
@@ -1061,7 +1148,7 @@ export default function AdminOfflineLessonDetailPage() {
           return "Добавьте комментарий к решению по домашнему заданию.";
         }
       }
-      if (homework.trim() && !learningV2Draft.topicId) {
+      if (homework.trim() && !hasValidLearningHomeworkTopic) {
         return "Выберите тему, к которой относится новое домашнее задание.";
       }
     }
@@ -1192,19 +1279,14 @@ export default function AdminOfflineLessonDetailPage() {
           : [];
       })
     ));
-    const topicUpdates = learningV2Draft.topicId
-      && learningV2Draft.toPercent !== null
-      && learningV2Draft.toPercent !== learningV2Draft.expectedPercent
-      ? [{
-          topicId: learningV2Draft.topicId,
-          expectedPercent: learningV2Draft.expectedPercent,
-          toPercent: learningV2Draft.toPercent,
-          comment: learningV2Draft.topicComment.trim() || null,
-        }]
-      : [];
-    const homeworkAssignment = homework.trim() && learningV2Draft.topicId
+    const topicUpdates = learningTopicUpdatesForReport(
+      learningV2,
+      learningV2Draft,
+      canEditAdminReview,
+    );
+    const homeworkAssignment = homework.trim() && hasValidLearningHomeworkTopic
       ? {
-          topicId: learningV2Draft.topicId,
+          topicId: learningV2Draft.homeworkTopicId!,
           instructions: homework.trim(),
         }
       : undefined;
@@ -1283,6 +1365,15 @@ export default function AdminOfflineLessonDetailPage() {
   }
 
   async function handleApprove() {
+    if (
+      requiresLessonReport
+      && isLearningLessonV2
+      && homework.trim()
+      && !hasValidLearningHomeworkTopic
+    ) {
+      setError("Выберите тему, к которой относится новое домашнее задание.");
+      return;
+    }
     if (requiresLessonReport && unmarkedCount > 0) {
       setError(`Отметьте посещаемость у всех учеников (осталось: ${unmarkedCount})`);
       return;
@@ -1342,9 +1433,18 @@ export default function AdminOfflineLessonDetailPage() {
     else if (status !== "unmarked") summary.absent += 1;
     return summary;
   }, { present: 0, late: 0, absent: 0 });
-  const selectedLearningTopic = learningV2?.plans
-    .flatMap((plan) => plan.topics)
-    .find((item) => item.id === learningV2Draft.topicId);
+  const currentLearningTopics = learningV2?.plans.flatMap((plan) => plan.topics) ?? [];
+  const currentLearningTopicById = new Map(currentLearningTopics.map((topic) => [topic.id, topic]));
+  const learningTopicUpdates = learningTopicUpdatesForReport(
+    learningV2,
+    learningV2Draft,
+    canEditAdminReview,
+  ).map((update) => ({
+    topicId: update.topicId,
+    title: currentLearningTopicById.get(update.topicId)?.title ?? "Тема из сохранённого отчёта",
+    fromPercent: update.expectedPercent,
+    toPercent: update.toPercent,
+  }));
   const homeworkDecisionSummary = Object.values(learningV2Draft.homeworkDecisions).reduce(
     (summary, decision) => {
       if (decision.decision === "revision") summary.revision += 1;
@@ -1358,20 +1458,27 @@ export default function AdminOfflineLessonDetailPage() {
       .filter((student) => ["present", "late"].includes(draftFor(student).attendanceStatus))
       .map((student) => student.crmStudentId),
   );
-  const linkedLearningStudentCount = learningV2?.students.filter(
-    (student) => Boolean(student.appUserId),
+  const linkedAttendedLearningStudentCount = learningV2?.students.filter(
+    (student) => Boolean(student.appUserId) && attendedStudentIds.has(student.crmStudentId),
   ).length ?? 0;
-  const planCompletionReward = selectedLearningTopic
-    && learningV2?.rewardsEnabled
-    && learningV2Draft.toPercent === 100
-    && learningV2Draft.expectedPercent !== 100
-    && selectedLearningTopic.planCompletionRewardPoints > 0
-    && linkedLearningStudentCount > 0
-    ? {
-        points: selectedLearningTopic.planCompletionRewardPoints,
-        recipientsCount: linkedLearningStudentCount,
-      }
-    : null;
+  const planCompletionRewards = learningV2?.rewardsEnabled && linkedAttendedLearningStudentCount > 0
+    ? learningV2.plans.flatMap((plan) => {
+        const willComplete = plan.topics.length > 0 && plan.topics.every((topic) => (
+          learningV2Draft.topicProgress[topic.id]?.toPercent ?? topic.progressPercent
+        ) === 100);
+        const completesTopicNow = plan.topics.some((topic) => {
+          const update = learningV2Draft.topicProgress[topic.id];
+          return update?.toPercent === 100 && update.expectedPercent !== 100;
+        });
+        if (!willComplete || !completesTopicNow || plan.planCompletionRewardPoints <= 0) return [];
+        return [{
+          planId: plan.planId,
+          directionTitle: plan.direction.title,
+          points: plan.planCompletionRewardPoints,
+          recipientsCount: linkedAttendedLearningStudentCount,
+        }];
+      })
+    : [];
   const xpSummary = learningV2?.rewardPreview
     .filter((item) => attendedStudentIds.has(item.crmStudentId))
     .reduce((summary, item) => {
@@ -1526,8 +1633,10 @@ export default function AdminOfflineLessonDetailPage() {
           disabled={!canEditReport}
           onChange={setLearningV2Draft}
           onTopicTitleChange={(title) => {
-            setTopic(title);
-            if (!lessonSummary) setLessonSummary(`Разобрали тему «${title}»`);
+            setTopic((current) => current.trim() ? current : title);
+            setLessonSummary((current) => (
+              current.trim() ? current : `Разобрали тему «${title}»`
+            ));
           }}
         />
       ) : learningV2 && !isTrialLesson ? (
@@ -1674,6 +1783,49 @@ export default function AdminOfflineLessonDetailPage() {
                       Домашнее задание
                     </label>
                   </div>
+                  {isLearningLessonV2 && (
+                    learningV2?.plans.some((plan) => plan.topics.length)
+                    || (canEditAdminReview && learningV2?.pendingResults?.homeworkAssignment)
+                  ) ? (
+                    <label className="mt-2 block text-xs font-bold text-stone-600">
+                      Тема нового домашнего задания
+                      <select
+                        id="learning-homework-topic"
+                        value={learningV2Draft.homeworkTopicId ?? ""}
+                        disabled={!canEditReport}
+                        aria-invalid={Boolean(homework.trim() && !hasValidLearningHomeworkTopic)}
+                        aria-describedby={homework.trim() && !hasValidLearningHomeworkTopic
+                          ? "learning-homework-topic-error"
+                          : undefined}
+                        onChange={(event) => setLearningV2Draft((current) => ({
+                          ...current,
+                          homeworkTopicId: event.target.value || null,
+                        }))}
+                        className="mt-1.5 h-11 w-full rounded-xl border border-stone-200 bg-white px-3 text-sm font-semibold text-ink outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-200"
+                      >
+                        <option value="">Выберите тему</option>
+                        {canEditAdminReview
+                          && learningV2.pendingResults?.homeworkAssignment?.topicId
+                          && !currentLearningTopicById.has(
+                            learningV2.pendingResults.homeworkAssignment.topicId,
+                          ) ? (
+                            <option value={learningV2.pendingResults.homeworkAssignment.topicId}>
+                              Тема из отправленного отчёта
+                            </option>
+                          ) : null}
+                        {learningV2.plans.flatMap((plan) => plan.topics.map((planTopic) => (
+                          <option key={planTopic.id} value={planTopic.id}>
+                            {planTopic.title} · {plan.direction.title}
+                          </option>
+                        )))}
+                      </select>
+                      {homework.trim() && !hasValidLearningHomeworkTopic ? (
+                        <span id="learning-homework-topic-error" className="mt-1.5 block text-xs font-semibold text-red-700">
+                          Выберите тему перед отправкой домашнего задания.
+                        </span>
+                      ) : null}
+                    </label>
+                  ) : null}
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     {homeworkPresets.map((preset) => (
                       <button
@@ -1826,6 +1978,7 @@ export default function AdminOfflineLessonDetailPage() {
                   || (requiresLessonReport && (
                     unmarkedCount > 0
                       || homeworkReviewPendingCount > 0
+                      || (isLearningLessonV2 && Boolean(homework.trim()) && !hasValidLearningHomeworkTopic)
                       || (isTrialLesson ? !isTrialReportReady : (!topic.trim() || !lessonSummary.trim()))
                   ))
               }
@@ -1842,7 +1995,12 @@ export default function AdminOfflineLessonDetailPage() {
               disabled={busy != null}
               onClick={() => {
                 const reason = askReason("Вернуть урок преподавателю для исправления?");
-                if (reason) void runAction("return", () => adminOfflineApi.returnToTeacher(crmClassId, reason));
+                if (reason) {
+                  void runAction("return", () => adminOfflineApi.returnToTeacher(crmClassId, reason))
+                    .then((returned) => {
+                      if (returned) clearOfflineLessonDraft();
+                    });
+                }
               }}
               className="flex w-full items-center justify-center gap-2 rounded-[24px] border border-amber-300 bg-amber-50 px-5 py-4 text-sm font-bold text-amber-900 disabled:opacity-50"
             >
@@ -2064,11 +2222,17 @@ export default function AdminOfflineLessonDetailPage() {
           pendingHomework: pendingLearningHomework,
           acceptedHomework: homeworkDecisionSummary.accepted,
           revisionHomework: homeworkDecisionSummary.revision,
-          topicTitle: selectedLearningTopic?.title ?? null,
-          topicFrom: learningV2Draft.expectedPercent,
-          topicTo: learningV2Draft.toPercent,
+          topicUpdates: learningTopicUpdates,
+          homeworkAssignment: homework.trim() && hasValidLearningHomeworkTopic
+            ? {
+                topicTitle: currentLearningTopicById.get(learningV2Draft.homeworkTopicId!)?.title
+                  ?? "Тема из сохранённого отчёта",
+                instructions: homework.trim(),
+              }
+            : null,
           rewardsEnabled: learningV2?.rewardsEnabled ?? false,
-          planCompletionReward,
+          rewardRecipientsCount: linkedAttendedLearningStudentCount,
+          planCompletionRewards,
           xp: xpSummary,
         } : null}
         onClose={() => setSubmitConfirmationOpen(false)}
@@ -2211,14 +2375,24 @@ function SubmitLessonConfirmation({
     pendingHomework: number;
     acceptedHomework: number;
     revisionHomework: number;
-    topicTitle: string | null;
-    topicFrom: number | null;
-    topicTo: number | null;
+    topicUpdates: Array<{
+      topicId: string;
+      title: string;
+      fromPercent: number | null;
+      toPercent: number;
+    }>;
+    homeworkAssignment: {
+      topicTitle: string;
+      instructions: string;
+    } | null;
     rewardsEnabled: boolean;
-    planCompletionReward: {
+    rewardRecipientsCount: number;
+    planCompletionRewards: Array<{
+      planId: string;
+      directionTitle: string;
       points: number;
       recipientsCount: number;
-    } | null;
+    }>;
     xp: {
       willAward: number;
       limited: number;
@@ -2231,6 +2405,9 @@ function SubmitLessonConfirmation({
 }) {
   const dialogRef = useDialogBehavior(open, onClose, { canClose: !busy });
   if (!open) return null;
+  const masteredTopicCount = learning?.topicUpdates.filter(
+    (topic) => topic.toPercent === 100 && topic.fromPercent !== 100,
+  ).length ?? 0;
 
   return (
     <div className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center sm:p-4">
@@ -2310,41 +2487,62 @@ function SubmitLessonConfirmation({
         </div>
         {learning && !absenceOnly ? (
           <div className="mt-4 space-y-3 rounded-lg border border-stone-200 bg-white p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-xs font-black uppercase text-stone-500">Прогресс темы</p>
-                <p className="mt-1 text-sm font-black text-ink">
-                  {learning.topicTitle ?? "Без изменения"}
-                </p>
-              </div>
-              {learning.topicTitle && learning.topicTo !== null ? (
-                <span className="shrink-0 rounded-lg bg-amber-50 px-3 py-2 text-sm font-black text-amber-950">
-                  {learning.topicFrom ?? 0}% → {learning.topicTo}%
-                </span>
-              ) : null}
+            <div>
+              <p className="text-xs font-black uppercase text-stone-500">Прогресс тем</p>
+              {learning.topicUpdates.length ? (
+                <div className="mt-2 space-y-2">
+                  {learning.topicUpdates.map((topic) => (
+                    <div
+                      key={topic.topicId}
+                      className="flex items-start justify-between gap-3 rounded-lg bg-stone-50 px-3 py-2"
+                    >
+                      <p className="min-w-0 break-words text-sm font-black text-ink">{topic.title}</p>
+                      <span className="shrink-0 rounded-md bg-amber-50 px-2.5 py-1 text-sm font-black text-amber-950">
+                        {topic.fromPercent ?? 0}% → {topic.toPercent}%
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-1 text-sm font-black text-ink">Без изменения</p>
+              )}
             </div>
-            {learning.topicTo === 100 && learning.rewardsEnabled ? (
+            {masteredTopicCount > 0 && learning.rewardsEnabled && learning.rewardRecipientsCount > 0 ? (
               <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-900">
-                Тема отмечается освоенной. За первое закрытие темы начисляются 100 баллов.
+                {masteredTopicCount === 1
+                  ? "Тема отмечается освоенной. За первое закрытие привязанным присутствовавшим ученикам начисляются 100 баллов."
+                  : `${formatRussianTopicCount(masteredTopicCount)} будут отмечены как освоенные. За первое закрытие каждой привязанным присутствовавшим ученикам начисляются 100 баллов.`}
               </p>
-            ) : learning.topicTo === 100 ? (
+            ) : masteredTopicCount > 0 && learning.rewardsEnabled ? (
               <p className="rounded-lg bg-stone-100 px-3 py-2 text-sm font-bold text-stone-600">
-                Тема отмечается освоенной. Награда 100 баллов для этого урока не начислится:
-                урок прошёл до даты запуска новой системы.
+                {masteredTopicCount === 1
+                  ? "Тема отмечается освоенной."
+                  : `${formatRussianTopicCount(masteredTopicCount)} будут отмечены как освоенные.`}
+                {" "}
+                Баллы не начислятся: среди присутствовавших нет ученика с привязанным аккаунтом.
+              </p>
+            ) : masteredTopicCount > 0 ? (
+              <p className="rounded-lg bg-stone-100 px-3 py-2 text-sm font-bold text-stone-600">
+                {masteredTopicCount === 1
+                  ? "Тема отмечается освоенной."
+                  : `${formatRussianTopicCount(masteredTopicCount)} будут отмечены как освоенные.`}
+                {" "}
+                Награда 100 баллов для этого урока не начислится: урок прошёл до даты запуска новой системы.
               </p>
             ) : null}
-            {learning.planCompletionReward ? (
+            {learning.planCompletionRewards.map((reward) => (
               <p
+                key={reward.planId}
                 data-testid="plan-completion-reward-preview"
                 className="rounded-lg bg-amber-50 px-3 py-2 text-sm font-bold text-amber-950"
               >
-                Эта отметка завершит план месяца. После подтверждения администратором
-                {learning.planCompletionReward.recipientsCount === 1
-                  ? ` привязанному ученику будет начислено +${learning.planCompletionReward.points}`
-                  : ` каждому привязанному ученику будет начислено по +${learning.planCompletionReward.points}`}
+                Эта отметка завершит план «{reward.directionTitle}». После подтверждения администратором
+                {reward.recipientsCount === 1
+                  ? ` привязанному присутствовавшему ученику будет начислено +${reward.points}`
+                  : ` каждому привязанному присутствовавшему ученику будет начислено по +${reward.points}`}
                 {" учебных баллов."}
               </p>
-            ) : null}
+            ))}
             <div className="border-t border-stone-200 pt-3">
               <p className="text-xs font-black uppercase text-stone-500">Проверка ДЗ</p>
               <p className="mt-1 text-sm font-bold text-stone-700">
@@ -2356,6 +2554,17 @@ function SubmitLessonConfirmation({
                 </p>
               ) : null}
             </div>
+            {learning.homeworkAssignment ? (
+              <div className="border-t border-stone-200 pt-3">
+                <p className="text-xs font-black uppercase text-stone-500">Новое ДЗ</p>
+                <p className="mt-1 break-words text-sm font-black text-ink">
+                  {learning.homeworkAssignment.topicTitle}
+                </p>
+                <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-5 text-stone-600">
+                  {learning.homeworkAssignment.instructions}
+                </p>
+              </div>
+            ) : null}
             {learning.xp ? (
               <div className="border-t border-stone-200 pt-3">
                 <p className="text-xs font-black uppercase text-stone-500">Недельная лига</p>

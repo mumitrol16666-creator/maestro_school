@@ -1441,6 +1441,204 @@ async function applyTopicMasteryRewards(params: {
   }
 }
 
+export type LearningTopicProgressFromLessonV2Input = {
+  topicId: string;
+  toPercent: number;
+  expectedPercent: number | null;
+  comment?: string;
+};
+
+type PreparedLearningTopicProgressFromLessonV2 = {
+  update: LearningTopicProgressFromLessonV2Input;
+  sourceKey: string;
+  alreadyApplied: boolean;
+  noChange: boolean;
+  masteryStudents: Array<{ id: string }>;
+};
+
+function validateLessonTopicProgressPercent(toPercent: number) {
+  if (!Number.isInteger(toPercent) || toPercent < 0 || toPercent > 100) {
+    throw new BadRequestError(
+      "Процент темы должен быть целым числом от 0 до 100",
+      "LEARNING_TOPIC_PROGRESS_INVALID",
+    );
+  }
+}
+
+export async function updateLearningTopicProgressBatchFromLessonV2(
+  actorUserId: string,
+  crmClassId: string,
+  updates: readonly LearningTopicProgressFromLessonV2Input[],
+  options: {
+    occurredAt?: Date;
+    rewardRecipientCrmStudentIds?: readonly string[];
+  } = {},
+) {
+  const topicIds = updates.map((update) => update.topicId);
+  if (new Set(topicIds).size !== topicIds.length) {
+    throw new BadRequestError("Одна тема указана несколько раз", "LESSON_TOPIC_DUPLICATE");
+  }
+  const occurredAt = options.occurredAt ?? new Date();
+  const prepared: PreparedLearningTopicProgressFromLessonV2[] = [];
+
+  // Resolve access, optimistic versions, idempotency receipts and reward recipients before
+  // opening the transaction. The transaction itself then contains only deterministic DB writes.
+  for (const update of updates) {
+    validateLessonTopicProgressPercent(update.toPercent);
+    const scoped = await requireLessonTopicScope(actorUserId, update.topicId);
+    const sourceKey = `offline-lesson:${crmClassId}:topic:${update.topicId}`;
+    const existingEvent = await prisma.learningTopicProgress.findUnique({
+      where: { sourceKey },
+    });
+    if (existingEvent) {
+      if (!sameLearningTopicProgressRequest(existingEvent, update)) {
+        throw new ConflictError(
+          "Прогресс этой темы уже зафиксирован в итогах урока",
+          "LESSON_TOPIC_PROGRESS_ALREADY_RECORDED",
+        );
+      }
+      prepared.push({
+        update,
+        sourceKey,
+        alreadyApplied: true,
+        noChange: false,
+        masteryStudents: [],
+      });
+      continue;
+    }
+    if (scoped.progressPercent === 100) {
+      throw new ConflictError(
+        "Освоенная тема заблокирована. Исправление выполняется куратором отдельным действием.",
+        "LEARNING_TOPIC_MASTERED_LOCKED",
+      );
+    }
+    if (scoped.progressPercent !== update.expectedPercent) {
+      throw new ConflictError(
+        "Процент темы изменился. Обновите урок и повторите действие.",
+        "LEARNING_TOPIC_STALE_PROGRESS",
+      );
+    }
+    if (scoped.progressPercent === update.toPercent) {
+      prepared.push({
+        update,
+        sourceKey,
+        alreadyApplied: false,
+        noChange: true,
+        masteryStudents: [],
+      });
+      continue;
+    }
+    const masteryStudents = update.toPercent === 100 && rewardEconomyV2AppliesToEvent(occurredAt)
+      ? await resolveTopicRewardStudents(
+          scoped,
+          crmClassId,
+          options.rewardRecipientCrmStudentIds,
+        )
+      : [];
+    prepared.push({
+      update,
+      sourceKey,
+      alreadyApplied: false,
+      noChange: false,
+      masteryStudents,
+    });
+  }
+
+  const writes = prepared
+    .filter((item) => !item.alreadyApplied && !item.noChange)
+    .sort((left, right) => left.update.topicId.localeCompare(right.update.topicId));
+  let recoveredConcurrentReplay = false;
+  if (writes.length) {
+    try {
+      await prisma.$transaction(async (tx) => {
+        for (const item of writes) {
+          const updated = await tx.learningTopic.updateMany({
+            where: {
+              id: item.update.topicId,
+              progressPercent: item.update.expectedPercent,
+              archivedAt: null,
+            },
+            data: {
+              progressPercent: item.update.toPercent,
+              ...(item.update.toPercent === 100
+                ? {
+                    masteredAt: occurredAt,
+                    masteryRewardSourceKey: item.masteryStudents.length
+                      ? `learning-topic-mastery:${item.update.topicId}`
+                      : null,
+                  }
+                : {}),
+            },
+          });
+          if (updated.count !== 1) {
+            throw new ConflictError(
+              "Процент темы изменился. Обновите урок и повторите действие.",
+              "LEARNING_TOPIC_STALE_PROGRESS",
+            );
+          }
+          await tx.learningTopicProgress.create({
+            data: {
+              topicId: item.update.topicId,
+              fromPercent: item.update.expectedPercent,
+              toPercent: item.update.toPercent,
+              source: LearningTopicProgressSource.lesson,
+              sourceKey: item.sourceKey,
+              comment: item.update.comment?.trim() || null,
+              changedById: actorUserId,
+              occurredAt,
+            },
+          });
+        }
+      });
+    } catch (error) {
+      const duplicateRace = (
+        error instanceof Prisma.PrismaClientKnownRequestError
+        && error.code === "P2002"
+      ) || (
+        error instanceof ConflictError
+        && error.code === "LEARNING_TOPIC_STALE_PROGRESS"
+      );
+      if (!duplicateRace) throw error;
+      const committedEvents = await prisma.learningTopicProgress.findMany({
+        where: { sourceKey: { in: writes.map((item) => item.sourceKey) } },
+      });
+      const committedBySourceKey = new Map(
+        committedEvents.map((event) => [event.sourceKey, event]),
+      );
+      if (!writes.every((item) => {
+        const event = committedBySourceKey.get(item.sourceKey);
+        return event && sameLearningTopicProgressRequest(event, item.update);
+      })) {
+        throw error;
+      }
+      recoveredConcurrentReplay = true;
+    }
+  }
+
+  const committedEvents = await prisma.learningTopicProgress.findMany({
+    where: { sourceKey: { in: prepared.map((item) => item.sourceKey) } },
+  });
+  const committedBySourceKey = new Map(committedEvents.map((event) => [event.sourceKey, event]));
+  const results = [];
+  for (const item of prepared) {
+    const current = await requireLessonTopicScope(actorUserId, item.update.topicId);
+    const committedEvent = committedBySourceKey.get(item.sourceKey);
+    if (item.update.toPercent === 100 && committedEvent) {
+      await applyTopicMasteryRewards({
+        topic: current,
+        crmClassId,
+        occurredAt: committedEvent.occurredAt,
+        immutableRecipientCrmStudentIds: options.rewardRecipientCrmStudentIds,
+      });
+    }
+    results.push({
+      ...topicDto(current),
+      idempotent: item.alreadyApplied || item.noChange || recoveredConcurrentReplay,
+    });
+  }
+  return results;
+}
+
 export async function updateLearningTopicProgressFromLessonV2(
   actorUserId: string,
   topicId: string,
@@ -1453,144 +1651,21 @@ export async function updateLearningTopicProgressFromLessonV2(
     rewardRecipientCrmStudentIds?: readonly string[];
   },
 ) {
-  if (!Number.isInteger(input.toPercent) || input.toPercent < 0 || input.toPercent > 100) {
-    throw new BadRequestError(
-      "Процент темы должен быть целым числом от 0 до 100",
-      "LEARNING_TOPIC_PROGRESS_INVALID",
-    );
-  }
-  const scoped = await requireLessonTopicScope(actorUserId, topicId);
-  const sourceKey = `offline-lesson:${input.crmClassId}:topic:${topicId}`;
-  const existingEvent = await prisma.learningTopicProgress.findUnique({
-    where: { sourceKey },
-  });
-  if (existingEvent) {
-    if (!sameLearningTopicProgressRequest(existingEvent, {
+  const [result] = await updateLearningTopicProgressBatchFromLessonV2(
+    actorUserId,
+    input.crmClassId,
+    [{
       topicId,
+      expectedPercent: input.expectedPercent,
       toPercent: input.toPercent,
-    })) {
-      throw new ConflictError(
-        "Прогресс этой темы уже зафиксирован в итогах урока",
-        "LESSON_TOPIC_PROGRESS_ALREADY_RECORDED",
-      );
-    }
-    if (existingEvent.toPercent === 100) {
-      await applyTopicMasteryRewards({
-        topic: scoped,
-        crmClassId: input.crmClassId,
-        occurredAt: existingEvent.occurredAt,
-        immutableRecipientCrmStudentIds: input.rewardRecipientCrmStudentIds,
-      });
-    }
-    return { ...topicDto(scoped), idempotent: true };
-  }
-  if (scoped.progressPercent === 100) {
-    throw new ConflictError(
-      "Освоенная тема заблокирована. Исправление выполняется куратором отдельным действием.",
-      "LEARNING_TOPIC_MASTERED_LOCKED",
-    );
-  }
-  if (scoped.progressPercent !== input.expectedPercent) {
-    throw new ConflictError(
-      "Процент темы изменился. Обновите урок и повторите действие.",
-      "LEARNING_TOPIC_STALE_PROGRESS",
-    );
-  }
-  if (scoped.progressPercent === input.toPercent) {
-    return { ...topicDto(scoped), idempotent: true };
-  }
-  const occurredAt = input.occurredAt ?? new Date();
-  let masteryStudents: Array<{ id: string }> = [];
-  if (input.toPercent === 100 && rewardEconomyV2AppliesToEvent(occurredAt)) {
-    masteryStudents = await resolveTopicRewardStudents(
-      scoped,
-      input.crmClassId,
-      input.rewardRecipientCrmStudentIds,
-    );
-  }
-
-  try {
-    await prisma.$transaction(async (tx) => {
-      const updated = await tx.learningTopic.updateMany({
-        where: {
-          id: topicId,
-          progressPercent: input.expectedPercent,
-          archivedAt: null,
-        },
-        data: {
-          progressPercent: input.toPercent,
-          ...(input.toPercent === 100
-            ? {
-                masteredAt: occurredAt,
-                masteryRewardSourceKey: masteryStudents.length
-                  ? `learning-topic-mastery:${topicId}`
-                  : null,
-              }
-            : {}),
-        },
-      });
-      if (updated.count !== 1) {
-        throw new ConflictError(
-          "Процент темы изменился. Обновите урок и повторите действие.",
-          "LEARNING_TOPIC_STALE_PROGRESS",
-        );
-      }
-      await tx.learningTopicProgress.create({
-        data: {
-          topicId,
-          fromPercent: input.expectedPercent,
-          toPercent: input.toPercent,
-          source: LearningTopicProgressSource.lesson,
-          sourceKey,
-          comment: input.comment?.trim() || null,
-          changedById: actorUserId,
-          occurredAt,
-        },
-      });
-    });
-  } catch (error) {
-    const duplicateRace = (
-      error instanceof Prisma.PrismaClientKnownRequestError
-      && error.code === "P2002"
-    ) || (
-      error instanceof ConflictError
-      && error.code === "LEARNING_TOPIC_STALE_PROGRESS"
-    );
-    if (!duplicateRace) throw error;
-    const committedEvent = await prisma.learningTopicProgress.findUnique({
-      where: { sourceKey },
-    });
-    if (!committedEvent || !sameLearningTopicProgressRequest(committedEvent, {
-      topicId,
-      toPercent: input.toPercent,
-    })) {
-      throw error;
-    }
-    const current = await requireLessonTopicScope(actorUserId, topicId);
-    if (committedEvent.toPercent === 100) {
-      await applyTopicMasteryRewards({
-        topic: current,
-        crmClassId: input.crmClassId,
-        occurredAt: committedEvent.occurredAt,
-        immutableRecipientCrmStudentIds: input.rewardRecipientCrmStudentIds,
-      });
-    }
-    return { ...topicDto(current), idempotent: true };
-  }
-
-  if (input.toPercent === 100) {
-    await applyTopicMasteryRewards({
-      topic: scoped,
-      crmClassId: input.crmClassId,
-      occurredAt,
-      immutableRecipientCrmStudentIds: input.rewardRecipientCrmStudentIds,
-    });
-  }
-
-  return {
-    ...topicDto(await requireLessonTopicScope(actorUserId, topicId)),
-    idempotent: false,
-  };
+      comment: input.comment,
+    }],
+    {
+      occurredAt: input.occurredAt,
+      rewardRecipientCrmStudentIds: input.rewardRecipientCrmStudentIds,
+    },
+  );
+  return result!;
 }
 
 export function sameLearningTopicProgressRequest(
