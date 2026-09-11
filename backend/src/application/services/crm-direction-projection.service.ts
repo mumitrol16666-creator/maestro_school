@@ -7,7 +7,13 @@ import {
 } from "../../infrastructure/crm/crm-client.js";
 import { prisma } from "../../infrastructure/database/prisma.js";
 import { BadRequestError, ConflictError } from "../../domain/errors.js";
-import { normalizeCrmDirectionTitle } from "../../domain/crm-direction-title.js";
+import {
+  assignedCrmDirectionId,
+  isAssignedCrmDirectionId,
+  mergeAssignedCrmDirections,
+  normalizeCrmDirectionTitle,
+  ASSIGNED_CRM_DIRECTION_UPDATED_AT,
+} from "../../domain/crm-direction-title.js";
 import { requireCrmTeacherId } from "./teacher-students.service.js";
 
 function projectionSlug(crmDirectionId: string) {
@@ -31,7 +37,15 @@ export async function requireCrmDirection(
   allowedTitles: readonly string[],
 ) {
   const catalog = await fetchCrmDirections();
-  const direction = catalog.directions.find((item) => item.crmDirectionId === crmDirectionId);
+  const normalizedAllowedTitles = new Set(allowedTitles.map(normalizeCrmDirectionTitle));
+  const catalogDirection = catalog.directions.find((item) => item.crmDirectionId === crmDirectionId);
+  const assignedTitle = allowedTitles.find((title) => assignedCrmDirectionId(title) === crmDirectionId);
+  const direction = catalogDirection ?? (assignedTitle ? {
+    crmDirectionId,
+    title: assignedTitle.trim(),
+    isActive: true,
+    updatedAt: ASSIGNED_CRM_DIRECTION_UPDATED_AT,
+  } satisfies CrmDirectionRef : null);
   if (!direction) {
     throw new BadRequestError(
       "Направление больше не найдено в CRM",
@@ -44,7 +58,6 @@ export async function requireCrmDirection(
       "CRM_DIRECTION_INACTIVE",
     );
   }
-  const normalizedAllowedTitles = new Set(allowedTitles.map(normalizeCrmDirectionTitle));
   if (!normalizedAllowedTitles.has(normalizeCrmDirectionTitle(direction.title))) {
     throw new BadRequestError(
       "Это направление не назначено преподавателю для выбранного ученика или группы",
@@ -80,19 +93,39 @@ export async function syncCrmDirectionProjection(direction: CrmDirectionRef) {
     });
   }
 
-  const titleMatches = await prisma.direction.findMany({
-    where: { title: direction.title, deletedAt: null },
+  const localDirections = await prisma.direction.findMany({
+    where: { deletedAt: null },
     orderBy: { createdAt: "asc" },
   });
-  if (titleMatches.length === 1 && !titleMatches[0].crmDirectionId) {
+  const titleMatches = localDirections.filter((item) => (
+    normalizeCrmDirectionTitle(item.title) === normalizeCrmDirectionTitle(direction.title)
+  ));
+  const titleMatch = titleMatches[0];
+  const canBindTitleMatch = titleMatches.length === 1 && (
+    !titleMatch.crmDirectionId
+    || (isAssignedCrmDirectionId(titleMatch.crmDirectionId) && !isAssignedCrmDirectionId(direction.crmDirectionId))
+  );
+  if (canBindTitleMatch) {
     return prisma.direction.update({
-      where: { id: titleMatches[0].id },
+      where: { id: titleMatch.id },
       data: {
         crmDirectionId: direction.crmDirectionId,
+        title: direction.title,
         crmIsActive: direction.isActive,
         crmUpdatedAt,
         crmSyncedAt: syncedAt,
       },
+    });
+  }
+  if (
+    titleMatches.length === 1
+    && isAssignedCrmDirectionId(direction.crmDirectionId)
+    && titleMatch.crmDirectionId
+    && !isAssignedCrmDirectionId(titleMatch.crmDirectionId)
+  ) {
+    return prisma.direction.update({
+      where: { id: titleMatch.id },
+      data: { crmSyncedAt: syncedAt },
     });
   }
   if (titleMatches.length) {
@@ -145,19 +178,20 @@ export async function listTeacherCrmDirections(teacherUserId: string) {
     fetchTeacherStudents(crmTeacherId),
     fetchTeacherGroups(crmTeacherId),
   ]);
-  const allowedTitles = new Set([
+  const assignedTitles = [
     ...(roster.teacher?.directions ?? []),
     ...roster.students.flatMap((student) => student.directions),
     ...groupRoster.groups.map((group) => group.direction),
-  ].map(normalizeCrmDirectionTitle));
-  const directions = catalog.directions.filter((direction) => (
-    direction.isActive && allowedTitles.has(normalizeCrmDirectionTitle(direction.title))
-  ));
-  const projections = await Promise.all(directions.map(syncCrmDirectionProjection));
-  return projections.map((projection) => ({
+  ];
+  const directions = mergeAssignedCrmDirections(catalog.directions, assignedTitles);
+  const projections = await Promise.all(directions.map(async (direction) => ({
+    direction,
+    projection: await syncCrmDirectionProjection(direction),
+  })));
+  return projections.map(({ direction, projection }) => ({
     id: projection.id,
-    crmDirectionId: projection.crmDirectionId,
-    title: projection.title,
+    crmDirectionId: direction.crmDirectionId,
+    title: direction.title,
     isActive: projection.crmIsActive,
     updatedAt: projection.crmUpdatedAt,
     syncedAt: projection.crmSyncedAt,
