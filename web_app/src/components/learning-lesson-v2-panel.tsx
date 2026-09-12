@@ -240,6 +240,10 @@ export function LearningLessonV2Panel({
   const topics = context.plans.flatMap((plan) => (
     plan.topics.map((topic) => ({ ...topic, directionTitle: plan.direction.title }))
   ));
+  const directionTitles = new Set(
+    context.plans.map((plan) => plan.direction.title.trim()).filter(Boolean),
+  );
+  const showDirectionTitle = directionTitles.size > 1;
   const selectedTopic = topics.find((topic) => topic.id === draft.topicId) ?? null;
   const selectedTopicProgress = selectedTopic ? draft.topicProgress[selectedTopic.id] : null;
   const selectedExpectedPercent = selectedTopicProgress?.expectedPercent
@@ -380,7 +384,7 @@ export function LearningLessonV2Panel({
                   >
                     <span className="block">{topic.title}</span>
                     <span className="mt-0.5 block text-xs font-semibold opacity-65">
-                      {topic.directionTitle} · {topicDraft && topicDraft.toPercent !== topic.progressPercent
+                      {showDirectionTitle ? `${topic.directionTitle} · ` : ""}{topicDraft && topicDraft.toPercent !== topic.progressPercent
                         ? `${topic.progressPercent}% → ${topicDraft.toPercent}%`
                         : `${topic.progressPercent}%`}
                     </span>

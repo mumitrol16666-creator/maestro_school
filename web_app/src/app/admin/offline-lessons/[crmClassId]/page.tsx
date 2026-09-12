@@ -1060,17 +1060,43 @@ export default function AdminOfflineLessonDetailPage() {
   }
 
   async function runAction(action: string, fn: () => Promise<unknown>) {
-    setBusy(action);
-    setError(null);
-    setSuccess(null);
-    try {
-      await fn();
+    const reloadLessonContext = async () => {
       await Promise.allSettled([
         lessonResource.reload(),
         studentsResource.reload(),
         ...(isAdmin ? [syncJournalResource.reload()] : []),
         reportVersionsResource.reload(),
       ]);
+    };
+
+    const refreshStartedLesson = async () => {
+      const refreshedLesson = await (isAdmin
+        ? adminOfflineApi.classCard(crmClassId)
+        : teacherOfflineApi.classCard(crmClassId)
+      ).catch(() => null);
+      if (refreshedLesson?.status !== "started") {
+        return { started: false, lesson: refreshedLesson };
+      }
+
+      lessonResource.setData(refreshedLesson);
+      await Promise.allSettled([
+        studentsResource.reload(),
+        ...(isAdmin ? [syncJournalResource.reload()] : []),
+        reportVersionsResource.reload(),
+      ]);
+      setSuccess({
+        title: "Урок начат",
+        description: "Состояние урока подтверждено после восстановления соединения. Можно продолжать работу.",
+      });
+      return { started: true, lesson: refreshedLesson };
+    };
+
+    setBusy(action);
+    setError(null);
+    setSuccess(null);
+    try {
+      await fn();
+      await reloadLessonContext();
       if (action === "submit") {
         setSuccess({
           title: "Урок отправлен на проверку",
@@ -1116,6 +1142,24 @@ export default function AdminOfflineLessonDetailPage() {
       }
       return true;
     } catch (reason) {
+      if (action === "start" && reason instanceof ApiError && reason.code === "NETWORK_ERROR") {
+        const startState = await refreshStartedLesson();
+        if (startState.started) return true;
+
+        if (startState.lesson?.status === "scheduled") {
+          try {
+            await fn();
+            await reloadLessonContext();
+            setSuccess({
+              title: "Урок начат",
+              description: "Соединение восстановлено. Можно отметить посещаемость и заполнить итог урока.",
+            });
+            return true;
+          } catch {
+            if ((await refreshStartedLesson()).started) return true;
+          }
+        }
+      }
       if (action === "submit" || action === "submit-absence") {
         const refreshedLesson = await (isAdmin
           ? adminOfflineApi.classCard(crmClassId)
@@ -1452,6 +1496,10 @@ export default function AdminOfflineLessonDetailPage() {
   }, { present: 0, late: 0, absent: 0 });
   const currentLearningTopics = learningV2?.plans.flatMap((plan) => plan.topics) ?? [];
   const currentLearningTopicById = new Map(currentLearningTopics.map((topic) => [topic.id, topic]));
+  const learningDirectionTitles = new Set(
+    learningV2?.plans.map((plan) => plan.direction.title.trim()).filter(Boolean) ?? [],
+  );
+  const showLearningDirectionInTopicOptions = learningDirectionTitles.size > 1;
   const learningTopicUpdates = learningTopicUpdatesForReport(
     learningV2,
     learningV2Draft,
@@ -1855,7 +1903,8 @@ export default function AdminOfflineLessonDetailPage() {
                           ) : null}
                         {learningV2.plans.flatMap((plan) => plan.topics.map((planTopic) => (
                           <option key={planTopic.id} value={planTopic.id}>
-                            {planTopic.title} · {plan.direction.title}
+                            {planTopic.title}
+                            {showLearningDirectionInTopicOptions ? ` · ${plan.direction.title}` : ""}
                           </option>
                         )))}
                       </select>
