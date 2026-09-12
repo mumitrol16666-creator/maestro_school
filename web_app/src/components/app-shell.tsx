@@ -199,6 +199,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
         <main className={`mobile-safe mx-auto max-w-[1500px] p-4 sm:p-8 lg:p-10 print:max-w-none print:p-0 ${
+          pathname.startsWith("/messages") ? "sm:py-5 lg:py-6" : ""
+        } ${
           student ? "pb-[calc(6.75rem+env(safe-area-inset-bottom,0px))] sm:pb-[calc(6.75rem+env(safe-area-inset-bottom,0px))] lg:pb-10" : ""
         }`}>
           {roleNavigationV2 ? (

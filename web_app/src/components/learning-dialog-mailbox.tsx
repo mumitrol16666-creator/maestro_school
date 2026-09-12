@@ -221,7 +221,7 @@ function ActionDialog({
   );
 }
 
-export function LearningDialogMailbox({ role }: { role: MailboxRole }) {
+export function LearningDialogMailbox({ role, className }: { role: MailboxRole; className?: string }) {
   const { user } = useAuth();
   const admin = role === "admin";
   const [archiveFilter, setArchiveFilter] = useState<LearningDialogArchiveFilter>("active");
@@ -538,7 +538,7 @@ export function LearningDialogMailbox({ role }: { role: MailboxRole }) {
     <>
       <section
         ref={mailboxRef}
-        className={`learning-dialog-mailbox h-[calc(100dvh-315px)] min-h-[320px] overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-soft sm:h-[calc(100dvh-295px)] sm:min-h-[420px] lg:h-[calc(100dvh-230px)] lg:min-h-[650px] ${role === "admin" ? "" : "learning-dialog-mailbox--with-mobile-navigation"} ${active ? "learning-dialog-mailbox--active" : ""}`}
+        className={`learning-dialog-mailbox h-[calc(100dvh-200px)] min-h-[400px] overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-soft sm:h-[calc(100dvh-180px)] sm:min-h-[420px] lg:h-[calc(100dvh-165px)] lg:min-h-[460px] ${role === "admin" ? "" : "learning-dialog-mailbox--with-mobile-navigation"} ${active ? "learning-dialog-mailbox--active" : ""} ${className ?? ""}`}
         data-testid="learning-dialog-mailbox"
         data-mobile-thread-active={active ? "true" : undefined}
       >

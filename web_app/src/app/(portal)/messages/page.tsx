@@ -10,13 +10,13 @@ export default function StudentMessagesPage() {
   const v2 = Boolean(user?.productFeatures?.learningDialogsV2);
   return (
     <>
-      <div className={v2 ? "hidden md:block" : ""}>
+      {!v2 && (
         <PageHeader
           eyebrow="Связь со школой"
-          title={v2 ? "Сообщения" : "Обращения"}
-          description={v2 ? "Преподаватели, учебные группы и куратор." : "Связь с вашим преподавателем."}
+          title="Обращения"
+          description="Связь с вашим преподавателем."
         />
-      </div>
+      )}
       {v2 ? <LearningDialogMailbox role="student" /> : <MessageMailbox role="student" />}
     </>
   );

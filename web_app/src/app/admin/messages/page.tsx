@@ -11,13 +11,13 @@ export default function TeacherMessagesPage() {
   const v2 = Boolean(user?.productFeatures?.learningDialogsV2);
   return (
     <>
-      <div className={v2 ? "hidden md:block" : ""}>
+      {!v2 && (
         <PageHeader
           eyebrow="Кабинет преподавателя"
           title="Сообщения"
-          description={v2 ? "Ученики, родители и учебные группы." : "Обращения учеников и ваши ответы."}
+          description="Обращения учеников и ваши ответы."
         />
-      </div>
+      )}
       {v2
         ? <LearningDialogMailbox role={isContentAdminRole(user?.role) ? "admin" : "teacher"} />
         : <MessageMailbox role="teacher" />}

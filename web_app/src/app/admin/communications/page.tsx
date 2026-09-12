@@ -32,7 +32,7 @@ export default function AdminCommunicationsPage() {
             </Link>
           </nav>
         </div>
-        <LearningDialogMailbox role="admin" />
+        <LearningDialogMailbox role="admin" className="h-[calc(100dvh-350px)] min-h-[380px] sm:h-[calc(100dvh-350px)] sm:min-h-[400px] lg:h-[calc(100dvh-350px)] lg:min-h-[420px]" />
       </>
     );
   }
