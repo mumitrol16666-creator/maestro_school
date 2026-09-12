@@ -279,10 +279,10 @@ async function resolveLessonScope(actorUserId: string, crmClassId: string): Prom
   }
   if (owner.kind === "group") {
     const groups = await fetchTeacherGroups(crmTeacherId).catch((error) => {
-      if (productFeatureConfig.flags.lessonSyncV2 && error instanceof AppError && error.statusCode >= 500) {
+      if (error instanceof AppError && error.statusCode >= 500) {
         return null;
       }
-      return null;
+      throw error;
     });
     const group = groups?.groups.find((item) => item.crmGroupId === owner.id);
     const allowedDirectionTitles = group?.direction
@@ -299,10 +299,10 @@ async function resolveLessonScope(actorUserId: string, crmClassId: string): Prom
     };
   }
   const students = await fetchTeacherStudents(crmTeacherId).catch((error) => {
-    if (productFeatureConfig.flags.lessonSyncV2 && error instanceof AppError && error.statusCode >= 500) {
+    if (error instanceof AppError && error.statusCode >= 500) {
       return null;
     }
-    return null;
+    throw error;
   });
   const student = students?.students.find((item) => item.crmStudentId === owner.id);
   const allowedDirectionTitles = student?.directions && student.directions.length > 0
