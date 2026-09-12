@@ -607,9 +607,17 @@ export default function AdminOfflineLessonDetailPage() {
     () => new Set(learningTopicIdsForReport(learningV2, canEditAdminReview)),
     [canEditAdminReview, learningV2],
   );
+  const hasLearningPlanTopics = allowedLearningReportTopicIds.size > 0;
+  const effectiveHomeworkTopicId = (
+    learningV2Draft.homeworkTopicId && allowedLearningReportTopicIds.has(learningV2Draft.homeworkTopicId)
+      ? learningV2Draft.homeworkTopicId
+      : (learningV2Draft.topicId && allowedLearningReportTopicIds.has(learningV2Draft.topicId)
+          ? learningV2Draft.topicId
+          : (allowedLearningReportTopicIds.size === 1 ? Array.from(allowedLearningReportTopicIds)[0] : null))
+  );
   const hasValidLearningHomeworkTopic = Boolean(
-    learningV2Draft.homeworkTopicId
-      && allowedLearningReportTopicIds.has(learningV2Draft.homeworkTopicId),
+    effectiveHomeworkTopicId
+      && allowedLearningReportTopicIds.has(effectiveHomeworkTopicId),
   );
   const canManageAttendance = canEditReport;
   const canApprove = isAdmin
@@ -1156,7 +1164,7 @@ export default function AdminOfflineLessonDetailPage() {
           return "Добавьте комментарий к решению по домашнему заданию.";
         }
       }
-      if (homework.trim() && !hasValidLearningHomeworkTopic) {
+      if (homework.trim() && hasLearningPlanTopics && !hasValidLearningHomeworkTopic) {
         return "Выберите тему, к которой относится новое домашнее задание.";
       }
     }
@@ -1294,7 +1302,7 @@ export default function AdminOfflineLessonDetailPage() {
     );
     const homeworkAssignment = homework.trim() && hasValidLearningHomeworkTopic
       ? {
-          topicId: learningV2Draft.homeworkTopicId!,
+          topicId: effectiveHomeworkTopicId!,
           instructions: homework.trim(),
         }
       : undefined;
@@ -1377,6 +1385,7 @@ export default function AdminOfflineLessonDetailPage() {
       requiresLessonReport
       && isLearningLessonV2
       && homework.trim()
+      && hasLearningPlanTopics
       && !hasValidLearningHomeworkTopic
     ) {
       setError("Выберите тему, к которой относится новое домашнее задание.");
@@ -1822,10 +1831,10 @@ export default function AdminOfflineLessonDetailPage() {
                       Тема нового домашнего задания
                       <select
                         id="learning-homework-topic"
-                        value={learningV2Draft.homeworkTopicId ?? ""}
+                        value={effectiveHomeworkTopicId ?? ""}
                         disabled={!canEditReport}
-                        aria-invalid={Boolean(homework.trim() && !hasValidLearningHomeworkTopic)}
-                        aria-describedby={homework.trim() && !hasValidLearningHomeworkTopic
+                        aria-invalid={Boolean(homework.trim() && hasLearningPlanTopics && !hasValidLearningHomeworkTopic)}
+                        aria-describedby={homework.trim() && hasLearningPlanTopics && !hasValidLearningHomeworkTopic
                           ? "learning-homework-topic-error"
                           : undefined}
                         onChange={(event) => setLearningV2Draft((current) => ({
@@ -1850,7 +1859,7 @@ export default function AdminOfflineLessonDetailPage() {
                           </option>
                         )))}
                       </select>
-                      {homework.trim() && !hasValidLearningHomeworkTopic ? (
+                      {homework.trim() && hasLearningPlanTopics && !hasValidLearningHomeworkTopic ? (
                         <span id="learning-homework-topic-error" className="mt-1.5 block text-xs font-semibold text-red-700">
                           Выберите тему перед отправкой домашнего задания.
                         </span>
@@ -2009,7 +2018,7 @@ export default function AdminOfflineLessonDetailPage() {
                   || (requiresLessonReport && (
                     unmarkedCount > 0
                       || homeworkReviewPendingCount > 0
-                      || (isLearningLessonV2 && Boolean(homework.trim()) && !hasValidLearningHomeworkTopic)
+                      || (isLearningLessonV2 && Boolean(homework.trim()) && hasLearningPlanTopics && !hasValidLearningHomeworkTopic)
                       || (isTrialLesson ? !isTrialReportReady : (!topic.trim() || !lessonSummary.trim()))
                   ))
               }
@@ -2256,7 +2265,7 @@ export default function AdminOfflineLessonDetailPage() {
           topicUpdates: learningTopicUpdates,
           homeworkAssignment: homework.trim() && hasValidLearningHomeworkTopic
             ? {
-                topicTitle: currentLearningTopicById.get(learningV2Draft.homeworkTopicId!)?.title
+                topicTitle: currentLearningTopicById.get(effectiveHomeworkTopicId!)?.title
                   ?? "Тема из сохранённого отчёта",
                 instructions: homework.trim(),
               }
