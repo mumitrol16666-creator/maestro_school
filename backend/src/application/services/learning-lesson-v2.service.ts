@@ -282,26 +282,18 @@ async function resolveLessonScope(actorUserId: string, crmClassId: string): Prom
       if (productFeatureConfig.flags.lessonSyncV2 && error instanceof AppError && error.statusCode >= 500) {
         return null;
       }
-      throw error;
+      return null;
     });
-    if (!groups) {
-      return {
-        lesson,
-        roster,
-        owner,
-        allowedDirectionTitles: [],
-        reportOnly: true,
-        canApply: canApplyLearningLessonResults(actor.role.slug, lesson.status),
-        eventAt: offlineLessonEventAt(lesson),
-      };
-    }
-    const group = groups.groups.find((item) => item.crmGroupId === owner.id);
+    const group = groups?.groups.find((item) => item.crmGroupId === owner.id);
+    const allowedDirectionTitles = group?.direction
+      ? [group.direction]
+      : (lesson.groupDirection ? [lesson.groupDirection] : null);
     return {
       lesson,
       roster,
       owner,
-      allowedDirectionTitles: group ? [group.direction] : [],
-      reportOnly: !group,
+      allowedDirectionTitles,
+      reportOnly: false,
       canApply: canApplyLearningLessonResults(actor.role.slug, lesson.status),
       eventAt: offlineLessonEventAt(lesson),
     };
@@ -310,26 +302,18 @@ async function resolveLessonScope(actorUserId: string, crmClassId: string): Prom
     if (productFeatureConfig.flags.lessonSyncV2 && error instanceof AppError && error.statusCode >= 500) {
       return null;
     }
-    throw error;
+    return null;
   });
-  if (!students) {
-    return {
-      lesson,
-      roster,
-      owner,
-      allowedDirectionTitles: [],
-      reportOnly: true,
-      canApply: canApplyLearningLessonResults(actor.role.slug, lesson.status),
-      eventAt: offlineLessonEventAt(lesson),
-    };
-  }
-  const student = students.students.find((item) => item.crmStudentId === owner.id);
+  const student = students?.students.find((item) => item.crmStudentId === owner.id);
+  const allowedDirectionTitles = student?.directions && student.directions.length > 0
+    ? student.directions
+    : (lesson.groupDirection ? [lesson.groupDirection] : null);
   return {
     lesson,
     roster,
     owner,
-    allowedDirectionTitles: student?.directions ?? [],
-    reportOnly: !student,
+    allowedDirectionTitles,
+    reportOnly: false,
     canApply: canApplyLearningLessonResults(actor.role.slug, lesson.status),
     eventAt: offlineLessonEventAt(lesson),
   };
