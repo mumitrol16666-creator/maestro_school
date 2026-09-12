@@ -143,7 +143,7 @@ export async function listTeacherStudents(appTeacherId: string) {
     .map((student) => student.appUserId)
     .filter((userId): userId is string => Boolean(userId));
   const month = aqtobeMonthKey();
-  const [checks, plans, latestActivity, latestLogin, parentLinks] = await Promise.all([
+  const [checks, legacyPlans, v2Plans, latestActivity, latestLogin, parentLinks] = await Promise.all([
     crmStudentIds.length
       ? prisma.offlineLessonStudentCheck.findMany({
           where: { teacherUserId: appTeacherId, crmStudentId: { in: crmStudentIds } },
@@ -152,7 +152,28 @@ export async function listTeacherStudents(appTeacherId: string) {
       : [],
     crmStudentIds.length
       ? prisma.studentMonthlyPlan.findMany({
-          where: { teacherUserId: appTeacherId, crmStudentId: { in: crmStudentIds }, month },
+          where: { crmStudentId: { in: crmStudentIds }, month },
+        })
+      : [],
+    crmStudentIds.length
+      ? prisma.learningPlan.findMany({
+          where: { crmStudentId: { in: crmStudentIds }, month },
+          include: {
+            versions: {
+              include: {
+                topics: {
+                  include: {
+                    topic: {
+                      select: {
+                        id: true,
+                        progressPercent: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
         })
       : [],
     appUserIds.length
@@ -201,7 +222,14 @@ export async function listTeacherStudents(appTeacherId: string) {
     list.push(check);
     checksByStudent.set(check.crmStudentId, list);
   }
-  const plansByStudent = new Map(plans.map((plan) => [plan.crmStudentId, plan]));
+  const legacyPlansByStudent = new Map(legacyPlans.map((plan) => [plan.crmStudentId, plan]));
+  const v2PlansByStudent = new Map<string, typeof v2Plans>();
+  for (const plan of v2Plans) {
+    if (!plan.crmStudentId) continue;
+    const list = v2PlansByStudent.get(plan.crmStudentId) ?? [];
+    list.push(plan);
+    v2PlansByStudent.set(plan.crmStudentId, list);
+  }
   const activityByStudent = new Map(latestActivity.map((item) => [item.userId, item._max.occurredAt]));
   const loginByStudent = new Map(latestLogin.map((item) => [item.userId, item._max.occurredAt]));
   const parentsByStudent = new Map<string, Array<{
@@ -223,22 +251,47 @@ export async function listTeacherStudents(appTeacherId: string) {
     teacher: crmRoster.teacher,
     students: students.map((student) => {
       const studentChecks = student.crmStudentId ? checksByStudent.get(student.crmStudentId) ?? [] : [];
-      const plan = student.crmStudentId ? plansByStudent.get(student.crmStudentId) : null;
+      const studentV2Plans = student.crmStudentId ? v2PlansByStudent.get(student.crmStudentId) ?? [] : [];
+      const legacyPlan = student.crmStudentId ? legacyPlansByStudent.get(student.crmStudentId) : null;
+      let hasPlan = false;
+      let planCompletionRate: number | null = null;
+
+      if (studentV2Plans.length > 0) {
+        hasPlan = true;
+        let totalActiveTopics = 0;
+        let completedTopics = 0;
+        for (const plan of studentV2Plans) {
+          const activeVersionNumber = plan.publishedVersionNumber ?? plan.currentVersionNumber;
+          const version = plan.versions.find((v) => v.version === activeVersionNumber);
+          const activeTopics = (version?.topics ?? []).filter((t) => t.state === "active");
+          totalActiveTopics += activeTopics.length;
+          completedTopics += activeTopics.filter((t) => t.topic.progressPercent === 100).length;
+        }
+        planCompletionRate = totalActiveTopics
+          ? Math.round((completedTopics / totalActiveTopics) * 100)
+          : 0;
+      } else if (legacyPlan) {
+        hasPlan = true;
+        const planItems = Array.isArray(legacyPlan.items)
+          ? (legacyPlan.items as Array<{ status?: string }>)
+          : [];
+        const completedPlanItems = planItems.filter((item) => item.status === "completed").length;
+        planCompletionRate = planItems.length
+          ? Math.round((completedPlanItems / planItems.length) * 100)
+          : null;
+      }
+
       const recentAttendance = student.attendanceHistory.slice(0, 8);
       const attendedCount = recentAttendance.filter((item) => ["present", "late"].includes(item.attendanceStatus)).length;
       const reviewedHomework = studentChecks.filter((item) => item.homeworkStatus !== "not_checked").slice(0, 8);
       const completedHomework = reviewedHomework.filter((item) => item.homeworkStatus === "completed").length;
-      const planItems = Array.isArray(plan?.items)
-        ? plan.items as Array<{ status?: string }>
-        : [];
-      const completedPlanItems = planItems.filter((item) => item.status === "completed").length;
       const signals: Array<{ code: string; title: string; action: string; tone: "warning" | "danger" }> = [];
       const recentAbsences = recentAttendance.slice(0, 3)
         .filter((item) => !["present", "late"].includes(item.attendanceStatus)).length;
       const recentMissedHomework = reviewedHomework.slice(0, 3)
         .filter((item) => item.homeworkStatus === "not_completed").length;
 
-      if (student.crmStudentId && !plan) {
+      if (student.crmStudentId && !hasPlan) {
         signals.push({
           code: "monthly_plan_missing",
           title: "Нет учебного плана на текущий месяц",
@@ -279,9 +332,7 @@ export async function listTeacherStudents(appTeacherId: string) {
           homeworkCompletionRate: reviewedHomework.length
             ? Math.round((completedHomework / reviewedHomework.length) * 100)
             : null,
-          planCompletionRate: planItems.length
-            ? Math.round((completedPlanItems / planItems.length) * 100)
-            : null,
+          planCompletionRate,
           currentMonth: month,
         },
         attentionSignals: signals,
