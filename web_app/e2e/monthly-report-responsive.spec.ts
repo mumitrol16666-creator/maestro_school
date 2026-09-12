@@ -20,7 +20,8 @@ test("monthly report is an accessible mobile sheet without duplicate header acti
   await signInAsStudent(request, context);
   await page.goto("/school-lessons?tab=history");
 
-  const trigger = page.getByRole("button", { name: "Отчёт за месяц" });
+  await page.getByText("Отчёт за месяц", { exact: true }).click();
+  const trigger = page.getByRole("button", { name: "Открыть отчёт", exact: true });
   await expect(trigger).toBeVisible();
   await trigger.click();
 

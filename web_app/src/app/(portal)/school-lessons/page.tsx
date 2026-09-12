@@ -4,8 +4,18 @@ function formatMonthTitle(monthKey: string) {
   const [yearStr, monthStr] = monthKey.split("-");
   const monthNum = parseInt(monthStr, 10) - 1;
   const monthNames = [
-    "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
-    "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"
+    "Январь",
+    "Февраль",
+    "Март",
+    "Апрель",
+    "Май",
+    "Июнь",
+    "Июль",
+    "Август",
+    "Сентябрь",
+    "Октябрь",
+    "Ноябрь",
+    "Декабрь",
   ];
   return `${monthNames[monthNum] || monthStr} ${yearStr}`;
 }
@@ -13,9 +23,7 @@ function formatMonthTitle(monthKey: string) {
 import {
   BookOpen,
   CalendarDays,
-  CheckCircle2,
   ChevronDown,
-  Clock3,
   Download,
   FileSpreadsheet,
   GraduationCap,
@@ -23,14 +31,11 @@ import {
   MapPin,
   MonitorPlay,
   RefreshCw,
-  RotateCcw,
-  Sparkles,
-  Target,
   UserRound,
-  WalletCards,
-  XCircle,
 } from "lucide-react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { LessonMaterialItems } from "@/components/student-lesson-materials";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
@@ -38,26 +43,19 @@ import { PageHeader } from "@/components/page-header";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { api } from "@/lib/api-client";
 import { currentAqtobeMonth } from "@/lib/aqtobe-month";
-import { parseVideoUrl } from "@/lib/parse-video-url";
-import {
-  schoolHomeworkReviewState,
-  type SchoolHomeworkReviewState,
-} from "@/lib/school-homework-state";
 import {
   getSchoolAlertCounts,
   markSchoolAlertsSeen,
   type SchoolAlertCounts,
 } from "@/lib/student-school-alerts";
-import type {
-  SchoolOfflineLesson,
-  SchoolOfflineMembership,
-  StudentOfflineSummary,
-} from "@/types/school-offline";
+import type { SchoolOfflineLesson } from "@/types/school-offline";
 import { MonthlyReportModal } from "@/components/monthly-report-modal";
-import { LearningHomeworkFolder } from "@/components/learning-homework-folder";
+import { StudentLessonCalendar } from "@/components/student-lesson-calendar";
+import {
+  schoolDateLabel,
+  studentLessonTitle,
+} from "@/lib/student-lesson-display";
 import { downloadMonthlyReportExcel } from "@/lib/monthly-report-excel";
-import { isManagedMediaUrl, triggerFileDownload } from "@/lib/file-download";
-import { learningHomeworkApi } from "@/lib/learning-homework-api";
 
 /* ─── label maps ────────────────────────────────────────────────────── */
 
@@ -66,174 +64,39 @@ const statusLabels: Record<string, string> = {
   started: "Идёт",
   pending_admin_review: "На проверке",
   completed: "Проведён",
-  not_filled: "Не заполнен",
+  not_filled: "Итоги готовятся",
   cancelled: "Отменён",
-};
-
-const membershipTypeLabels: Record<string, string> = {
-  trial: "Пробное занятие",
-  monthly: "Абонемент на месяц",
-  monthly_12: "Абонемент на 12 занятий",
-  quarterly: "Абонемент на 3 месяца",
-  individual_single: "Индивидуальное занятие",
-  individual_package: "Индивидуальный формат",
-  single_class: "Разовое занятие",
-  single_lesson: "Разовое занятие",
-  custom: "Индивидуальный формат",
-  hybrid_1: "Гибридный формат",
-  hybrid_1m: "Гибридный формат",
-  hybrid_2m: "Гибридный формат",
-  group_evening: "Групповой формат",
-  group_mini: "Мини-группа",
-  duet: "Дуо",
-  individual_1_2: "Индивидуальный формат",
-  individual_2_2: "Индивидуальный формат",
-  individual_4_long: "Индивидуальный формат",
-  individual_archived: "Индивидуальный формат",
-  individual_1: "Индивидуальный формат",
-  individual_2: "Индивидуальный формат",
-  individual_3: "Индивидуальный формат",
-  individual_4: "Индивидуальный формат",
-  individual_8_25: "Индивидуальный формат",
-  individual_year: "Индивидуальный формат",
-  theory: "Теория",
-  quartet_only: "Квартет",
-};
-
-const membershipFormatLabels: Record<string, string> = {
-  individual: "Индивидуальный формат",
-  personal: "Индивидуальный формат",
-  hybrid: "Гибридный формат",
-  mixed: "Гибридный формат",
-  group: "Групповой формат",
-  quartet: "Квартет",
-  duet: "Дуо",
-  theory: "Теория",
-  trial: "Пробное занятие",
 };
 
 /* ─── helpers ───────────────────────────────────────────────────────── */
 
 function formatLessonDate(dateStr: string) {
-  return new Intl.DateTimeFormat("ru-RU", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  }).format(new Date(dateStr));
-}
-
-function formatShortDate(dateStr: string) {
-  return new Intl.DateTimeFormat("ru-RU", {
-    day: "numeric",
-    month: "short",
-  }).format(new Date(dateStr));
-}
-
-function isTechnicalMembershipName(value: string) {
-  return (
-    /^[a-z][a-z0-9]*(?:_[a-z0-9]+)+$/i.test(value) ||
-    /^абонемент\s*\d+$/i.test(value) ||
-    /^индивидуальн(?:ый|ая)\s+\d+(?:[-–]\d+)?$/i.test(value)
-  );
-}
-
-function membershipDisplayName(membership: SchoolOfflineMembership) {
-  const planName = membership.planName?.trim();
-  if (planName && !isTechnicalMembershipName(planName)) return planName;
-
-  return (
-    membershipTypeLabels[membership.type] ||
-    membershipFormatLabels[membership.lessonFormat] ||
-    "Абонемент Maestro"
-  );
-}
-
-function membershipDisplayDetails(membership: SchoolOfflineMembership) {
-  const groupName = membership.groupName?.trim();
-  const normalizedGroupName = groupName?.toLocaleLowerCase("ru-RU");
-  const visibleGroupName =
-    normalizedGroupName && !["общий", "без группы"].includes(normalizedGroupName)
-      ? groupName
-      : null;
-
-  return [membership.directionName?.trim(), visibleGroupName, membership.teacherName?.trim()]
-    .filter((value, index, values): value is string => Boolean(value) && values.indexOf(value) === index)
-    .join(" · ");
-}
-
-function MaterialPreview({ material }: { material: SchoolOfflineLesson["materials"][number] }) {
-  if (!material.url) return null;
-  const parsed = parseVideoUrl(material.url);
-  const directVideo = material.type === "video" || material.mimeType?.startsWith("video/") || /\.(mp4|webm|mov|m4v|ogv)(\?|$)/i.test(material.url);
-  if (directVideo) {
-    return <video controls preload="metadata" className="mb-3 max-h-72 w-full rounded-xl bg-black" onClick={(event) => event.stopPropagation()} src={material.url} />;
-  }
-  if (parsed) {
-    return <div className="relative mb-3 aspect-video overflow-hidden rounded-xl bg-black">
-      <iframe title={material.title || "Видео к уроку"} src={parsed.embedUrl} className="h-full w-full border-0" allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen onClick={(event) => event.stopPropagation()} />
-    </div>;
-  }
-  if (material.type === "image" || material.mimeType?.startsWith("image/")) {
-    return <img src={material.url} alt={material.title || "Материал урока"} className="mb-3 max-h-72 w-full rounded-xl object-contain" loading="lazy" onClick={(event) => event.stopPropagation()} />;
-  }
-  if (material.type === "pdf" || material.mimeType === "application/pdf" || /\.pdf(\?|$)/i.test(material.url)) {
-    return <iframe title={material.title || "PDF к уроку"} src={material.url} className="mb-3 h-40 w-full rounded-xl border border-stone-200 bg-white sm:h-80" onClick={(event) => event.stopPropagation()} />;
-  }
-  return null;
-}
-
-function LessonMaterialItems({ materials }: { materials: SchoolOfflineLesson["materials"] }) {
-  return (
-    <div className="mt-3 space-y-2.5">
-      {materials.map((material, index) => {
-        if (!material.url) return null;
-        const isFile = isManagedMediaUrl(material.url)
-          || ["file", "pdf", "image", "audio"].includes(material.type ?? "")
-          || Boolean(material.mimeType && !material.mimeType.startsWith("video/"));
-        const title = material.title || `Материал ${index + 1}`;
-
-        return (
-          <div
-            key={`${material.url}-${index}`}
-            className="flex flex-col gap-3 rounded-2xl border border-stone-200 bg-stone-50/80 p-3.5 sm:flex-row sm:items-center sm:justify-between"
-          >
-            <div className="min-w-0 flex-1">
-              <MaterialPreview material={material} />
-              <p className="truncate text-sm font-bold text-ink">{title}</p>
-              {material.description ? <p className="mt-1 line-clamp-2 text-xs text-stone-500">{material.description}</p> : null}
-            </div>
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                if (isFile) {
-                  void triggerFileDownload(material.url, title);
-                  return;
-                }
-                window.open(material.url, "_blank", "noopener,noreferrer");
-              }}
-              className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-stone-200 bg-white px-4 py-2 text-xs font-bold text-ink shadow-xs transition hover:border-amber-300 hover:bg-amber-50"
-            >
-              <Download size={14} className="text-gold" />
-              <span>{isFile ? "Скачать файл" : "Открыть материал"}</span>
-            </button>
-          </div>
-        );
-      })}
-    </div>
-  );
+  return schoolDateLabel(dateStr);
 }
 
 /* ─── tab types ─────────────────────────────────────────────────────── */
 
-type Tab = "overview" | "homework" | "schedule" | "history";
+type Tab = "schedule" | "history";
 type LessonFormatFilter = "all" | "offline" | "online";
 
-const tabs: { key: Tab; label: string; mobileLabel: string; icon: typeof GraduationCap }[] = [
-  { key: "overview", label: "Обзор", mobileLabel: "Главное", icon: Sparkles },
-  { key: "homework", label: "Домашние задания", mobileLabel: "Домашние", icon: BookOpen },
-  { key: "schedule", label: "Расписание", mobileLabel: "Уроки", icon: CalendarDays },
-  { key: "history", label: "История", mobileLabel: "История", icon: History },
+const tabs: {
+  key: Tab;
+  label: string;
+  mobileLabel: string;
+  icon: typeof GraduationCap;
+}[] = [
+  {
+    key: "schedule",
+    label: "Календарь",
+    mobileLabel: "Календарь",
+    icon: CalendarDays,
+  },
+  {
+    key: "history",
+    label: "Прошедшие",
+    mobileLabel: "Прошедшие",
+    icon: History,
+  },
 ];
 
 /* ─── interactive lesson card ───────────────────────────────────────── */
@@ -242,12 +105,17 @@ function LessonCard({
   lesson,
   upcoming,
   defaultOpen,
+  hideDate = false,
 }: {
   lesson: SchoolOfflineLesson;
   upcoming?: boolean;
   defaultOpen?: boolean;
+  hideDate?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen ?? false);
+  useEffect(() => {
+    if (defaultOpen) setOpen(true);
+  }, [defaultOpen]);
   const statusLabel = statusLabels[lesson.status] ?? lesson.status;
   const isOnline = lesson.deliveryFormat === "online";
   const hasLearningResults =
@@ -266,137 +134,139 @@ function LessonCard({
     hasLearningResults;
 
   return (
-    <article
-      className={`rounded-[24px] border shadow-soft transition-[border-color,box-shadow,background-color] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 focus-visible:ring-offset-2 ${
-        upcoming
-          ? "border-gold/20 bg-white"
-          : "border-stone-200 bg-paper"
-      } ${hasDetails ? "cursor-pointer" : ""}`}
-      onClick={() => hasDetails && setOpen(!open)}
-      onKeyDown={(event) => {
-        if (!hasDetails || (event.key !== "Enter" && event.key !== " ")) return;
-        event.preventDefault();
-        setOpen(!open);
-      }}
-      role={hasDetails ? "button" : undefined}
-      tabIndex={hasDetails ? 0 : undefined}
-      aria-expanded={hasDetails ? open : undefined}
-    >
-      {/* collapsed header */}
-      <div className="flex flex-col items-stretch gap-3 p-5 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0 sm:flex-1">
-          <h3 className="font-display text-2xl">{lesson.title}</h3>
-          <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-stone-500">
-            <span className="inline-flex items-center gap-1.5">
-              <CalendarDays size={14} className="text-gold" />
-              {formatLessonDate(lesson.date)} · {lesson.startTime}–{lesson.endTime}
+    <article className="rounded-2xl border border-stone-200 bg-white">
+      <div className="flex flex-col gap-2 p-3 sm:flex-row sm:items-start sm:justify-between sm:p-4">
+        <div className="min-w-0 flex-1">
+          <h3 className="break-words text-sm font-bold text-ink">
+            {hasDetails ? (
+              <button
+                type="button"
+                onClick={() => setOpen(!open)}
+                aria-expanded={open}
+                aria-controls={`lesson-details-${lesson.crmClassId}`}
+                className="rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
+              >
+                {studentLessonTitle(lesson)}
+              </button>
+            ) : (
+              studentLessonTitle(lesson)
+            )}
+          </h3>
+          <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs leading-5 text-stone-500">
+            <span className="font-semibold tabular-nums text-stone-700">
+              {!hideDate ? `${formatLessonDate(lesson.date)} · ` : ""}
+              {lesson.startTime.slice(0, 5)}–{lesson.endTime.slice(0, 5)}
             </span>
             {lesson.teacherName ? (
-              <span className="inline-flex items-center gap-1.5">
-                <UserRound size={14} />
-                {lesson.teacherName}
+              <span className="inline-flex min-w-0 items-start gap-1">
+                <UserRound size={13} className="mt-1 shrink-0" />
+                <span className="break-words">{lesson.teacherName}</span>
               </span>
             ) : null}
             {isOnline ? (
-              <span className="inline-flex items-center gap-1.5 font-semibold text-sky-700">
-                <MonitorPlay size={14} />
+              <span className="inline-flex items-center gap-1 text-sky-700">
+                <MonitorPlay size={13} />
                 Онлайн
               </span>
             ) : lesson.roomName ? (
-              <span className="inline-flex items-center gap-1.5">
-                <MapPin size={14} />
+              <span className="inline-flex items-center gap-1">
+                <MapPin size={13} />
                 {lesson.roomName}
               </span>
             ) : null}
           </p>
-          {lesson.groupName ? (
-            <p className="mt-2 text-xs font-semibold text-stone-400">Группа: {lesson.groupName}</p>
-          ) : null}
         </div>
-        <div className="flex w-full flex-wrap items-center justify-start gap-2 sm:w-auto sm:justify-end">
-          {upcoming && isOnline ? (
-            lesson.meetingUrl ? (
+        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+          {upcoming &&
+          isOnline &&
+          ["scheduled", "started"].includes(lesson.status) ? (
+            lesson.meetingUrl && /^https?:\/\//i.test(lesson.meetingUrl) ? (
               <a
                 href={lesson.meetingUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                onClick={(event) => event.stopPropagation()}
-                className="inline-flex min-h-9 items-center gap-2 rounded-lg bg-sky-700 px-3 text-xs font-bold text-white transition hover:bg-sky-800"
+                className="inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-ink px-3 text-xs font-semibold text-white"
               >
-                <MonitorPlay size={14} /> Подключиться
+                <MonitorPlay size={14} />
+                Подключиться
               </a>
             ) : (
-              <span className="inline-flex min-h-9 items-center rounded-lg border border-sky-100 bg-sky-50 px-3 text-xs font-bold text-sky-800">
-                Ссылка появится
+              <span className="text-xs text-stone-500">
+                Ссылка появится здесь
               </span>
             )
           ) : null}
-          <span
-            className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-wide ${
-              lesson.status === "completed"
-                ? "bg-emerald-50 text-emerald-800"
-                : lesson.status === "pending_admin_review"
-                  ? "bg-amber-50 text-amber-900"
-                  : lesson.status === "scheduled"
-                    ? "bg-blue-50 text-blue-800"
-                    : "bg-stone-100 text-stone-600"
-            }`}
-          >
-            {statusLabel}
-          </span>
-          {hasDetails && (
-            <ChevronDown
-              size={18}
-              className={`text-stone-400 transition-transform duration-200 ${
-                open ? "rotate-180" : ""
-              }`}
-            />
-          )}
+          {!(upcoming && lesson.status === "scheduled") ? (
+            <span
+              className={`rounded-lg px-2 py-1 text-xs font-medium ${lesson.status === "completed" ? "bg-emerald-50 text-emerald-800" : lesson.status === "cancelled" ? "bg-red-50 text-red-700" : "bg-stone-100 text-stone-600"}`}
+            >
+              {!upcoming &&
+              lesson.status === "completed" &&
+              lesson.attended != null
+                ? lesson.attended
+                  ? "Посетил"
+                  : "Пропуск"
+                : statusLabel}
+            </span>
+          ) : null}
+          {hasDetails ? (
+            <button
+              type="button"
+              onClick={() => setOpen(!open)}
+              aria-expanded={open}
+              aria-controls={`lesson-details-${lesson.crmClassId}`}
+              aria-label={`${open ? "Скрыть" : "Открыть"} подробности: ${studentLessonTitle(lesson)}`}
+              className="inline-flex min-h-11 items-center gap-1 rounded-lg px-2 text-xs font-semibold text-stone-600 hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
+            >
+              {open ? "Свернуть" : "Подробнее"}
+              <ChevronDown size={15} className={open ? "rotate-180" : ""} />
+            </button>
+          ) : null}
         </div>
       </div>
 
-      {/* attendance badge — always visible */}
-      {!upcoming && lesson.attended != null ? (
-        <div className="px-5 pb-3">
-          <p className="inline-flex items-center gap-2 text-sm font-semibold">
-            {lesson.attended ? (
-              <>
-                <CheckCircle2 size={16} className="text-emerald-600" />
-                <span className="text-emerald-800">Присутствовал</span>
-              </>
-            ) : (
-              <>
-                <XCircle size={16} className="text-stone-400" />
-                <span className="text-stone-500">Не был на уроке</span>
-              </>
-            )}
-          </p>
-        </div>
-      ) : null}
-
-      {/* expanded details */}
       {open && (
-        <div className="border-t border-stone-100 px-5 pb-5 pt-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+        <div
+          id={`lesson-details-${lesson.crmClassId}`}
+          className="border-t border-stone-100 p-3 space-y-3 sm:p-4"
+        >
           {lesson.topic ? (
             <div className="rounded-2xl bg-stone-50 p-4">
-              <p className="text-xs font-bold uppercase tracking-wider text-stone-400">Тема урока</p>
-              <p className="mt-2 text-sm leading-6 text-stone-700">{lesson.topic}</p>
+              <p className="text-xs font-bold uppercase tracking-wider text-stone-400">
+                Тема урока
+              </p>
+              <p className="mt-2 text-sm leading-6 text-stone-700">
+                {lesson.topic}
+              </p>
             </div>
           ) : null}
 
           {lesson.status === "completed" && (
             <div className="grid gap-3 sm:grid-cols-2">
-              <LessonReportField label="Цели урока" value={lesson.lessonGoals} />
-              <LessonReportField label="Что сделали" value={lesson.lessonSummary} />
-              <LessonReportField label="Что доработать дальше" value={lesson.nextLessonFocus} />
+              <LessonReportField
+                label="Цели урока"
+                value={lesson.lessonGoals}
+              />
+              <LessonReportField
+                label="Что сделали"
+                value={lesson.lessonSummary}
+              />
+              <LessonReportField
+                label="Что доработать дальше"
+                value={lesson.nextLessonFocus}
+              />
             </div>
           )}
 
           {lesson.status === "completed" && hasLearningResults ? (
             <div className="rounded-2xl border border-violet-100 bg-violet-50/60 p-4">
-              <p className="text-xs font-bold uppercase tracking-wider text-violet-700">Учебный результат</p>
+              <p className="text-xs font-bold uppercase tracking-wider text-violet-700">
+                Учебный результат
+              </p>
               {(lesson.lessonPoints ?? 0) > 0 ? (
-                <p className="mt-2 text-sm font-bold text-violet-950">+{lesson.lessonPoints} учебных баллов</p>
+                <p className="mt-2 text-sm font-bold text-violet-950">
+                  +{lesson.lessonPoints} учебных баллов
+                </p>
               ) : null}
               {lesson.learningTopicResults?.length ? (
                 <div className="mt-3 space-y-2">
@@ -422,7 +292,10 @@ function LessonCard({
                       </div>
                       <div className="mt-2 flex flex-wrap items-center gap-2">
                         <span className="rounded-lg bg-violet-100 px-2.5 py-1 text-xs font-black text-violet-900">
-                          {item.fromPercent == null ? "—" : `${item.fromPercent}%`} → {item.toPercent}%
+                          {item.fromPercent == null
+                            ? "—"
+                            : `${item.fromPercent}%`}{" "}
+                          → {item.toPercent}%
                         </span>
                         {item.masteryPointsAwarded > 0 ? (
                           <span className="rounded-lg bg-gold/20 px-2.5 py-1 text-xs font-black text-amber-950">
@@ -475,7 +348,8 @@ function LessonCard({
                           : "bg-amber-100 text-amber-900"
                       }`}
                     >
-                      {item.title} · {item.status === "completed" ? "освоено" : "в работе"}
+                      {item.title} ·{" "}
+                      {item.status === "completed" ? "освоено" : "в работе"}
                     </span>
                   ))}
                 </div>
@@ -484,15 +358,19 @@ function LessonCard({
           ) : null}
 
           {lesson.homework ? (
-            <div className="rounded-2xl border border-amber-100 bg-amber-50/60 p-4">
-              <p className="text-xs font-bold uppercase tracking-wider text-amber-800">Домашнее задание</p>
-              <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-amber-950">{lesson.homework}</p>
-            </div>
+            <Link
+              href={`/tasks/school/${encodeURIComponent(lesson.crmClassId)}`}
+              className="inline-flex min-h-11 items-center rounded-lg bg-amber-50 px-3 text-sm font-semibold text-amber-900"
+            >
+              Открыть задание →
+            </Link>
           ) : null}
 
           {lesson.materials.length > 0 ? (
             <div className="rounded-2xl border border-stone-200 bg-white p-4">
-              <p className="text-xs font-bold uppercase tracking-wider text-stone-400">Материалы урока</p>
+              <p className="text-xs font-bold uppercase tracking-wider text-stone-400">
+                Материалы урока
+              </p>
               <LessonMaterialItems materials={lesson.materials} />
             </div>
           ) : null}
@@ -502,443 +380,68 @@ function LessonCard({
   );
 }
 
-function LessonReportField({ label, value }: { label: string; value: string | null }) {
-  if (!value) return null;
-  return (
-    <div className="rounded-2xl bg-stone-50 p-4">
-      <p className="text-xs font-bold uppercase tracking-wider text-stone-400">{label}</p>
-      <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-stone-700">{value}</p>
-    </div>
-  );
-}
-
-/* ─── progress timeline ─────────────────────────────────────────────── */
-
-function ProgressTimeline({ lessons }: { lessons: SchoolOfflineLesson[] }) {
-  const completed = lessons
-    .filter((l) => l.status === "completed")
-    .slice(0, 5);
-
-  if (completed.length === 0) return null;
-
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-
-  return (
-    <section className="mb-8 rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
-      <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">Прогресс по урокам</p>
-      <h2 className="font-display mt-3 text-3xl">Что прошли на занятиях</h2>
-
-      {/* timeline */}
-      <div className="mt-8 relative">
-        {/* connector line */}
-        <div className="absolute left-[19px] top-[28px] bottom-[28px] w-[2px] bg-gradient-to-b from-gold/30 via-stone-200 to-stone-100 sm:hidden" />
-
-        {/* horizontal connector for desktop */}
-        <div className="hidden sm:block absolute top-[19px] left-[28px] right-[28px] h-[2px] bg-gradient-to-r from-gold/30 via-stone-200 to-stone-100" />
-
-        {/* nodes — vertical on mobile, horizontal on desktop */}
-        <div className="flex flex-col sm:flex-row sm:justify-between gap-6 sm:gap-2">
-          {completed.map((lesson) => {
-            const isExpanded = expandedId === lesson.crmClassId;
-            const color =
-              lesson.attended === true
-                ? "bg-emerald-500 ring-emerald-200"
-                : lesson.attended === false
-                  ? "bg-stone-300 ring-stone-200"
-                  : "bg-amber-400 ring-amber-200";
-
-            return (
-              <div
-                key={lesson.crmClassId}
-                className="relative flex sm:flex-col sm:items-center sm:text-center gap-4 sm:gap-2 sm:flex-1 cursor-pointer group"
-                onClick={() => setExpandedId(isExpanded ? null : lesson.crmClassId)}
-              >
-                {/* dot */}
-                <div className={`relative z-10 h-[38px] w-[38px] shrink-0 rounded-full ring-4 ${color} grid place-items-center transition-transform group-hover:scale-110`}>
-                  {lesson.attended === true ? (
-                    <CheckCircle2 size={18} className="text-white" />
-                  ) : lesson.attended === false ? (
-                    <XCircle size={16} className="text-white" />
-                  ) : (
-                    <Clock3 size={16} className="text-white" />
-                  )}
-                </div>
-
-                {/* label */}
-                <div className="flex-1 sm:flex-none min-w-0">
-                  <p className="text-xs font-bold text-stone-500">{formatShortDate(lesson.date)}</p>
-                  <p className="mt-0.5 text-sm font-semibold text-ink truncate max-w-[160px]">{lesson.topic || lesson.title}</p>
-
-                  {/* expanded detail */}
-                  {isExpanded && (
-                    <div className="mt-3 rounded-2xl border border-stone-200 bg-white p-4 text-left shadow-soft sm:absolute sm:top-full sm:left-1/2 sm:-translate-x-1/2 sm:mt-4 sm:w-72 sm:z-20">
-                      {lesson.lessonSummary ? (
-                        <div className="mb-3">
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Что сделали</p>
-                          <p className="mt-1 text-xs leading-5 text-stone-700">{lesson.lessonSummary}</p>
-                        </div>
-                      ) : null}
-                      {lesson.lessonGoals ? (
-                        <div className="mb-3">
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Цели</p>
-                          <p className="mt-1 text-xs leading-5 text-stone-700">{lesson.lessonGoals}</p>
-                        </div>
-                      ) : null}
-                      {lesson.nextLessonFocus ? (
-                        <div>
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Фокус на след. урок</p>
-                          <p className="mt-1 text-xs leading-5 text-stone-700">{lesson.nextLessonFocus}</p>
-                        </div>
-                      ) : null}
-                      {!lesson.lessonSummary && !lesson.lessonGoals && !lesson.nextLessonFocus && (
-                        <p className="text-xs text-stone-400">Преподаватель пока не заполнил итог урока.</p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function MonthlyPlanProgress({
-  plan,
+function GroupedLessonList({
+  lessons,
+  upcoming = false,
+  requestedLessonId,
 }: {
-  plan: NonNullable<StudentOfflineSummary["monthlyPlan"]>;
+  lessons: SchoolOfflineLesson[];
+  upcoming?: boolean;
+  requestedLessonId?: string | null;
 }) {
-  const activeItems = plan.items.filter((item) => item.status !== "moved");
-  const total = Math.max(activeItems.length, 1);
-  const completedWidth = (plan.completedCount / total) * 100;
-  const inProgressWidth = (plan.inProgressCount / total) * 100;
-  const monthLabel = new Intl.DateTimeFormat("ru-RU", {
-    month: "long",
-    year: "numeric",
-  }).format(new Date(`${plan.month}-01T12:00:00`));
-  const statusLabel = {
-    planned: "Впереди",
-    in_progress: "В работе",
-    completed: "Освоено",
-    moved: "Перенесено",
-  } as const;
-
-  return (
-    <section className="mb-8 rounded-[28px] border border-violet-100 bg-gradient-to-br from-violet-50 via-white to-amber-50/40 p-6 shadow-soft sm:p-8">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-violet-700">
-            <Target size={17} />
-            Учебный план · {monthLabel}
-          </p>
-          <h2 className="font-display mt-3 text-3xl">{plan.goal || "Цель месяца"}</h2>
-          {plan.expectedResult ? (
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">{plan.expectedResult}</p>
-          ) : null}
-        </div>
-        <div className="rounded-2xl bg-white px-5 py-3 text-right shadow-sm ring-1 ring-violet-100">
-          <p className="font-display text-3xl text-violet-800">{plan.progressPercent}%</p>
-          <p className="text-[11px] font-bold uppercase tracking-wider text-stone-400">освоено</p>
-        </div>
-      </div>
-
-      <div className="mt-6 h-3 overflow-hidden rounded-full bg-stone-200">
-        <div className="flex h-full w-full">
-          <div className="bg-emerald-500 transition-all" style={{ width: `${completedWidth}%` }} />
-          <div className="bg-amber-400 transition-all" style={{ width: `${inProgressWidth}%` }} />
-        </div>
-      </div>
-      <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs font-semibold text-stone-600">
-        <span><b className="text-emerald-700">{plan.completedCount}</b> освоено</span>
-        <span><b className="text-amber-700">{plan.inProgressCount}</b> в работе</span>
-        <span><b>{plan.plannedCount}</b> впереди</span>
-        {plan.teacherName ? <span className="text-stone-400">План: {plan.teacherName}</span> : null}
-      </div>
-
-      {activeItems.length ? (
-        <div className="mt-6 grid gap-2 sm:grid-cols-2">
-          {activeItems.map((item) => (
-            <div key={item.id} className="flex items-center justify-between gap-3 rounded-2xl border border-white bg-white/80 px-4 py-3">
-              <span className="text-sm font-semibold text-stone-700">{item.title}</span>
-              <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase ${
-                item.status === "completed"
-                  ? "bg-emerald-50 text-emerald-700"
-                  : item.status === "in_progress"
-                    ? "bg-amber-50 text-amber-800"
-                    : "bg-stone-100 text-stone-500"
-              }`}>
-                {statusLabel[item.status]}
-              </span>
-            </div>
-          ))}
-        </div>
-      ) : null}
-    </section>
-  );
-}
-
-/* ─── homework folder ───────────────────────────────────────────────── */
-
-function HomeworkFolder({ lessons, requestedLessonId }: { lessons: SchoolOfflineLesson[]; requestedLessonId?: string | null }) {
-  const withHomework = lessons
-    .filter((lesson) => lesson.homework)
-    .sort((left, right) => (
-      `${right.date}-${right.startTime}`.localeCompare(`${left.date}-${left.startTime}`)
-    ));
-
-  if (withHomework.length === 0) {
+  const groups = new Map<string, SchoolOfflineLesson[]>();
+  const sorted = [...lessons].sort((a, b) => {
+    const dates = a.date.slice(0, 10).localeCompare(b.date.slice(0, 10));
     return (
-      <EmptyState
-        title="Домашних заданий пока нет"
-        description="После проведённых уроков домашние задания появятся здесь."
-      />
+      (upcoming ? dates : -dates) || a.startTime.localeCompare(b.startTime)
     );
+  });
+  for (const lesson of sorted) {
+    const date = lesson.date.slice(0, 10);
+    groups.set(date, [...(groups.get(date) ?? []), lesson]);
   }
-
   return (
     <div className="space-y-4">
-      {withHomework.map((lesson) => (
-        <HomeworkCard
-          key={lesson.crmClassId}
-          lesson={lesson}
-          reviewState={schoolHomeworkReviewState(lesson, lessons)}
-          defaultOpen={lesson.crmClassId === requestedLessonId}
-        />
+      {[...groups].map(([date, items]) => (
+        <section key={date} aria-label={formatLessonDate(date)}>
+          <h3 className="mb-2 text-xs font-semibold capitalize text-stone-500">
+            {schoolDateLabel(date, true)}{" "}
+            <span className="ml-1 text-stone-400">· {items.length}</span>
+          </h3>
+          <div className="space-y-2">
+            {items.map((lesson) => (
+              <LessonCard
+                key={lesson.crmClassId}
+                lesson={lesson}
+                upcoming={upcoming}
+                defaultOpen={lesson.crmClassId === requestedLessonId}
+                hideDate
+              />
+            ))}
+          </div>
+        </section>
       ))}
     </div>
   );
 }
 
-const homeworkResultLabels = {
-  completed: "Выполнено",
-  partial: "Выполнено частично",
-  not_completed: "Не выполнено",
-} as const;
-
-const homeworkResultStyles = {
-  completed: {
-    panel: "border-emerald-100 bg-emerald-50/60",
-    label: "text-emerald-700",
-    bar: "bg-emerald-500",
-  },
-  partial: {
-    panel: "border-amber-100 bg-amber-50/60",
-    label: "text-amber-800",
-    bar: "bg-amber-400",
-  },
-  not_completed: {
-    panel: "border-red-100 bg-red-50/60",
-    label: "text-red-700",
-    bar: "bg-red-500",
-  },
-} as const;
-
-function HomeworkProgress({
-  result,
-  reviewState,
+function LessonReportField({
+  label,
+  value,
 }: {
-  result: SchoolOfflineLesson["homeworkResult"];
-  reviewState: SchoolHomeworkReviewState;
+  label: string;
+  value: string | null;
 }) {
-  if (!result) {
-    const isMissing = reviewState === "missing_review";
-    return (
-      <span className={`rounded-2xl border px-3 py-2 text-center ${
-        isMissing ? "border-red-100 bg-red-50" : "border-stone-200 bg-stone-50"
-      }`}>
-        <span className={`block text-[10px] font-bold uppercase tracking-wide ${
-          isMissing ? "text-red-500" : "text-stone-400"
-        }`}>{isMissing ? "Результат" : "Проверка"}</span>
-        <span className={`mt-0.5 block text-xs font-bold ${
-          isMissing ? "text-red-700" : "text-stone-600"
-        }`}>{isMissing ? "Не отмечен" : "На следующем уроке"}</span>
-      </span>
-    );
-  }
-
-  const percent = result.completionPercent;
-  const safePercent = percent ?? 0;
-  const color = safePercent >= 100
-    ? "#10b981"
-    : safePercent >= 50
-      ? "#f59e0b"
-      : safePercent > 0
-        ? "#f97316"
-        : "#ef4444";
-
+  if (!value) return null;
   return (
-    <div className="flex items-center gap-2.5">
-      <span
-        role="img"
-        aria-label={percent == null ? homeworkResultLabels[result.status] : `Домашнее задание выполнено на ${percent}%`}
-        className="grid h-14 w-14 shrink-0 place-items-center rounded-full"
-        style={{ background: `conic-gradient(${color} ${safePercent}%, #e7e5e4 ${safePercent}% 100%)` }}
-      >
-        <span className="grid h-10 w-10 place-items-center rounded-full bg-white text-xs font-black text-ink">
-          {percent == null ? "—" : `${percent}%`}
-        </span>
-      </span>
-      <span className="hidden max-w-28 text-xs font-bold leading-4 text-stone-600 sm:block">
-        {homeworkResultLabels[result.status]}
-      </span>
+    <div className="rounded-2xl bg-stone-50 p-4">
+      <p className="text-xs font-bold uppercase tracking-wider text-stone-400">
+        {label}
+      </p>
+      <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-stone-700">
+        {value}
+      </p>
     </div>
-  );
-}
-
-function HomeworkPoints({ lesson }: { lesson: SchoolOfflineLesson }) {
-  if (lesson.lessonPointsAwarded == null) {
-    return (
-      <span className="rounded-2xl border border-stone-200 bg-white px-3 py-2 text-center">
-        <span className="block text-sm font-black text-stone-400">—</span>
-        <span className="block text-[10px] font-bold text-stone-400">баллы</span>
-      </span>
-    );
-  }
-
-  return (
-    <span className="rounded-2xl border border-violet-100 bg-violet-50 px-3 py-2 text-center">
-      <span className="block text-sm font-black text-violet-800">
-        {lesson.lessonPointsAwarded > 0 ? "+" : ""}{lesson.lessonPointsAwarded}
-      </span>
-      <span className="block text-[10px] font-bold text-violet-600">баллов за занятие</span>
-    </span>
-  );
-}
-
-function HomeworkCard({
-  lesson,
-  reviewState,
-  defaultOpen = false,
-}: {
-  lesson: SchoolOfflineLesson;
-  reviewState: SchoolHomeworkReviewState;
-  defaultOpen?: boolean;
-}) {
-  const [open, setOpen] = useState(defaultOpen);
-  const resultStyle = lesson.homeworkResult
-    ? homeworkResultStyles[lesson.homeworkResult.status]
-    : null;
-  const needsRevision = lesson.homeworkResult?.status === "partial"
-    || lesson.homeworkResult?.status === "not_completed";
-  const revisionComment = lesson.homeworkReview?.difficulties?.trim()
-    || lesson.homeworkReview?.notCompletedReason?.trim()
-    || null;
-  const displayTitle = lesson.topic?.trim() || lesson.title;
-  const lessonContext = lesson.topic?.trim() ? lesson.title : null;
-
-  return (
-    <article
-      id={`homework-${lesson.crmClassId}`}
-      className={`cursor-pointer rounded-[24px] border bg-white shadow-soft transition-[border-color,box-shadow,background-color] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 focus-visible:ring-offset-2 ${
-        reviewState === "missing_review"
-          ? "border-red-100 hover:border-red-200"
-          : "border-amber-100 hover:border-amber-200"
-      }`}
-      onClick={() => setOpen(!open)}
-      onKeyDown={(event) => {
-        if (event.key !== "Enter" && event.key !== " ") return;
-        event.preventDefault();
-        setOpen(!open);
-      }}
-      role="button"
-      tabIndex={0}
-      aria-expanded={open}
-    >
-      <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <BookOpen size={16} className="text-amber-600 shrink-0" />
-            <h3 className="font-display line-clamp-2 text-xl">{displayTitle}</h3>
-          </div>
-          <p className="mt-2 flex flex-wrap items-center gap-2 text-sm text-stone-500">
-            <CalendarDays size={13} className="text-gold" />
-            {formatLessonDate(lesson.date)}
-            {lessonContext ? <span className="text-stone-400">· {lessonContext}</span> : null}
-            {lesson.teacherName && (
-              <span className="text-stone-400">· {lesson.teacherName}</span>
-            )}
-          </p>
-          {!open && lesson.homework && (
-            <p className="mt-2 text-sm text-stone-600 line-clamp-2">{lesson.homework}</p>
-          )}
-        </div>
-        <div className="flex shrink-0 items-center gap-2 self-stretch sm:self-start">
-          <HomeworkProgress result={lesson.homeworkResult} reviewState={reviewState} />
-          <HomeworkPoints lesson={lesson} />
-          <ChevronDown
-            size={18}
-            className={`ml-auto shrink-0 text-stone-400 transition-transform duration-200 sm:ml-1 ${
-              open ? "rotate-180" : ""
-            }`}
-          />
-        </div>
-      </div>
-
-      {open && (
-        <div className="grid gap-3 border-t border-amber-100 p-4 lg:grid-cols-2">
-          <div className={`rounded-2xl border p-4 ${
-            resultStyle?.panel ?? "border-stone-200 bg-stone-50"
-          }`}>
-            <p className={`text-xs font-bold uppercase tracking-wider ${
-              resultStyle?.label ?? "text-stone-400"
-            }`}>
-              Результат проверки
-            </p>
-            {lesson.homeworkResult ? (
-              <>
-                <div className="mt-3 flex items-center justify-between gap-3 text-sm">
-                  <span className="font-semibold text-stone-700">
-                    {homeworkResultLabels[lesson.homeworkResult.status]}
-                  </span>
-                  <strong className="text-lg text-ink">
-                    {lesson.homeworkResult.completionPercent == null
-                      ? "Без процента"
-                      : `${lesson.homeworkResult.completionPercent}%`}
-                  </strong>
-                </div>
-                <div className="mt-3 h-2 overflow-hidden rounded-full bg-white">
-                  <div
-                    className={`h-full rounded-full ${resultStyle?.bar ?? "bg-stone-300"}`}
-                    style={{ width: `${lesson.homeworkResult.completionPercent ?? 0}%` }}
-                  />
-                </div>
-              </>
-            ) : (
-              <p className="mt-2 text-sm leading-6 text-stone-500">
-                {reviewState === "missing_review"
-                  ? "Следующее занятие уже прошло, но результат не отметили. Преподаватель или администратор может исправить его в карточке проведённого урока."
-                  : "Преподаватель отметит результат на следующем занятии."}
-              </p>
-            )}
-          </div>
-
-          {needsRevision ? (
-            <div className="rounded-2xl border border-red-100 bg-red-50 p-4">
-              <p className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-wider text-red-700">
-                <RotateCcw size={14} /> Что повторить к следующему уроку
-              </p>
-              <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-red-950">
-                {revisionComment || "Повторите домашнее задание с учётом результата проверки преподавателя."}
-              </p>
-            </div>
-          ) : null}
-
-          <div className="rounded-2xl border border-amber-100 bg-amber-50/60 p-4">
-            <p className="text-xs font-bold uppercase tracking-wider text-amber-800">Домашнее задание</p>
-            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-amber-950">{lesson.homework}</p>
-          </div>
-
-          {lesson.materials.length > 0 ? (
-            <div className="rounded-2xl border border-stone-200 bg-white p-4 lg:col-span-2">
-              <p className="text-xs font-bold uppercase tracking-wider text-stone-400">Материалы</p>
-              <LessonMaterialItems materials={lesson.materials} />
-            </div>
-          ) : null}
-        </div>
-      )}
-    </article>
   );
 }
 
@@ -954,33 +457,38 @@ function TabNav({
   alerts: SchoolAlertCounts;
 }) {
   return (
-    <nav className="mb-8 grid grid-cols-4 gap-1 rounded-2xl border border-stone-200 bg-white p-1.5 shadow-soft">
+    <nav
+      aria-label="Разделы уроков"
+      className="mb-4 grid grid-cols-2 gap-1 rounded-2xl border border-stone-200 bg-white p-1"
+    >
       {tabs.map(({ key, label, mobileLabel, icon: Icon }) => (
         <button
           key={key}
           onClick={() => onChange(key)}
           type="button"
           title={label}
+          aria-pressed={active === key}
           className={`relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-[10px] font-semibold leading-tight transition-colors sm:flex-row sm:gap-2 sm:px-4 sm:py-2.5 sm:text-sm ${
             active === key
               ? "bg-ink text-white shadow-sm"
               : "text-stone-500 hover:bg-stone-50 hover:text-ink"
           }`}
         >
-          <Icon size={17} className={active === key ? "text-gold" : undefined} />
-          <span className="w-full truncate text-center sm:hidden">{mobileLabel}</span>
+          <Icon
+            size={17}
+            className={active === key ? "text-gold" : undefined}
+          />
+          <span className="w-full truncate text-center sm:hidden">
+            {mobileLabel}
+          </span>
           <span className="hidden sm:inline">{label}</span>
-          {key === "homework" && alerts.homework > 0 ? (
-            <span className="absolute right-1 top-1 grid min-w-4 place-items-center rounded-full bg-gold px-1 py-0.5 text-[9px] font-black text-ink sm:static sm:min-w-5 sm:px-1.5 sm:text-[10px]">
-              {alerts.homework}
-            </span>
-          ) : null}
           {key === "history" && alerts.reports > 0 ? (
             <span className="absolute right-1 top-1 grid min-w-4 place-items-center rounded-full bg-gold px-1 py-0.5 text-[9px] font-black text-ink sm:static sm:min-w-5 sm:px-1.5 sm:text-[10px]">
               {alerts.reports}
             </span>
           ) : null}
-          {key === "schedule" && alerts.todayLessons + alerts.tomorrowLessons > 0 ? (
+          {key === "schedule" &&
+          alerts.todayLessons + alerts.tomorrowLessons > 0 ? (
             <span className="absolute right-1 top-1 grid min-w-4 place-items-center rounded-full bg-blue-100 px-1 py-0.5 text-[9px] font-black text-blue-800 sm:static sm:min-w-5 sm:px-1.5 sm:text-[10px]">
               {alerts.todayLessons + alerts.tomorrowLessons}
             </span>
@@ -993,25 +501,43 @@ function TabNav({
 
 /* ─── main page ─────────────────────────────────────────────────────── */
 
-export default function SchoolLessonsPage() {
+function SchoolSchedule() {
+  const router = useRouter();
   const params = useSearchParams();
   const { user } = useAuth();
   const resource = useApiResource(() => api.studentOfflineSummary(), []);
-  const learningHomeworkResource = useApiResource(() => learningHomeworkApi.studentAssignments(), []);
   const requestedTab = params.get("tab");
   const requestedFormat = params.get("format");
   const requestedLessonId = params.get("lesson");
-  const initialTab = tabs.some((item) => item.key === requestedTab) ? requestedTab as Tab : "overview";
-  const [activeTab, setActiveTab] = useState<Tab>(initialTab);
-  const [lessonFormatFilter, setLessonFormatFilter] = useState<LessonFormatFilter>(
-    requestedFormat === "online" || requestedFormat === "offline" ? requestedFormat : "all",
-  );
-  const [reportMonth, setReportMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const activeTab: Tab = requestedTab === "history" ? "history" : "schedule";
+  function setActiveTab(tab: Tab) {
+    const query = new URLSearchParams(params.toString());
+    query.set("tab", tab);
+    query.delete("lesson");
+    router.push(`/school-lessons?${query.toString()}`, { scroll: false });
+  }
+  const [lessonFormatFilter, setLessonFormatFilter] =
+    useState<LessonFormatFilter>(
+      requestedFormat === "online" || requestedFormat === "offline"
+        ? requestedFormat
+        : "all",
+    );
+  const [reportMonth, setReportMonth] = useState(currentAqtobeMonth);
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
   const [historyFilterMonth, setHistoryFilterMonth] = useState<string>("auto");
+  useEffect(() => {
+    setHistoryFilterMonth("auto");
+  }, [requestedLessonId]);
+  useEffect(() => {
+    setLessonFormatFilter(
+      requestedFormat === "online" || requestedFormat === "offline"
+        ? requestedFormat
+        : "all",
+    );
+  }, [requestedFormat]);
   const [alerts, setAlerts] = useState<SchoolAlertCounts>({
     homework: 0,
     reports: 0,
@@ -1021,33 +547,6 @@ export default function SchoolLessonsPage() {
   });
 
   const lessonHistory = resource.data?.lessonHistory ?? [];
-  const requestedHomeworkExists = requestedLessonId
-    ? learningHomeworkResource.loading
-      || Boolean(learningHomeworkResource.data?.assignments.some((assignment) => assignment.id === requestedLessonId))
-      || lessonHistory.some((lesson) => lesson.crmClassId === requestedLessonId && Boolean(lesson.homework?.trim()))
-    : true;
-
-  useEffect(() => {
-    if (
-      !resource.data
-      || learningHomeworkResource.loading
-      || activeTab !== "homework"
-      || !requestedLessonId
-      || !requestedHomeworkExists
-    ) return;
-    const frame = window.requestAnimationFrame(() => {
-      document.getElementById(`homework-${requestedLessonId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [
-    activeTab,
-    learningHomeworkResource.data,
-    learningHomeworkResource.loading,
-    requestedHomeworkExists,
-    requestedLessonId,
-    resource.data,
-  ]);
-
   const availableMonths = useMemo(() => {
     const monthsMap = new Map<string, number>();
     for (const lesson of lessonHistory) {
@@ -1064,20 +563,24 @@ export default function SchoolLessonsPage() {
       }));
   }, [lessonHistory]);
 
-  const activeMonth = historyFilterMonth === "auto"
-    ? (reportMonth || (availableMonths[0]?.monthKey ?? currentAqtobeMonth()))
-    : historyFilterMonth;
+  const activeMonth =
+    historyFilterMonth === "auto"
+      ? lessonHistory
+          .find((lesson) => lesson.crmClassId === requestedLessonId)
+          ?.date.slice(0, 7) ||
+        reportMonth ||
+        (availableMonths[0]?.monthKey ?? currentAqtobeMonth())
+      : historyFilterMonth;
 
   const displayHistory = useMemo(() => {
     if (activeMonth === "all") return lessonHistory;
-    return lessonHistory.filter((lesson) => lesson.date && lesson.date.startsWith(activeMonth));
+    return lessonHistory.filter(
+      (lesson) => lesson.date && lesson.date.startsWith(activeMonth),
+    );
   }, [lessonHistory, activeMonth]);
 
   useEffect(() => {
     if (!user || !resource.data) return;
-    if (activeTab === "homework") {
-      markSchoolAlertsSeen(user.id, resource.data, "homework");
-    }
     if (activeTab === "history") {
       markSchoolAlertsSeen(user.id, resource.data, "reports");
     }
@@ -1094,12 +597,12 @@ export default function SchoolLessonsPage() {
         <>
           <PageHeader
             eyebrow="Обучение Maestro"
-            title="Уроки"
-            description="Единое расписание занятий в школе и онлайн, абонементы и домашние задания."
+            title="Расписание"
+            description="Даты, время и место занятий."
           />
           <EmptyState
             title="Профиль школы не подключён"
-            description="Обратитесь к администратору школы. После подключения здесь появятся уроки и остаток абонемента."
+            description="Обратитесь к администратору школы. После подключения здесь появится расписание."
           />
         </>
       );
@@ -1109,11 +612,15 @@ export default function SchoolLessonsPage() {
 
   const data = resource.data;
   if (!data) {
-    return <ErrorState message="Не удалось загрузить данные" retry={resource.reload} />;
+    return (
+      <ErrorState
+        message="Не удалось загрузить данные"
+        retry={resource.reload}
+      />
+    );
   }
 
-  const { balanceSnapshot, upcomingLessons } = data;
-  const currentMembership = balanceSnapshot.currentMembership;
+  const { upcomingLessons } = data;
   const groupDayNames = ["", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
   async function refreshFromCrm() {
@@ -1137,502 +644,209 @@ export default function SchoolLessonsPage() {
     }
   }
 
-  /* ── upcoming: sorted + limited to 3 ── */
-  const upcoming3 = [...upcomingLessons]
-    .sort((a, b) => {
-      const dateComp = a.date.localeCompare(b.date);
-      if (dateComp !== 0) return dateComp;
-      return a.startTime.localeCompare(b.startTime);
-    })
-    .slice(0, 3);
-  const filteredUpcomingLessons = lessonFormatFilter === "all"
-    ? upcomingLessons
-    : upcomingLessons.filter((lesson) => (lesson.deliveryFormat || "offline") === lessonFormatFilter);
+  const filteredUpcomingLessons =
+    lessonFormatFilter === "all"
+      ? upcomingLessons
+      : upcomingLessons.filter(
+          (lesson) =>
+            (lesson.deliveryFormat || "offline") === lessonFormatFilter,
+        );
 
   return (
     <>
-      <PageHeader
-        eyebrow="Обучение Maestro"
-        title="Уроки"
-        description="Единое расписание занятий в школе и онлайн, прогресс и домашние задания."
-        action={
-          <div className="flex flex-col items-start gap-2 sm:items-end">
-            <button
-              type="button"
-              onClick={refreshFromCrm}
-              disabled={refreshing}
-              className="inline-flex items-center gap-2 rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-sm font-bold text-ink shadow-soft transition hover:border-gold/50 hover:text-gold disabled:cursor-wait disabled:opacity-70"
-            >
-              <RefreshCw size={16} className={refreshing ? "animate-spin" : undefined} />
-              {refreshing ? "Обновляем" : "Обновить данные"}
-            </button>
-            {lastRefreshedAt ? (
-              <p className="text-xs font-semibold text-stone-400">
-                Обновлено {lastRefreshedAt.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}
-              </p>
-            ) : null}
-            {refreshError ? <p className="text-xs font-semibold text-red-600">{refreshError}</p> : null}
-          </div>
-        }
-      />
+      <header className="mb-4 flex items-center justify-between gap-3">
+        <div>
+          <h1 className="font-display text-3xl">Расписание</h1>
+          <p className="mt-1 text-sm text-stone-500">
+            Даты, время и место занятий
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={refreshFromCrm}
+          disabled={refreshing}
+          aria-label={
+            refreshing ? "Обновляем расписание" : "Обновить расписание"
+          }
+          title={
+            lastRefreshedAt
+              ? `Обновлено ${lastRefreshedAt.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}`
+              : "Обновить расписание"
+          }
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-stone-200 bg-white text-stone-500 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold disabled:opacity-50"
+        >
+          <RefreshCw
+            size={18}
+            className={refreshing ? "animate-spin" : undefined}
+          />
+        </button>
+      </header>
+      {refreshError ? (
+        <p role="alert" className="mb-3 text-sm text-red-700">
+          {refreshError}
+        </p>
+      ) : null}
 
       <TabNav active={activeTab} onChange={setActiveTab} alerts={alerts} />
 
-      {/* ═══════ TAB: Overview ═══════ */}
-      {activeTab === "overview" && (
-        <>
-          {/* nearest lessons are the primary reason to open this screen */}
-          <section className="mb-8">
-            <div className="mb-4 flex items-center gap-3 sm:mb-5">
-              <Clock3 className="text-gold" size={22} />
-              <h2 className="font-display text-2xl sm:text-3xl">Ближайшие уроки</h2>
-              {upcomingLessons.length > 3 && (
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("schedule")}
-                  className="ml-auto text-sm font-bold text-gold hover:underline"
-                >
-                  Все {upcomingLessons.length} →
-                </button>
-              )}
-            </div>
-            {upcoming3.length === 0 ? (
-              <EmptyState
-                title="Ближайших уроков нет"
-                description="Когда администратор добавит занятия в расписание, они появятся здесь."
-              />
-            ) : (
-              <div className="space-y-4">
-                {upcoming3.map((lesson, index) => (
-                  <LessonCard key={lesson.crmClassId} lesson={lesson} upcoming defaultOpen={index === 0} />
-                ))}
-              </div>
-            )}
-          </section>
-
-          {/* balance cards */}
-          <section className="mb-8 grid grid-cols-2 gap-2 sm:gap-4 xl:grid-cols-3">
-            <div className="rounded-[20px] border border-stone-200 bg-paper p-4 shadow-soft sm:rounded-[28px] sm:p-6">
-              <WalletCards className="text-gold" size={20} />
-              <p className="font-display mt-3 text-2xl tabular-nums sm:mt-4 sm:text-3xl">
-                {balanceSnapshot.accountBalanceKzt.toLocaleString("ru-RU")} ₸
-              </p>
-              <p className="mt-1 text-xs leading-4 text-stone-500 sm:text-sm">на вашем балансе</p>
-            </div>
-            {balanceSnapshot.debtAmountKzt > 0 ? (
-              <div className="rounded-[20px] border border-red-100 bg-red-50 p-4 shadow-soft sm:rounded-[28px] sm:p-6">
-                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-red-700 sm:text-xs sm:tracking-[0.16em]">Долг</p>
-                <p className="font-display mt-3 text-2xl tabular-nums text-red-900 sm:mt-4 sm:text-4xl">
-                  {balanceSnapshot.debtAmountKzt.toLocaleString("ru-RU")} ₸
-                </p>
-                <p className="mt-1 text-xs leading-4 text-red-700/80 sm:text-sm">по активным абонементам</p>
-              </div>
-            ) : (
-              <div className="rounded-[20px] border border-emerald-100 bg-emerald-50 p-4 shadow-soft sm:rounded-[28px] sm:p-6">
-                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-800 sm:text-xs sm:tracking-[0.16em]">Оплата</p>
-                <p className="font-display mt-3 text-2xl text-emerald-900 sm:mt-4 sm:text-3xl">Без долга</p>
-                <p className="mt-1 text-xs leading-4 text-emerald-800/80 sm:text-sm">по активным абонементам</p>
-              </div>
-            )}
-          </section>
-
-          {data.monthlyPlan ? <MonthlyPlanProgress plan={data.monthlyPlan} /> : null}
-
-          {/* progress timeline */}
-          <ProgressTimeline lessons={lessonHistory} />
-
-          {/* current membership */}
-          {currentMembership ? (
-            <section className="mb-8 rounded-[28px] border border-gold/20 bg-ink p-6 text-white shadow-soft sm:p-8">
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">Текущий абонемент</p>
-              <div className="mt-4 flex flex-wrap items-end justify-between gap-5">
-                <div>
-                  <h2 className="font-display text-3xl">
-                    {membershipDisplayName(currentMembership)}
-                  </h2>
-                  {membershipDisplayDetails(currentMembership) ? (
-                    <p className="mt-2 text-sm text-white/65">
-                      {membershipDisplayDetails(currentMembership)}
-                    </p>
-                  ) : null}
-                </div>
-                <div className="text-right">
-                  <p className="font-display text-4xl text-gold">
-                    {currentMembership.classesRemaining}
-                  </p>
-                  <p className="mt-1 text-xs text-white/65">занятий осталось</p>
-                  <p className="mt-2 text-xs text-white/50">
-                    Всего в пакете: {currentMembership.totalClasses} занятий
-                  </p>
-                  <p className="mt-1 text-xs text-white/50">
-                    Действует до {formatLessonDate(currentMembership.endDate)}
-                  </p>
-                </div>
-              </div>
-
-              {currentMembership.individualClassesRemaining !== null &&
-                currentMembership.individualClassesRemaining !== undefined && (
-                  <div className="mt-6 border-t border-white/10 pt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-                    <div className="rounded-2xl bg-white/5 p-4 border border-white/10">
-                      <p className="text-[11px] font-bold uppercase tracking-wider text-white/50">Индивидуальные</p>
-                      <p className="font-display mt-2 text-2xl text-gold">
-                        {currentMembership.individualClassesRemaining} ост.
-                      </p>
-                    </div>
-                    <div className="rounded-2xl bg-white/5 p-4 border border-white/10">
-                      <p className="text-[11px] font-bold uppercase tracking-wider text-white/50">Групповые</p>
-                      <p className="font-display mt-2 text-2xl text-gold">
-                        {currentMembership.groupClassesRemaining} ост.
-                      </p>
-                    </div>
-                    <div className="rounded-2xl bg-white/5 p-4 border border-white/10">
-                      <p className="text-[11px] font-bold uppercase tracking-wider text-white/50">Теория</p>
-                      <p className="font-display mt-2 text-2xl text-gold">
-                        {currentMembership.theoryClassesRemaining} ост.
-                      </p>
-                    </div>
-                    <div className="rounded-2xl bg-white/5 p-4 border border-white/10">
-                      <p className="text-[11px] font-bold uppercase tracking-wider text-white/50">Заморозки (экс.)</p>
-                      <p className="font-display mt-2 text-2xl text-white">
-                        {currentMembership.emergencyFreezesAvailable}{" "}
-                        <span className="text-white/40 text-xs">/ {currentMembership.emergencyFreezesUsed ?? 0} исп.</span>
-                      </p>
-                    </div>
-                  </div>
-                )}
-            </section>
-          ) : null}
-
-        </>
-      )}
-
-      {/* ═══════ TAB: Homework ═══════ */}
-      {activeTab === "homework" && (
-        <>
-          <div className="mb-6">
-            <div className="flex items-center gap-3 mb-2">
-              <BookOpen className="text-gold" size={22} />
-              <h2 className="font-display text-3xl">Домашние задания</h2>
-            </div>
-            <p className="text-sm text-stone-500">Домашки за последние уроки. Нажмите на карточку, чтобы раскрыть задание.</p>
-          </div>
-          {!requestedHomeworkExists ? (
-            <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-950">
-              Это задание уже не входит в доступное окно истории. Откройте полный отчёт за нужный месяц.
-            </div>
-          ) : null}
-          {learningHomeworkResource.data?.enabled ? (
-            <div className="space-y-8">
-              <section>
-                <p className="mb-3 text-[10px] font-black uppercase tracking-[0.18em] text-gold">Текущие задания</p>
-                <LearningHomeworkFolder
-                  assignments={learningHomeworkResource.data.assignments}
-                  loading={learningHomeworkResource.loading}
-                  error={learningHomeworkResource.error}
-                  onReload={learningHomeworkResource.reload}
-                />
-              </section>
-              {lessonHistory.some((lesson) => Boolean(lesson.homework)) ? (
-                <section>
-                  <p className="mb-3 text-[10px] font-black uppercase tracking-[0.18em] text-stone-400">Предыдущие задания</p>
-                  <HomeworkFolder lessons={lessonHistory} requestedLessonId={requestedLessonId} />
-                </section>
-              ) : null}
-            </div>
-          ) : (
-            <HomeworkFolder lessons={lessonHistory} requestedLessonId={requestedLessonId} />
-          )}
-        </>
-      )}
-
       {/* ═══════ TAB: Schedule ═══════ */}
       {activeTab === "schedule" && (
-        <>
-          {/* groups & schedule */}
-          {data.profile.groups.length > 0 ? (
-            <section className="mb-10 rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">Мои группы</p>
-              <h2 className="font-display mt-3 text-3xl">Ансамбли и расписание</h2>
-              <div className="mt-6 grid gap-4 sm:grid-cols-2">
-                {data.profile.groups.map((group) => (
-                  <div
-                    key={group.crmGroupId ?? group.name}
-                    className="rounded-2xl border border-gold/20 bg-white p-5"
-                  >
-                    <p className="font-display text-2xl text-ink">{group.name}</p>
-                    <p className="mt-3 text-sm font-semibold text-stone-700">
-                      {(group.schedules ?? [])
-                        .map((item) => `${groupDayNames[item.dayOfWeek]} ${item.time}`)
-                        .join(" · ") || "Расписание уточняется"}
-                    </p>
-                    {(group.instruments ?? []).length > 0 ? (
-                      <p className="mt-2 text-xs text-stone-500">
-                        {(group.instruments ?? []).map((item) => `${item.name} ×${item.quantity}`).join(", ")}
-                      </p>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-            </section>
-          ) : null}
-
-          {/* all upcoming lessons */}
-          <section>
-            <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-3">
-                <CalendarDays className="text-gold" size={22} />
-                <h2 className="font-display text-2xl sm:text-3xl">Запланированные уроки</h2>
-                <span className="rounded-full bg-ink px-2.5 py-1 text-xs font-bold text-white">
-                  {filteredUpcomingLessons.length}
-                </span>
-              </div>
-              <div className="grid grid-cols-3 gap-1 rounded-lg border border-stone-200 bg-white p-1" role="group" aria-label="Формат уроков">
-                {([
+        <section aria-label="Все занятия" className="space-y-4">
+          <div className="flex flex-wrap justify-end gap-3">
+            <div
+              className="inline-flex rounded-xl border border-stone-200 bg-white p-1"
+              role="group"
+              aria-label="Формат уроков"
+            >
+              {(
+                [
                   ["all", "Все"],
                   ["offline", "В школе"],
                   ["online", "Онлайн"],
-                ] as const).map(([value, label]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => setLessonFormatFilter(value)}
-                    className={`min-h-9 rounded-md px-3 text-xs font-bold transition ${
-                      lessonFormatFilter === value ? "bg-ink text-white" : "text-stone-500 hover:bg-stone-50 hover:text-ink"
-                    }`}
-                    aria-pressed={lessonFormatFilter === value}
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setLessonFormatFilter(value)}
+                  aria-pressed={lessonFormatFilter === value}
+                  className={`min-h-11 rounded-lg px-3 text-xs font-semibold focus-visible:ring-2 focus-visible:ring-gold ${lessonFormatFilter === value ? "bg-ink text-white" : "text-stone-600 hover:bg-stone-50"}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <StudentLessonCalendar
+            data={{
+              ...data,
+              upcomingLessons: filteredUpcomingLessons,
+              lessonHistory:
+                lessonFormatFilter === "all"
+                  ? lessonHistory
+                  : lessonHistory.filter(
+                      (lesson) =>
+                        (lesson.deliveryFormat || "offline") ===
+                        lessonFormatFilter,
+                    ),
+            }}
+            requestedLessonId={requestedLessonId}
+            onHistory={(id) =>
+              router.push(
+                `/school-lessons?tab=history&lesson=${encodeURIComponent(id)}`,
+              )
+            }
+          />
+          {data.profile.groups.length ? (
+            <details className="rounded-2xl border border-stone-200 bg-white px-4">
+              <summary className="cursor-pointer py-4 text-sm font-semibold">
+                Мои группы · {data.profile.groups.length}
+              </summary>
+              <div className="divide-y divide-stone-100 pb-3">
+                {data.profile.groups.map((group) => (
+                  <div
+                    key={group.crmGroupId || group.name}
+                    className="py-3 first:pt-0"
                   >
-                    {label}
-                  </button>
+                    <p className="break-words text-sm font-semibold">
+                      {group.name}
+                    </p>
+                    <p className="mt-1 text-xs text-stone-500">
+                      {(group.schedules ?? [])
+                        .map(
+                          (item) =>
+                            `${groupDayNames[item.dayOfWeek]} ${item.time}`,
+                        )
+                        .join(" · ") || "Расписание уточняется"}
+                    </p>
+                  </div>
                 ))}
               </div>
-            </div>
-            {filteredUpcomingLessons.length === 0 ? (
-              <EmptyState
-                title={lessonFormatFilter === "online" ? "Онлайн-уроков пока нет" : lessonFormatFilter === "offline" ? "Уроков в школе пока нет" : "Запланированных уроков нет"}
-                description="Здесь появятся ваши ближайшие занятия."
-              />
-            ) : (() => {
-              const sortedUpcoming = [...filteredUpcomingLessons].sort((a, b) => {
-                const dateComp = a.date.localeCompare(b.date);
-                if (dateComp !== 0) return dateComp;
-                return a.startTime.localeCompare(b.startTime);
-              });
-
-              const localNow = new Date();
-              const getLocalDateString = (d: Date) => {
-                const year = d.getFullYear();
-                const month = String(d.getMonth() + 1).padStart(2, '0');
-                const day = String(d.getDate()).padStart(2, '0');
-                return `${year}-${month}-${day}`;
-              };
-              const todayStr = getLocalDateString(localNow);
-
-              const localTomorrow = new Date(localNow);
-              localTomorrow.setDate(localTomorrow.getDate() + 1);
-              const tomorrowStr = getLocalDateString(localTomorrow);
-
-              const todayLessons = sortedUpcoming.filter((l) => l.date === todayStr);
-              const tomorrowLessons = sortedUpcoming.filter((l) => l.date === tomorrowStr);
-              const otherLessons = sortedUpcoming.filter((l) => l.date !== todayStr && l.date !== tomorrowStr);
-
-              return (
-                <div className="space-y-8">
-                  {todayLessons.length > 0 && (
-                    <div>
-                      <div className="mb-4 flex items-center gap-2">
-                        <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                        <h3 className="font-display text-2xl text-stone-800">Сегодня</h3>
-                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-800">{todayLessons.length}</span>
-                      </div>
-                      <div className="space-y-4">
-                        {todayLessons.map((lesson) => (
-                          <LessonCard key={lesson.crmClassId} lesson={lesson} upcoming />
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {tomorrowLessons.length > 0 && (
-                    <div>
-                      <div className="mb-4 flex items-center gap-2">
-                        <span className="h-2.5 w-2.5 rounded-full bg-blue-500" />
-                        <h3 className="font-display text-2xl text-stone-800">Завтра</h3>
-                        <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-bold text-blue-800">{tomorrowLessons.length}</span>
-                      </div>
-                      <div className="space-y-4">
-                        {tomorrowLessons.map((lesson) => (
-                          <LessonCard key={lesson.crmClassId} lesson={lesson} upcoming />
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {otherLessons.length > 0 && (
-                    <div>
-                      <div className="mb-4 flex items-center gap-2">
-                        <span className="h-2.5 w-2.5 rounded-full bg-stone-400" />
-                        <h3 className="font-display text-2xl text-stone-800">Предстоящие уроки</h3>
-                        <span className="rounded-full bg-stone-100 px-2 py-0.5 text-xs font-bold text-stone-600">{otherLessons.length}</span>
-                      </div>
-                      <div className="space-y-4">
-                        {otherLessons.map((lesson) => (
-                          <LessonCard key={lesson.crmClassId} lesson={lesson} upcoming />
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-          </section>
-        </>
+            </details>
+          ) : null}
+        </section>
       )}
 
       {/* ═══════ TAB: History ═══════ */}
       {activeTab === "history" && (
         <>
-          {/* memberships */}
-          {balanceSnapshot.memberships.length > 0 ? (
-            <section className="mb-10 rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">Абонементы</p>
-              <h2 className="font-display mt-3 text-3xl">Активные пакеты</h2>
-              <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {balanceSnapshot.memberships.map((m) => (
-                  <div key={m.crmMembershipId} className="rounded-2xl border border-stone-200 bg-white p-5">
-                    <div className="flex items-end gap-2">
-                      <p className="font-display text-4xl leading-none text-ink">{m.classesRemaining}</p>
-                      <p className="pb-0.5 text-xs font-semibold text-stone-500">занятий осталось</p>
-                    </div>
-                    <p className="mt-4 text-sm font-semibold text-stone-800">
-                      {membershipDisplayName(m)}
-                    </p>
-                    {membershipDisplayDetails(m) ? (
-                      <p className="mt-1 text-xs text-stone-500">{membershipDisplayDetails(m)}</p>
-                    ) : null}
-                    <div className="mt-3 border-t border-stone-100 pt-3 text-xs text-stone-500">
-                      <p>Всего в пакете: {m.totalClasses} занятий</p>
-                      <p className="mt-1">Действует до {formatLessonDate(m.endDate)}</p>
-                    </div>
-                    {m.remainingAmountKzt > 0 ? (
-                      <p className="mt-3 text-xs font-bold text-red-700">
-                        Долг: {m.remainingAmountKzt.toLocaleString("ru-RU")} ₸
-                      </p>
-                    ) : null}
-                    {m.individualClassesRemaining !== null && m.individualClassesRemaining !== undefined && (
-                      <div className="mt-3 border-t border-stone-100 pt-3 text-xs text-stone-500 space-y-1">
-                        <div className="flex justify-between">
-                          <span>Индивидуальные:</span>
-                          <span className="font-semibold text-stone-800">{m.individualClassesRemaining}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Групповые:</span>
-                          <span className="font-semibold text-stone-800">{m.groupClassesRemaining}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Теория:</span>
-                          <span className="font-semibold text-stone-800">{m.theoryClassesRemaining}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Экстренные заморозки:</span>
-                          <span className="font-semibold text-stone-800">
-                            {m.emergencyFreezesAvailable} (исп. {m.emergencyFreezesUsed ?? 0})
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </section>
-          ) : null}
-
           {/* lesson history */}
           <section>
-            <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">
-                  Подтверждено администратором
-                </p>
-                <h2 className="font-display mt-2 text-3xl">История и отчёты по урокам</h2>
-              </div>
-              <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:flex-wrap">
-                <input
-                  type="month"
-                  value={activeMonth === "all" ? reportMonth : activeMonth}
-                  onChange={(event) => {
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-lg font-bold">История занятий</h2>
+              <select
+                aria-label="Месяц истории"
+                value={activeMonth}
+                onChange={(event) => {
+                  setHistoryFilterMonth(event.target.value);
+                  if (event.target.value !== "all")
                     setReportMonth(event.target.value);
-                    setHistoryFilterMonth(event.target.value);
-                  }}
-                  className="w-full rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm font-bold sm:w-auto"
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    setReportMonth(activeMonth === "all" ? currentAqtobeMonth() : activeMonth);
-                    setReportModalOpen(true);
-                  }}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-ink px-4 py-2 text-sm font-bold text-white transition hover:bg-stone-800 sm:w-auto shadow-sm"
-                >
-                  <FileSpreadsheet size={15} /> Отчёт за месяц
-                </button>
-                <button
-                  type="button"
-                  onClick={downloadMonthlyReport}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-stone-200 bg-white px-3.5 py-2 text-sm font-bold text-stone-700 transition hover:bg-stone-50 sm:w-auto"
-                  title="Скачать отчёт в формате Excel (.xls)"
-                >
-                  <Download size={15} /> Excel
-                </button>
-              </div>
-            </div>
-
-            {/* Quick Month Filter Bar */}
-            {availableMonths.length > 0 ? (
-              <div className="mb-5 flex flex-wrap items-center gap-2 border-b border-stone-100 pb-3">
-                <span className="text-xs font-bold text-stone-400 mr-1">Месяцы:</span>
-                {availableMonths.map(({ monthKey, count, title }: { monthKey: string; count: number; title: string }) => (
-                  <button
-                    key={monthKey}
-                    type="button"
-                    onClick={() => {
-                      setHistoryFilterMonth(monthKey);
-                      setReportMonth(monthKey);
-                    }}
-                    className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold transition ${
-                      activeMonth === monthKey
-                        ? "bg-amber-100 text-amber-950 border border-amber-300 font-black shadow-xs"
-                        : "bg-white border border-stone-200 text-stone-600 hover:bg-stone-50"
-                    }`}
-                  >
-                    <CalendarDays size={13} className={activeMonth === monthKey ? "text-gold" : "text-stone-400"} />
-                    {title} ({count})
-                  </button>
+                }}
+                className="min-h-11 max-w-full rounded-xl border border-stone-200 bg-white px-3 text-sm focus-visible:ring-2 focus-visible:ring-gold"
+              >
+                <option value="all">
+                  Все занятия ({lessonHistory.length})
+                </option>
+                {!availableMonths.some(
+                  (month) => month.monthKey === activeMonth,
+                ) && activeMonth !== "all" ? (
+                  <option value={activeMonth}>
+                    {formatMonthTitle(activeMonth)} (0)
+                  </option>
+                ) : null}
+                {availableMonths.map((month) => (
+                  <option key={month.monthKey} value={month.monthKey}>
+                    {month.title} ({month.count})
+                  </option>
                 ))}
+              </select>
+            </div>
+            <details className="mb-4 rounded-2xl border border-stone-200 bg-white px-4">
+              <summary className="cursor-pointer py-3 text-sm font-semibold">
+                Отчёт за месяц
+              </summary>
+              <div className="flex flex-wrap items-end gap-2 pb-4">
+                <label className="grid min-w-0 max-w-full gap-1 text-xs text-stone-500">
+                  Месяц отчёта
+                  <input
+                    type="month"
+                    value={reportMonth}
+                    onChange={(event) => setReportMonth(event.target.value)}
+                    className="min-h-11 min-w-0 max-w-full rounded-lg border border-stone-200 bg-white px-3 text-sm text-ink"
+                  />
+                </label>
                 <button
                   type="button"
-                  onClick={() => setHistoryFilterMonth("all")}
-                  className={`rounded-xl px-3 py-1.5 text-xs font-bold transition ${
-                    activeMonth === "all"
-                      ? "bg-stone-800 text-white font-black shadow-xs"
-                      : "bg-white border border-stone-200 text-stone-600 hover:bg-stone-50"
-                  }`}
+                  disabled={!reportMonth}
+                  onClick={() => setReportModalOpen(true)}
+                  className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-ink px-3 text-sm font-semibold text-white disabled:opacity-50"
                 >
-                  Все ({lessonHistory.length})
+                  <FileSpreadsheet size={15} />
+                  Открыть отчёт
+                </button>
+                <button
+                  type="button"
+                  disabled={!reportMonth}
+                  onClick={downloadMonthlyReport}
+                  className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-stone-200 px-3 text-sm font-semibold disabled:opacity-50"
+                >
+                  <Download size={15} />
+                  Скачать Excel
                 </button>
               </div>
-            ) : null}
+            </details>
 
             {displayHistory.length === 0 ? (
-              <EmptyState
-                title="Занятий в этом месяце нет"
-                description="Выберите другой месяц или переключитесь на «Все», чтобы просмотреть историю занятий."
-              />
+              <p className="rounded-2xl border border-stone-200 bg-white p-4 text-sm text-stone-500">
+                {activeMonth === "all"
+                  ? "История занятий пока пуста."
+                  : "В этом месяце занятий пока нет. Выберите другой месяц или все занятия."}
+              </p>
             ) : (
-              <div className="space-y-4">
-                {displayHistory.map((lesson: SchoolOfflineLesson) => (
-                  <LessonCard key={lesson.crmClassId} lesson={lesson} />
-                ))}
-              </div>
+              <GroupedLessonList
+                lessons={displayHistory}
+                requestedLessonId={requestedLessonId}
+              />
             )}
           </section>
         </>
@@ -1647,5 +861,26 @@ export default function SchoolLessonsPage() {
         />
       )}
     </>
+  );
+}
+
+// Keep existing notifications and bookmarked homework links working without a second homework screen.
+export default function SchoolLessonsPage() {
+  const params = useSearchParams();
+  const router = useRouter();
+  const isHomework = params.get("tab") === "homework";
+  const id = params.get("lesson");
+  useEffect(() => {
+    if (isHomework)
+      router.replace(
+        id
+          ? `/tasks/school/${encodeURIComponent(id)}`
+          : "/tasks?source=offline",
+      );
+  }, [isHomework, id, router]);
+  return isHomework ? (
+    <LoadingState label="Открываем задание в обучении" />
+  ) : (
+    <SchoolSchedule />
   );
 }

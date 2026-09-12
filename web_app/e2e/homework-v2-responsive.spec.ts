@@ -21,6 +21,7 @@ test("новое ДЗ не ломает телефонные размеры", as
   });
   test.skip(create.status() === 404, "Homework V2 is disabled");
   expect([200, 201]).toContain(create.status());
+  const createdAssignment = await create.json();
 
   await page.goto("/login");
   await page.getByRole("button", { name: "Ученик", exact: true }).click();
@@ -28,7 +29,7 @@ test("новое ДЗ не ломает телефонные размеры", as
   await page.locator('input[autocomplete="current-password"]:visible').fill(PASSWORD);
   await page.getByRole("button", { name: "Войти в кабинет" }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
-  await page.goto("/school-lessons?tab=homework");
+  await page.goto(`/tasks/school/${encodeURIComponent(createdAssignment.data.id)}`);
   await expect(page.getByText(FORM_INSTRUCTIONS)).toBeVisible();
   const closeDialog = page.getByRole("button", { name: "Закрыть" });
   if (await closeDialog.isVisible().catch(() => false)) await closeDialog.click();
@@ -37,7 +38,7 @@ test("новое ДЗ не ломает телефонные размеры", as
   await expect(assignmentCard.getByRole("button", { name: "Я подготовил", exact: true })).toBeVisible();
   await assignmentCard.getByRole("button", { name: "Я подготовил", exact: true }).click();
   await expect(assignmentCard.getByPlaceholder("Сопроводительный комментарий")).toBeVisible();
-  await expect(assignmentCard.getByRole("button", { name: "Прикрепить файлы" })).toBeVisible();
+  await expect(assignmentCard.getByLabel("Прикрепить файлы")).toBeAttached();
   await expect(assignmentCard.getByRole("button", { name: "Отправить преподавателю" })).toBeVisible();
 
   for (const width of [320, 375, 430, 768]) {

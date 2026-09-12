@@ -280,7 +280,7 @@ function LeagueHistory() {
 
 const actionRoutes: Array<{ sourceType: LeagueXpSourceType; label: string; href: string; action: string; icon: typeof School }> = [
   { sourceType: "offline_lesson", label: "Подтверждённый урок · первые 2 за неделю", href: "/school-lessons", action: "Расписание", icon: School },
-  { sourceType: "learning_homework", label: "Принятое ДЗ · до 3 на направление", href: "/school-lessons?tab=homework", action: "Открыть", icon: BookOpen },
+  { sourceType: "learning_homework", label: "Принятое ДЗ · до 3 на направление", href: "/tasks?source=offline", action: "Открыть", icon: BookOpen },
   { sourceType: "prepared_test", label: "Успешный тест · первые 2 за неделю", href: "/tests", action: "Начать", icon: ClipboardCheck },
 ];
 

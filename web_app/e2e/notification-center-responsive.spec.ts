@@ -85,6 +85,6 @@ test("notification action opens the exact homework screen", async ({ page }) => 
   await expect(notification).toContainText("Открыть задание");
   await notification.click();
 
-  await expect(page).toHaveURL(new RegExp("/school-lessons\\?tab=homework&lesson=QA-CLASS-IND-PREVIOUS$"));
+  await expect(page).toHaveURL(/\/tasks\/school\/QA-CLASS-IND-PREVIOUS$/);
   await expect(page.getByRole("dialog", { name: /новых|Всё просмотрено/ })).toHaveCount(0);
 });

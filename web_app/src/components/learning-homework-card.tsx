@@ -14,7 +14,6 @@ import {
   X,
 } from "lucide-react";
 import { type ChangeEvent, useState } from "react";
-import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
 import { ApiError } from "@/lib/api-client";
 import { learningHomeworkApi } from "@/lib/learning-homework-api";
 import type {
@@ -23,11 +22,14 @@ import type {
   StudentLearningHomeworkAssignment,
 } from "@/types/learning-homework";
 
-const stateView: Record<LearningHomeworkRecipientState, {
-  label: string;
-  className: string;
-  icon: typeof Clock3;
-}> = {
+const stateView: Record<
+  LearningHomeworkRecipientState,
+  {
+    label: string;
+    className: string;
+    icon: typeof Clock3;
+  }
+> = {
   assigned: {
     label: "Нужно подготовить",
     className: "bg-amber-50 text-amber-900",
@@ -79,19 +81,38 @@ function HomeworkMaterialAction({
 }) {
   const content = (
     <>
-      {material.privateFile ? <Download size={13} className="shrink-0 text-gold" /> : <ExternalLink size={13} className="shrink-0 text-gold" />}
-      <span className="min-w-0 flex-1 truncate">{material.title || "Материал"}</span>
-      {material.sizeBytes ? <span className="shrink-0 text-[10px] text-stone-400">{formatBytes(material.sizeBytes)}</span> : null}
+      {material.privateFile ? (
+        <Download size={13} className="shrink-0 text-gold" />
+      ) : (
+        <ExternalLink size={13} className="shrink-0 text-gold" />
+      )}
+      <span className="min-w-0 flex-1 truncate">
+        {material.title || "Материал"}
+      </span>
+      {material.sizeBytes ? (
+        <span className="shrink-0 text-[10px] text-stone-400">
+          {formatBytes(material.sizeBytes)}
+        </span>
+      ) : null}
     </>
   );
-  const className = "inline-flex min-h-9 max-w-full items-center gap-1.5 rounded-xl border border-stone-200 bg-stone-50 px-3 text-xs font-bold text-ink hover:border-amber-300";
+  const className =
+    "inline-flex min-h-9 max-w-full items-center gap-1.5 rounded-xl border border-stone-200 bg-stone-50 px-3 text-xs font-bold text-ink hover:border-amber-300";
   if (material.privateFile) {
     return (
       <button
         type="button"
-        onClick={() => void learningHomeworkApi.downloadMaterial(material).catch((reason) => {
-          onError(reason instanceof ApiError ? reason.message : "Не удалось скачать файл");
-        })}
+        onClick={() =>
+          void learningHomeworkApi
+            .downloadMaterial(material)
+            .catch((reason) => {
+              onError(
+                reason instanceof ApiError
+                  ? reason.message
+                  : "Не удалось скачать файл",
+              );
+            })
+        }
         className={className}
       >
         {content}
@@ -99,21 +120,33 @@ function HomeworkMaterialAction({
     );
   }
   return (
-    <a href={material.url} target="_blank" rel="noreferrer" className={className}>
+    <a
+      href={material.url}
+      target="_blank"
+      rel="noreferrer"
+      className={className}
+    >
       {content}
     </a>
   );
 }
 
-function LearningHomeworkCard({
+export function LearningHomeworkCard({
   assignment,
   onSubmitted,
+  compact = false,
+  defaultOpen = false,
 }: {
   assignment: StudentLearningHomeworkAssignment;
   onSubmitted: () => Promise<unknown> | unknown;
+  compact?: boolean;
+  defaultOpen?: boolean;
 }) {
+  const [detailsOpen, setDetailsOpen] = useState(defaultOpen);
   const [answerOpen, setAnswerOpen] = useState(false);
-  const [submissionMode, setSubmissionMode] = useState<"materials" | "ready_for_lesson">("ready_for_lesson");
+  const [submissionMode, setSubmissionMode] = useState<
+    "materials" | "ready_for_lesson"
+  >("ready_for_lesson");
   const [text, setText] = useState("");
   const [link, setLink] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -122,7 +155,9 @@ function LearningHomeworkCard({
   const [error, setError] = useState<string | null>(null);
   const view = stateView[assignment.state];
   const StateIcon = view.icon;
-  const maySubmit = ["assigned", "revision", "waiting_review"].includes(assignment.state);
+  const maySubmit = ["assigned", "revision", "waiting_review"].includes(
+    assignment.state,
+  );
   const previousAttemptId = assignment.latestAttempt?.id ?? null;
   const latestReview = assignment.latestAttempt?.review;
 
@@ -161,90 +196,146 @@ function LearningHomeworkCard({
       setRequestKey(crypto.randomUUID());
       await onSubmitted();
     } catch (reason) {
-      setError(reason instanceof ApiError ? reason.message : "Не удалось отправить ответ");
+      setError(
+        reason instanceof ApiError
+          ? reason.message
+          : "Не удалось отправить ответ",
+      );
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <article id={`homework-${assignment.id}`} className="min-w-0 scroll-mt-28 rounded-[24px] border border-stone-200 bg-white p-4 shadow-soft sm:p-5">
+    <article
+      id={`homework-${assignment.id}`}
+      className={`min-w-0 scroll-mt-28 rounded-2xl border border-stone-200 bg-white ${compact ? "p-3 sm:p-4" : "p-4 shadow-soft sm:p-5"}`}
+    >
       <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-start gap-2">
             <BookOpen size={17} className="mt-1 shrink-0 text-gold" />
             <div className="min-w-0">
               <p className="text-[10px] font-black uppercase text-stone-400">
-                {assignment.topic.direction.title} · {assignment.topic.scope === "group" ? "Группа" : "Индивидуально"}
+                {assignment.topic.direction.title} ·{" "}
+                {assignment.topic.scope === "group"
+                  ? "Группа"
+                  : "Индивидуально"}
               </p>
-              <h3 className="mt-1 break-words font-display text-xl text-ink sm:text-2xl">
+              <h3
+                className={
+                  compact
+                    ? "mt-1 break-words text-sm font-bold text-ink"
+                    : "mt-1 break-words font-display text-xl text-ink sm:text-2xl"
+                }
+              >
                 {assignment.topic.title}
               </h3>
             </div>
           </div>
-          <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-stone-700">
+          <p
+            className={`mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-stone-700 ${compact && !detailsOpen && !answerOpen ? "line-clamp-2" : ""}`}
+          >
             {assignment.instructions}
           </p>
           <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs font-semibold text-stone-500">
             <span className="inline-flex items-center gap-1.5">
               <CalendarDays size={13} className="text-gold" />
-              Назначено {formatDate(assignment.assignedAt)}
+              {compact ? "" : "Назначено "}
+              {formatDate(assignment.assignedAt)}
             </span>
             {assignment.dueAt ? (
               <span className="inline-flex items-center gap-1.5">
                 <Clock3 size={13} /> До {formatDate(assignment.dueAt)}
               </span>
             ) : null}
-            {assignment.teacherName ? <span>{assignment.teacherName}</span> : null}
+            {assignment.teacherName ? (
+              <span>{assignment.teacherName}</span>
+            ) : null}
           </div>
         </div>
-        <span className={`inline-flex min-h-9 shrink-0 items-center gap-1.5 self-start rounded-xl px-3 text-xs font-black ${view.className}`}>
+        <span
+          className={`inline-flex min-h-9 shrink-0 items-center gap-1.5 self-start rounded-xl px-3 text-xs font-black ${view.className}`}
+        >
           <StateIcon size={14} /> {view.label}
         </span>
       </div>
 
       {latestReview?.comment ? (
-        <div className={`mt-4 rounded-2xl border p-3 text-sm ${
-          assignment.state === "revision"
-            ? "border-red-100 bg-red-50 text-red-950"
-            : "border-emerald-100 bg-emerald-50 text-emerald-950"
-        }`}>
-          <p className="text-[10px] font-black uppercase">Комментарий преподавателя</p>
-          <p className="mt-1 whitespace-pre-wrap break-words leading-6">{latestReview.comment}</p>
+        <div
+          className={`mt-4 rounded-2xl border p-3 text-sm ${
+            assignment.state === "revision"
+              ? "border-red-100 bg-red-50 text-red-950"
+              : "border-emerald-100 bg-emerald-50 text-emerald-950"
+          }`}
+        >
+          <p className="text-[10px] font-black uppercase">
+            Комментарий преподавателя
+          </p>
+          <p className="mt-1 whitespace-pre-wrap break-words leading-6">
+            {latestReview.comment}
+          </p>
         </div>
       ) : null}
 
-      {assignment.materials.length ? (
+      {assignment.materials.length &&
+      (!compact || detailsOpen || answerOpen) ? (
         <div className="mt-4 flex flex-wrap gap-2">
           {assignment.materials.map((material, index) => (
             <HomeworkMaterialAction
               key={`${material.url}-${index}`}
-              material={{ ...material, title: material.title || `Материал ${index + 1}` }}
+              material={{
+                ...material,
+                title: material.title || `Материал ${index + 1}`,
+              }}
               onError={setError}
             />
           ))}
         </div>
       ) : null}
 
+      {compact ? (
+        <button
+          type="button"
+          onClick={() => setDetailsOpen((value) => !value)}
+          aria-expanded={detailsOpen || answerOpen}
+          className="mt-2 min-h-11 rounded-lg text-xs font-semibold text-stone-600 focus-visible:ring-2 focus-visible:ring-gold"
+        >
+          {detailsOpen
+            ? "Свернуть задание"
+            : `Задание и материалы${assignment.materials.length ? ` · ${assignment.materials.length}` : ""}`}
+        </button>
+      ) : null}
       {maySubmit ? (
-        <div className="mt-4 border-t border-stone-100 pt-4">
+        <div
+          className={compact ? "mt-2" : "mt-4 border-t border-stone-100 pt-4"}
+        >
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
             <button
               type="button"
               disabled={saving}
-              onClick={() => openAnswer(
-                assignment.state === "waiting_review"
-                  ? assignment.latestAttempt?.submissionMode ?? "ready_for_lesson"
-                  : "ready_for_lesson",
-              )}
+              onClick={() =>
+                openAnswer(
+                  assignment.state === "waiting_review"
+                    ? (assignment.latestAttempt?.submissionMode ??
+                        "ready_for_lesson")
+                    : "ready_for_lesson",
+                )
+              }
               className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-bold transition disabled:opacity-50 ${
                 assignment.state === "waiting_review"
                   ? "border border-stone-200 bg-white text-ink hover:bg-stone-50"
                   : "bg-ink text-white hover:bg-stone-800"
               }`}
             >
-              {assignment.state === "waiting_review" ? <Send size={15} /> : <CheckCircle2 size={16} />}
-              {assignment.state === "waiting_review" ? "Обновить ответ" : "Я подготовил"}
+              {assignment.state === "waiting_review" ? (
+                <Send size={15} />
+              ) : (
+                <CheckCircle2 size={16} />
+              )}
+              {assignment.state === "waiting_review"
+                ? "Обновить ответ"
+                : "Я подготовил"}
             </button>
           </div>
 
@@ -253,10 +344,14 @@ function LearningHomeworkCard({
               <div className="flex min-w-0 items-center justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-sm font-black text-ink">
-                    {submissionMode === "ready_for_lesson" ? "Отправить на проверку" : "Добавить ответ"}
+                    {submissionMode === "ready_for_lesson"
+                      ? "Отправить на проверку"
+                      : "Добавить ответ"}
                   </p>
                   <p className="mt-0.5 text-xs text-stone-500">
-                    {submissionMode === "ready_for_lesson" ? "Комментарий и материалы необязательны" : "Добавьте комментарий, ссылку или файл"}
+                    {submissionMode === "ready_for_lesson"
+                      ? "Комментарий и материалы необязательны"
+                      : "Добавьте комментарий, ссылку или файл"}
                   </p>
                 </div>
                 <button
@@ -287,13 +382,24 @@ function LearningHomeworkCard({
               {files.length ? (
                 <div className="flex min-w-0 flex-wrap gap-2">
                   {files.map((file, index) => (
-                    <span key={`${file.name}-${file.size}-${index}`} className="inline-flex max-w-full items-center gap-2 rounded-lg border border-stone-200 bg-white px-2.5 py-2 text-xs font-semibold text-stone-700">
+                    <span
+                      key={`${file.name}-${file.size}-${index}`}
+                      className="inline-flex max-w-full items-center gap-2 rounded-lg border border-stone-200 bg-white px-2.5 py-2 text-xs font-semibold text-stone-700"
+                    >
                       <Paperclip size={13} className="shrink-0 text-gold" />
                       <span className="min-w-0 truncate">{file.name}</span>
-                      <span className="shrink-0 text-[10px] text-stone-400">{formatBytes(file.size)}</span>
+                      <span className="shrink-0 text-[10px] text-stone-400">
+                        {formatBytes(file.size)}
+                      </span>
                       <button
                         type="button"
-                        onClick={() => setFiles((current) => current.filter((_, fileIndex) => fileIndex !== index))}
+                        onClick={() =>
+                          setFiles((current) =>
+                            current.filter(
+                              (_, fileIndex) => fileIndex !== index,
+                            ),
+                          )
+                        }
                         className="grid h-5 w-5 shrink-0 place-items-center rounded text-stone-400 hover:bg-stone-100 hover:text-red-700"
                         aria-label={`Убрать файл ${file.name}`}
                       >
@@ -318,12 +424,24 @@ function LearningHomeworkCard({
                 </label>
                 <button
                   type="button"
-                  disabled={saving || (submissionMode === "materials" && !text.trim() && !link.trim() && !files.length)}
+                  disabled={
+                    saving ||
+                    (submissionMode === "materials" &&
+                      !text.trim() &&
+                      !link.trim() &&
+                      !files.length)
+                  }
                   onClick={() => void submitAnswer()}
                   className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-amber-400 px-4 text-sm font-black text-ink hover:bg-amber-300 disabled:opacity-45"
                 >
-                  {saving ? <LoaderCircle size={15} className="animate-spin" /> : <Send size={15} />}
-                  {assignment.state === "waiting_review" ? "Обновить ответ" : "Отправить преподавателю"}
+                  {saving ? (
+                    <LoaderCircle size={15} className="animate-spin" />
+                  ) : (
+                    <Send size={15} />
+                  )}
+                  {assignment.state === "waiting_review"
+                    ? "Обновить ответ"
+                    : "Отправить преподавателю"}
                 </button>
               </div>
             </div>
@@ -333,18 +451,23 @@ function LearningHomeworkCard({
               Отправлено преподавателю. Проверим на уроке или заранее.
             </p>
           ) : null}
-          {error ? <p className="mt-2 text-xs font-semibold text-red-700">{error}</p> : null}
+          {error ? (
+            <p className="mt-2 text-xs font-semibold text-red-700">{error}</p>
+          ) : null}
         </div>
       ) : null}
 
-      {assignment.attempts.length ? (
+      {assignment.attempts.length && (!compact || detailsOpen || answerOpen) ? (
         <details className="mt-4 border-t border-stone-100 pt-3">
           <summary className="cursor-pointer text-xs font-bold text-stone-500">
             История ответов · {assignment.attempts.length}
           </summary>
           <div className="mt-3 space-y-2">
             {assignment.attempts.map((attempt) => (
-              <div key={attempt.id} className="rounded-xl bg-stone-50 p-3 text-xs text-stone-600">
+              <div
+                key={attempt.id}
+                className="rounded-xl bg-stone-50 p-3 text-xs text-stone-600"
+              >
                 <p className="font-bold text-ink">
                   Ответ отправлен · {formatDate(attempt.submittedAt)}
                 </p>
@@ -370,39 +493,5 @@ function LearningHomeworkCard({
         </details>
       ) : null}
     </article>
-  );
-}
-
-export function LearningHomeworkFolder({
-  assignments,
-  loading,
-  error,
-  onReload,
-}: {
-  assignments: StudentLearningHomeworkAssignment[];
-  loading: boolean;
-  error: string | null;
-  onReload: () => Promise<unknown> | unknown;
-}) {
-  if (loading) return <LoadingState label="Загружаем новые домашние задания" />;
-  if (error) return <ErrorState message={error} retry={onReload} />;
-  if (!assignments.length) {
-    return (
-      <EmptyState
-        title="Новых заданий пока нет"
-        description="Преподаватель назначит их из текущего учебного плана."
-      />
-    );
-  }
-  return (
-    <div className="space-y-4">
-      {assignments.map((assignment) => (
-        <LearningHomeworkCard
-          key={assignment.id}
-          assignment={assignment}
-          onSubmitted={onReload}
-        />
-      ))}
-    </div>
   );
 }

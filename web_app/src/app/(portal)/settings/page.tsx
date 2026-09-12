@@ -4,6 +4,7 @@ import { Award, BookOpen, Camera, Coins, Eye, EyeOff, Flame, GraduationCap, Load
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState, type ChangeEvent } from "react";
+import { StudentMemberships } from "@/components/student-memberships";
 import { AchievementsWall } from "@/components/achievements-wall";
 import { useAuth } from "@/components/auth-provider";
 import { ApiError } from "@/lib/api-client";
@@ -136,24 +137,7 @@ export default function SettingsPage() {
               {level ? <LevelSummary progress={level} /> : null}
               {economy?.economyV2Enabled ? <EconomyProfileSummary economy={economy} /> : null}
               {achievements ? <ProfileAchievements achievements={achievements} /> : null}
-              {school ? (
-                <div className="rounded-[30px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
-                  <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold">Школа Maestro</p>
-                  <h3 className="font-display mt-3 text-3xl">Абонемент и оплата</h3>
-                  <div className="mt-6 grid gap-4 sm:grid-cols-2">
-                    <div className="rounded-2xl bg-stone-50 p-5">
-                      <WalletCards size={18} className="text-gold" />
-                      <p className="font-display mt-3 text-3xl">
-                        {school.balanceSnapshot.accountBalanceKzt.toLocaleString("ru-RU")} ₸
-                      </p>
-                      <p className="mt-1 text-xs text-stone-500">на вашем балансе</p>
-                    </div>
-                  </div>
-                  <Link href="/school-lessons" className="mt-5 inline-flex rounded-2xl bg-ink px-5 py-3 text-sm font-bold text-white">
-                    Открыть уроки и отчёты
-                  </Link>
-                </div>
-              ) : null}
+              {school ? <StudentMemberships balanceSnapshot={school.balanceSnapshot} /> : null}
               <div className="rounded-[30px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
                 <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold">Обучение</p>
                 <div className={`mt-6 grid gap-4 ${economy?.economyV2Enabled ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>

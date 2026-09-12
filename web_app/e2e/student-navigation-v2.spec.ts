@@ -106,15 +106,10 @@ test("mobile tasks show every source filter and schedule starts with the nearest
   await expect(sourceFilters.getByRole("button", { name: "Онлайн", exact: true })).toBeVisible();
 
   await page.goto("/school-lessons");
-  const nearestLessons = page.getByRole("heading", { name: "Ближайшие уроки", exact: true });
-  const balance = page.getByText("на вашем балансе", { exact: true });
+  const nearestLessons = page.getByRole("region", { name: "Календарь уроков", exact: true });
   await expect(nearestLessons).toBeVisible();
-  await expect(balance).toBeVisible();
-  const nearestBox = await nearestLessons.boundingBox();
-  const balanceBox = await balance.boundingBox();
-  expect(nearestBox).not.toBeNull();
-  expect(balanceBox).not.toBeNull();
-  expect(nearestBox!.y).toBeLessThan(balanceBox!.y);
+  await expect(page.getByRole("region", { name: "Баланс и абонемент", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: "Разделы уроков" }).getByRole("button")).toHaveCount(2);
 
   const overflow = await page.evaluate(() => (
     document.documentElement.scrollWidth - document.documentElement.clientWidth
@@ -158,7 +153,7 @@ test("mobile task filters keep the screen stable and an offline task opens", asy
   const taskLink = results.getByRole("link", { name: /Посмотреть/ }).first();
   await expect(taskLink).toBeVisible();
   await taskLink.click();
-  await expect(page).toHaveURL(/\/school-lessons\?tab=homework&lesson=/);
-  await expect(page.getByRole("heading", { name: "Уроки", exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/\/tasks\/school\//);
+  await expect(page.getByRole("heading", { name: "Задание с преподавателем", exact: true })).toBeVisible();
   await expect(page.getByText(/Application error/i)).toHaveCount(0);
 });

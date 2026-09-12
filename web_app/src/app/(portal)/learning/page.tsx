@@ -135,7 +135,7 @@ export default function LearningWorkspacePage() {
             eyebrow={`ДЗ за ${formatMonthKey(month, "short")}`}
             title="Ваш результат"
             id="homework-month-title"
-            href="/school-lessons?tab=homework"
+            href="/tasks?source=offline&view=completed"
             action="История ДЗ"
           />
 
@@ -165,7 +165,7 @@ export default function LearningWorkspacePage() {
 
               {homeworkStatistics.totals.noAttempt > 0 ? (
                 <Link
-                  href="/school-lessons?tab=homework"
+                  href="/tasks?source=offline"
                   className="mt-5 flex items-center justify-between gap-3 border-l-2 border-amber-400 bg-amber-50/70 px-4 py-3 text-xs font-semibold text-amber-950 transition hover:bg-amber-50"
                 >
                   <span>Без ответа: {homeworkStatistics.totals.noAttempt}</span>
