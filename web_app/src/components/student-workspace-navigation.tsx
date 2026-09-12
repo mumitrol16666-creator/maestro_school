@@ -183,32 +183,7 @@ export function StudentWorkspaceContextNavigation() {
   }
 
   if (shopSection) {
-    return (
-      <nav
-        aria-label="Разделы магазина"
-        data-testid="student-shop-navigation"
-        className="mb-5 grid grid-cols-2 gap-1 rounded-lg border border-stone-200 bg-white p-1 shadow-sm"
-      >
-        <a
-          href={storefrontUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-md px-2 text-xs font-bold text-stone-500 transition hover:bg-stone-50 hover:text-ink sm:text-sm"
-        >
-          <ShoppingBag size={16} className="shrink-0" />
-          <span className="truncate">Товары за ₸</span>
-          <ExternalLink size={13} className="shrink-0" />
-        </a>
-        <Link
-          href="/rewards"
-          aria-current="page"
-          className="flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-md bg-ink px-2 text-xs font-bold text-white sm:text-sm"
-        >
-          <Gift size={16} className="shrink-0" />
-          <span className="truncate">За Coins</span>
-        </Link>
-      </nav>
-    );
+    return null;
   }
 
   return null;

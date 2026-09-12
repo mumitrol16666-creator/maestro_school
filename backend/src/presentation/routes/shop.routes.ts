@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../../infrastructure/database/prisma.js";
-import { BadRequestError } from "../../domain/errors.js";
+import { BadRequestError, ForbiddenError } from "../../domain/errors.js";
 import {
   cancelStudentShopOrder,
   fetchStudentShop,
@@ -53,16 +53,8 @@ export async function shopRoutes(app: FastifyInstance) {
   app.post(
     "/students/me/shop/orders",
     { preHandler: [authenticate, requireStudent] },
-    async (request, reply) => {
-      const body = orderBody.parse(request.body);
-      const crmStudentId = await requireCrmStudentId(request.user!.id);
-      const result = await postStudentShopOrder({ ...body, crmStudentId });
-      return reply.status(201).send({
-        data: {
-          order: result.order,
-          coins: await getStudentCoins(request.user!.id),
-        },
-      });
+    async () => {
+      throw new ForbiddenError("Магазин временно недоступен");
     },
   );
 

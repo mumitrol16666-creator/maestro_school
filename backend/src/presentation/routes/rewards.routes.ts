@@ -9,6 +9,7 @@ import {
   updateRewardCatalogItem,
 } from "../../application/services/rewards.service.js";
 import { writeAuditLog } from "../../application/services/audit.service.js";
+import { ForbiddenError } from "../../domain/errors.js";
 import {
   authenticate,
   requireContentAdmin,
@@ -39,17 +40,8 @@ export async function rewardsRoutes(app: FastifyInstance) {
   app.post(
     "/rewards/:id/redeem",
     { preHandler: [authenticate, requireStudent] },
-    async (request, reply) => {
-      const { id } = idParams.parse(request.params);
-      const body = z.object({
-        studentNote: z.string().trim().max(500).optional().nullable(),
-      }).parse(request.body ?? {});
-      const result = await redeemReward({
-        studentId: request.user!.id,
-        rewardId: id,
-        studentNote: body.studentNote,
-      });
-      return reply.status(201).send({ data: result });
+    async () => {
+      throw new ForbiddenError("Магазин временно недоступен");
     },
   );
 

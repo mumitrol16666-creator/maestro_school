@@ -12,6 +12,7 @@ import {
   LoaderCircle,
   Music,
   Percent,
+  ShoppingBag,
   Sparkles,
   Tag,
   Trophy,
@@ -189,61 +190,40 @@ export default function RewardsPage() {
           </div>
         </div>
         <p className="max-w-sm text-xs leading-5 text-stone-600 sm:text-right">
-          Coins списываются при отправке заявки и возвращаются, если администратор её отклонит.
+          Все ваши Coins сохраняются на счёте и будут доступны сразу после открытия магазина.
         </p>
       </section>
 
-      <div className="mt-8">
-        <CommercialShop onCoinsChanged={resource.reload} />
-      </div>
+      <div className="mt-8 overflow-hidden rounded-[28px] border border-amber-200/80 bg-gradient-to-br from-amber-50/70 via-white to-stone-50 p-7 shadow-soft sm:p-12">
+        <div className="mx-auto max-w-xl text-center">
+          <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-gold/15 text-gold shadow-inner sm:h-20 sm:w-20">
+            <ShoppingBag size={38} strokeWidth={2} />
+          </div>
+          <span className="mt-5 inline-block rounded-full border border-amber-300/80 bg-amber-100/80 px-3.5 py-1 text-xs font-black uppercase tracking-wider text-amber-950">
+            Временно на обновлении
+          </span>
+          <h2 className="font-display mt-3 text-3xl text-ink sm:text-4xl">Магазин пока недоступен</h2>
+          <p className="mt-3 text-sm leading-6 text-stone-600 sm:text-base">
+            Мы обновляем ассортимент товаров, мерча и витрину наград. Совсем скоро магазин откроется с новыми позициями!
+          </p>
 
-      <section className="mt-12 border-t border-stone-200 pt-9">
-        <div className="mb-5">
-          <p className="text-xs font-black uppercase tracking-[0.18em] text-gold">Награды и возможности</p>
-          <h2 className="font-display mt-2 text-3xl">Можно получить полностью за Coins</h2>
+          <div className="mt-8 flex flex-col gap-3.5 rounded-2xl border border-stone-200/80 bg-white/90 p-4 text-left shadow-sm sm:flex-row sm:items-center">
+            <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-gold/15 text-gold">
+              <Sparkles size={22} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-bold text-ink">Coins продолжают копиться</p>
+              <p className="mt-0.5 text-xs leading-5 text-stone-600">
+                Занимайтесь, проходите тесты, выполняйте цели недели и поднимайтесь в лиге — все ваши накопленные Coins сохраняются на балансе.
+              </p>
+            </div>
+          </div>
         </div>
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-          {data.catalog.map((reward) => {
-            const unavailable = reward.stock === 0;
-            const canAfford = data.coins >= reward.costCoins;
-            const catStyle = getCategoryStyle(reward.category);
-            const CatIcon = catStyle.icon;
-            return (
-              <article key={reward.id} className="flex min-h-[280px] flex-col rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft">
-                <div className="flex items-start justify-between gap-3">
-                  <span className={`grid h-12 w-12 place-items-center rounded-2xl ${catStyle.bg}`}>
-                    <CatIcon size={22} />
-                  </span>
-                  <span className="rounded-full bg-amber-50 px-3 py-1.5 text-xs font-black text-amber-900">
-                    {reward.costCoins} Coins
-                  </span>
-                </div>
-                <p className="mt-5 text-[10px] font-black uppercase tracking-[0.16em] text-stone-400">
-                  {categoryCopy[reward.category] ?? reward.category}
-                </p>
-                <h3 className="font-display mt-2 text-2xl">{reward.title}</h3>
-                <p className="mt-3 flex-1 text-sm leading-6 text-stone-500">{reward.description}</p>
-                <button
-                  type="button"
-                  disabled={unavailable || !canAfford}
-                  onClick={() => {
-                    setSelected(reward);
-                    setError(null);
-                  }}
-                  className="mt-5 inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-ink px-5 text-sm font-bold text-white transition hover:bg-gold hover:text-ink disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-500"
-                >
-                  <Sparkles size={16} />
-                  {unavailable ? "Временно нет" : canAfford ? "Получить награду" : `Не хватает ${reward.costCoins - data.coins}`}
-                </button>
-              </article>
-            );
-          })}
-        </div>
-      </section>
+      </div>
 
       {data.redemptions.length ? (
         <section className="mt-10 rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
-          <h2 className="font-display text-3xl">Мои заявки</h2>
+          <h2 className="font-display text-2xl">Ранее оформленные заявки</h2>
           <div className="mt-5 space-y-3">
             {data.redemptions.map((redemption) => {
               const meta = statusCopy[redemption.status];
