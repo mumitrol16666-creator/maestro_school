@@ -4,6 +4,7 @@ import type {
   TeacherOfflineClass,
   TeacherOfflineClassStudents,
   OfflineHomeworkReview,
+  LearningLessonV2Context,
   LearningLessonV2ResultsInput,
   TrialLessonReport,
   OfflineLessonServerDraft,
@@ -105,6 +106,18 @@ export const teacherOfflineApi = {
           ...learning,
         }),
       },
+    ),
+  quickAddTopic: (
+    crmClassId: string,
+    data: { title: string; masteryCriteria?: string; directionId?: string },
+  ) =>
+    apiRequest<{
+      success: boolean;
+      topic: { id: string; title: string; masteryCriteria: string };
+      learningV2: LearningLessonV2Context;
+    }>(
+      `/teachers/me/offline-lessons/${encodeURIComponent(crmClassId)}/quick-topic`,
+      { method: "POST", body: JSON.stringify(data) },
     ),
   attendanceBatch: (
     crmClassId: string,

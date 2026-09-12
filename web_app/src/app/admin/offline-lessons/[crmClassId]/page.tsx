@@ -41,6 +41,7 @@ import {
   type LearningLessonV2Draft,
 } from "@/components/learning-lesson-v2-panel";
 import { PageHeader } from "@/components/page-header";
+import { LessonAgendaTimer, LessonAgendaItem, defaultLessonAgenda } from "@/components/lesson-agenda-timer";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { useDialogBehavior } from "@/hooks/use-dialog-behavior";
 import { ApiError } from "@/lib/api-client";
@@ -358,6 +359,7 @@ type OfflineLessonFormDraft = {
     studentCheckDrafts: Record<string, StudentLessonCheckDraft>;
     learningV2Draft?: LearningLessonV2Draft;
     learningV2ReportVersion?: number | null;
+    agenda?: LessonAgendaItem[];
     notHeldReason: string;
   };
 };
@@ -522,6 +524,8 @@ export default function AdminOfflineLessonDetailPage() {
   const [comment, setComment] = useState("");
   const [trialReport, setTrialReport] = useState<TrialLessonReport>(() => mergeTrialReport());
   const [studentCheckDrafts, setStudentCheckDrafts] = useState<Record<string, StudentLessonCheckDraft>>({});
+  const [agenda, setAgenda] = useState<LessonAgendaItem[]>(defaultLessonAgenda);
+  const [overriddenLearningV2, setOverriddenLearningV2] = useState<LearningLessonV2Context | null>(null);
   const [learningV2Draft, setLearningV2Draft] = useState<LearningLessonV2Draft>(
     emptyLearningLessonV2Draft,
   );
@@ -556,7 +560,7 @@ export default function AdminOfflineLessonDetailPage() {
       ? "pending_admin_review"
       : lesson?.status;
   const loadedStudents = studentsResource.data?.students ?? [];
-  const learningV2 = studentsResource.data?.learningV2 ?? null;
+  const learningV2 = overriddenLearningV2 ?? studentsResource.data?.learningV2 ?? null;
   const isLearningLessonV2 = Boolean(learningV2?.enabled);
   const isTrialLesson = lesson?.classType === "trial" || Boolean(lesson?.trialParticipant || lesson?.trialBooking);
   const hasLinkedStudent = Boolean(lesson?.crmIndividualStudentId);
@@ -849,6 +853,9 @@ export default function AdminOfflineLessonDetailPage() {
         return next;
       });
       const savedLearningV2Draft = normalizeLearningLessonV2Draft(saved.learningV2Draft);
+      if (Array.isArray(saved.agenda) && saved.agenda.length > 0) {
+        setAgenda(saved.agenda);
+      }
       setLearningV2Draft(learningV2?.pendingResults
         ? mergeLearningLessonV2Draft(
             learningResultsV2Draft(learningV2?.pendingResults),
@@ -883,6 +890,7 @@ export default function AdminOfflineLessonDetailPage() {
         ]),
       ));
       setLearningV2Draft(learningResultsV2Draft(learningV2?.pendingResults));
+      setAgenda(defaultLessonAgenda);
       lastSavedDraftForm.current = null;
       setDraftSaveStatus(null);
     }
@@ -1626,6 +1634,20 @@ export default function AdminOfflineLessonDetailPage() {
         />
       </div>
 
+      <LessonAgendaTimer
+        agenda={agenda}
+        onChangeAgenda={setAgenda}
+        startTime={lesson.startTime}
+        endTime={lesson.endTime}
+        disabled={!canEditReport}
+        onApplySummary={(summaryText) => {
+          setLessonSummary((current) => {
+            if (!current.trim()) return summaryText;
+            return current + "\n\n" + summaryText;
+          });
+        }}
+      />
+
       {learningV2 && !isTrialLesson && (!canEditReport || hydratedLessonDraftKey === lessonDraftKey) ? (
         <LearningLessonV2Panel
           context={learningV2}
@@ -1637,6 +1659,15 @@ export default function AdminOfflineLessonDetailPage() {
             setLessonSummary((current) => (
               current.trim() ? current : `Разобрали тему «${title}»`
             ));
+          }}
+          onQuickAddTopic={async (input) => {
+            const api = isAdmin ? adminOfflineApi : teacherOfflineApi;
+            const res = await api.quickAddTopic(crmClassId, input);
+            if (res.learningV2) {
+              setOverriddenLearningV2(res.learningV2);
+              void studentsResource.reload();
+            }
+            return res;
           }}
         />
       ) : learningV2 && !isTrialLesson ? (

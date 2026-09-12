@@ -22,6 +22,7 @@ import {
 import { authenticate, requirePermission, requireTeacher } from "../guards/auth.guards.js";
 import {
   learningLessonResultsSchema,
+  offlineLessonQuickTopicSchema,
   offlineLessonStudentCheckSchema,
 } from "./offline-lesson.schemas.js";
 import {
@@ -44,6 +45,7 @@ import {
 import { listTeacherCrmDirections } from "../../application/services/crm-direction-projection.service.js";
 import { isSupportedMaterialUrl } from "../../domain/group-material.js";
 import { writeAuditLog } from "../../application/services/audit.service.js";
+import { quickAddOfflineLessonTopic } from "../../application/services/learning-lesson-v2.service.js";
 import {
   deleteOfflineLessonDraft,
   getOfflineLessonDraft,
@@ -498,6 +500,18 @@ export async function teacherOfflineRoutes(app: FastifyInstance) {
         to: z.string().optional(),
       }).parse(request.query);
       return { data: await getTeacherOfflineAgenda(request.user!.id, query) };
+    },
+  );
+
+
+  app.post(
+    "/teachers/me/offline-lessons/:crmClassId/quick-topic",
+    { preHandler: writeGuards },
+    async (request) => {
+      const { crmClassId } = z.object({ crmClassId: z.string().min(1) }).parse(request.params);
+      const body = offlineLessonQuickTopicSchema.parse(request.body ?? {});
+      const result = await quickAddOfflineLessonTopic(request.user!.id, crmClassId, body);
+      return { data: result };
     },
   );
 

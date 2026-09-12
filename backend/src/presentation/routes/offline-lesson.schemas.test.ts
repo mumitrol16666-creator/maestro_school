@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { learningLessonResultsSchema } from "./offline-lesson.schemas.js";
+import { learningLessonResultsSchema, offlineLessonQuickTopicSchema } from "./offline-lesson.schemas.js";
 
 test("lesson results schema rejects duplicate homework decisions", () => {
   const recipientId = "11111111-1111-4111-8111-111111111111";
@@ -76,4 +76,27 @@ test("lesson results schema rejects an empty homework assignment", () => {
   });
 
   assert.equal(result.success, false);
+});
+
+test("offlineLessonQuickTopicSchema validates topic title and optional criteria", () => {
+  const valid = offlineLessonQuickTopicSchema.safeParse({
+    title: "Гамма До-мажор",
+    masteryCriteria: "Без запинок в темпе 80 bpm",
+  });
+  assert.equal(valid.success, true);
+  if (valid.success) {
+    assert.equal(valid.data.title, "Гамма До-мажор");
+    assert.equal(valid.data.masteryCriteria, "Без запинок в темпе 80 bpm");
+  }
+
+  const emptyTitle = offlineLessonQuickTopicSchema.safeParse({
+    title: "   ",
+  });
+  assert.equal(emptyTitle.success, false);
+
+  const withDirection = offlineLessonQuickTopicSchema.safeParse({
+    title: "Песня Кукушка",
+    directionId: "11111111-1111-4111-8111-111111111111",
+  });
+  assert.equal(withDirection.success, true);
 });

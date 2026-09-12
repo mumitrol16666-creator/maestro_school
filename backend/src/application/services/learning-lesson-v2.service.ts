@@ -1,4 +1,4 @@
-import { LearningPlanTopicState } from "@prisma/client";
+import { LearningPlanTopicState, LearningTopicProgressSource } from "@prisma/client";
 import { productFeatureConfig, rewardEconomyV2AppliesToEvent } from "../../config/product-features.js";
 import { isOfflineCoordinatorRole } from "../../domain/cms-access.js";
 import { AppError, BadRequestError, ForbiddenError } from "../../domain/errors.js";
@@ -685,4 +685,261 @@ export async function applyApprovedLearningLessonV2Results(
   // by an earlier partial attempt, so only snapshot-internal invariants are checked here.
   validateLearningLessonV2ResultDuplicates(input);
   return applyValidatedLearningLessonV2Results(actorUserId, crmClassId, input, context, approval);
+}
+
+export async function quickAddOfflineLessonTopic(
+  actorUserId: string,
+  crmClassId: string,
+  input: { title: string; masteryCriteria?: string; directionId?: string },
+) {
+  if (!learningLessonV2Enabled()) {
+    throw new BadRequestError("Функционал учебных планов V2 отключен", "LEARNING_LESSON_V2_DISABLED");
+  }
+  const title = input.title.trim();
+  if (!title) {
+    throw new BadRequestError("Укажите название темы", "TOPIC_TITLE_REQUIRED");
+  }
+  const masteryCriteria = (input.masteryCriteria ?? "").trim();
+  const scope = await resolveLessonScope(actorUserId, crmClassId);
+  const month = aqtobeMonthKey(scope.eventAt);
+
+  let direction = null;
+  if (input.directionId) {
+    direction = await prisma.direction.findFirst({
+      where: {
+        id: input.directionId,
+        deletedAt: null,
+      },
+    });
+  }
+  if (!direction) {
+    const existingPlan = await prisma.learningPlan.findFirst({
+      where: {
+        month: { lte: month },
+        ...(scope.owner.kind === "student"
+          ? { crmStudentId: scope.owner.id, crmGroupId: null }
+          : { crmStudentId: null, crmGroupId: scope.owner.id }),
+        ...(scope.allowedDirectionTitles && scope.allowedDirectionTitles.length > 0
+          ? { direction: { title: { in: scope.allowedDirectionTitles } } }
+          : {}),
+      },
+      include: { direction: true },
+      orderBy: [{ month: "desc" }, { updatedAt: "desc" }],
+    });
+    if (existingPlan?.direction) {
+      direction = existingPlan.direction;
+    }
+  }
+  if (!direction && scope.allowedDirectionTitles && scope.allowedDirectionTitles.length > 0) {
+    direction = await prisma.direction.findFirst({
+      where: {
+        title: { in: scope.allowedDirectionTitles },
+        deletedAt: null,
+      },
+    });
+  }
+  if (!direction) {
+    direction = await prisma.direction.findFirst({
+      where: { deletedAt: null },
+      orderBy: { createdAt: "asc" },
+    });
+  }
+  if (!direction) {
+    throw new BadRequestError("Направление обучения не найдено", "DIRECTION_NOT_FOUND");
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    let plan = await tx.learningPlan.findFirst({
+      where: {
+        directionId: direction.id,
+        month,
+        ...(scope.owner.kind === "student"
+          ? { crmStudentId: scope.owner.id, crmGroupId: null }
+          : { crmStudentId: null, crmGroupId: scope.owner.id }),
+      },
+      include: {
+        versions: {
+          orderBy: { version: "desc" },
+          take: 1,
+          include: {
+            topics: {
+              orderBy: { sortOrder: "asc" },
+              include: { topic: true },
+            },
+          },
+        },
+      },
+    });
+
+    if (!plan) {
+      const planId = crypto.randomUUID();
+      const versionId = crypto.randomUUID();
+      const topicId = crypto.randomUUID();
+      const sourceKey = "v2-plan-item:" + planId + ":" + topicId;
+
+      const createdTopic = await tx.learningTopic.create({
+        data: {
+          id: topicId,
+          directionId: direction.id,
+          ...(scope.owner.kind === "student"
+            ? { crmStudentId: scope.owner.id, crmGroupId: null }
+            : { crmStudentId: null, crmGroupId: scope.owner.id }),
+          title,
+          masteryCriteria,
+          progressPercent: 0,
+          createdById: actorUserId,
+          responsibleTeacherId: actorUserId,
+          legacySourceKey: sourceKey,
+          progressHistory: {
+            create: {
+              fromPercent: null,
+              toPercent: 0,
+              source: LearningTopicProgressSource.teacher,
+              sourceKey: sourceKey + ":progress:create",
+              changedById: actorUserId,
+              occurredAt: new Date(),
+            },
+          },
+        },
+      });
+
+      plan = await tx.learningPlan.create({
+        data: {
+          id: planId,
+          directionId: direction.id,
+          month,
+          ...(scope.owner.kind === "student"
+            ? { crmStudentId: scope.owner.id, crmGroupId: null }
+            : { crmStudentId: null, crmGroupId: scope.owner.id }),
+          currentVersionNumber: 1,
+          publishedVersionNumber: 1,
+          createdById: actorUserId,
+          versions: {
+            create: {
+              id: versionId,
+              version: 1,
+              goal: "Освоить «" + title + "»",
+              publishedAt: new Date(),
+              createdById: actorUserId,
+              topics: {
+                create: {
+                  topicId: createdTopic.id,
+                  state: LearningPlanTopicState.active,
+                  sortOrder: 0,
+                  titleSnapshot: title,
+                  masteryCriteriaSnapshot: masteryCriteria,
+                },
+              },
+            },
+          },
+        },
+        include: {
+          versions: {
+            include: {
+              topics: {
+                include: { topic: true },
+              },
+            },
+          },
+        },
+      });
+
+      return { topic: createdTopic, planId: plan.id };
+    }
+
+    const latestVersion = plan.versions[0];
+    const existingTopics = latestVersion ? latestVersion.topics : [];
+
+    const duplicate = existingTopics.find(
+      (item) => item.state === LearningPlanTopicState.active && item.titleSnapshot.trim().toLowerCase() === title.toLowerCase(),
+    );
+    if (duplicate) {
+      return { topic: duplicate.topic, planId: plan.id };
+    }
+
+    const topicId = crypto.randomUUID();
+    const sourceKey = "v2-plan-item:" + plan.id + ":" + topicId;
+    const createdTopic = await tx.learningTopic.create({
+      data: {
+        id: topicId,
+        directionId: direction.id,
+        ...(scope.owner.kind === "student"
+          ? { crmStudentId: scope.owner.id, crmGroupId: null }
+          : { crmStudentId: null, crmGroupId: scope.owner.id }),
+        title,
+        masteryCriteria,
+        progressPercent: 0,
+        createdById: actorUserId,
+        responsibleTeacherId: actorUserId,
+        legacySourceKey: sourceKey,
+        progressHistory: {
+          create: {
+            fromPercent: null,
+            toPercent: 0,
+            source: LearningTopicProgressSource.teacher,
+            sourceKey: sourceKey + ":progress:create",
+            changedById: actorUserId,
+            occurredAt: new Date(),
+          },
+        },
+      },
+    });
+
+    const nextVersionNum = (plan.currentVersionNumber || 0) + 1;
+    await tx.learningPlanVersion.create({
+      data: {
+        planId: plan.id,
+        version: nextVersionNum,
+        goal: latestVersion?.goal || ("Освоить «" + title + "»"),
+        expectedResult: latestVersion?.expectedResult || "",
+        skills: latestVersion?.skills || "",
+        checkpoint: latestVersion?.checkpoint || "",
+        note: latestVersion?.note || "",
+        materials: latestVersion?.materials ?? [],
+        publishedAt: new Date(),
+        createdById: actorUserId,
+        topics: {
+          create: [
+            ...existingTopics.map((item) => ({
+              topicId: item.topicId,
+              state: item.state,
+              sortOrder: item.sortOrder,
+              titleSnapshot: item.titleSnapshot,
+              masteryCriteriaSnapshot: item.masteryCriteriaSnapshot,
+              replacementTopicId: item.replacementTopicId,
+            })),
+            {
+              topicId: createdTopic.id,
+              state: LearningPlanTopicState.active,
+              sortOrder: existingTopics.length,
+              titleSnapshot: title,
+              masteryCriteriaSnapshot: masteryCriteria,
+            },
+          ],
+        },
+      },
+    });
+
+    await tx.learningPlan.update({
+      where: { id: plan.id },
+      data: {
+        currentVersionNumber: nextVersionNum,
+        publishedVersionNumber: nextVersionNum,
+        updatedAt: new Date(),
+      },
+    });
+
+    return { topic: createdTopic, planId: plan.id };
+  });
+
+  const updatedContext = await getLearningLessonV2Context(actorUserId, crmClassId);
+  return {
+    success: true,
+    topic: {
+      id: result.topic.id,
+      title: result.topic.title,
+      masteryCriteria: result.topic.masteryCriteria,
+    },
+    learningV2: updatedContext,
+  };
 }

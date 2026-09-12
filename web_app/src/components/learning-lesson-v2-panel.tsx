@@ -1,11 +1,16 @@
 "use client";
 
+import { useState } from "react";
+
 import {
   Check,
   CircleDot,
   ClipboardCheck,
   RotateCcw,
   Target,
+  Plus,
+  LoaderCircle,
+  Sparkles,
 } from "lucide-react";
 import type {
   LearningLessonV2Context,
@@ -181,13 +186,44 @@ export function LearningLessonV2Panel({
   disabled,
   onChange,
   onTopicTitleChange,
+  onQuickAddTopic,
 }: {
   context: LearningLessonV2Context;
   draft: LearningLessonV2Draft;
   disabled: boolean;
   onChange: (draft: LearningLessonV2Draft) => void;
   onTopicTitleChange?: (title: string) => void;
+  onQuickAddTopic?: (input: { title: string; masteryCriteria?: string }) => Promise<void | { success: boolean; topic?: { id: string; title: string } }>;
 }) {
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [quickTitle, setQuickTitle] = useState("");
+  const [quickCriteria, setQuickCriteria] = useState("");
+  const [addingTopic, setAddingTopic] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
+
+  async function handleAddTopicSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!quickTitle.trim() || !onQuickAddTopic || addingTopic) return;
+    setAddingTopic(true);
+    setAddError(null);
+    try {
+      const res = await onQuickAddTopic({
+        title: quickTitle.trim(),
+        masteryCriteria: quickCriteria.trim() || undefined,
+      });
+      setQuickTitle("");
+      setQuickCriteria("");
+      setShowAddForm(false);
+      if (res && res.topic) {
+        onChange({ ...draft, topicId: res.topic.id });
+        onTopicTitleChange?.(res.topic.title);
+      }
+    } catch (err: any) {
+      setAddError(err?.message || "Не удалось сохранить тему в план");
+    } finally {
+      setAddingTopic(false);
+    }
+  }
   if (!context.available) {
     if (context.reason !== "one_time_replacement") return null;
     return (
@@ -248,7 +284,75 @@ export function LearningLessonV2Panel({
       </div>
 
       <div className="mt-5 border-t border-stone-200 pt-5">
-        <p className="text-sm font-black text-ink">Прогресс тем</p>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm font-black text-ink">Прогресс тем</p>
+          {onQuickAddTopic && !disabled ? (
+            <button
+              type="button"
+              onClick={() => {
+                setShowAddForm(!showAddForm);
+                setAddError(null);
+              }}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-900 transition hover:bg-amber-100"
+            >
+              <Plus size={14} className="text-amber-700" />
+              {showAddForm ? "Скрыть форму" : "+ Добавить тему в план"}
+            </button>
+          ) : null}
+        </div>
+
+        {showAddForm ? (
+          <form onSubmit={handleAddTopicSubmit} className="mt-4 rounded-2xl border border-amber-200 bg-amber-50/50 p-4">
+            <div className="flex items-center gap-2">
+              <Sparkles size={16} className="text-amber-700" />
+              <p className="text-xs font-bold uppercase tracking-wider text-amber-900">
+                Новая тема в учебный план месяца
+              </p>
+            </div>
+            <p className="mt-1 text-xs text-amber-900/70">
+              Тема сразу добавится в опубликованный план ученика/группы и появится для выбора на этом уроке.
+            </p>
+            <div className="mt-3 space-y-2.5">
+              <input
+                type="text"
+                placeholder="Название темы (например: «Гамма До-мажор в 2 октавы»)*"
+                value={quickTitle}
+                disabled={addingTopic}
+                onChange={(e) => setQuickTitle(e.target.value)}
+                className="h-10 w-full rounded-xl border border-stone-300 bg-white px-3.5 text-sm font-medium text-ink placeholder:text-stone-400 focus:border-amber-500 focus:outline-none"
+              />
+              <input
+                type="text"
+                placeholder="Критерий освоения (например: «Без запинок в темпе 80 bpm»)"
+                value={quickCriteria}
+                disabled={addingTopic}
+                onChange={(e) => setQuickCriteria(e.target.value)}
+                className="h-10 w-full rounded-xl border border-stone-300 bg-white px-3.5 text-sm font-medium text-ink placeholder:text-stone-400 focus:border-amber-500 focus:outline-none"
+              />
+              {addError ? (
+                <p className="text-xs font-semibold text-red-600">{addError}</p>
+              ) : null}
+              <div className="flex items-center gap-2">
+                <button
+                  type="submit"
+                  disabled={!quickTitle.trim() || addingTopic}
+                  className="flex h-9 items-center gap-1.5 rounded-xl bg-amber-600 px-4 text-xs font-bold text-white transition hover:bg-amber-700 disabled:opacity-50"
+                >
+                  {addingTopic ? <LoaderCircle className="animate-spin" size={14} /> : <Plus size={14} />}
+                  Сохранить тему в план
+                </button>
+                <button
+                  type="button"
+                  disabled={addingTopic}
+                  onClick={() => setShowAddForm(false)}
+                  className="h-9 rounded-xl border border-stone-200 bg-white px-3 text-xs font-bold text-stone-600 hover:bg-stone-100"
+                >
+                  Отмена
+                </button>
+              </div>
+            </div>
+          </form>
+        ) : null}
         {topics.length ? (
           <>
             <div className="mt-3 flex flex-wrap gap-2">
@@ -351,9 +455,30 @@ export function LearningLessonV2Panel({
             )}
           </>
         ) : (
-          <p className="mt-2 text-sm text-stone-500">
-            В опубликованном плане нет активных тем. Отчёт урока можно отправить без изменения прогресса.
-          </p>
+          <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50/40 p-4 sm:p-5">
+            <div className="flex items-center gap-2">
+              <Sparkles size={18} className="text-amber-700" />
+              <h4 className="text-sm font-bold text-amber-950">
+                В опубликованном плане пока нет активных тем
+              </h4>
+            </div>
+            <p className="mt-1.5 text-xs leading-relaxed text-amber-900/80">
+              Вы можете добавить тему прямо сейчас. Она сохранится в плане текущего месяца, и вы сразу сможете зафиксировать прогресс её освоения.
+            </p>
+            {onQuickAddTopic && !disabled && !showAddForm ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAddForm(true);
+                  setAddError(null);
+                }}
+                className="mt-3 inline-flex items-center gap-2 rounded-xl bg-amber-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-amber-700 shadow-sm"
+              >
+                <Plus size={14} />
+                + Добавить первую тему в план
+              </button>
+            ) : null}
+          </div>
         )}
       </div>
 
