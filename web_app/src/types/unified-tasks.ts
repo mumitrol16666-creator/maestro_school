@@ -5,6 +5,7 @@ export type UnifiedTaskScope = "active" | "completed" | "all";
 export type UnifiedTask = {
   id: string;
   source: UnifiedTaskSource;
+  provenance?: "legacy_offline" | "learning_homework_v2";
   kind: "assignment" | "test";
   title: string;
   descriptionPreview: string;
@@ -37,7 +38,7 @@ export type UnifiedTaskCounts = {
   bySource: Record<UnifiedTaskSource, number>;
 };
 
-export type UnifiedTasksData = { items: UnifiedTask[]; counts: UnifiedTaskCounts };
+export type UnifiedTasksData = { items: UnifiedTask[]; counts: UnifiedTaskCounts; filteredCounts?: UnifiedTaskCounts };
 export type UnifiedTasksMeta = {
   partial: boolean;
   truncated: boolean;

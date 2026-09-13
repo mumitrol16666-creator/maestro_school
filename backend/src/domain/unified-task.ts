@@ -5,6 +5,7 @@ export type UnifiedTaskScope = "active" | "completed" | "all";
 export type UnifiedTask = {
   id: string;
   source: UnifiedTaskSource;
+  provenance?: "legacy_offline" | "learning_homework_v2";
   kind: "assignment" | "test";
   title: string;
   descriptionPreview: string;
@@ -88,6 +89,8 @@ export function withTaskState<T extends Omit<UnifiedTask, "actionRequired">>(
 }
 
 function priority(task: UnifiedTask) {
+  // Historical grades must not displace an explicitly assigned current task.
+  if (task.provenance === "legacy_offline" && task.actionRequired) return 4.5;
   if (task.status === "needs_revision") return 0;
   if (task.status === "todo" && task.timing.overdue) return 1;
   if (task.status === "todo" && task.timing.dueKind === "exact") return 2;

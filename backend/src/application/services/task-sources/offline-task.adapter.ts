@@ -83,6 +83,7 @@ export function mapOfflineTask(
   return withTaskState({
     id: `offline:${lesson.crmClassId}`,
     source: "offline",
+    provenance: "legacy_offline",
     kind: "assignment",
     title: lesson.topic?.trim() || "Домашнее задание после урока",
     descriptionPreview: descriptionPreview(lesson.homework),
@@ -106,7 +107,7 @@ export function mapOfflineTask(
       coins: null,
     },
     target: {
-      href: `/school-lessons?tab=homework&lesson=${encodeURIComponent(lesson.crmClassId)}`,
+      href: `/tasks/school/${encodeURIComponent(lesson.crmClassId)}`,
       actionLabel: taskActionLabel(status, "offline"),
     },
     updatedAt,

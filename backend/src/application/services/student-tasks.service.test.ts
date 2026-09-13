@@ -58,5 +58,20 @@ describe("student task aggregation", () => {
     assert.equal(result.meta.truncated, true);
     assert.equal(result.data.counts.actionRequired, 2);
     assert.deepEqual(result.data.counts.bySource, { course: 2, offline: 1, online: 1 });
+    assert.deepEqual(result.data.filteredCounts.bySource, { course: 2, offline: 0, online: 0 });
+    assert.equal(result.data.filteredCounts.completed, 0);
+    assert.equal(result.data.filteredCounts.waitingReview, 0);
+  });
+
+  it("keeps canonical tasks and lower-bound counts in a partial school batch", async () => {
+    const result = await getStudentTasks("student", { scope: "active", source: "offline", limit: 50 }, {
+      course: async () => [task("course", "course", "todo")], online: async () => [],
+      offline: async () => ({ tasks: [task("v2", "offline", "waiting_review")], unavailableCode: "CRM_TIMEOUT" }),
+    });
+    assert.equal(result.meta.partial, true);
+    assert.equal(result.data.items[0].id, "v2");
+    assert.equal(result.data.filteredCounts.waitingReview, 1);
+    assert.equal(result.data.filteredCounts.actionRequired, 0);
+    assert.equal(result.data.counts.actionRequired, 1);
   });
 });

@@ -1,5 +1,6 @@
 import type { SchoolOfflineLesson } from "@/types/school-offline";
 import type { UnifiedTask } from "@/types/unified-tasks";
+import { isHistoricalTask } from "@/lib/task-presentation";
 
 const schoolZone = "Asia/Aqtobe";
 function lessonTime(lesson: SchoolOfflineLesson, time: string) {
@@ -22,7 +23,8 @@ export function schoolDateLabel(date: string, weekday = false) {
 
 export function learningTaskContext(task: UnifiedTask) {
   // An imported partial grade is not proof of a new teacher request to revise.
-  const label = task.source === "offline" ? "Из прошлых уроков"
+  const label = isHistoricalTask(task) ? "Из прошлых уроков"
+    : task.source === "offline" ? "Задание преподавателя"
     : task.source === "course" ? "Из курса" : "Онлайн-задание";
   const date = task.timing.assignedAt ? new Date(task.timing.assignedAt) : null;
   return { label, date: date && Number.isFinite(date.getTime())

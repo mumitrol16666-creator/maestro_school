@@ -1,40 +1,25 @@
 "use client";
 
-import { AlertTriangle, CheckCircle2, Clock3, RotateCcw } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Inbox } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
-import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
-import { PageHeader } from "@/components/page-header";
 import { UnifiedTaskCard } from "@/components/unified-task-card";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { api } from "@/lib/api-client";
+import { isHistoricalTask } from "@/lib/task-presentation";
 import type { UnifiedTaskSource } from "@/types/unified-tasks";
 
 type View = "action" | "waiting" | "completed";
-
-const views: Array<{
-  key: View;
-  label: string;
-  icon: typeof Clock3;
-  accent: string;
-}> = [
-  { key: "action", label: "Нужно сделать", icon: RotateCcw, accent: "text-red-700" },
-  { key: "waiting", label: "На проверке", icon: Clock3, accent: "text-blue-700" },
-  { key: "completed", label: "Выполнено", icon: CheckCircle2, accent: "text-emerald-700" },
-];
-
+const views = [
+  { key: "action", label: "Нужно сделать" },
+  { key: "waiting", label: "На проверке" },
+  { key: "completed", label: "Выполнено" },
+] as const;
 const sources: Array<{ key: "all" | UnifiedTaskSource; label: string }> = [
-  { key: "all", label: "Все" },
-  { key: "course", label: "Курсы" },
-  { key: "offline", label: "С преподавателем" },
-  { key: "online", label: "Онлайн" },
+  { key: "all", label: "Все" }, { key: "offline", label: "С преподавателем" },
+  { key: "course", label: "Курсы" }, { key: "online", label: "Онлайн" },
 ];
-
-const sourceUnavailableLabel: Record<UnifiedTaskSource, string> = {
-  course: "курсов",
-  offline: "школы",
-  online: "онлайн-уроков",
-};
+const focus = "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-700";
 
 function TasksContent() {
   const params = useSearchParams();
@@ -42,15 +27,15 @@ function TasksContent() {
   const rawView = params.get("view");
   const rawSource = params.get("source");
   const view: View = rawView === "waiting" || rawView === "completed" ? rawView : "action";
-  const source: "all" | UnifiedTaskSource = rawSource === "course" || rawSource === "offline" || rawSource === "online"
-    ? rawSource
-    : "all";
-
-  const resource = useApiResource(() => api.studentTasks({
-    scope: view === "completed" ? "completed" : "active",
-    status: view === "waiting" ? "waiting_review" : undefined,
-    source: source === "all" ? undefined : source,
-    limit: 100,
+  const source = rawSource === "course" || rawSource === "offline" || rawSource === "online" ? rawSource : "all";
+  const filterKey = `${view}:${source}`;
+  const resource = useApiResource(async () => ({
+    key: filterKey,
+    response: await api.studentTasks({
+      scope: view === "completed" ? "completed" : "active",
+      status: view === "waiting" ? "waiting_review" : undefined,
+      source: source === "all" ? undefined : source, limit: 100,
+    }),
   }), [view, source]);
 
   function setFilters(next: { view?: View; source?: "all" | UnifiedTaskSource }) {
@@ -62,155 +47,95 @@ function TasksContent() {
     router.replace(`/tasks${query.toString() ? `?${query.toString()}` : ""}`, { scroll: false });
   }
 
-  if (resource.loading && !resource.data) return <LoadingState label="Собираем задания из всех разделов" />;
-  if (resource.error || !resource.data) {
-    return <ErrorState message={resource.error ?? "Не удалось загрузить задания"} retry={resource.reload} />;
-  }
-
-  const { data, meta } = resource.data;
-  const refreshing = resource.loading;
-  const items = view === "action" ? data.items.filter((task) => task.actionRequired) : data.items;
-  const unavailable = (Object.entries(meta?.sources ?? {}) as Array<[UnifiedTaskSource, { status: string }]>)
-    .filter(([, state]) => state.status === "unavailable")
-    .map(([key]) => sourceUnavailableLabel[key]);
+  // Never show the previous filter's items or numbers under a newly selected tab.
+  const response = resource.data?.key === filterKey && !resource.error ? resource.data.response : null;
+  const busy = resource.loading || (!response && !resource.error);
+  const counts = response?.data.filteredCounts ?? (source === "all" ? response?.data.counts : undefined);
+  const meta = response?.meta;
+  const partial = Boolean(meta?.partial && (source === "all" || meta.sources[source]?.status === "unavailable"));
+  const items = response?.data.items.filter(task => view !== "action" || task.actionRequired) ?? [];
+  const current = items.filter(task => !isHistoricalTask(task));
+  const historical = items.filter(isHistoricalTask);
   const empty = view === "waiting"
-    ? { title: "Нет заданий на проверке", description: "Отправленные работы появятся здесь, пока преподаватель их проверяет." }
+    ? { title: "Нет заданий на проверке", description: "Здесь появятся отправленные преподавателю работы." }
     : view === "completed"
-      ? { title: "Выполненных заданий пока нет", description: "После проверки готовые работы сохранятся в этом разделе." }
-      : { title: "Сейчас всё сделано", description: "Новые задания появятся после уроков или внутри курса." };
+      ? { title: "Выполненных заданий пока нет", description: "Принятые работы сохранятся здесь." }
+      : { title: "Незавершённых заданий нет", description: "Новые задания появятся после назначения преподавателем или открытия урока курса." };
 
   return (
-    <>
-      <PageHeader
-        eyebrow="Единая учебная очередь"
-        title="Задания"
-        description="Всё, что нужно сделать по курсам и занятиям с преподавателем."
-      />
+    <div className="mx-auto max-w-6xl" data-testid="tasks-workspace">
+      <header className="mb-6">
+        <p className="text-[11px] font-black uppercase tracking-[0.16em] text-amber-800">Моё обучение</p>
+        <h1 className="font-display mt-2 text-4xl leading-tight text-ink">Задания</h1>
+        <p className="mt-2 text-sm leading-6 text-stone-600">Подготовка к урокам и задания из курсов.</p>
+      </header>
 
-      <section
-        data-testid="task-state-filters"
-        aria-label="Состояние заданий"
-        aria-busy={refreshing}
-        className="mb-4 grid grid-cols-3 gap-2 sm:gap-3"
-      >
-        {views.map(({ key, label, icon, accent }) => (
-          <TaskStateFilter
-            key={key}
-            label={label}
-            value={key === "action"
-              ? data.counts.actionRequired
-              : key === "waiting"
-                ? data.counts.waitingReview
-                : data.counts.completed}
-            icon={icon}
-            accent={accent}
-            active={view === key}
-            onClick={() => setFilters({ view: key })}
-          />
-        ))}
+      <section data-testid="task-state-filters" aria-label="Состояние заданий"
+        className="mb-3 grid grid-cols-3 gap-1 rounded-xl border border-stone-200 bg-white p-1">
+        {views.map(({ key, label }) => {
+          const count = key === "action" ? counts?.actionRequired : key === "waiting" ? counts?.waitingReview : counts?.completed;
+          return <button key={key} type="button" aria-pressed={view === key} onClick={() => setFilters({ view: key })}
+            className={`flex min-h-12 min-w-0 flex-wrap items-center justify-center gap-x-2 gap-y-1 rounded-lg px-1.5 py-2 text-xs font-semibold transition-colors sm:px-3 sm:text-sm ${focus} ${view === key ? "bg-ink text-white" : "text-stone-600 hover:bg-stone-50"}`}>
+            <span>{label}</span>
+            <span className={`rounded-full px-2 py-0.5 text-xs tabular-nums ${view === key ? "bg-gold text-ink" : "bg-stone-100 text-stone-700"}`}>
+              {busy || count == null ? "—" : `${partial ? "≥ " : ""}${count}`}
+            </span>
+          </button>;
+        })}
       </section>
 
-      <div className="mb-4 space-y-2">
-        <div data-testid="task-source-filters" className="grid grid-cols-2 gap-2 sm:flex">
-          {sources.map(({ key, label }) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setFilters({ source: key })}
-              className={`min-h-10 min-w-0 rounded-xl px-3 text-xs font-black transition sm:min-h-9 sm:shrink-0 sm:rounded-full sm:px-4 ${
-                source === key ? "bg-amber-100 text-amber-950" : "border border-stone-200 bg-white text-stone-500"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        <div className="flex h-5 items-center justify-end" aria-live="polite">
-          {refreshing ? (
-            <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-stone-400">
-              <span className="h-2 w-2 animate-pulse rounded-full bg-gold" /> Обновляем список
-            </span>
-          ) : null}
-        </div>
+      <div data-testid="task-source-filters" role="group" aria-label="Источник заданий" className="mb-5 flex flex-wrap gap-2">
+        {sources.map(({ key, label }) => <button key={key} type="button" aria-pressed={source === key} onClick={() => setFilters({ source: key })}
+          className={`min-h-11 rounded-full border px-3 text-xs font-semibold transition-colors sm:px-4 ${focus} ${source === key ? "border-gold bg-amber-50 text-amber-950" : "border-stone-200 text-stone-600 hover:bg-white"}`}>{label}</button>)}
       </div>
 
-      {meta?.partial ? (
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
-          <span className="inline-flex items-center gap-2 font-semibold">
-            <AlertTriangle size={17} /> Не удалось обновить задания из {unavailable.join(" и ")}. Остальные задания показаны.
-          </span>
-          <button type="button" onClick={() => void resource.reload()} className="font-black underline underline-offset-4">Повторить</button>
-        </div>
-      ) : null}
-
-      <div
-        data-testid="task-results"
-        aria-busy={refreshing}
-        className={`min-h-[360px] transition-opacity ${refreshing ? "pointer-events-none opacity-60" : "opacity-100"}`}
-      >
-        {items.length ? (
-          <div className="grid gap-4 lg:grid-cols-2">
-            {items.map((task) => <UnifiedTaskCard key={task.id} task={task} />)}
-          </div>
-        ) : meta?.partial ? (
-          <div className="rounded-[26px] border border-dashed border-amber-300 bg-white p-8 text-center">
-            <AlertTriangle className="mx-auto text-amber-600" />
-            <h2 className="font-display mt-3 text-2xl">Часть заданий временно недоступна</h2>
-            <p className="mt-2 text-sm text-stone-500">Повторите загрузку, чтобы проверить остальные задания.</p>
-          </div>
+      <div data-testid="task-results" aria-busy={busy}>
+        {busy ? <Loading /> : resource.error ? (
+          <Notice title="Не удалось загрузить задания" description="Не можем проверить список. Попробуйте ещё раз." retry={resource.reload} />
         ) : (
-          <EmptyState title={source === "all" ? empty.title : `${empty.title} в выбранном разделе`} description={empty.description} />
+          <>
+            {partial && <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950" role="status">
+              <span>Часть заданий недоступна. Счётчики показывают только загруженные работы.</span>
+              <button type="button" onClick={resource.reload} className={`min-h-11 font-bold underline underline-offset-4 ${focus}`}>Повторить</button>
+            </div>}
+            {items.length ? (
+              <div className="space-y-3">
+                {current.map(task => <UnifiedTaskCard key={task.id} task={task} />)}
+                {historical.length > 0 && <section aria-label="Из прошлых уроков" className={current.length ? "pt-3" : ""}>
+                  <h2 className="mb-1 text-[11px] font-black uppercase tracking-[0.13em] text-amber-800">Из прошлых уроков</h2>
+                  <p className="mb-3 text-xs leading-5 text-stone-600">Задания и оценки из отчётов по занятиям. Это не новые назначения.</p>
+                  <div className="space-y-3">{historical.map(task => <UnifiedTaskCard key={task.id} task={task} />)}</div>
+                </section>}
+              </div>
+            ) : partial ? (
+              <Notice title="Полный список пока недоступен" description="Пока нельзя сказать, что все задания выполнены." />
+            ) : (
+              <section className="flex items-start gap-3 rounded-xl border border-stone-200 bg-white p-5 sm:p-6" aria-label="Пустой список">
+                {view === "action" ? <CheckCircle2 className="mt-1 shrink-0 text-emerald-700" aria-hidden="true" /> : <Inbox className="mt-1 shrink-0 text-stone-500" aria-hidden="true" />}
+                <div><h2 className="font-display text-2xl">{empty.title}</h2>
+                  <p className="mt-2 text-sm leading-6 text-stone-600">{source !== "all" ? "В выбранном разделе. " : ""}{empty.description}</p>
+                </div>
+              </section>
+            )}
+            {meta?.truncated && <p className="mt-4 text-xs leading-5 text-stone-600">Показаны первые 100 заданий. Счётчики учитывают весь выбранный раздел.</p>}
+          </>
         )}
       </div>
-
-      {meta?.truncated ? (
-        <p className="mt-5 text-center text-xs font-semibold text-stone-400">Показаны первые 100 заданий по выбранному фильтру.</p>
-      ) : null}
-    </>
+    </div>
   );
 }
 
-function TaskStateFilter({
-  label,
-  value,
-  icon: Icon,
-  accent,
-  active,
-  onClick,
-}: {
-  label: string;
-  value: number;
-  icon: typeof Clock3;
-  accent: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      aria-pressed={active}
-      onClick={onClick}
-      className={`min-w-0 rounded-2xl border p-3 text-left shadow-sm transition sm:p-4 ${
-        active
-          ? "border-ink bg-ink text-white shadow-[0_12px_28px_rgba(21,22,19,0.16)]"
-          : "border-stone-200 bg-white text-stone-700 hover:border-gold/40"
-      }`}
-    >
-      <span className={`flex min-h-8 items-start gap-1.5 text-[9px] font-black uppercase leading-4 tracking-[0.08em] sm:min-h-0 sm:text-[10px] sm:tracking-[0.12em] ${
-        active ? "text-white/65" : "text-stone-400"
-      }`}>
-        <Icon size={13} className="mt-0.5 shrink-0" />
-        <span>{label}</span>
-      </span>
-      <span className={`font-display mt-1 block text-2xl sm:text-3xl ${active ? "text-white" : accent}`}>{value}</span>
-    </button>
-  );
+function Loading() {
+  return <p role="status" className="py-6 text-sm text-stone-600">Загружаем задания…</p>;
 }
-
+function Notice({ title, description, retry }: { title: string; description: string; retry?: () => void }) {
+  return <section className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-5" role="alert">
+    <AlertTriangle className="mt-1 shrink-0 text-amber-800" aria-hidden="true" />
+    <div><h2 className="font-display text-2xl">{title}</h2><p className="mt-2 text-sm leading-6 text-stone-600">{description}</p>
+      {retry && <button type="button" onClick={retry} className={`mt-3 min-h-11 rounded-lg border border-amber-300 px-4 text-sm font-bold ${focus}`}>Повторить</button>}
+    </div>
+  </section>;
+}
 export default function TasksPage() {
-  return (
-    <Suspense fallback={<LoadingState label="Открываем задания" />}>
-      <TasksContent />
-    </Suspense>
-  );
+  return <Suspense fallback={<Loading />}><TasksContent /></Suspense>;
 }

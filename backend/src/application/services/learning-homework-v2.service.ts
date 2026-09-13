@@ -675,9 +675,9 @@ export async function listTeacherLearningHomeworkAssignments(
   return assignments.map((assignment) => assignmentDto(assignment));
 }
 
-export async function listStudentLearningHomeworkAssignments(studentUserId: string) {
+export async function listStudentLearningHomeworkAssignments(studentUserId: string, options: { linkRecipients?: boolean } = {}) {
   const crmStudentId = await requireStudentCrmProfile(studentUserId);
-  await prisma.learningHomeworkRecipient.updateMany({
+  if (options.linkRecipients !== false) await prisma.learningHomeworkRecipient.updateMany({
     where: { crmStudentId, studentUserId: null },
     data: { studentUserId },
   });
