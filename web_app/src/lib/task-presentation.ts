@@ -14,6 +14,9 @@ export function taskDate(value: string | null, withTime = false) {
 }
 
 export function taskStatusLabel(task: UnifiedTask) {
+  if (task.legacyDecision === "continue") return "Продолжить работу";
+  if (task.legacyDecision === "accepted") return "Принято преподавателем";
+  if (task.status === "archived") return "Неактуально";
   if (isHistoricalTask(task)) {
     const percent = task.result.completionPercent;
     const safe = percent != null && Number.isFinite(percent) ? Math.min(100, Math.max(0, Math.round(percent))) : null;

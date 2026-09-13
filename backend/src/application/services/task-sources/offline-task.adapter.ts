@@ -30,6 +30,7 @@ type OfflineLesson = {
   homeworkReview?: OfflineReview | null;
   homeworkResult?: OfflineReview | null;
   lessonPointsAwarded?: number | null;
+  legacyResolution?: { decision: string; comment: string; updatedAt?: Date | string } | null;
 };
 
 function normalized(value?: string | null) {
@@ -70,7 +71,10 @@ export function mapOfflineTask(
 ): UnifiedTask | null {
   if (lesson.status !== "completed" || !lesson.homework?.trim()) return null;
   const review = effectiveReview(lesson);
-  const status = offlineStatus(review);
+  const resolution = lesson.legacyResolution;
+  const status = resolution?.decision === "obsolete" ? "archived"
+    : resolution?.decision === "accepted" ? "completed"
+    : resolution?.decision === "continue" ? "todo" : offlineStatus(review);
   if (!status) return null;
 
   const nextLesson = [...upcomingLessons]
@@ -78,12 +82,14 @@ export function mapOfflineTask(
     .sort((left, right) => `${left.date}-${left.startTime ?? ""}`.localeCompare(`${right.date}-${right.startTime ?? ""}`))[0] ?? null;
   const assignedAt = aqtobeIso(lesson.date, lesson.startTime);
   const dueAt = nextLesson ? aqtobeIso(nextLesson.date, nextLesson.startTime) : null;
-  const updatedAt = review?.reviewedAt ?? assignedAt ?? now.toISOString();
+  const updatedAt = resolution?.updatedAt ? new Date(resolution.updatedAt).toISOString() : review?.reviewedAt ?? assignedAt ?? now.toISOString();
 
   return withTaskState({
     id: `offline:${lesson.crmClassId}`,
     source: "offline",
     provenance: "legacy_offline",
+    ...(resolution && ["accepted", "continue", "obsolete"].includes(resolution.decision)
+      ? { legacyDecision: resolution.decision as UnifiedTask["legacyDecision"] } : {}),
     kind: "assignment",
     title: lesson.topic?.trim() || "Домашнее задание после урока",
     descriptionPreview: descriptionPreview(lesson.homework),
@@ -100,9 +106,9 @@ export function mapOfflineTask(
       overdue: false,
     },
     result: {
-      completionPercent: review?.completionPercent ?? (status === "completed" ? 100 : null),
+      completionPercent: resolution ? null : review?.completionPercent ?? (status === "completed" ? 100 : null),
       scorePercent: null,
-      reviewComment: review?.difficulties || review?.notCompletedReason || null,
+      reviewComment: resolution ? resolution.comment || null : review?.difficulties || review?.notCompletedReason || null,
       points: lesson.lessonPointsAwarded ?? null,
       coins: null,
     },

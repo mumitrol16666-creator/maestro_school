@@ -47,12 +47,13 @@ async function setup(page: Page, options: Options = {}, url = "/tasks") {
       if (options.delay) await new Promise(resolve => setTimeout(resolve, options.delay));
       if (options.fail) return route.fulfill({ status: 503, json: { error: { code: "UNAVAILABLE", message: "Нет связи" } } });
       const all = options.tasks ?? examples();
-      const counts = (items: UnifiedTask[]) => ({ totalActive: items.filter(t=>t.status !== "completed").length,
+      const counts = (items: UnifiedTask[]) => ({ totalActive: items.filter(t=>t.status !== "completed" && t.status !== "archived").length,
         actionRequired: items.filter(t=>t.actionRequired).length, waitingReview: items.filter(t=>t.status === "waiting_review").length,
         needsRevision: items.filter(t=>t.status === "needs_revision").length, completed: items.filter(t=>t.status === "completed").length,
+        archived: items.filter(t=>t.status === "archived").length,
         bySource: { course: items.filter(t=>t.source === "course").length, offline: items.filter(t=>t.source === "offline").length, online: items.filter(t=>t.source === "online").length } });
       const filtered = all.filter(t=>!url.searchParams.get("source") || t.source === url.searchParams.get("source"));
-      const items = filtered.filter(t => (url.searchParams.get("scope") === "completed" ? t.status === "completed" : t.status !== "completed")
+      const items = filtered.filter(t => (url.searchParams.get("scope") === "completed" ? t.status === "completed" : url.searchParams.get("scope") === "archived" ? t.status === "archived" : t.status !== "completed" && t.status !== "archived")
         && (!url.searchParams.get("status") || t.status === url.searchParams.get("status")));
       return route.fulfill({ json: { data: { items, counts: counts(all), filteredCounts: counts(filtered) },
         meta: { partial: !!options.partial, truncated: !!options.truncated, sources: { offline: { status: options.partial ? "unavailable" : "ok" }, course: { status: "ok" }, online: { status: "ok" } } } } });
@@ -84,6 +85,16 @@ test("compact rows separate current tasks and historical grades", async ({ page 
   await expect(page.getByText("Комментарий: Не ускоряйся на переходе.")).toBeVisible();
   expect(errors).toEqual([]);
   expect(writes).toEqual([]);
+});
+
+test("obsolete work has its own archive and is never counted as completed or actionable", async ({ page }) => {
+  await setup(page, { tasks: [task("offline:closed", { title: "Старое задание", provenance: "legacy_offline", legacyDecision: "obsolete", status: "archived", actionRequired: false })] });
+  await expect(page.getByTestId("task-state-filters").getByRole("button", { name: "Нужно сделать 0" })).toBeVisible();
+  await expect(page.getByTestId("task-state-filters").getByRole("button", { name: "Выполнено 0" })).toBeVisible();
+  await page.getByRole("button", { name: "Неактуально 1" }).click();
+  await expect(page.getByTestId("task-card")).toHaveCount(1);
+  await expect(page.getByTestId("task-card")).toContainText("Неактуально");
+  await page.reload(); await expect(page.getByTestId("task-card")).toHaveCount(1);
 });
 
 test("filters change the list and their own counts; deep link survives reload", async ({ page }) => {

@@ -13,6 +13,7 @@ import {
   teacherOfflineSetAttendanceBatch,
 } from "../../application/services/teacher-offline.service.js";
 import { listTeacherStudents } from "../../application/services/teacher-students.service.js";
+import { getTeacherStudentHomework, resolveLegacyHomework } from "../../application/services/teacher-student-homework.service.js";
 import { openTeacherStudentDialog } from "../../application/services/learning-dialog-membership.service.js";
 import { listTeacherGroups } from "../../application/services/teacher-groups.service.js";
 import {
@@ -57,6 +58,25 @@ const readGuards = [authenticate, requirePermission("offline_school.read")];
 const writeGuards = [authenticate, requirePermission("offline_school.write")];
 
 export async function teacherOfflineRoutes(app: FastifyInstance) {
+  app.get("/teachers/me/students/:crmStudentId/homework", {
+    preHandler: [authenticate, requireTeacher, requirePermission("offline_school.read")],
+  }, async request => {
+    const { crmStudentId } = z.object({ crmStudentId: z.string().min(1).max(128) }).parse(request.params);
+    return { data: await getTeacherStudentHomework(request.user!.id, crmStudentId) };
+  });
+
+  app.post("/teachers/me/students/:crmStudentId/homework/:crmClassId/resolve", {
+    preHandler: [authenticate, requireTeacher, requirePermission("offline_school.read"), requirePermission("homework.review")],
+  }, async request => {
+    const params = z.object({ crmStudentId: z.string().min(1).max(128), crmClassId: z.string().min(1).max(128) }).parse(request.params);
+    const body = z.object({
+      decision: z.enum(["accepted", "continue", "obsolete"]),
+      comment: z.string().trim().max(5000).default(""),
+      expectedRevision: z.number().int().nonnegative(), requestKey: z.string().uuid(),
+    }).parse(request.body);
+    return { data: await resolveLegacyHomework({ ...params, ...body, teacherId: request.user!.id }) };
+  });
+
   app.get(
     "/teachers/me/staff-tasks",
     { preHandler: [authenticate, requireTeacher] },

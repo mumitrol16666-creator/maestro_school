@@ -71,6 +71,7 @@ describe("unified task domain", () => {
       waitingReview: 1,
       needsRevision: 0,
       completed: 1,
+      archived: 0,
       bySource: { course: 1, offline: 1, online: 1 },
     });
   });

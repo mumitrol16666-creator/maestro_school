@@ -231,6 +231,7 @@ export async function getStudentSchoolOfflineSummary(appUserId: string) {
   }
 
   const summary = await fetchStudentOfflineSummary(user.crmStudentId);
+  const legacyResolutions = await prisma.legacyHomeworkResolution.findMany({ where: { crmStudentId: user.crmStudentId } });
   const lessonHistory = Array.isArray(summary.lessonHistory)
     ? summary.lessonHistory as OfflineSummaryLesson[]
     : [];
@@ -430,7 +431,13 @@ export async function getStudentSchoolOfflineSummary(appUserId: string) {
 
   return {
     ...summary,
-    lessonHistory: mergedLessonHistory,
+    lessonHistory: mergedLessonHistory.map(lesson => ({
+      ...lesson,
+      legacyResolution: (() => {
+        const resolution = legacyResolutions.find(item => item.crmClassId === lesson.crmClassId);
+        return resolution ? { decision: resolution.decision, comment: resolution.comment, updatedAt: resolution.updatedAt } : null;
+      })(),
+    })),
     monthlyPlan: monthlyPlan
       ? {
           id: monthlyPlan.id,

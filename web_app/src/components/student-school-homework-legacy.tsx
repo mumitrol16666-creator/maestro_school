@@ -9,6 +9,8 @@ import {
 import type { SchoolHomeworkReviewState } from "@/lib/school-homework-state";
 import type { SchoolOfflineLesson } from "@/types/school-offline";
 
+const decisionLabels = { accepted: "Принято преподавателем", continue: "Продолжить работу", obsolete: "Неактуально" };
+
 const homeworkResultLabels = {
   completed: "Выполнено",
   partial: "Выполнено частично",
@@ -85,8 +87,8 @@ export function LegacySchoolHomework({
     ? homeworkResultStyles[lesson.homeworkResult.status]
     : null;
   const needsRevision =
-    lesson.homeworkResult?.status === "partial" ||
-    lesson.homeworkResult?.status === "not_completed";
+    !lesson.legacyResolution && (lesson.homeworkResult?.status === "partial" ||
+    lesson.homeworkResult?.status === "not_completed");
   const revisionComment =
     lesson.homeworkReview?.difficulties?.trim() ||
     lesson.homeworkReview?.notCompletedReason?.trim() ||
@@ -132,10 +134,10 @@ export function LegacySchoolHomework({
           </p>
         ) : null}
         <div className="mt-2 flex flex-wrap items-center gap-2">
-          <HomeworkProgress
+          {lesson.legacyResolution ? <span className="rounded-lg bg-stone-100 px-2 py-1 text-xs font-medium text-stone-700">{decisionLabels[lesson.legacyResolution.decision]}</span> : <HomeworkProgress
             result={lesson.homeworkResult}
             reviewState={reviewState}
-          />
+          />}
           <HomeworkPoints lesson={lesson} />
         </div>
       </div>
@@ -154,7 +156,11 @@ export function LegacySchoolHomework({
             >
               Результат проверки
             </p>
-            {lesson.homeworkResult ? (
+            {lesson.legacyResolution ? <div className="mt-2 text-sm leading-6 text-stone-700">
+              <p className="font-semibold">{decisionLabels[lesson.legacyResolution.decision]}</p>
+              {lesson.legacyResolution.comment && <p className="mt-2 whitespace-pre-wrap break-words">{lesson.legacyResolution.comment}</p>}
+              <p className="mt-2 text-xs text-stone-500">{formatLessonDate(lesson.legacyResolution.updatedAt)}</p>
+            </div> : lesson.homeworkResult ? (
               <>
                 <div className="mt-3 flex items-center justify-between gap-3 text-sm">
                   <span className="font-semibold text-stone-700">

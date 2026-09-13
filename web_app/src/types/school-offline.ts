@@ -1,4 +1,5 @@
 export type SchoolOfflineLesson = {
+  legacyResolution?: { decision: "accepted" | "continue" | "obsolete"; comment: string; updatedAt: string } | null;
   crmClassId: string;
   title: string;
   date: string;

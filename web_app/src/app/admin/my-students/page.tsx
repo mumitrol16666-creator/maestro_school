@@ -537,6 +537,7 @@ function StudentCard({ student, homework }: { student: TeacherStudent; homework:
       ) : null}
 
       <div className="mt-5 flex flex-wrap gap-2 border-t border-stone-200 pt-5">
+        {student.crmStudentId && <Link href={`/admin/my-students/student/${encodeURIComponent(student.crmStudentId)}/tasks`} className="inline-flex min-h-11 items-center gap-2 rounded-full bg-ink px-4 py-2 text-xs font-bold text-white"><ClipboardList size={14} />Задания</Link>}
         {student.crmStudentId ? (
           <Link
             href={`/admin/my-students/student/${encodeURIComponent(student.crmStudentId)}/plan`}
@@ -750,6 +751,7 @@ function GroupCard({ group, homework }: { group: TeacherGroup; homework: Homewor
                       Мой ученик
                     </span>
                   ) : null}
+                  <Link href={`/admin/my-students/student/${encodeURIComponent(student.crmStudentId)}/tasks`} className="inline-flex min-h-11 items-center rounded-lg px-2 text-xs font-bold text-amber-900">Задания →</Link>
                 </div>
               ))}
             </div>

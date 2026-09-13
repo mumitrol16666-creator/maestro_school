@@ -681,6 +681,11 @@ export async function listStudentLearningHomeworkAssignments(studentUserId: stri
     where: { crmStudentId, studentUserId: null },
     data: { studentUserId },
   });
+  return listLearningHomeworkAssignmentsByCrmStudent(crmStudentId);
+}
+
+// Caller must establish student/teacher scope before using a CRM identity.
+export async function listLearningHomeworkAssignmentsByCrmStudent(crmStudentId: string) {
   const recipients = await prisma.learningHomeworkRecipient.findMany({
     where: {
       crmStudentId,

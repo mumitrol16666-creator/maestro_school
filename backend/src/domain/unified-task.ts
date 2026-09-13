@@ -1,11 +1,12 @@
 export type UnifiedTaskSource = "course" | "offline" | "online";
-export type UnifiedTaskStatus = "todo" | "waiting_review" | "needs_revision" | "completed";
-export type UnifiedTaskScope = "active" | "completed" | "all";
+export type UnifiedTaskStatus = "todo" | "waiting_review" | "needs_revision" | "completed" | "archived";
+export type UnifiedTaskScope = "active" | "completed" | "all" | "archived";
 
 export type UnifiedTask = {
   id: string;
   source: UnifiedTaskSource;
   provenance?: "legacy_offline" | "learning_homework_v2";
+  legacyDecision?: "accepted" | "continue" | "obsolete";
   kind: "assignment" | "test";
   title: string;
   descriptionPreview: string;
@@ -42,6 +43,7 @@ export type UnifiedTaskCounts = {
   waitingReview: number;
   needsRevision: number;
   completed: number;
+  archived?: number;
   bySource: Record<UnifiedTaskSource, number>;
 };
 
@@ -116,11 +118,12 @@ export function sortUnifiedTasks(tasks: UnifiedTask[]) {
 
 export function unifiedTaskCounts(tasks: UnifiedTask[]): UnifiedTaskCounts {
   return {
-    totalActive: tasks.filter((task) => task.status !== "completed").length,
+    totalActive: tasks.filter((task) => !["completed", "archived"].includes(task.status)).length,
     actionRequired: tasks.filter((task) => task.actionRequired).length,
     waitingReview: tasks.filter((task) => task.status === "waiting_review").length,
     needsRevision: tasks.filter((task) => task.status === "needs_revision").length,
     completed: tasks.filter((task) => task.status === "completed").length,
+    archived: tasks.filter((task) => task.status === "archived").length,
     bySource: {
       course: tasks.filter((task) => task.source === "course").length,
       offline: tasks.filter((task) => task.source === "offline").length,
@@ -132,5 +135,6 @@ export function unifiedTaskCounts(tasks: UnifiedTask[]): UnifiedTaskCounts {
 export function matchesTaskScope(task: UnifiedTask, scope: UnifiedTaskScope) {
   if (scope === "all") return true;
   if (scope === "completed") return task.status === "completed";
-  return task.status !== "completed";
+  if (scope === "archived") return task.status === "archived";
+  return task.status !== "completed" && task.status !== "archived";
 }

@@ -4,9 +4,9 @@ import { getStudentTasks } from "../../application/services/student-tasks.servic
 import { authenticate, requirePermission, requireStudent } from "../guards/auth.guards.js";
 
 const querySchema = z.object({
-  scope: z.enum(["active", "completed", "all"]).default("active"),
+  scope: z.enum(["active", "completed", "all", "archived"]).default("active"),
   source: z.enum(["course", "offline", "online"]).optional(),
-  status: z.enum(["todo", "waiting_review", "needs_revision", "completed"]).optional(),
+  status: z.enum(["todo", "waiting_review", "needs_revision", "completed", "archived"]).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
 

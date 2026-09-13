@@ -985,6 +985,20 @@ model LearningPlanTopic {
 
 // New school-homework lifecycle. Legacy course homework and offline lesson
 // checks remain separate compatibility sources until their explicit cutover.
+model LegacyHomeworkResolution {
+  id             String   @id @default(uuid()) @db.Uuid
+  crmStudentId   String   @map("crm_student_id") @db.VarChar(128)
+  crmClassId     String   @map("crm_class_id") @db.VarChar(128)
+  decision       String   @db.VarChar(32)
+  comment        String   @default("") @db.Text
+  revision       Int      @default(1)
+  history        Json     @default("[]") @db.JsonB
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([crmStudentId, crmClassId])
+  @@map("legacy_homework_resolutions")
+}
+
 model LearningHomeworkAssignment {
   id             String    @id @default(uuid()) @db.Uuid
   topicId        String    @map("topic_id") @db.Uuid

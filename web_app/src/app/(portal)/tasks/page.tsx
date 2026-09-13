@@ -9,11 +9,12 @@ import { api } from "@/lib/api-client";
 import { isHistoricalTask } from "@/lib/task-presentation";
 import type { UnifiedTaskSource } from "@/types/unified-tasks";
 
-type View = "action" | "waiting" | "completed";
+type View = "action" | "waiting" | "completed" | "archived";
 const views = [
   { key: "action", label: "Нужно сделать" },
   { key: "waiting", label: "На проверке" },
   { key: "completed", label: "Выполнено" },
+  { key: "archived", label: "Неактуально" },
 ] as const;
 const sources: Array<{ key: "all" | UnifiedTaskSource; label: string }> = [
   { key: "all", label: "Все" }, { key: "offline", label: "С преподавателем" },
@@ -26,13 +27,13 @@ function TasksContent() {
   const router = useRouter();
   const rawView = params.get("view");
   const rawSource = params.get("source");
-  const view: View = rawView === "waiting" || rawView === "completed" ? rawView : "action";
+  const view: View = rawView === "waiting" || rawView === "completed" || rawView === "archived" ? rawView : "action";
   const source = rawSource === "course" || rawSource === "offline" || rawSource === "online" ? rawSource : "all";
   const filterKey = `${view}:${source}`;
   const resource = useApiResource(async () => ({
     key: filterKey,
     response: await api.studentTasks({
-      scope: view === "completed" ? "completed" : "active",
+      scope: view === "completed" || view === "archived" ? view : "active",
       status: view === "waiting" ? "waiting_review" : undefined,
       source: source === "all" ? undefined : source, limit: 100,
     }),
@@ -56,7 +57,7 @@ function TasksContent() {
   const items = response?.data.items.filter(task => view !== "action" || task.actionRequired) ?? [];
   const current = items.filter(task => !isHistoricalTask(task));
   const historical = items.filter(isHistoricalTask);
-  const empty = view === "waiting"
+  const empty = view === "archived" ? { title: "Неактуальных заданий нет", description: "Здесь сохраняются задания, которые преподаватель снял с работы." } : view === "waiting"
     ? { title: "Нет заданий на проверке", description: "Здесь появятся отправленные преподавателю работы." }
     : view === "completed"
       ? { title: "Выполненных заданий пока нет", description: "Принятые работы сохранятся здесь." }
@@ -71,11 +72,11 @@ function TasksContent() {
       </header>
 
       <section data-testid="task-state-filters" aria-label="Состояние заданий"
-        className="mb-3 grid grid-cols-3 gap-1 rounded-xl border border-stone-200 bg-white p-1">
-        {views.map(({ key, label }) => {
-          const count = key === "action" ? counts?.actionRequired : key === "waiting" ? counts?.waitingReview : counts?.completed;
+        className="mb-3 flex flex-wrap gap-1 rounded-xl border border-stone-200 bg-white p-1">
+        {views.filter(item => item.key !== "archived" || (counts?.archived ?? 0) > 0 || view === "archived").map(({ key, label }) => {
+          const count = key === "action" ? counts?.actionRequired : key === "waiting" ? counts?.waitingReview : key === "archived" ? counts?.archived ?? 0 : counts?.completed;
           return <button key={key} type="button" aria-pressed={view === key} onClick={() => setFilters({ view: key })}
-            className={`flex min-h-12 min-w-0 flex-wrap items-center justify-center gap-x-2 gap-y-1 rounded-lg px-1.5 py-2 text-xs font-semibold transition-colors sm:px-3 sm:text-sm ${focus} ${view === key ? "bg-ink text-white" : "text-stone-600 hover:bg-stone-50"}`}>
+            className={`flex min-h-12 min-w-0 flex-1 flex-wrap items-center justify-center gap-x-2 gap-y-1 rounded-lg px-1.5 py-2 text-xs font-semibold transition-colors sm:px-3 sm:text-sm ${focus} ${view === key ? "bg-ink text-white" : "text-stone-600 hover:bg-stone-50"}`}>
             <span>{label}</span>
             <span className={`rounded-full px-2 py-0.5 text-xs tabular-nums ${view === key ? "bg-gold text-ink" : "bg-stone-100 text-stone-700"}`}>
               {busy || count == null ? "—" : `${partial ? "≥ " : ""}${count}`}

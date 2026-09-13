@@ -1,11 +1,12 @@
 export type UnifiedTaskSource = "course" | "offline" | "online";
-export type UnifiedTaskStatus = "todo" | "waiting_review" | "needs_revision" | "completed";
-export type UnifiedTaskScope = "active" | "completed" | "all";
+export type UnifiedTaskStatus = "todo" | "waiting_review" | "needs_revision" | "completed" | "archived";
+export type UnifiedTaskScope = "active" | "completed" | "all" | "archived";
 
 export type UnifiedTask = {
   id: string;
   source: UnifiedTaskSource;
   provenance?: "legacy_offline" | "learning_homework_v2";
+  legacyDecision?: "accepted" | "continue" | "obsolete";
   kind: "assignment" | "test";
   title: string;
   descriptionPreview: string;
@@ -35,6 +36,7 @@ export type UnifiedTaskCounts = {
   waitingReview: number;
   needsRevision: number;
   completed: number;
+  archived?: number;
   bySource: Record<UnifiedTaskSource, number>;
 };
 
