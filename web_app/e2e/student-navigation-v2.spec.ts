@@ -60,7 +60,7 @@ test("learning and shop expose compact secondary navigation", async ({ page, req
   await signInAsStudent(request, context);
   await page.goto("/learning");
 
-  await expect(page.getByRole("heading", { name: "Обучение", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Сейчас", exact: true })).toBeVisible();
   const learningNavigation = page.getByTestId("student-learning-navigation");
   await expect(learningNavigation.getByRole("link", { name: "Сейчас" })).toHaveAttribute("aria-current", "page");
   await expect(learningNavigation.getByRole("link", { name: "План" })).toBeVisible();
