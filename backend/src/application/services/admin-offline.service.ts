@@ -7,7 +7,6 @@ import {
   postTeacherMarkNotHeld,
   postTeacherStart,
   postTeacherSubmit,
-  postAdminApproveClass,
   postAdminAttendance,
   postAdminReopenClass,
   postAdminReturnClass,
@@ -41,18 +40,11 @@ import {
   processCrmOutboxEvent,
 } from "./crm-outbox.service.js";
 import {
-  assertCurrentOfflineLessonApprovalForFinalization,
-  getCurrentOfflineLessonApprovalState,
   getCurrentOfflineLessonLearningResultsV2,
-  prepareOfflineLessonApproval,
-  readOfflineLessonApprovedBy,
-  readOfflineLessonLearningResultsV2,
   completeOfflineLessonCorrection,
   reserveOfflineLessonCorrection,
   submitOfflineLessonReportVersion,
 } from "./offline-lesson-report.service.js";
-import { finalizeOfflineLessonApproval } from "./offline-lesson-finalization.service.js";
-import { buildOfflineLessonApprovalSnapshot } from "./offline-lesson-approval-snapshot.js";
 
 function lessonSyncV2Enabled() {
   return productFeatureConfig.flags.lessonSyncV2;
@@ -306,154 +298,6 @@ export async function adminOfflineSetAttendance(
     planTopicUpdates,
   });
   return { crmResult, lessonCheck };
-}
-
-export async function adminOfflineApprove(
-  approvedBy: string,
-  crmClassId: string,
-  payload: {
-    deduct?: boolean;
-    topic?: string;
-    lessonGoals?: string;
-    lessonSummary?: string;
-    homeworkDraft?: string;
-    nextLessonFocus?: string;
-    materials?: Array<{ type?: string; url?: string; title?: string; description?: string | null; mimeType?: string | null }>;
-    teacherComment?: string;
-    trialReport?: Record<string, unknown>;
-    learningResultsV2?: LearningLessonV2ResultsInput;
-  },
-) {
-  const { learningResultsV2, ...crmPayload } = payload;
-  if (lessonSyncV2Enabled()) {
-    await flushCrmOutboxForLesson(crmClassId);
-    const approvalState = await getCurrentOfflineLessonApprovalState(crmClassId);
-    const { report, version } = approvalState;
-    if (!report || !version || report.currentVersion === 0) {
-      throw new BadRequestError(
-        "Отправленная версия отчёта не найдена.",
-        "LESSON_REPORT_NOT_FOUND",
-      );
-    }
-    const expectedVersion = report.currentVersion;
-    const currentLearningResults = readOfflineLessonLearningResultsV2(version.payload);
-    const homeworkApproval = currentLearningResults?.homeworkAssignment
-      ? buildOfflineLessonApprovalSnapshot(version)
-      : undefined;
-    let approvalEvent = approvalState.event;
-    if (report.crmConfirmedAt) {
-      if (approvalEvent && ["pending", "failed"].includes(approvalEvent.status)) {
-        approvalEvent = await processCrmOutboxEvent(approvalEvent.id);
-      }
-      if (approvalEvent?.status === "succeeded") {
-        const responsePayload = approvalEvent.responsePayload;
-        if (responsePayload && typeof responsePayload === "object" && !Array.isArray(responsePayload)) {
-          const response = responsePayload as Record<string, unknown>;
-          if (Object.prototype.hasOwnProperty.call(response, "learningRewards")) {
-            return { ...response, idempotent: true };
-          }
-          await assertCurrentOfflineLessonApprovalForFinalization(crmClassId, expectedVersion);
-          const learningRewards = await finalizeOfflineLessonApproval({
-            crmClassId,
-            approvedBy: readOfflineLessonApprovedBy(version.payload)
-              ?? version.authorUserId
-              ?? approvedBy,
-            learningResultsV2: currentLearningResults,
-            reportVersion: expectedVersion,
-            homeworkApproval,
-          });
-          return { ...response, idempotent: true, learningRewards };
-        }
-      }
-      if (approvalEvent && approvalEvent.status !== "succeeded") {
-        throw new BadRequestError(
-          approvalEvent.lastError
-            ?? "Подтверждение принято CRM, но локальное завершение ещё выполняется.",
-          approvalEvent.status === "conflict" ? "CRM_SYNC_CONFLICT" : "CRM_SYNC_PENDING",
-        );
-      }
-      await assertCurrentOfflineLessonApprovalForFinalization(crmClassId, expectedVersion);
-      const learningRewards = await finalizeOfflineLessonApproval({
-        crmClassId,
-        approvedBy: readOfflineLessonApprovedBy(version.payload)
-          ?? version.authorUserId
-          ?? approvedBy,
-        learningResultsV2: currentLearningResults,
-        reportVersion: expectedVersion,
-        homeworkApproval,
-      });
-      return { crmClassId, status: "completed", idempotent: true, learningRewards };
-    }
-
-    const sync = await getOfflineLessonSyncSummary(crmClassId);
-    if (sync.pendingCount || sync.conflictCount) {
-      throw new BadRequestError(
-        sync.conflictCount
-          ? "Данные урока расходятся с расписанием. Сначала выберите верную версию в журнале."
-          : "Отчёт ещё отправляется. Дождитесь завершения и повторите подтверждение.",
-        sync.conflictCount ? "CRM_SYNC_CONFLICT" : "CRM_SYNC_PENDING",
-      );
-    }
-    const stagedLearningResults = learningResultsV2
-      ?? currentLearningResults
-      ?? { homeworkDecisions: [], topicUpdates: [] };
-    const checks = await prisma.offlineLessonStudentCheck.findMany({
-      where: { crmClassId },
-      select: { crmStudentId: true, attendanceStatus: true },
-    });
-    const presentStudentIds = new Set(checks
-      .filter((check) => ["present", "late"].includes(check.attendanceStatus))
-      .map((check) => check.crmStudentId));
-    const context = await getLearningLessonV2Context(approvedBy, crmClassId);
-    if (context?.enabled) {
-      await validateLearningLessonV2ResultsForSubmission(
-        approvedBy,
-        crmClassId,
-        stagedLearningResults,
-        presentStudentIds,
-        {
-          additionalAllowedTopicIds: learningLessonV2ReferencedTopicIds(
-            currentLearningResults,
-          ),
-        },
-      );
-    }
-
-    const approval = await prepareOfflineLessonApproval({
-      crmClassId,
-      expectedVersion,
-      crmPayload,
-      learningResultsV2: stagedLearningResults,
-      approvedBy,
-    });
-    const delivered = await processCrmOutboxEvent(approval.id);
-    if (!delivered || delivered.status !== "succeeded") {
-      throw new BadRequestError(
-        delivered?.lastError
-          ?? "Подтверждение ещё передаётся в CRM. Повторите через несколько секунд.",
-        delivered?.status === "conflict" ? "CRM_SYNC_CONFLICT" : "CRM_SYNC_PENDING",
-      );
-    }
-    const responsePayload = delivered.responsePayload;
-    if (!responsePayload || typeof responsePayload !== "object" || Array.isArray(responsePayload)) {
-      throw new ConflictError(
-        "CRM подтвердила урок, но сохранённый ответ недоступен для завершения операции.",
-        "LESSON_APPROVAL_RESPONSE_MISSING",
-      );
-    }
-    return responsePayload as Awaited<ReturnType<typeof postAdminApproveClass>> & {
-      learningRewards?: unknown;
-    };
-  }
-
-  const crmResult = await postAdminApproveClass(crmClassId, crmPayload);
-  const lesson = await fetchClassCard(crmClassId) as AdminOfflineLesson;
-  const learningRewards = await finalizeOfflineLessonApproval({
-    crmClassId,
-    approvedBy,
-    lesson,
-  });
-  return { ...crmResult, learningRewards };
 }
 
 export async function adminOfflineReturn(actorUserId: string, crmClassId: string, reason?: string) {

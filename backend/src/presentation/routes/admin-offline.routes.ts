@@ -1,7 +1,7 @@
+import { requireCrmLessonApproval } from "../../domain/offline-lesson-approval-policy.js";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import {
-  adminOfflineApprove,
   adminOfflineMarkNotHeld,
   adminOfflineReopen,
   adminOfflineReturn,
@@ -267,28 +267,7 @@ export async function adminOfflineRoutes(app: FastifyInstance) {
   app.post(
     "/admin/offline-lessons/:crmClassId/approve",
     { preHandler: writeGuards },
-    async (request) => {
-      const { crmClassId } = z.object({ crmClassId: z.string().min(1) }).parse(request.params);
-      const body = z.object({
-        deduct: z.boolean().optional(),
-        topic: z.string().max(5000).optional(),
-        lessonGoals: z.string().max(5000).optional(),
-        lessonSummary: z.string().max(10000).optional(),
-        homeworkDraft: z.string().max(10000).optional(),
-        nextLessonFocus: z.string().max(5000).optional(),
-        teacherComment: z.string().max(5000).optional(),
-        trialReport: z.record(z.string(), z.unknown()).optional(),
-        materials: z.array(z.object({
-          type: z.string().optional(),
-          url: z.string().optional(),
-          title: z.string().optional(),
-          description: z.string().max(2000).nullable().optional(),
-          mimeType: z.string().max(255).nullable().optional(),
-        })).optional(),
-        learningResultsV2: learningLessonResultsSchema.optional(),
-      }).parse(request.body ?? {});
-      return { data: await adminOfflineApprove(request.user!.id, crmClassId, body) };
-    },
+    async () => requireCrmLessonApproval(),
   );
 
   app.post(

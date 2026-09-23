@@ -296,7 +296,7 @@ test("один отчёт сохраняет независимый прогре
   await page.goto(`/admin/offline-lessons/${INDIVIDUAL_LESSON_ID}`);
   await closeNotificationCenter(page);
 
-  await page.getByRole("button", { name: /Стабильный бой восьмыми/ }).click();
+
   await expect(page.getByRole("spinbutton", { name: "Новый процент темы" })).toHaveValue("64");
   await expect(page.getByRole("button", { name: /Чистые переходы аккордов/ })).toHaveCount(0);
   await expect(page.getByLabel("Тема нового домашнего задания")).toHaveValue(homeworkTopicId!);
@@ -304,34 +304,16 @@ test("один отчёт сохраняет независимый прогре
     `option[value="${homeworkTopicId}"]`,
   )).toHaveText("Тема из отправленного отчёта");
 
-  await page.route(
-    `**/api/v1/admin/offline-lessons/${INDIVIDUAL_LESSON_ID}/approve`,
-    async (route) => {
-      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ data: {} }) });
-    },
+  await expect(page.getByRole("button", { name: "Подтвердить урок", exact: true })).toHaveCount(0);
+  await expect(page.getByText("Ожидает подтверждения в CRM", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Открыть расписание CRM" })).toBeVisible();
+  await expect(page.getByRole("spinbutton", { name: "Новый процент темы" })).toBeDisabled();
+  const rejectedApproval = await request.post(
+    `/api/v1/admin/offline-lessons/${INDIVIDUAL_LESSON_ID}/approve`,
+    { headers: { Authorization: `Bearer ${adminSession.token}` }, data: {} },
   );
-  const approveResponsePromise = page.waitForResponse((incoming) => (
-    incoming.request().method() === "POST"
-    && incoming.url().endsWith(`/api/v1/admin/offline-lessons/${INDIVIDUAL_LESSON_ID}/approve`)
-  ));
-  await page.getByRole("button", { name: "Подтвердить урок" }).click();
-  const approveResponse = await approveResponsePromise;
-  expect(approveResponse.ok()).toBe(true);
-  await expect(page.getByText("Урок подтверждён", { exact: true })).toBeVisible();
-  const approved = approveResponse.request().postDataJSON() as {
-    learningResultsV2?: {
-      homeworkAssignment?: { topicId: string; instructions: string };
-      topicUpdates: Array<{ expectedPercent: number | null; toPercent: number }>;
-    };
-  };
-  expect(approved.learningResultsV2?.topicUpdates).toEqual([
-    expect.objectContaining({ expectedPercent: 45, toPercent: 64 }),
-    expect.objectContaining({ expectedPercent: 0, toPercent: 75 }),
-  ]);
-  expect(approved.learningResultsV2?.homeworkAssignment).toEqual({
-    topicId: homeworkTopicId,
-    instructions: homeworkText,
-  });
+  expect(rejectedApproval.status()).toBe(409);
+  expect((await rejectedApproval.json()).error.code).toBe("CRM_APPROVAL_REQUIRED");
 
   const returned = await request.post(
     `/api/v1/admin/offline-lessons/${INDIVIDUAL_LESSON_ID}/return-to-teacher`,

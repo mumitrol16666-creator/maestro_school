@@ -602,7 +602,7 @@ export default function AdminOfflineLessonDetailPage() {
       && (!isAdmin || canActForTeacher),
   );
   const canEditAdminReview = isAdmin && effectiveLessonStatus === "pending_admin_review";
-  const canEditReport = Boolean(canEditTeacherReport || canEditAdminReview);
+  const canEditReport = canEditTeacherReport;
   const allowedLearningReportTopicIds = useMemo(
     () => new Set(learningTopicIdsForReport(learningV2, canEditAdminReview)),
     [canEditAdminReview, learningV2],
@@ -1424,49 +1424,6 @@ export default function AdminOfflineLessonDetailPage() {
     setNotHeldReason("");
   }
 
-  async function handleApprove() {
-    if (
-      requiresLessonReport
-      && isLearningLessonV2
-      && homework.trim()
-      && hasLearningPlanTopics
-      && !hasValidLearningHomeworkTopic
-    ) {
-      setError("Выберите тему, к которой относится новое домашнее задание.");
-      return;
-    }
-    if (requiresLessonReport && unmarkedCount > 0) {
-      setError(`Отметьте посещаемость у всех учеников (осталось: ${unmarkedCount})`);
-      return;
-    }
-    if (requiresLessonReport && homeworkReviewPendingCount > 0) {
-      setError("Зафиксируйте выполнение прошлого домашнего задания");
-      return;
-    }
-    const approved = await runAction("approve", async () => {
-      if (!isNotHeld) await saveStudentChecks();
-      return adminOfflineApi.approve(crmClassId, {
-        deduct: !isNotHeld,
-        topic: topic.trim() || undefined,
-        lessonGoals: lessonGoals.trim() || undefined,
-        lessonSummary: lessonSummary.trim() || undefined,
-        homeworkDraft: homework.trim() || undefined,
-        nextLessonFocus: nextLessonFocus.trim() || undefined,
-        teacherComment: comment.trim() || undefined,
-        trialReport: isTrialLesson
-          ? { ...trialReport, capturedAt: trialReport.capturedAt ?? new Date().toISOString() }
-          : undefined,
-        learningResultsV2: isNotHeld ? undefined : buildLearningResultsV2(),
-        materials: materialsText
-          .split("\n")
-          .map((url) => url.trim())
-          .filter(Boolean)
-          .map((url) => materialEntries.find((item) => item.url === url) ?? ({ type: "link", url, title: url })),
-      });
-    });
-    if (approved) clearOfflineLessonDraft();
-  }
-
   function askReason(message: string) {
     if (!window.confirm(message)) return null;
     const reason = window.prompt("Коротко объясните причину:")?.trim();
@@ -1657,7 +1614,7 @@ export default function AdminOfflineLessonDetailPage() {
         <div className="mb-6 rounded-[24px] border border-amber-200 bg-amber-50 p-5">
           <p className="text-sm font-bold text-amber-950">Преподаватель отметил отсутствие ученика</p>
           <p className="mt-2 text-sm leading-6 text-amber-900/75">
-            Обычный отчёт по уроку не требуется. Проверьте посещаемость и подтвердите отметку.
+            Обычный отчёт по уроку не требуется. Отметку проверяет и подтверждает администратор в CRM.
           </p>
         </div>
       ) : null}
@@ -1746,7 +1703,7 @@ export default function AdminOfflineLessonDetailPage() {
                 : isTrialLesson
                 ? "Заполните диагностическую анкету пробного. Ответы помогут подготовить анализ и план обучения."
                 : isAdmin
-                ? "Проверьте отчёт преподавателя, при необходимости отредактируйте и подтвердите урок."
+                ? "Подтверждение отчёта и списание выполняются в CRM. Здесь отображаются данные урока и результат проверки."
                 : "Заполните тему, итог и домашнее задание. Ученик увидит материалы после подтверждения администратором."}
             </p>
 
@@ -2061,22 +2018,12 @@ export default function AdminOfflineLessonDetailPage() {
           ) : null}
 
           {canApprove ? (
-            <button
-              disabled={
-                busy != null
-                  || (requiresLessonReport && (
-                    unmarkedCount > 0
-                      || homeworkReviewPendingCount > 0
-                      || (isLearningLessonV2 && Boolean(homework.trim()) && hasLearningPlanTopics && !hasValidLearningHomeworkTopic)
-                      || (isTrialLesson ? !isTrialReportReady : (!topic.trim() || !lessonSummary.trim()))
-                  ))
-              }
-              onClick={() => void handleApprove()}
-              className="flex w-full items-center justify-center gap-2 rounded-[24px] bg-emerald-700 px-5 py-4 text-sm font-bold text-white disabled:opacity-50"
-            >
-              {busy === "approve" ? <LoaderCircle className="animate-spin" size={16} /> : <ShieldCheck size={16} />}
-              {isSubmittedAbsence ? "Подтвердить отсутствие" : "Подтвердить урок"}
-            </button>
+            <div className="rounded-[24px] border border-emerald-200 bg-emerald-50 p-5 text-sm text-emerald-950">
+              <p className="font-bold">Ожидает подтверждения в CRM</p>
+              <p className="mt-2">Администратор проверяет отчёт, тариф и сумму списания в CRM. После подтверждения здесь появится итоговый статус.</p>
+              <a href={`${(process.env.NEXT_PUBLIC_CRM_API_URL ?? "https://app-maestro-school.duckdns.org").replace(/\/$/, "")}/admin.html#schedule`}
+                target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex min-h-11 items-center font-bold underline">Открыть расписание CRM</a>
+            </div>
           ) : null}
 
           {canApprove ? (
@@ -2257,10 +2204,10 @@ export default function AdminOfflineLessonDetailPage() {
               <p className="mt-2 text-sm text-amber-800/80">
                 {isSubmittedAbsence
                   ? isAdmin
-                    ? "Проверьте отметку посещаемости. Тема, итог и домашнее задание не требуются."
+                    ? "Подтвердите отметку посещаемости в CRM. Тема, итог и домашнее задание не требуются."
                     : "Администратор получил отметку об отсутствии. Отчёт по уроку заполнять не нужно."
                   : isAdmin
-                  ? "Проверьте посещаемость и результат прошлого ДЗ, затем подтвердите урок."
+                  ? "Отчёт передан администратору. Подтверждение урока и списание выполняются в CRM."
                   : "Посещаемость и проверка прошлого ДЗ сохранены. Администратор подтвердит урок и опубликует новое задание."}
               </p>
             </div>

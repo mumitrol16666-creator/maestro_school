@@ -965,3 +965,39 @@ test("a stale approval lease is recovered and safely finalized", async () => {
   assert.equal(deliveryCalls, 1);
   assert.equal(finalizationCalls, 1);
 });
+
+test("an old queued approval waits for CRM without posting or automatic retries", async t => {
+  const event = outboxEvent("admin_approve");
+  const { database, reportState } = createOutboxDatabase(event, undefined, { crmDeliveredAt: new Date() });
+  let writes = 0;
+  let conflicts = 0;
+  t.mock.method(globalThis, "fetch", async () => { writes += 1; throw new Error("No approval request is allowed"); });
+  database.crmSyncConflict.create = async () => { conflicts += 1; };
+  const deps = { database, readApprovalRetryStatus: async () => ({ status: "pending_admin_review" }), now: () => new Date() } as any;
+  const result = await processCrmOutboxEvent(event.id, deps);
+  assert.equal(result?.status, "awaiting_crm");
+  assert.equal(result?.nextAttemptAt, null);
+  assert.equal(reportState.status, "pending_review");
+  assert.equal(reportState.crmConfirmedAt, null);
+  assert.equal(writes, 0);
+  assert.equal(conflicts, 0);
+  await processCrmOutboxEvent(event.id, deps);
+  assert.equal(event.attempts, 1, "waiting approval must not be automatically retried");
+});
+
+test("a waiting legacy approval resumes only after a fresh confirmation observed in CRM", async () => {
+  const fixture = createObservedApprovalDatabase();
+  const event = outboxEvent("admin_approve");
+  event.idempotencyKey = "lesson-report:crm-class-1:v1:approve";
+  event.status = "awaiting_crm";
+  fixture.setEvent(event);
+  let processed = 0;
+  const result = await reconcileObservedCrmApproval("crm-class-1", { status: "completed", reviewedAt: "2026-09-06T04:14:45.271Z" }, {
+    database: fixture.database,
+    processEvent: async () => { processed += 1; return fixture.getEvent() as any; },
+  });
+  assert.equal(result.state, "retrying");
+  assert.equal(fixture.getEvent()?.status, "pending");
+  assert.equal(fixture.getEvent()?.payload.approvalSource, "crm_observed");
+  assert.equal(processed, 1);
+});

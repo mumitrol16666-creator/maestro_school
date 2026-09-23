@@ -14,13 +14,6 @@ export type PendingReviewAgenda = {
   classes: TeacherOfflineClass[];
 };
 
-export type ApproveOfflineLessonResult = {
-  crmClassId: string;
-  status: string;
-  class: TeacherOfflineClass;
-  deductions: Array<{ studentId: string; deducted?: boolean }>;
-};
-
 export type CrmSyncJournal = {
   events: Array<{
     id: string;
@@ -141,25 +134,7 @@ export const adminOfflineApi = {
         }),
       },
     ),
-  approve: (
-    crmClassId: string,
-    body: {
-      deduct?: boolean;
-      topic?: string;
-      lessonGoals?: string;
-      lessonSummary?: string;
-      homeworkDraft?: string;
-      nextLessonFocus?: string;
-      teacherComment?: string;
-      materials?: Array<{ type?: string; url?: string; title?: string; description?: string | null; mimeType?: string | null }>;
-      trialReport?: TrialLessonReport;
-      learningResultsV2?: LearningLessonV2ResultsInput;
-    },
-  ) =>
-    apiRequest<ApproveOfflineLessonResult>(
-      `/admin/offline-lessons/${encodeURIComponent(crmClassId)}/approve`,
-      { method: "POST", body: JSON.stringify(body) },
-    ),
+
   returnToTeacher: (crmClassId: string, reason: string) =>
     apiRequest<Record<string, unknown>>(
       `/admin/offline-lessons/${encodeURIComponent(crmClassId)}/return-to-teacher`,

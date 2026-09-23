@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../infrastructure/database/prisma.js";
 import { AppError, BadRequestError, ConflictError } from "../../domain/errors.js";
+import { CRM_APPROVAL_REQUIRED } from "../../domain/offline-lesson-approval-policy.js";
 import {
   fetchClassCard,
   postAdminApproveClass,
@@ -341,7 +342,7 @@ export async function reconcileObservedCrmApproval(
 
       let reconciledEvent = existing;
       if (!isObservedCrmApprovalPayload(payload)) {
-        if (!["pending", "failed"].includes(existing.status)) {
+        if (!["pending", "failed", "awaiting_crm"].includes(existing.status)) {
           return { state: "explicit_approval_preserved" as const, event: existing, process: false };
         }
         const observedPayload: DeliveryPayload = {
@@ -354,7 +355,10 @@ export async function reconcileObservedCrmApproval(
             id: existing.id,
             status: existing.status,
           },
-          data: { payload: inputJson(observedPayload) },
+          data: {
+            payload: inputJson(observedPayload),
+            ...(existing.status === "awaiting_crm" ? { status: "pending", nextAttemptAt: null, lastError: null } : {}),
+          },
         });
         if (converted.count !== 1) {
           return { state: "state_changed" as const, event: existing, process: false };
@@ -362,6 +366,7 @@ export async function reconcileObservedCrmApproval(
         reconciledEvent = {
           ...existing,
           payload: observedPayload as unknown as Prisma.JsonValue,
+          ...(existing.status === "awaiting_crm" ? { status: "pending", nextAttemptAt: null, lastError: null } : {}),
         };
       }
 
@@ -1047,7 +1052,9 @@ async function markFailed(event: {
   attempts: number;
 }, error: unknown, claimToken: Date, database: typeof prisma = prisma) {
   const message = errorMessage(error);
-  const shouldRetry = retryable(error);
+  const awaitingCrm = event.eventType === "admin_approve" && error instanceof AppError
+    && error.code === CRM_APPROVAL_REQUIRED;
+  const shouldRetry = !awaitingCrm && retryable(error);
   const payload = event.payload as unknown as DeliveryPayload;
 
   const ownsClaim = await database.$transaction(async (tx) => {
@@ -1058,7 +1065,7 @@ async function markFailed(event: {
         processingAt: claimToken,
       },
       data: {
-        status: shouldRetry ? "failed" : "conflict",
+        status: awaitingCrm ? "awaiting_crm" : shouldRetry ? "failed" : "conflict",
         lastError: message,
         nextAttemptAt: shouldRetry ? nextAttempt(event.attempts) : null,
         processingAt: null,
@@ -1092,7 +1099,7 @@ async function markFailed(event: {
             crmConfirmedAt: null,
           },
           data: {
-            status: event.eventType === "admin_approve" && shouldRetry
+            status: awaitingCrm ? "pending_review" : event.eventType === "admin_approve" && shouldRetry
               ? "approving"
               : shouldRetry
                 ? "pending_sync"
@@ -1102,7 +1109,7 @@ async function markFailed(event: {
       }
     }
 
-    if (!shouldRetry) {
+    if (!shouldRetry && !awaitingCrm) {
       const existing = await tx.crmSyncConflict.findFirst({
         where: { outboxEventId: event.id, status: { not: "resolved" } },
       });
@@ -1126,7 +1133,7 @@ async function markFailed(event: {
     return true;
   });
   if (!ownsClaim) return false;
-  if (curatorWorkspaceV2Enabled()) {
+  if (!awaitingCrm && curatorWorkspaceV2Enabled()) {
     await upsertAdminJournalEntry({
       sourceKey: `crm-sync:${event.id}`,
       type: "crm_sync",

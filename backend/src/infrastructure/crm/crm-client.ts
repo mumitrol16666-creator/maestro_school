@@ -1,3 +1,4 @@
+import { requireCrmLessonApproval } from "../../domain/offline-lesson-approval-policy.js";
 import { env } from "../../config/env.js";
 import { AppError } from "../../domain/errors.js";
 
@@ -598,7 +599,6 @@ export async function postAdminAttendance(
 export async function postAdminApproveClass(
   crmClassId: string,
   payload: {
-    deduct?: boolean;
     topic?: string;
     lessonGoals?: string;
     lessonSummary?: string;
@@ -609,17 +609,14 @@ export async function postAdminApproveClass(
     trialReport?: TrialLessonReportPayload;
   },
   idempotencyKey?: string,
-) {
-  return crmPost<{
-    crmClassId: string;
-    status: string;
-    class: Record<string, unknown>;
-    deductions: Array<{ studentId: string; deducted?: boolean }>;
-  }>(
-    `/api/integration/v1/classes/${encodeURIComponent(crmClassId)}/approve`,
-    payload,
-    idempotencyKey,
-  );
+): Promise<{
+  crmClassId: string;
+  status: string;
+  class: Record<string, unknown>;
+  deductions: Array<{ studentId: string; deducted?: boolean }>;
+}> {
+  // Also blocks old persisted approvals, even before the CRM update is deployed.
+  return requireCrmLessonApproval();
 }
 
 export async function postAdminReturnClass(crmClassId: string, reason?: string) {

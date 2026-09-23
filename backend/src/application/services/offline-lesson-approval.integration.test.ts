@@ -206,3 +206,40 @@ integrationTest(
     assert.equal(readOfflineLessonApprovedBy(replayedVersion.payload), eventPayload.approvedBy);
   },
 );
+
+integrationTest("CRM-owned confirmation updates the Platform report without another charge request", async t => {
+  const originalSecret = process.env.INTEGRATION_SERVICE_SECRET;
+  process.env.INTEGRATION_SERVICE_SECRET = "local-approval-integration-test-secret";
+  t.after(() => {
+    if (originalSecret === undefined) delete process.env.INTEGRATION_SERVICE_SECRET;
+    else process.env.INTEGRATION_SERVICE_SECRET = originalSecret;
+  });
+  const { processCrmOutboxEvent, reconcileObservedCrmApproval } = await import("./crm-outbox.service.js");
+  const fixture = await createApprovalFixture();
+  t.after(() => removeApprovalFixture(fixture));
+  const event = await prepareOfflineLessonApproval({ crmClassId: fixture.crmClassId, expectedVersion: 1,
+    approvedBy: randomUUID(), learningResultsV2: firstResults, crmPayload: { topic: "Old queued approval" } });
+  await prisma.crmOutboxEvent.update({ where: { id: event.id }, data: { status: "awaiting_crm" } });
+  await prisma.offlineLessonReport.update({ where: { id: fixture.report.id }, data: { status: "pending_review" } });
+  const lesson = { crmClassId: fixture.crmClassId, status: "completed", reviewedAt: new Date(Date.now() + 1000).toISOString() };
+  let reads = 0;
+  let finalizations = 0;
+  t.mock.method(globalThis, "fetch", async (_url: string | URL | Request, init?: RequestInit) => {
+    assert.equal(init?.method ?? "GET", "GET", "confirmation must never write back to CRM");
+    reads += 1;
+    return new Response(JSON.stringify({ success: true, data: lesson }), { status: 200 });
+  });
+  const processEvent = (id: string) => processCrmOutboxEvent(id, {
+    finalizeApproval: async () => { finalizations += 1; return { fixture: true } as any; },
+  });
+  await reconcileObservedCrmApproval(fixture.crmClassId, lesson, { processEvent });
+  const report = await prisma.offlineLessonReport.findUniqueOrThrow({ where: { id: fixture.report.id } });
+  const delivered = await prisma.crmOutboxEvent.findUniqueOrThrow({ where: { id: event.id } });
+  assert.equal(report.status, "confirmed");
+  assert.equal(report.confirmedVersion, 1);
+  assert.equal(delivered.status, "succeeded");
+  assert.equal((delivered.payload as Record<string, unknown>).approvalSource, "crm_observed");
+  await reconcileObservedCrmApproval(fixture.crmClassId, lesson, { processEvent });
+  assert.equal(reads, 1);
+  assert.equal(finalizations, 1);
+});
