@@ -29,7 +29,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
 import { SuccessModal } from "@/components/success-modal";
@@ -487,6 +487,7 @@ function readOfflineLessonDraft(
 
 export default function AdminOfflineLessonDetailPage() {
   const params = useParams<{ crmClassId: string }>();
+  const router = useRouter();
   const crmClassId = params.crmClassId;
   const { user } = useAuth();
   const isAdmin = isOfflineCoordinatorRole(user?.role);
@@ -1403,6 +1404,7 @@ export default function AdminOfflineLessonDetailPage() {
       if (submitted) {
         clearOfflineLessonDraft();
         setSubmitConfirmationOpen(false);
+        if (!isAdmin) router.replace("/admin/offline-lessons");
       }
     } finally {
       submissionLock.current = false;
