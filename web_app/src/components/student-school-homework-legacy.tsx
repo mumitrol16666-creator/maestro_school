@@ -63,7 +63,7 @@ function HomeworkPoints({ lesson }: { lesson: SchoolOfflineLesson }) {
   if (lesson.lessonPointsAwarded == null) return null;
 
   return (
-    <span className="inline-flex items-center gap-1 rounded-lg bg-violet-50 px-2 py-1 text-xs text-violet-800">
+    <span className="inline-flex items-center gap-1 rounded-lg bg-amber-50 px-2 py-1 text-xs text-amber-800">
       <span className="font-semibold">
         {lesson.lessonPointsAwarded > 0 ? "+" : ""}
         {lesson.lessonPointsAwarded}

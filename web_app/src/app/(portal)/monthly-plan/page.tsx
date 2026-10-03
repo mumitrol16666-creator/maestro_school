@@ -81,7 +81,7 @@ export default function MonthlyPlanPage() {
           <Link href="/dashboard" className="inline-flex items-center gap-2 text-sm font-bold text-stone-500 hover:text-ink">
             <ArrowLeft size={16} /> Главная
           </Link>
-          <p className="mt-6 text-xs font-black uppercase tracking-[0.18em] text-gold">Учебный маршрут</p>
+          <p className="mt-6 text-xs font-black uppercase tracking-[0.18em] text-gold-ink">Учебный маршрут</p>
           <h1 className="font-display mt-2 text-4xl leading-tight sm:text-5xl">
             План на {monthTitle(month)}
           </h1>

@@ -170,7 +170,7 @@ export function StudentWorkspaceContextNavigation() {
                       active ? "bg-amber-50 text-amber-950" : "text-stone-600 hover:bg-stone-50 hover:text-ink"
                     }`}
                   >
-                    <Icon size={17} className="shrink-0 text-gold" />
+                    <Icon size={17} className="shrink-0 text-gold-ink" />
                     {label}
                   </Link>
                 );

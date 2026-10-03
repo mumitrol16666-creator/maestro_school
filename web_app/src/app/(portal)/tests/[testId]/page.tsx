@@ -209,7 +209,7 @@ export default function PreparedTestPage() {
               <p className="mt-1 flex items-center gap-2 font-display text-3xl">
                 {completed.passed ? (
                   completed.xpAwarded > 0
-                    ? <><Flame size={22} className="text-gold" /> +{completed.xpAwarded} XP</>
+                    ? <><Flame size={22} className="text-gold-ink" /> +{completed.xpAwarded} XP</>
                     : <span className="text-xl">
                         {completed.xpStatus === "weekly_limit"
                           ? "Лимит недели"
@@ -332,7 +332,7 @@ export default function PreparedTestPage() {
 
           <fieldset className="rounded-[30px] border border-stone-200 bg-paper p-5 shadow-soft sm:p-8">
             <legend className="sr-only">Вопрос {currentQuestion + 1}</legend>
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-gold">
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-gold-ink">
               Выберите один ответ
             </p>
             <h2 className="mt-3 font-display text-2xl leading-tight sm:text-3xl">{question.prompt}</h2>

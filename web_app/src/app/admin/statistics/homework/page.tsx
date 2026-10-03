@@ -103,7 +103,7 @@ export default function HomeworkStatisticsPage() {
       <section className="mt-9 grid gap-8 xl:grid-cols-2">
         <div className="min-w-0">
           <div className="flex items-center gap-3">
-            <BookOpenCheck size={19} className="text-gold" />
+            <BookOpenCheck size={19} className="text-gold-ink" />
             <div>
               <h2 className="font-display text-2xl">По направлениям</h2>
               <p className="mt-1 text-xs text-stone-500">Можно выбрать направление и раскрыть состав ниже.</p>
@@ -134,7 +134,7 @@ export default function HomeworkStatisticsPage() {
 
         <div className="min-w-0">
           <div className="flex items-center gap-3">
-            <UsersRound size={19} className="text-gold" />
+            <UsersRound size={19} className="text-gold-ink" />
             <div>
               <h2 className="font-display text-2xl">Групповые задания</h2>
               <p className="mt-1 text-xs text-stone-500">Одно общее ДЗ учитывается отдельно для каждого участника.</p>
@@ -160,7 +160,7 @@ export default function HomeworkStatisticsPage() {
       <section className="mt-10">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-gold">По ученикам</p>
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-gold-ink">По ученикам</p>
             <h2 className="font-display mt-2 text-3xl">Результаты ДЗ</h2>
             <p className="mt-2 text-sm text-stone-500">{data.students.total} учеников с назначенными заданиями.</p>
           </div>
@@ -265,7 +265,7 @@ function SummaryMetric({
 }) {
   return (
     <div className="min-h-32 rounded-lg border border-stone-200 bg-white p-4 shadow-sm sm:p-5">
-      <Icon size={19} className="text-gold" />
+      <Icon size={19} className="text-gold-ink" />
       <p className={`font-display mt-4 text-3xl tabular-nums ${tone}`}>{value}</p>
       <p className="mt-1 text-xs font-black text-stone-600">{label}</p>
     </div>

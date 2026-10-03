@@ -170,7 +170,7 @@ export default function AdminRewardsPage() {
       <section className="rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-gold">Обмен Coins</p>
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-gold-ink">Обмен Coins</p>
             <h2 className="font-display mt-2 text-3xl">Заявки учеников</h2>
           </div>
           <div className="flex rounded-xl border border-stone-200 bg-stone-50 p-1">
@@ -272,14 +272,14 @@ export default function AdminRewardsPage() {
       <div className="mt-7 grid gap-6 xl:grid-cols-[1fr_390px]">
         <section>
           <div className="mb-4">
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-gold">Витрина</p>
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-gold-ink">Витрина</p>
             <h2 className="font-display mt-2 text-3xl">Каталог наград</h2>
           </div>
           <div className="space-y-3">
             {resource.data.catalog.map((item) => (
               <article key={item.id} className="rounded-[24px] border border-stone-200 bg-paper p-5 shadow-soft">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-                  <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl ${item.isActive ? "bg-violet-50 text-violet-700" : "bg-stone-100 text-stone-400"}`}>
+                  <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl ${item.isActive ? "bg-amber-50 text-amber-700" : "bg-stone-100 text-stone-400"}`}>
                     <Gift size={20} />
                   </span>
                   <div className="min-w-0 flex-1">
@@ -287,7 +287,7 @@ export default function AdminRewardsPage() {
                       <h3 className="font-display text-xl">{item.title}</h3>
                       {!item.isActive ? <span className="rounded-full bg-stone-100 px-2 py-1 text-[10px] font-bold text-stone-500">Скрыто</span> : null}
                     </div>
-                    <p className="mt-1 text-xs font-bold text-gold">
+                    <p className="mt-1 text-xs font-bold text-gold-ink">
                       {item.costCoins} Coins · {item.stock == null ? "без лимита" : `остаток ${item.stock}`} · заявок {item._count?.redemptions ?? 0}
                     </p>
                     <p className="mt-2 line-clamp-2 text-sm text-stone-500">{item.description}</p>
@@ -302,7 +302,7 @@ export default function AdminRewardsPage() {
         </section>
 
         <form onSubmit={save} className="h-fit rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft">
-          <p className="text-xs font-black uppercase tracking-[0.18em] text-gold">
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-gold-ink">
             {editing ? "Редактирование" : "Новая награда"}
           </p>
           <div className="mt-5 space-y-4">

@@ -126,7 +126,7 @@ export function CommercialShop({ onCoinsChanged }: { onCoinsChanged?: () => Prom
     <section aria-labelledby="commercial-shop-title">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-xs font-black uppercase tracking-[0.18em] text-gold">Товары Maestro</p>
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-gold-ink">Товары Maestro</p>
           <h2 id="commercial-shop-title" className="font-display mt-2 text-3xl">Инструменты и аксессуары</h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-500">
             У каждого товара свой лимит Coins. Остаток оплачивается при получении в школе.
@@ -263,7 +263,7 @@ export function CommercialShop({ onCoinsChanged }: { onCoinsChanged?: () => Prom
           <section ref={checkoutRef} role="dialog" aria-modal="true" aria-labelledby="shop-checkout-title" tabIndex={-1} className="max-h-[92dvh] w-full overflow-y-auto rounded-t-2xl bg-paper p-5 shadow-2xl sm:max-w-xl sm:rounded-lg sm:p-7">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-xs font-black uppercase tracking-[0.16em] text-gold">Оформление</p>
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-gold-ink">Оформление</p>
                 <h3 id="shop-checkout-title" className="font-display mt-2 text-3xl">Проверить заказ</h3>
               </div>
               <button type="button" onClick={() => setCheckoutOpen(false)} disabled={submitting} className="grid h-10 w-10 place-items-center rounded-lg border border-stone-200" aria-label="Закрыть"><X size={18} /></button>

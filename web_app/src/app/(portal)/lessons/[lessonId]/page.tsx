@@ -194,7 +194,7 @@ export default function LessonPage() {
           <div className="w-full max-w-xl rounded-[32px] border border-white/10 bg-paper p-6 shadow-soft sm:p-8">
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
-                <p className="text-xs font-bold uppercase tracking-[0.2em] text-gold">Урок готов</p>
+                <p className="text-xs font-bold uppercase tracking-[0.2em] text-gold-ink">Урок готов</p>
                 <h2 className="font-display mt-3 text-3xl leading-tight text-ink sm:text-4xl">{lesson.title}</h2>
               </div>
               <StatusBadge status={lesson.status} />
@@ -240,7 +240,7 @@ export default function LessonPage() {
       <div className="grid gap-7 xl:grid-cols-[1fr_360px]">
         <div>
           <div className="mb-6 flex flex-wrap items-center gap-3">
-            <span className="text-xs font-bold uppercase tracking-[0.2em] text-gold">Урок {lesson.order}</span>
+            <span className="text-xs font-bold uppercase tracking-[0.2em] text-gold-ink">Урок {lesson.order}</span>
             <StatusBadge status={lesson.status} />
           </div>
 
@@ -290,7 +290,7 @@ export default function LessonPage() {
                       </span>
                     ) : null}
                     <span className="flex items-center gap-4">
-                      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-stone-100 text-gold">
+                      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-stone-100 text-gold-ink">
                         {materialIcon(material.type)}
                       </span>
                       <span className="min-w-0 flex-1">
@@ -430,7 +430,7 @@ export default function LessonPage() {
         <aside className="space-y-5">
           <div className="rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft">
             <p className="text-xs font-bold uppercase tracking-[0.16em] text-stone-400">Статус урока</p>
-            <span className="mt-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-50 text-gold">
+            <span className="mt-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-50 text-gold-ink">
               <Sparkles size={21} />
             </span>
             <h3 className="font-display mt-5 text-2xl">{lessonStatusLabels[lesson.status]}</h3>
@@ -466,10 +466,10 @@ export default function LessonPage() {
               className="card-hover flex items-center justify-between rounded-[28px] border border-stone-200 bg-paper p-5 shadow-soft"
             >
               <div>
-                <p className="text-xs font-bold uppercase tracking-wider text-gold">Следующий урок</p>
+                <p className="text-xs font-bold uppercase tracking-wider text-gold-ink">Следующий урок</p>
                 <p className="font-display mt-2 text-xl">{nextLesson.title}</p>
               </div>
-              <ArrowRight size={18} className="text-gold" />
+              <ArrowRight size={18} className="text-gold-ink" />
             </Link>
           )}
         </aside>

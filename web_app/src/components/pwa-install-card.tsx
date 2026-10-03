@@ -20,11 +20,11 @@ export function PwaInstallCard() {
   return (
     <div className="rounded-[30px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
       <div className="flex items-start gap-4">
-        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-ink text-gold">
+        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-ink text-gold-ink">
           <Smartphone size={20} />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold">Установка из браузера</p>
+          <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold-ink">Установка из браузера</p>
           <h3 className="font-display mt-2 text-3xl">Добавить сайт на главный экран</h3>
           <p className="mt-3 text-sm leading-6 text-stone-500">
             Иконка Maestro на экране телефона — открывается сразу, как обычное приложение.

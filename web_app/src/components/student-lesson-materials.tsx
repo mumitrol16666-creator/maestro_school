@@ -109,7 +109,7 @@ export function LessonMaterialItems({
               }}
               className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-stone-200 bg-white px-4 py-2 text-xs font-bold text-ink shadow-xs transition hover:border-amber-300 hover:bg-amber-50"
             >
-              <Download size={14} className="text-gold" />
+              <Download size={14} className="text-gold-ink" />
               <span>{isFile ? "Скачать файл" : "Открыть материал"}</span>
             </button>
           </div>

@@ -52,7 +52,7 @@ export default function AdminStudentsPage() {
             href={`/admin/students/${student.id}`}
             className="card-hover flex items-center gap-4 rounded-[24px] border border-stone-200 bg-paper p-5 shadow-soft"
           >
-            <span className="grid h-12 w-12 place-items-center rounded-2xl bg-amber-50 text-gold">
+            <span className="grid h-12 w-12 place-items-center rounded-2xl bg-amber-50 text-gold-ink">
               <Users size={20} />
             </span>
             <div className="min-w-0 flex-1">
@@ -63,7 +63,7 @@ export default function AdminStudentsPage() {
                 {student.points} баллов · {student.coins} Coins · {student.completedLessons} уроков
               </p>
             </div>
-            <ArrowRight size={18} className="text-gold" />
+            <ArrowRight size={18} className="text-gold-ink" />
           </Link>
         ))}
       </div>

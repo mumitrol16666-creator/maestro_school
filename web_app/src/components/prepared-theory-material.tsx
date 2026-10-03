@@ -25,7 +25,7 @@ export function PreparedTheoryMaterialView({
           <p className="text-xs font-black uppercase tracking-[0.18em]">Maestro Music School · Теория гитары</p>
           <div className="my-4 h-px bg-stone-300" />
         </div>
-        <div className="flex flex-wrap items-center gap-3 text-xs font-bold uppercase tracking-[0.14em] text-gold print:text-stone-600">
+        <div className="flex flex-wrap items-center gap-3 text-xs font-bold uppercase tracking-[0.14em] text-gold-ink print:text-stone-600">
           <span className="inline-flex items-center gap-2"><BookOpen size={16} /> Урок перед тестом</span>
           <span className="inline-flex items-center gap-1.5"><Clock3 size={15} /> {material.readingMinutes} мин</span>
         </div>
@@ -39,7 +39,7 @@ export function PreparedTheoryMaterialView({
         {material.sections.map((section, index) => (
           <section key={section.title} className="break-inside-avoid">
             <div className="flex items-start gap-4">
-              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-amber-50 text-sm font-black text-gold print:border print:border-stone-300 print:bg-white print:text-black">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-amber-50 text-sm font-black text-gold-ink print:border print:border-stone-300 print:bg-white print:text-black">
                 {index + 1}
               </span>
               <div className="min-w-0 flex-1">
@@ -68,7 +68,7 @@ export function PreparedTheoryMaterialView({
               <Lightbulb size={18} /> Главное запомнить
             </h3>
             <ul className="mt-4 space-y-3 text-sm leading-6 text-stone-700">
-              {material.remember.map((item) => <li key={item} className="flex gap-2"><span className="font-black text-gold">✓</span><span>{item}</span></li>)}
+              {material.remember.map((item) => <li key={item} className="flex gap-2"><span className="font-black text-gold-ink">✓</span><span>{item}</span></li>)}
             </ul>
           </section>
           <section className="break-inside-avoid rounded-[24px] border border-emerald-200 bg-emerald-50 p-5 print:bg-white">

@@ -171,7 +171,7 @@ function ActionDialog({
       <section role="dialog" aria-modal="true" aria-labelledby="dialog-action-title" className="w-full max-w-md overflow-hidden rounded-2xl border border-white/70 bg-white shadow-2xl">
         <header className="flex items-start justify-between gap-4 border-b border-stone-200 px-5 py-4">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gold">Диалог Maestro</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gold-ink">Диалог Maestro</p>
             <h2 id="dialog-action-title" className="mt-1 text-xl font-black text-ink">{action.title}</h2>
           </div>
           <button type="button" onClick={onClose} disabled={busy} className="grid h-9 w-9 place-items-center rounded-lg border border-stone-200 text-stone-500" aria-label="Закрыть">
@@ -587,7 +587,7 @@ export function LearningDialogMailbox({ role, className }: { role: MailboxRole; 
             ) : null}
 
             {loading ? (
-              <div className="grid flex-1 place-items-center"><LoaderCircle size={24} className="animate-spin text-gold" /></div>
+              <div className="grid flex-1 place-items-center"><LoaderCircle size={24} className="animate-spin text-gold-ink" /></div>
             ) : filtered.length ? (
               <div data-testid="learning-dialog-list" className="min-h-0 flex-1 divide-y divide-stone-100 overflow-y-auto overscroll-contain">
                 {filtered.map((conversation) => {
@@ -633,7 +633,7 @@ export function LearningDialogMailbox({ role, className }: { role: MailboxRole; 
 
           <div className={`${active || threadLoading ? "flex" : "hidden md:flex"} h-full min-h-0 min-w-0 flex-col overflow-hidden bg-stone-50/60`}>
             {threadLoading && !active ? (
-              <div className="grid flex-1 place-items-center"><LoaderCircle size={26} className="animate-spin text-gold" /></div>
+              <div className="grid flex-1 place-items-center"><LoaderCircle size={26} className="animate-spin text-gold-ink" /></div>
             ) : active && activePerson ? (
               <>
                 <header data-testid="learning-dialog-active-header" className="flex min-h-[68px] shrink-0 items-center gap-2 border-b border-stone-200 bg-white px-3 pb-2.5 pt-[max(0.625rem,env(safe-area-inset-top,0px))] sm:px-4 sm:py-2.5">
@@ -698,7 +698,7 @@ export function LearningDialogMailbox({ role, className }: { role: MailboxRole; 
                             {stateText ? <p className={`text-sm italic ${message.mine ? "text-white/55" : "text-stone-400"}`}>{stateText}</p> : null}
                             {message.body ? <p className="whitespace-pre-wrap break-words text-sm leading-6">{message.body}</p> : null}
                             {message.contextType && message.contextId ? (
-                              <p className={`mt-2 text-[10px] font-bold uppercase ${message.mine ? "text-gold" : "text-amber-700"}`}>Контекст: {message.contextType}</p>
+                              <p className={`mt-2 text-[10px] font-bold uppercase ${message.mine ? "text-gold-ink" : "text-amber-700"}`}>Контекст: {message.contextType}</p>
                             ) : null}
                             {message.attachments.length ? (
                               <div className="mt-2 space-y-1.5">
@@ -777,7 +777,7 @@ export function LearningDialogMailbox({ role, className }: { role: MailboxRole; 
                         <div className="mb-2 flex gap-2 overflow-x-auto pb-1">
                           {files.map((file, index) => (
                             <span key={`${file.name}-${index}`} className="inline-flex max-w-[230px] shrink-0 items-center gap-2 rounded-lg border border-stone-200 bg-stone-50 px-2.5 py-2 text-xs font-semibold">
-                              <Paperclip size={13} className="shrink-0 text-gold" /><span className="min-w-0 truncate">{file.name}</span>
+                              <Paperclip size={13} className="shrink-0 text-gold-ink" /><span className="min-w-0 truncate">{file.name}</span>
                               <button type="button" onClick={() => setFiles((current) => current.filter((_, itemIndex) => itemIndex !== index))} className="grid h-5 w-5 shrink-0 place-items-center rounded text-stone-400 hover:bg-stone-200" aria-label={`Убрать ${file.name}`}><X size={12} /></button>
                             </span>
                           ))}

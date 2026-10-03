@@ -242,14 +242,14 @@ export function AdminWorkspaceDirectory() {
               href={section.href}
               className="group grid min-h-20 grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-4 py-4 transition hover:bg-white/60 sm:px-3"
             >
-              <span className="grid h-11 w-11 place-items-center rounded-lg bg-ink text-gold">
+              <span className="grid h-11 w-11 place-items-center rounded-lg bg-ink text-gold-ink">
                 <Icon size={19} />
               </span>
               <span className="min-w-0">
                 <strong className="block text-sm text-ink sm:text-base">{section.label}</strong>
                 <span className="mt-1 block text-xs leading-5 text-stone-500 sm:text-sm">{section.description}</span>
               </span>
-              <ChevronRight size={18} className="text-stone-300 transition group-hover:translate-x-0.5 group-hover:text-gold" />
+              <ChevronRight size={18} className="text-stone-300 transition group-hover:translate-x-0.5 group-hover:text-gold-ink" />
             </Link>
           );
         })}
@@ -298,7 +298,7 @@ export function AdminWorkspaceHub({ sectionId }: { sectionId: Exclude<AdminWorks
                     href={item.href}
                     className="group grid min-h-20 grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-4 py-4 transition hover:bg-white/60 sm:px-3"
                   >
-                    <span className="grid h-11 w-11 place-items-center rounded-lg border border-stone-200 bg-white text-stone-700 transition group-hover:border-gold/40 group-hover:text-gold">
+                    <span className="grid h-11 w-11 place-items-center rounded-lg border border-stone-200 bg-white text-stone-700 transition group-hover:border-gold/40 group-hover:text-gold-ink">
                       <Icon size={19} />
                     </span>
                     <span className="min-w-0">
@@ -308,7 +308,7 @@ export function AdminWorkspaceHub({ sectionId }: { sectionId: Exclude<AdminWorks
                       </span>
                       <span className="mt-1 block text-xs leading-5 text-stone-500 sm:text-sm">{item.description}</span>
                     </span>
-                    <ChevronRight size={18} className="text-stone-300 transition group-hover:translate-x-0.5 group-hover:text-gold" />
+                    <ChevronRight size={18} className="text-stone-300 transition group-hover:translate-x-0.5 group-hover:text-gold-ink" />
                   </Link>
                 );
               })}

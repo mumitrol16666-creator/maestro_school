@@ -94,12 +94,12 @@ export default function AdminWeeklyLeaguePage() {
 
       <div className="grid gap-4 sm:grid-cols-3">
         <section className="rounded-[26px] border border-stone-200 bg-paper p-5 shadow-soft">
-          <Trophy size={22} className="text-gold" />
+          <Trophy size={22} className="text-gold-ink" />
           <p className="font-display mt-5 text-3xl">{data.standings[0]?.displayName ?? "—"}</p>
           <p className="mt-1 text-xs font-bold text-stone-500">Лидер · {data.standings[0]?.xp ?? 0} XP</p>
         </section>
         <section className="rounded-[26px] border border-stone-200 bg-paper p-5 shadow-soft">
-          <Users size={22} className="text-violet-600" />
+          <Users size={22} className="text-amber-600" />
           <p className="font-display mt-5 text-3xl">{data.participantCount}</p>
           <p className="mt-1 text-xs font-bold text-stone-500">участников со счётом</p>
         </section>
@@ -112,7 +112,7 @@ export default function AdminWeeklyLeaguePage() {
 
       <section className="mt-8 overflow-hidden rounded-[28px] border border-stone-200 bg-paper shadow-soft">
         <div className="border-b border-stone-100 p-5 sm:p-6">
-          <p className="text-xs font-black uppercase tracking-[0.18em] text-gold">{data.week.label}</p>
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-gold-ink">{data.week.label}</p>
           <h2 className="font-display mt-2 text-3xl">Текущая таблица</h2>
         </div>
         {data.standings.length ? data.standings.map((entry) => (
@@ -132,7 +132,7 @@ export default function AdminWeeklyLeaguePage() {
       <section className="mt-8 rounded-[28px] border border-stone-200 bg-paper p-5 shadow-soft sm:p-7">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-gold">Допуск</p>
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-gold-ink">Допуск</p>
             <h2 className="font-display mt-2 text-3xl">Участники лиги</h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-500">
               Отключайте тестовые и служебные аккаунты. Уже заработанный XP хранится в истории, но не показывается в рейтинге, пока участие выключено.
@@ -223,7 +223,7 @@ export default function AdminWeeklyLeaguePage() {
 
       <section className="mt-8 rounded-[28px] border border-amber-200 bg-amber-50 p-6">
         <div className="flex gap-4">
-          <Medal className="shrink-0 text-gold" size={24} />
+          <Medal className="shrink-0 text-gold-ink" size={24} />
           <div>
             <h2 className="font-display text-2xl">Призы выдаются автоматически</h2>
             <p className="mt-2 text-sm leading-6 text-amber-900">

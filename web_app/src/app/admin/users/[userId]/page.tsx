@@ -80,7 +80,7 @@ export default function AdminUserDetailPage() {
             <p><span className="font-bold text-ink">Зарегистрирован:</span> {new Date(user.createdAt).toLocaleDateString("ru-RU")}</p>
           </div>
           {user.role === "student" ? (
-            <Link href={`/admin/students/${user.id}`} className="mt-6 inline-flex text-sm font-bold text-gold hover:underline">
+            <Link href={`/admin/students/${user.id}`} className="mt-6 inline-flex text-sm font-bold text-gold-ink hover:underline">
               Открыть карточку ученика →
             </Link>
           ) : null}
@@ -98,7 +98,7 @@ export default function AdminUserDetailPage() {
 
         <section className="rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
           <div className="flex items-center gap-3">
-            <Shield size={18} className="text-gold" />
+            <Shield size={18} className="text-gold-ink" />
             <div>
               <h2 className="font-display text-2xl">Доступ сотрудника</h2>
               <p className="mt-1 text-sm text-stone-500">

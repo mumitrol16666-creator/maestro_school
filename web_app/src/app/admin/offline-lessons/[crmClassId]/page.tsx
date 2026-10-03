@@ -41,7 +41,6 @@ import {
   type LearningLessonV2Draft,
 } from "@/components/learning-lesson-v2-panel";
 import { PageHeader } from "@/components/page-header";
-import { LessonAgendaTimer, LessonAgendaItem, defaultLessonAgenda } from "@/components/lesson-agenda-timer";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { useDialogBehavior } from "@/hooks/use-dialog-behavior";
 import { ApiError } from "@/lib/api-client";
@@ -126,7 +125,7 @@ const attendanceClasses: Record<string, string> = {
   late: "bg-amber-50 text-amber-900",
   excused_absence: "bg-sky-50 text-sky-900",
   unexcused_absence: "bg-red-50 text-red-800",
-  emergency_freeze: "bg-violet-50 text-violet-900",
+  emergency_freeze: "bg-amber-50 text-amber-900",
 };
 
 const trialObjectionOptions = [
@@ -359,7 +358,6 @@ type OfflineLessonFormDraft = {
     studentCheckDrafts: Record<string, StudentLessonCheckDraft>;
     learningV2Draft?: LearningLessonV2Draft;
     learningV2ReportVersion?: number | null;
-    agenda?: LessonAgendaItem[];
     notHeldReason: string;
   };
 };
@@ -525,7 +523,6 @@ export default function AdminOfflineLessonDetailPage() {
   const [comment, setComment] = useState("");
   const [trialReport, setTrialReport] = useState<TrialLessonReport>(() => mergeTrialReport());
   const [studentCheckDrafts, setStudentCheckDrafts] = useState<Record<string, StudentLessonCheckDraft>>({});
-  const [agenda, setAgenda] = useState<LessonAgendaItem[]>(defaultLessonAgenda);
   const [overriddenLearningV2, setOverriddenLearningV2] = useState<LearningLessonV2Context | null>(null);
   const [learningV2Draft, setLearningV2Draft] = useState<LearningLessonV2Draft>(
     emptyLearningLessonV2Draft,
@@ -862,9 +859,6 @@ export default function AdminOfflineLessonDetailPage() {
         return next;
       });
       const savedLearningV2Draft = normalizeLearningLessonV2Draft(saved.learningV2Draft);
-      if (Array.isArray(saved.agenda) && saved.agenda.length > 0) {
-        setAgenda(saved.agenda);
-      }
       setLearningV2Draft(learningV2?.pendingResults
         ? mergeLearningLessonV2Draft(
             learningResultsV2Draft(learningV2?.pendingResults),
@@ -899,7 +893,6 @@ export default function AdminOfflineLessonDetailPage() {
         ]),
       ));
       setLearningV2Draft(learningResultsV2Draft(learningV2?.pendingResults));
-      setAgenda(defaultLessonAgenda);
       lastSavedDraftForm.current = null;
       setDraftSaveStatus(null);
     }
@@ -1520,7 +1513,7 @@ export default function AdminOfflineLessonDetailPage() {
         title={lesson.title}
         description={`${new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long", year: "numeric" }).format(new Date(lesson.date))} · ${lesson.startTime}–${lesson.endTime}`}
         action={
-          <Link href="/admin/offline-lessons" className="text-sm font-bold text-gold hover:underline">
+          <Link href="/admin/offline-lessons" className="text-sm font-bold text-gold-ink hover:underline">
             ← К расписанию
           </Link>
         }
@@ -1557,7 +1550,7 @@ export default function AdminOfflineLessonDetailPage() {
           )
         ) : null}
         {lesson.teacher?.name ? (
-          <span className="rounded-full bg-violet-50 px-4 py-2 text-xs font-bold text-violet-900">
+          <span className="rounded-full bg-amber-50 px-4 py-2 text-xs font-bold text-amber-900">
             Преподаватель: {lesson.teacher.name}
           </span>
         ) : (
@@ -1590,11 +1583,11 @@ export default function AdminOfflineLessonDetailPage() {
       ) : null}
 
       {canActForTeacher && lesson.teacher?.name && ["scheduled", ...teacherEditableLessonStatuses].includes(lesson.status) ? (
-        <div className="mb-6 rounded-[24px] border border-violet-200 bg-violet-50 p-5">
-          <p className="text-sm font-bold text-violet-950">
+        <div className="mb-6 rounded-[24px] border border-amber-200 bg-amber-50 p-5">
+          <p className="text-sm font-bold text-amber-950">
             Вы работаете за преподавателя: {lesson.teacher.name}
           </p>
-          <p className="mt-2 text-sm leading-6 text-violet-900/75">
+          <p className="mt-2 text-sm leading-6 text-amber-900/75">
             Отчёт и посещаемость будут записаны в этот урок. Преподаватель урока и его начисления не изменятся.
           </p>
         </div>
@@ -1650,20 +1643,6 @@ export default function AdminOfflineLessonDetailPage() {
         />
       </div>
 
-      <LessonAgendaTimer
-        agenda={agenda}
-        onChangeAgenda={setAgenda}
-        startTime={lesson.startTime}
-        endTime={lesson.endTime}
-        disabled={!canEditReport}
-        onApplySummary={(summaryText) => {
-          setLessonSummary((current) => {
-            if (!current.trim()) return summaryText;
-            return current + "\n\n" + summaryText;
-          });
-        }}
-      />
-
       {learningV2 && !isTrialLesson && (!canEditReport || hydratedLessonDraftKey === lessonDraftKey) ? (
         <LearningLessonV2Panel
           context={learningV2}
@@ -1688,7 +1667,7 @@ export default function AdminOfflineLessonDetailPage() {
         />
       ) : learningV2 && !isTrialLesson ? (
         <section className="flex min-h-32 items-center justify-center gap-3 rounded-[24px] border border-stone-200 bg-white px-5 text-sm font-bold text-stone-500 shadow-sm" aria-live="polite">
-          <LoaderCircle className="animate-spin text-gold" size={20} />
+          <LoaderCircle className="animate-spin text-gold-ink" size={20} />
           Восстанавливаем черновик урока
         </section>
       ) : null}
@@ -1750,9 +1729,9 @@ export default function AdminOfflineLessonDetailPage() {
             ) : (
               <>
                 {!isLearningLessonV2 && availablePlanTopics.length > 0 ? (
-                  <div className="mt-5 rounded-2xl border border-violet-100 bg-violet-50/60 p-3.5">
-                    <p className="flex items-center gap-1.5 text-xs font-bold text-violet-900">
-                      <Sparkles size={14} className="text-violet-600" />
+                  <div className="mt-5 rounded-2xl border border-amber-100 bg-amber-50/60 p-3.5">
+                    <p className="flex items-center gap-1.5 text-xs font-bold text-amber-900">
+                      <Sparkles size={14} className="text-amber-600" />
                       Быстрый выбор темы из плана месяца:
                     </p>
                     <div className="mt-2.5 flex flex-wrap gap-1.5">
@@ -1769,8 +1748,8 @@ export default function AdminOfflineLessonDetailPage() {
                           }}
                           className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold transition ${
                             topic === item
-                              ? "bg-violet-700 text-white shadow-xs"
-                              : "border border-violet-200 bg-white text-violet-900 hover:bg-violet-100/80"
+                              ? "bg-amber-700 text-white shadow-xs"
+                              : "border border-amber-200 bg-white text-amber-900 hover:bg-amber-100/80"
                           }`}
                         >
                           <Music size={12} />
@@ -1984,7 +1963,7 @@ export default function AdminOfflineLessonDetailPage() {
                 <button
                   type="submit"
                   disabled={!canEditTeacherReport || busy != null || Boolean(teacherSubmissionIssue)}
-                  className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-ink px-5 py-3 text-sm font-bold text-white disabled:opacity-50 sm:w-auto"
+                  className="brand-button-primary min-h-12 w-full sm:w-auto"
                 >
                   {["submit", "submit-absence"].includes(busy ?? "") ? <LoaderCircle className="animate-spin" size={16} /> : <Send size={16} />}
                   {allStudentsAbsent
@@ -2068,7 +2047,7 @@ export default function AdminOfflineLessonDetailPage() {
                 const reason = askReason("Восстановить отменённый урок в расписании?");
                 if (reason) void runAction("reopen", () => adminOfflineApi.reopen(crmClassId, reason));
               }}
-              className="flex w-full items-center justify-center gap-2 rounded-[24px] border border-violet-300 bg-violet-50 px-5 py-4 text-sm font-bold text-violet-900 disabled:opacity-50"
+              className="flex w-full items-center justify-center gap-2 rounded-[24px] border border-amber-300 bg-amber-50 px-5 py-4 text-sm font-bold text-amber-900 disabled:opacity-50"
             >
               {busy === "reopen" ? <LoaderCircle className="animate-spin" size={16} /> : <RotateCcw size={16} />}
               Восстановить урок
@@ -2607,7 +2586,7 @@ function SubmitLessonConfirmation({
               <div className="border-t border-stone-200 pt-3">
                 <p className="text-xs font-black uppercase text-stone-500">Недельная лига</p>
                 {learning.xp.willAward > 0 ? (
-                  <p className="mt-1 text-sm font-black text-violet-800">
+                  <p className="mt-1 text-sm font-black text-amber-800">
                     +{learning.xp.willAward} XP после подтверждения урока
                   </p>
                 ) : learning.xp.limited > 0 ? (
@@ -2653,7 +2632,7 @@ function SubmitLessonConfirmation({
             type="button"
             disabled={busy}
             onClick={onConfirm}
-            className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-ink px-4 text-sm font-bold text-white transition-colors hover:bg-gold hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold disabled:opacity-50"
+            className="brand-button-primary min-h-12"
           >
             {busy ? <LoaderCircle size={16} className="animate-spin" /> : <Send size={16} />}
             {absenceOnly ? "Передать посещаемость" : "Отправить на проверку"}
@@ -2931,9 +2910,9 @@ function TrialReportEditor({
         ) : null}
       </div>
 
-      {isAdmin ? <div className="rounded-[24px] border border-violet-200 bg-violet-50 p-5">
-        <p className="text-sm font-bold text-violet-950">Коммерческий блок — только менеджеру</p>
-        <p className="mt-2 text-sm leading-6 text-violet-900/80">
+      {isAdmin ? <div className="rounded-[24px] border border-amber-200 bg-amber-50 p-5">
+        <p className="text-sm font-bold text-amber-950">Коммерческий блок — только менеджеру</p>
+        <p className="mt-2 text-sm leading-6 text-amber-900/80">
           Эти данные не участвуют в педагогическом отчёте для семьи и не требуются преподавателю для отправки урока.
         </p>
       <div className="mt-4 grid gap-4 md:grid-cols-3">
@@ -3648,14 +3627,14 @@ function StudentLearningResultFields({
 
   return (
     <div>
-      <div className="rounded-xl border border-violet-100 bg-violet-50/50 p-3.5">
+      <div className="rounded-xl border border-amber-100 bg-amber-50/50 p-3.5">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-violet-900">
+          <p className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-amber-900">
             <Target size={15} />
             План на {student.monthlyPlan?.month || currentAqtobeMonth()}
           </p>
           {student.monthlyPlan?.goal ? (
-            <span className="text-xs font-semibold text-violet-800">Цель: {student.monthlyPlan.goal}</span>
+            <span className="text-xs font-semibold text-amber-800">Цель: {student.monthlyPlan.goal}</span>
           ) : null}
         </div>
 
@@ -3667,7 +3646,7 @@ function StudentLearningResultFields({
               const isInProgress = selectedStatus === "in_progress"
                 || (item.status === "in_progress" && !selectedStatus);
               return (
-                <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-violet-100 bg-white p-2.5">
+                <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-100 bg-white p-2.5">
                   <div className="flex min-w-0 flex-1 items-center gap-2">
                     <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-lg text-xs font-bold ${
                       isDone
@@ -3707,7 +3686,7 @@ function StudentLearningResultFields({
                       <button
                         type="button"
                         onClick={() => onSelectTopic(item.title)}
-                        className="grid h-7 w-7 place-items-center rounded-lg border border-violet-200 bg-violet-50 text-violet-800 transition hover:bg-violet-100"
+                        className="grid h-7 w-7 place-items-center rounded-lg border border-amber-200 bg-amber-50 text-amber-800 transition hover:bg-amber-100"
                         title="Использовать тему в отчёте"
                         aria-label={`Использовать тему «${item.title}» в отчёте`}
                       >
@@ -3724,7 +3703,7 @@ function StudentLearningResultFields({
         )}
 
         {canEdit ? (
-          <div className="mt-3 border-t border-violet-100 pt-3">
+          <div className="mt-3 border-t border-amber-100 pt-3">
             <div className="flex flex-col gap-2 sm:flex-row">
               <input
                 value={quickTopicTitle}
@@ -3736,13 +3715,13 @@ function StudentLearningResultFields({
                   }
                 }}
                 placeholder="Новая тема или песня в план"
-                className="h-10 min-w-0 flex-1 rounded-xl border border-violet-200 bg-white px-3 text-xs outline-none focus:ring-2 focus:ring-violet-200"
+                className="h-10 min-w-0 flex-1 rounded-xl border border-amber-200 bg-white px-3 text-xs outline-none focus:ring-2 focus:ring-amber-200"
               />
               <button
                 type="button"
                 disabled={addingQuickTopic || !quickTopicTitle.trim()}
                 onClick={() => void handleAddQuickTopic()}
-                className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl bg-violet-700 px-3.5 text-xs font-bold text-white transition hover:bg-violet-800 disabled:opacity-50"
+                className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl bg-amber-700 px-3.5 text-xs font-bold text-white transition hover:bg-amber-800 disabled:opacity-50"
               >
                 {addingQuickTopic ? <LoaderCircle size={14} className="animate-spin" /> : <Plus size={14} />}
                 Добавить
@@ -3757,7 +3736,7 @@ function StudentLearningResultFields({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <span className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-amber-950">
-              <Star size={16} className="text-gold" />
+              <Star size={16} className="text-gold-ink" />
               Учебные баллы
             </span>
             <span className="mt-0.5 block text-[11px] text-amber-900/70">От 0 до 100 баллов за результат урока</span>
@@ -3890,7 +3869,7 @@ function StudentLessonCheckCard({
       {showHomeworkReview ? (
         <fieldset className="mt-4 border-t border-stone-100 pt-4">
           <legend className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.14em] text-stone-500">
-            <BookCheck size={15} className="text-gold" />
+            <BookCheck size={15} className="text-gold-ink" />
             Выполнение прошлого ДЗ
           </legend>
           {!attended ? (
@@ -3993,7 +3972,7 @@ function StudentLessonCheckCard({
 
       {showLearningResult && attended ? (
         <fieldset className="mt-4 border-t border-stone-100 pt-4">
-          <legend className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.14em] text-violet-700">
+          <legend className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.14em] text-amber-700">
             <Target size={15} />
             План месяца и учебные баллы
           </legend>
@@ -4064,7 +4043,7 @@ function StudentPreviousContext({
     <div className={`${compact ? "mt-0" : "mt-3.5"} rounded-2xl border border-gold/25 bg-amber-50/50 p-4`}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <span className="text-[11px] font-black uppercase tracking-[0.14em] text-gold">
+          <span className="text-[11px] font-black uppercase tracking-[0.14em] text-gold-ink">
             {compact ? student.name : "Контекст прошлого урока"}
           </span>
           <span className="text-xs text-stone-500 font-semibold">

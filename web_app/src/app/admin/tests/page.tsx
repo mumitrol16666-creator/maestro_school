@@ -45,7 +45,7 @@ export default function AdminTestsPage() {
           { label: "Средний результат", value: summary.averageScore == null ? "—" : `${summary.averageScore}%`, icon: CircleGauge },
         ].map(({ label, value, icon: Icon }) => (
           <div key={label} className="rounded-[26px] border border-stone-200 bg-paper p-5 shadow-soft">
-            <span className="grid h-10 w-10 place-items-center rounded-2xl bg-amber-50 text-gold">
+            <span className="grid h-10 w-10 place-items-center rounded-2xl bg-amber-50 text-gold-ink">
               <Icon size={19} />
             </span>
             <p className="mt-4 font-display text-3xl">{value}</p>
@@ -70,7 +70,7 @@ export default function AdminTestsPage() {
               <div key={question.questionId} className="rounded-2xl border border-stone-200 p-4">
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className="text-xs font-bold uppercase tracking-wide text-gold">{question.testTitle}</p>
+                    <p className="text-xs font-bold uppercase tracking-wide text-gold-ink">{question.testTitle}</p>
                     <p className="mt-1 text-sm font-semibold">{question.prompt}</p>
                   </div>
                   <span className="shrink-0 rounded-full bg-red-50 px-3 py-1 text-sm font-black text-red-700">
@@ -86,7 +86,7 @@ export default function AdminTestsPage() {
       <section className="mt-8">
         <div className="mb-4 flex items-end justify-between gap-3">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-gold">Библиотека</p>
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-gold-ink">Библиотека</p>
             <h2 className="mt-1 font-display text-3xl">{summary.totalTests} тестов</h2>
           </div>
           <p className="text-sm text-stone-500">{summary.startedStudentTests} запусков учениками</p>
@@ -95,7 +95,7 @@ export default function AdminTestsPage() {
           {tests.map((test) => (
             <div key={test.id} className="rounded-[26px] border border-stone-200 bg-paper p-4 shadow-soft sm:p-5">
               <div className="flex items-center gap-4">
-                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-ink font-display text-lg text-gold">
+                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-ink font-display text-lg text-gold-ink">
                   {test.order}
                 </span>
                 <div className="min-w-0 flex-1">

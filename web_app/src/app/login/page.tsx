@@ -41,32 +41,23 @@ const LOGIN_COPY = {
   student: {
     heading: "Вход ученика",
     description: "Откройте задания, материалы, расписание и свой учебный прогресс.",
-    mobileIntro: "Уроки, домашние задания, онлайн-занятия и прогресс в одном личном кабинете Maestro.",
     identityLabel: "Логин, email или телефон",
     placeholder: "s_77001234567",
     helper: "Войдите по своему логину, email или номеру телефона.",
-    audienceTitle: "Кабинет ученика",
-    audienceDescription: "Здесь находятся занятия, домашние задания, учебный план, баллы и награды.",
   },
   parent: {
     heading: "Вход родителя",
     description: "Следите за расписанием, оплатой и прогрессом ребёнка в семейном кабинете.",
-    mobileIntro: "Расписание, баланс, учебный план и достижения ребёнка в одном кабинете Maestro.",
     identityLabel: "Телефон, email или логин родителя",
     placeholder: "Телефон или логин родителя",
     helper: "Выберите профиль родителя. Его пароль может отличаться от пароля ученика.",
-    audienceTitle: "Семейный кабинет",
-    audienceDescription: "Родитель видит только те учебные данные, к которым открыт доступ ученика.",
   },
   staff: {
     heading: "Вход сотрудника",
     description: "Откройте расписание, отчёты, проверки и рабочие разделы школы.",
-    mobileIntro: "Уроки, ученики, отчёты и учебный контроль в рабочем кабинете Maestro.",
     identityLabel: "Логин сотрудника",
     placeholder: "Логин сотрудника",
     helper: "Используйте учётную запись, выданную администратором школы.",
-    audienceTitle: "Рабочий кабинет Maestro",
-    audienceDescription: "Набор разделов зависит от роли преподавателя или администратора.",
   },
 } as const;
 
@@ -137,27 +128,24 @@ export default function LoginPage() {
   const selectedCopy = LOGIN_COPY[profile];
 
   return (
-    <main className="grid min-h-screen bg-paper lg:grid-cols-[1.05fr_0.95fr]">
+    <main className="grid min-h-screen bg-cream lg:grid-cols-[1.05fr_0.95fr]">
       <AuthHeroPanel profile={profile} />
 
-      <section className="flex items-center justify-center p-6 sm:p-12">
+      <section className="flex items-center justify-center px-5 py-8 sm:p-10 lg:py-12">
         <div className="w-full max-w-md">
-          <div className="mb-8 lg:hidden">
+          <div className="mb-7 lg:hidden">
             <Brand />
-            <p className="mt-5 text-sm leading-6 text-stone-500">
-              {selectedCopy.mobileIntro}
-            </p>
           </div>
 
-          <p className="text-xs font-bold uppercase tracking-[0.22em] text-gold">Личный кабинет</p>
-          <h2 className="font-display mt-3 text-5xl">{selectedCopy.heading}</h2>
+          <p className="text-xs font-bold uppercase tracking-[0.22em] text-gold-ink">Личный кабинет</p>
+          <h1 className="font-display mt-3 text-balance text-3xl leading-tight sm:text-[2.5rem]">{selectedCopy.heading}</h1>
           <p className="mt-4 text-sm leading-6 text-stone-500">
             {ssoPending
-              ? "Открываем ваш кабинет..."
+              ? "Открываем ваш кабинет…"
               : selectedCopy.description}
           </p>
 
-          <form onSubmit={handleSubmit} className="mt-10 space-y-5">
+          <form onSubmit={handleSubmit} className="mt-7 space-y-5">
             <fieldset>
               <legend className="mb-2 text-xs font-bold uppercase tracking-wider text-stone-500">
                 Какой кабинет открыть
@@ -174,17 +162,18 @@ export default function LoginPage() {
                     <button
                       key={item.value}
                       type="button"
+                      aria-pressed={selected}
                       onClick={() => {
                         setProfile(item.value);
                         setError(null);
                       }}
                       className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl px-2 text-xs font-bold transition sm:flex-row ${
                         selected
-                          ? "bg-ink text-white shadow-sm"
+                          ? "bg-charcoal text-white shadow-sm"
                           : "text-stone-500 hover:bg-white hover:text-ink"
                       }`}
                     >
-                      <Icon size={16} className={selected ? "text-gold" : undefined} />
+                      <Icon size={16} className={selected ? "text-gold-ink" : undefined} />
                       {item.label}
                     </button>
                   );
@@ -197,10 +186,13 @@ export default function LoginPage() {
                 type="text"
                 required
                 autoComplete="username"
+                name="username"
+                spellCheck={false}
+                autoCapitalize="none"
                 value={phone}
                 onChange={(event) => setPhone(event.target.value)}
                 placeholder={selectedCopy.placeholder}
-                className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-4 text-sm outline-none transition focus:border-gold"
+                className="brand-input py-3.5"
               />
               <span className="mt-2 block text-xs leading-5 text-stone-500">
                 {selectedCopy.helper}
@@ -208,35 +200,36 @@ export default function LoginPage() {
             </label>
             <label className="block">
               <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-stone-500">Пароль</span>
-              <span className="flex items-center rounded-2xl border border-stone-200 bg-white pr-4 focus-within:border-gold">
+              <span className="flex items-center rounded-xl border border-stone-300 bg-paper pr-1 focus-within:border-gold">
                 <input
                   type={showPassword ? "text" : "password"}
                   required
                   minLength={8}
                   maxLength={72}
                   autoComplete="current-password"
+                  name="password"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
-                  className="min-w-0 flex-1 rounded-2xl px-4 py-4 text-sm outline-none"
+                  className="min-w-0 flex-1 rounded-xl bg-transparent px-4 py-3.5 text-sm"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((current) => !current)}
                   aria-label={showPassword ? "Скрыть пароль" : "Показать пароль"}
-                  className="text-stone-400"
+                  className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-stone-600 hover:bg-stone-100"
                 >
                   {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
                 </button>
               </span>
             </label>
-            {error && <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</p>}
+            {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</p>}
             <button
               disabled={busy}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-ink px-5 py-4 text-sm font-bold text-white transition hover:bg-stone-800 disabled:opacity-60"
+              className="brand-button-primary w-full py-3.5"
             >
               {busy ? (
                 <>
-                  <LoaderCircle size={17} className="animate-spin" /> Входим...
+                  <LoaderCircle size={17} className="animate-spin" /> Входим…
                 </>
               ) : (
                 <>
@@ -248,29 +241,22 @@ export default function LoginPage() {
 
           <AndroidAppDownloadLink />
 
-          <div className="mt-8 rounded-2xl border border-gold/20 bg-gold/5 px-4 py-4 text-center">
-            <p className="text-sm font-bold text-ink">{selectedCopy.audienceTitle}</p>
-            <p className="mt-2 text-sm leading-6 text-stone-500">
-              {selectedCopy.audienceDescription}
-            </p>
-          </div>
-
           {profile === "staff" ? (
-            <div className="mt-8 rounded-2xl border border-stone-200 bg-white p-5">
+            <div className="mt-6 border-t border-stone-200 pt-5">
               <p className="text-sm font-bold text-ink">Нет доступа к рабочему кабинету?</p>
               <p className="mt-2 text-sm leading-6 text-stone-500">
                 Обратитесь к администратору школы, чтобы проверить учётную запись и назначенную роль.
               </p>
             </div>
           ) : (
-            <div className="mt-8 rounded-2xl border border-stone-200 bg-white p-5">
+            <div className="mt-6 border-t border-stone-200 pt-5">
               <p className="text-sm font-bold text-ink">Хотите стать учеником Maestro?</p>
               <p className="mt-2 text-sm leading-6 text-stone-500">
                 Запишитесь на пробный урок на сайте. Администратор свяжется с вами и подберёт удобное время.
               </p>
               <a
                 href={TRIAL_LANDING_URL}
-                className="mt-4 inline-flex items-center gap-2 text-sm font-bold text-gold transition hover:text-ink"
+                className="mt-4 inline-flex items-center gap-2 text-sm font-bold text-gold-ink transition hover:text-ink"
               >
                 Записаться на пробный урок <ArrowRight size={15} />
               </a>

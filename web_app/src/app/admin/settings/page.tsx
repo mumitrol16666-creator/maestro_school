@@ -70,30 +70,30 @@ export default function AdminSettingsPage() {
 
       <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
         <section className="rounded-[30px] bg-ink p-7 text-white shadow-soft">
-          <div className="grid h-20 w-20 place-items-center rounded-full border border-white/10 bg-white/10 font-display text-2xl text-gold">
+          <div className="grid h-20 w-20 place-items-center rounded-full border border-white/10 bg-white/10 font-display text-2xl text-gold-ink">
             {initials}
           </div>
           <h2 className="font-display mt-7 text-4xl">{fullName}</h2>
           <p className="mt-2 text-sm text-white/45">{roleLabel(profile.role)}</p>
           <div className="mt-8 space-y-3 border-t border-white/10 pt-6 text-sm">
             <div className="flex items-center gap-3 text-white/60">
-              <UserRound size={16} className="text-gold" />
+              <UserRound size={16} className="text-gold-ink" />
               Логин: {profile.login ?? "—"}
             </div>
             {visibleEmail ? (
               <div className="flex items-center gap-3 text-white/60">
-                <Mail size={16} className="text-gold" />
+                <Mail size={16} className="text-gold-ink" />
                 {visibleEmail}
               </div>
             ) : null}
             <div className="flex items-center gap-3 text-white/60">
-              <Phone size={16} className="text-gold" />
+              <Phone size={16} className="text-gold-ink" />
               {profile.phone && profile.phone !== "00000000000" ? profile.phone : "Телефон не указан"}
             </div>
           </div>
           {isTeacher ? (
             <div className="mt-7 border-t border-white/10 pt-6">
-              <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold">Рабочий день</p>
+              <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold-ink">Рабочий день</p>
               <div className="mt-4 grid gap-2 sm:grid-cols-3 xl:grid-cols-1">
                 {[
                   { href: "/admin/offline-lessons", label: "Мои уроки", icon: CalendarDays },
@@ -105,7 +105,7 @@ export default function AdminSettingsPage() {
                     href={href}
                     className="flex min-h-11 items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-bold text-white/80 transition hover:border-gold/40 hover:bg-white/10 hover:text-white"
                   >
-                    <Icon size={17} className="text-gold" aria-hidden="true" />
+                    <Icon size={17} className="text-gold-ink" aria-hidden="true" />
                     {label}
                   </Link>
                 ))}
@@ -125,7 +125,7 @@ export default function AdminSettingsPage() {
         <section className="space-y-5">
           <div className="rounded-[30px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
             <div className="flex items-center gap-3">
-              <KeyRound size={18} className="text-gold" />
+              <KeyRound size={18} className="text-gold-ink" />
               <div>
                 <h2 className="font-display text-2xl">Смена пароля</h2>
                 <p className="mt-1 text-sm text-stone-500">Используйте новый пароль при следующем входе.</p>
@@ -137,7 +137,7 @@ export default function AdminSettingsPage() {
           </div>
 
           <div className="rounded-[30px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
-            <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold">Контакты</p>
+            <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold-ink">Контакты</p>
             <form onSubmit={savePhone} className="mt-5 space-y-4">
               <div>
                 <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-stone-400">Телефон</label>
@@ -166,7 +166,7 @@ export default function AdminSettingsPage() {
 
           <div className="rounded-[30px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
             <div className="flex items-center gap-3">
-              <Shield size={18} className="text-gold" />
+              <Shield size={18} className="text-gold-ink" />
               <div>
                 <h2 className="font-display text-2xl">Что вам доступно</h2>
                 <p className="mt-1 text-sm text-stone-500">{roleDescription(profile.role)}</p>

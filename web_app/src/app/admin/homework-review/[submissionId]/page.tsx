@@ -55,14 +55,14 @@ function AttemptMaterial({
         })}
         className={className}
       >
-        <Download size={14} className="shrink-0 text-gold" />
+        <Download size={14} className="shrink-0 text-gold-ink" />
         <span className="truncate">{material.title || "Файл ученика"}</span>
       </button>
     );
   }
   return (
     <a href={material.url} target="_blank" rel="noreferrer" className={className}>
-      <ExternalLink size={14} className="shrink-0 text-gold" />
+      <ExternalLink size={14} className="shrink-0 text-gold-ink" />
       <span className="truncate">{material.title || "Материал ученика"}</span>
     </a>
   );
@@ -217,7 +217,7 @@ export default function HomeworkReviewDetailPage() {
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <section className="min-w-0 rounded-[28px] border border-stone-200 bg-paper p-5 shadow-soft sm:p-8">
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold-ink">
             {learningItem ? "Школьное домашнее задание" : "Задание курса"}
           </p>
           <h1 className="mt-3 break-words font-display text-3xl sm:text-4xl">{item.studentName}</h1>
@@ -278,7 +278,7 @@ export default function HomeworkReviewDetailPage() {
         <aside className="space-y-4 xl:sticky xl:top-24 xl:self-start">
           <section className="rounded-[28px] border border-stone-200 bg-paper p-5 shadow-soft sm:p-6">
             <div className="flex items-center gap-3">
-              <span className="grid h-10 w-10 place-items-center rounded-xl bg-amber-50 text-gold">
+              <span className="grid h-10 w-10 place-items-center rounded-xl bg-amber-50 text-gold-ink">
                 <MessageSquareText size={18} />
               </span>
               <div>

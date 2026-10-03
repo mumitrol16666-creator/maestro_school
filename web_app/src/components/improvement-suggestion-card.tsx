@@ -69,7 +69,7 @@ export function ImprovementSuggestionCard() {
     <>
       <section className="rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
         <div className="flex items-start gap-4">
-          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-amber-50 text-gold">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-amber-50 text-gold-ink">
             <Lightbulb size={21} aria-hidden="true" />
           </span>
           <div className="min-w-0 flex-1">
@@ -107,7 +107,7 @@ export function ImprovementSuggestionCard() {
           >
             <header className="flex items-start justify-between gap-4 border-b border-stone-200 px-5 py-5 sm:px-7">
               <div>
-                <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold">Обратная связь</p>
+                <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold-ink">Обратная связь</p>
                 <h2 id="improvement-dialog-title" className="font-display mt-1 text-2xl sm:text-3xl">
                   Предложить улучшение
                 </h2>

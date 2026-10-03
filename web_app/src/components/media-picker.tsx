@@ -63,7 +63,7 @@ export function MediaPicker({ open, onClose, onSelect, title = "Медиатек
       >
         <div className="flex items-start justify-between gap-4 border-b border-stone-100 px-6 py-5">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.16em] text-gold">Медиатека</p>
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-gold-ink">Медиатека</p>
             <h2 className="font-display mt-1 text-3xl">{title}</h2>
           </div>
           <button type="button" onClick={onClose} className={secondaryButton} aria-label="Закрыть">
@@ -128,7 +128,7 @@ export function MediaPicker({ open, onClose, onSelect, title = "Медиатек
                   className="rounded-2xl border border-stone-200 bg-white p-4 text-left transition hover:border-gold hover:shadow-soft"
                 >
                   <div className="flex items-start gap-3">
-                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-stone-100 text-gold">
+                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-stone-100 text-gold-ink">
                       {item.folder === "images" ? <Image size={17} /> : <File size={17} />}
                     </span>
                     <div className="min-w-0">

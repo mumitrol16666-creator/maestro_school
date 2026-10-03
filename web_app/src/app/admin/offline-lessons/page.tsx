@@ -53,8 +53,8 @@ const stageMeta: Record<LessonStage, {
   overdue: {
     label: "Просрочен",
     action: "Заполнить отчёт",
-    badge: "bg-red-600 text-white font-extrabold animate-pulse",
-    border: "border-red-500 bg-red-50/20 shadow-[0_0_12px_rgba(239,68,68,0.1)]",
+    badge: "bg-red-100 text-red-800",
+    border: "border-red-200 bg-paper",
   },
   report: {
     label: "Нужен отчёт",
@@ -333,7 +333,7 @@ export default function AdminOfflineLessonsPage() {
       />
 
       {!isAdmin && (
-        <section className="mb-6 rounded-[24px] border border-stone-200 bg-white p-4 shadow-sm sm:p-5">
+        <section className="brand-card mb-6 p-4 sm:p-5">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.2em] text-stone-400">Период кабинета</p>
@@ -341,8 +341,9 @@ export default function AdminOfflineLessonsPage() {
             </div>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
               <div className="grid gap-1">
-                <label className="text-[10px] font-bold uppercase tracking-[0.16em] text-stone-400">С</label>
+                <label htmlFor="lesson-period-from" className="text-xs font-medium text-stone-600">С</label>
                 <input
+                  id="lesson-period-from"
                   type="date"
                   value={period.from}
                   onChange={(event) => setPeriod((current) => ({ ...current, from: event.target.value }))}
@@ -350,8 +351,9 @@ export default function AdminOfflineLessonsPage() {
                 />
               </div>
               <div className="grid gap-1">
-                <label className="text-[10px] font-bold uppercase tracking-[0.16em] text-stone-400">По</label>
+                <label htmlFor="lesson-period-to" className="text-xs font-medium text-stone-600">По</label>
                 <input
+                  id="lesson-period-to"
                   type="date"
                   value={period.to}
                   onChange={(event) => setPeriod((current) => ({ ...current, to: event.target.value }))}
@@ -427,6 +429,7 @@ export default function AdminOfflineLessonsPage() {
             key={tab.id}
             type="button"
             onClick={() => handleTabChange(tab.id)}
+            aria-pressed={activeTab === tab.id}
             className={`min-w-0 rounded-xl px-2 py-2.5 text-xs font-bold leading-tight transition sm:px-3 sm:text-sm ${
               activeTab === tab.id
                  ? "bg-ink text-white shadow-sm"
@@ -574,21 +577,21 @@ function SummaryCard({
   tone: "sky" | "amber" | "cream" | "green";
 }) {
   const tones = {
-    sky: "border-sky-200 bg-sky-50 text-sky-900",
-    amber: "border-amber-200 bg-amber-50 text-amber-950",
-    cream: "border-[#dfc991] bg-[#fffaf0] text-[#6f5420]",
-    green: "border-emerald-200 bg-emerald-50 text-emerald-900",
+    sky: "bg-stone-100 text-stone-700",
+    amber: "bg-gold/15 text-gold-ink",
+    cream: "bg-gold/10 text-gold-ink",
+    green: "bg-emerald-50 text-emerald-800",
   };
   return (
     <article
       aria-label={`${label}: ${value}`}
-      className={`min-h-[108px] rounded-[18px] border p-3.5 text-left shadow-sm sm:min-h-[136px] sm:rounded-[24px] sm:p-5 ${tones[tone]}`}
+      className="brand-card min-h-[108px] p-3.5 text-left sm:min-h-[136px] sm:p-5"
     >
       <span className="flex items-center justify-between gap-3">
-        <span className="grid h-9 w-9 place-items-center rounded-xl bg-white/70 shadow-sm sm:h-10 sm:w-10">
-          <Icon size={19} />
+        <span className={`grid h-9 w-9 place-items-center rounded-xl sm:h-10 sm:w-10 ${tones[tone]}`}>
+          <Icon size={19} aria-hidden="true" />
         </span>
-        <strong className="font-display text-3xl tabular-nums sm:text-4xl">{value}</strong>
+        <strong className="text-3xl font-semibold tabular-nums sm:text-4xl">{value}</strong>
       </span>
       <span className="mt-2.5 block text-xs font-black leading-4 sm:mt-3 sm:text-sm">{label}</span>
       <span className="mt-1 hidden text-xs opacity-65 sm:block">{hint}</span>
@@ -611,7 +614,7 @@ function LessonSection({
   return (
     <section>
       <div className="mb-4 flex items-center gap-3">
-        <h2 className="font-display text-3xl">{title}</h2>
+        <h2 className="font-display text-2xl">{title}</h2>
         <span className="rounded-full bg-stone-100 px-2.5 py-1 text-xs font-bold text-stone-600">{lessons.length}</span>
       </div>
       <div className="space-y-3">
@@ -658,7 +661,7 @@ function LessonRow({
         <p className="text-xs font-bold uppercase text-stone-400">
           {formatLessonDate(lesson.date)} · {lesson.startTime}–{lesson.endTime}
         </p>
-        <h3 className="font-display mt-2 text-2xl">{lesson.title}</h3>
+        <h3 className="mt-2 text-lg font-semibold leading-snug text-ink">{lesson.title}</h3>
         <p className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-stone-500">
           <span>{lesson.group?.name ?? "Индивидуальный урок"}</span>
           {lesson.deliveryFormat === "online" ? (
@@ -682,10 +685,10 @@ function LessonRow({
         ) : null}
         <Link
           href={`/admin/offline-lessons/${lesson.crmClassId}`}
-          className={`mt-1 inline-flex min-h-10 items-center gap-2 rounded-xl px-4 text-sm font-bold transition hover:-translate-y-0.5 ${
-            stage === "report" || stage === "fix"
-              ? "bg-ink text-white"
-              : "border border-stone-300 bg-white text-ink"
+          className={`mt-1 ${
+            stage === "report" || stage === "fix" || stage === "overdue"
+              ? "brand-button-primary"
+              : "brand-button-secondary"
           }`}
         >
           {stage === "accepted"

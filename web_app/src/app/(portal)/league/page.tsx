@@ -90,7 +90,7 @@ function PodiumCard({ entry, index }: { entry: WeeklyLeagueStanding; index: numb
   return (
     <article className={`rounded-[26px] border p-5 shadow-soft ${podiumStyles[index]} ${entry.isCurrentStudent ? "ring-2 ring-gold/50" : ""}`}>
       <div className="flex items-start justify-between gap-3">
-        <span className="grid h-11 w-11 place-items-center rounded-full border border-current text-gold" aria-label={`${entry.position} место`}>
+        <span className="grid h-11 w-11 place-items-center rounded-full border border-current text-gold-ink" aria-label={`${entry.position} место`}>
           <Award size={22} />
         </span>
         <span className="rounded-full bg-white/80 px-3 py-1.5 text-xs font-black text-stone-500">
@@ -100,9 +100,9 @@ function PodiumCard({ entry, index }: { entry: WeeklyLeagueStanding; index: numb
       <p className="mt-6 text-xs font-black uppercase tracking-[0.16em] text-stone-400">{entry.position} место</p>
       <h3 className="font-display mt-1 truncate text-2xl">
         {entry.displayName}
-        {entry.isCurrentStudent ? <span className="ml-2 text-sm text-gold">(вы)</span> : null}
+        {entry.isCurrentStudent ? <span className="ml-2 text-sm text-gold-ink">(вы)</span> : null}
       </h3>
-      <p className="font-display mt-4 text-4xl">{entry.xp} <span className="text-base text-gold">XP</span></p>
+      <p className="font-display mt-4 text-4xl">{entry.xp} <span className="text-base text-gold-ink">XP</span></p>
       <p className="mt-2 text-xs font-bold"><RankMovement delta={entry.rankDelta} /></p>
     </article>
   );
@@ -195,7 +195,7 @@ function LeagueHistory() {
     <section className="mt-9" data-testid="weekly-league-history">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-gold"><CalendarDays size={15} /> Архив</p>
+          <p className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-gold-ink"><CalendarDays size={15} /> Архив</p>
           <h2 className="font-display mt-2 text-3xl">История недель</h2>
         </div>
         <p className="text-sm font-bold text-stone-500">Зафиксированные результаты</p>
@@ -237,7 +237,7 @@ function LeagueHistory() {
                     <div className="mt-3 divide-y divide-stone-200">
                       {item.topThree.map((leader) => (
                         <div key={`${leader.position}-${leader.displayName}`} className="grid grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-3 py-2.5 text-sm">
-                          <span className="font-display text-lg text-gold">{leader.position}</span>
+                          <span className="font-display text-lg text-gold-ink">{leader.position}</span>
                           <span className="truncate font-semibold">{leader.displayName}{leader.isCurrentStudent ? " · вы" : ""}</span>
                           <strong>{leader.xp} XP</strong>
                         </div>
@@ -361,7 +361,7 @@ export default function WeeklyLeaguePage() {
       />
 
       {/* ═══════════════════ Hero card ═══════════════════ */}
-      <section className="relative overflow-hidden rounded-[32px] bg-[#171813] p-6 text-white shadow-2xl sm:p-8">
+      <section className="relative overflow-hidden rounded-[32px] bg-charcoal p-6 text-white shadow-2xl sm:p-8">
         <div className="relative grid gap-7 lg:grid-cols-[1fr_auto] lg:items-end">
           <div>
             <div className="flex flex-wrap items-center gap-2">
@@ -382,9 +382,9 @@ export default function WeeklyLeaguePage() {
                 </span>
               ) : null}
             </div>
-            <p className="mt-6 text-xs font-black uppercase tracking-[0.18em] text-gold">{data.week.label}</p>
+            <p className="mt-6 text-xs font-black uppercase tracking-[0.18em] text-gold-ink">{data.week.label}</p>
             <h2 className="font-display mt-2 text-4xl sm:text-5xl">
-              {me?.xp ?? 0} <span className="text-2xl text-gold">/ {me?.goalXp ?? 80} XP</span>
+              {me?.xp ?? 0} <span className="text-2xl text-gold-ink">/ {me?.goalXp ?? 80} XP</span>
             </h2>
             <div className="mt-3 h-3 w-full max-w-xs overflow-hidden rounded-full bg-white/10">
               <div className="h-full rounded-full bg-gold" style={{ width: `${me?.goalProgress ?? 0}%` }} />
@@ -396,7 +396,7 @@ export default function WeeklyLeaguePage() {
               <span>{me?.xp ?? 0} / {me?.goalXp ?? 80} XP</span>
             </div>
             <p className="mt-4 flex items-center gap-2 text-sm font-bold">
-              {(me?.goalProgress ?? 0) >= 100 ? <CheckCircle2 size={17} className="text-emerald-400" /> : <Target size={17} className="text-gold" />}
+              {(me?.goalProgress ?? 0) >= 100 ? <CheckCircle2 size={17} className="text-emerald-400" /> : <Target size={17} className="text-gold-ink" />}
               {(me?.goalProgress ?? 0) >= 100
                 ? `Цель выполнена · +${data.prizes.personalGoal.coins} Coins`
                 : `До цели ещё ${Math.max(0, (me?.goalXp ?? 80) - (me?.xp ?? 0))} XP`}
@@ -413,7 +413,7 @@ export default function WeeklyLeaguePage() {
         </div>
         <div className="rounded-[20px] border border-stone-200 bg-paper p-4 shadow-soft text-center">
           <p className="font-display flex min-h-9 items-center justify-center gap-1 text-3xl text-ink">
-            {xpToTop3 > 0 ? xpToTop3 : <Trophy size={28} className="text-gold" />} <span className="text-sm text-gold">{xpToTop3 > 0 ? "XP" : ""}</span>
+            {xpToTop3 > 0 ? xpToTop3 : <Trophy size={28} className="text-gold-ink" />} <span className="text-sm text-gold-ink">{xpToTop3 > 0 ? "XP" : ""}</span>
           </p>
           <p className="mt-1 text-[11px] font-bold text-stone-500">{xpToTop3 > 0 ? "до топ-3" : "в топ-3!"}</p>
         </div>
@@ -431,7 +431,7 @@ export default function WeeklyLeaguePage() {
       {data.week.isCurrent ? (
         <section className="mt-7 rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft">
           <div className="flex items-center gap-3">
-            <Sparkles size={20} className="text-gold" />
+            <Sparkles size={20} className="text-gold-ink" />
             <h2 className="font-display text-xl">Что сделать сейчас</h2>
           </div>
           <div className="mt-5 space-y-2">
@@ -440,15 +440,15 @@ export default function WeeklyLeaguePage() {
               const rule = ruleBySource.get(item.sourceType);
               return (
                 <div key={item.sourceType} className="flex flex-wrap items-center gap-3 rounded-2xl bg-stone-50/80 px-4 py-3 transition hover:bg-stone-100">
-                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-amber-50 text-gold">
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-amber-50 text-gold-ink">
                     <Icon size={17} />
                   </span>
                   <span className="min-w-0 flex-[1_1_calc(100%-3rem)] text-sm font-semibold sm:flex-1">{item.label}</span>
-                  <span className="ml-12 shrink-0 text-xs font-black text-gold sm:ml-0">
+                  <span className="ml-12 shrink-0 text-xs font-black text-gold-ink sm:ml-0">
                     {rule ? `+${rule.xp}${rule.retryXp ? ` / +${rule.retryXp}` : ""} XP` : "XP"}
                     {data.economyV2Enabled && item.sourceType === "offline_lesson" ? " · +50 Coins" : ""}
                   </span>
-                  <Link href={item.href} className="shrink-0 rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-xs font-bold text-ink transition hover:border-gold hover:text-gold">
+                  <Link href={item.href} className="shrink-0 rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-xs font-bold text-ink transition hover:border-gold hover:text-gold-ink">
                     {item.action}
                   </Link>
                 </div>
@@ -467,7 +467,7 @@ export default function WeeklyLeaguePage() {
         <section className="mt-7" data-testid="weekly-streak">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-gold"><Flame size={15} /> Серия активности</p>
+              <p className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-gold-ink"><Flame size={15} /> Серия активности</p>
               <h2 className="font-display mt-2 text-3xl">{me.streakWeeks} недель подряд</h2>
             </div>
             <p className="text-sm font-bold text-stone-500">Лучшая серия: {me.bestStreakWeeks}</p>
@@ -483,7 +483,7 @@ export default function WeeklyLeaguePage() {
                 key={milestone.weeks}
                 className={`min-h-28 rounded-[20px] border p-4 ${milestone.earned ? "border-gold bg-amber-50" : "border-stone-200 bg-paper"}`}
               >
-                <Award size={19} className={milestone.earned ? "text-gold" : "text-stone-400"} />
+                <Award size={19} className={milestone.earned ? "text-gold-ink" : "text-stone-400"} />
                 <p className="font-display mt-4 text-2xl">{milestone.weeks}</p>
                 <p className="text-[11px] font-bold text-stone-500">недель · {milestone.coins} Coins</p>
               </article>
@@ -502,7 +502,7 @@ export default function WeeklyLeaguePage() {
       <section className="mt-9">
         <div className="mb-5 flex items-end justify-between gap-4">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-gold">
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-gold-ink">
               {data.week.phase === "finalizing" ? "Предварительный результат" : "Лидеры недели"}
             </p>
             <h2 className="font-display mt-2 text-3xl">{data.week.positionsFinal ? "Итоги недели" : "Топ недели"}</h2>
@@ -520,7 +520,7 @@ export default function WeeklyLeaguePage() {
           </div>
         ) : (
           <div className="rounded-[28px] border border-dashed border-stone-300 bg-white/50 p-10 text-center">
-            <Trophy className="mx-auto text-gold" size={34} />
+            <Trophy className="mx-auto text-gold-ink" size={34} />
             <h3 className="font-display mt-4 text-2xl">Неделя только началась</h3>
             <p className="mt-2 text-sm text-stone-500">Первое учебное действие сразу появится в таблице.</p>
           </div>
@@ -535,7 +535,7 @@ export default function WeeklyLeaguePage() {
                   <p className="truncate font-bold">{entry.displayName}{entry.isCurrentStudent ? " · это вы" : ""}</p>
                   <p className="mt-1 text-xs font-bold"><RankMovement delta={entry.rankDelta} /></p>
                 </div>
-                <span className="font-display text-2xl">{entry.xp} <span className="text-xs text-gold">XP</span></span>
+                <span className="font-display text-2xl">{entry.xp} <span className="text-xs text-gold-ink">XP</span></span>
               </div>
             ))}
           </div>
@@ -567,7 +567,7 @@ export default function WeeklyLeaguePage() {
       <details className="group mt-9 border-y border-stone-200">
         <summary className="flex min-h-16 cursor-pointer list-none items-center justify-between gap-4 py-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-gold">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-gold">Ваш XP</p>
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-gold-ink">Ваш XP</p>
             <h2 className="font-display mt-1 text-2xl">Как начислился XP</h2>
           </div>
           <ChevronDown size={20} className="shrink-0 text-stone-400 transition-transform group-open:rotate-180" />
@@ -576,10 +576,10 @@ export default function WeeklyLeaguePage() {
         <section className="rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-gold">За что начислено</p>
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-gold-ink">За что начислено</p>
               <h2 className="font-display mt-2 text-3xl">Из чего сложился счёт</h2>
             </div>
-            <Award size={26} className="text-gold" />
+            <Award size={26} className="text-gold-ink" />
           </div>
           {me?.breakdown.length ? (
             <div className="mt-6 space-y-3">
@@ -587,7 +587,7 @@ export default function WeeklyLeaguePage() {
                 const Icon = sourceIcons[item.sourceType] ?? Bolt;
                 return (
                   <div key={item.sourceType} className="flex items-center gap-3 rounded-2xl bg-stone-50 px-4 py-3">
-                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-amber-50 text-gold"><Icon size={15} /></span>
+                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-amber-50 text-gold-ink"><Icon size={15} /></span>
                     <span className="min-w-0 flex-1 text-sm font-semibold text-stone-600">{item.label}</span>
                     <strong>+{item.xp} XP</strong>
                   </div>
@@ -603,10 +603,10 @@ export default function WeeklyLeaguePage() {
         <section className="rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-gold">История XP</p>
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-gold-ink">История XP</p>
               <h2 className="font-display mt-2 text-3xl">Последние действия</h2>
             </div>
-            <Megaphone size={26} className="text-gold" />
+            <Megaphone size={26} className="text-gold-ink" />
           </div>
           {me?.recentEvents.length ? (
             <div className="mt-6 space-y-2">
@@ -634,13 +634,13 @@ export default function WeeklyLeaguePage() {
       {data.prizes.rewardsEnabled ? (
         <section className="mt-5 flex flex-col gap-4 border-y border-stone-200 bg-paper px-1 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
           <div className="flex items-start gap-3">
-            <Trophy size={20} className="mt-0.5 shrink-0 text-gold" />
+            <Trophy size={20} className="mt-0.5 shrink-0 text-gold-ink" />
             <p className="text-sm leading-6 text-stone-600">
               Топ-3 получает <strong className="text-ink">{data.prizes.placements.map((item) => item.coins).join(" / ")} Coins</strong>.
               За личную цель {data.prizes.personalGoal.xp} XP — ещё <strong className="text-ink">+{data.prizes.personalGoal.coins} Coins</strong>.
             </p>
           </div>
-          <Link href="/rewards" className="inline-flex min-h-10 shrink-0 items-center gap-2 self-start text-sm font-bold text-ink hover:text-gold sm:self-auto">
+          <Link href="/rewards" className="inline-flex min-h-10 shrink-0 items-center gap-2 self-start text-sm font-bold text-ink hover:text-gold-ink sm:self-auto">
             Награды за Coins <ArrowRight size={15} />
           </Link>
         </section>

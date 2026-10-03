@@ -45,11 +45,11 @@ export default function ProgressPage() {
               <article key={enrollment.id} className="rounded-[30px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
                 <div className="flex flex-col gap-3 border-b border-stone-200 pb-5 sm:flex-row sm:items-end sm:justify-between">
                   <div className="min-w-0">
-                    <p className="text-xs font-bold uppercase tracking-widest text-gold">
+                    <p className="text-xs font-bold uppercase tracking-widest text-gold-ink">
                       {enrollment.course.direction.title}
                     </p>
                     <h2 className="font-display mt-2 text-3xl text-pretty sm:text-4xl">
-                      <Link href={`/courses/${enrollment.courseId}`} className="hover:text-gold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-gold">
+                      <Link href={`/courses/${enrollment.courseId}`} className="hover:text-gold-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-gold">
                         {enrollment.course.title}
                       </Link>
                     </h2>
@@ -76,15 +76,15 @@ export default function ProgressPage() {
                         <Link
                           href={href}
                           key={item.lessonId}
-                          className="group flex min-w-0 items-center gap-3 py-4 transition-colors hover:text-gold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold sm:gap-4"
+                          className="group flex min-w-0 items-center gap-3 py-4 transition-colors hover:text-gold-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold sm:gap-4"
                         >
-                          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-stone-100 text-gold">
+                          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-stone-100 text-gold-ink">
                             {status === "completed"
                               ? <CheckCircle2 size={18} aria-hidden="true" />
                               : <Clock3 size={18} aria-hidden="true" />}
                           </span>
                           <span className="min-w-0 flex-1">
-                            <span className="block truncate font-display text-lg text-ink group-hover:text-gold sm:text-xl">
+                            <span className="block truncate font-display text-lg text-ink group-hover:text-gold-ink sm:text-xl">
                               {item.lesson.title}
                             </span>
                             <span className="mt-1 block truncate text-xs text-stone-500">
@@ -115,7 +115,7 @@ export default function ProgressPage() {
 
         <aside className="self-start overflow-hidden rounded-[28px] border border-stone-200 bg-paper shadow-soft" data-testid="learning-points-history">
           <div className="bg-ink p-6 text-white">
-            <Star size={22} className="text-gold" fill="currentColor" aria-hidden="true" />
+            <Star size={22} className="text-gold-ink" fill="currentColor" aria-hidden="true" />
             <p className="font-display mt-6 text-4xl tabular-nums">{points.toLocaleString("ru-RU")}</p>
             <p className="mt-1 text-sm text-white/60">учебных баллов</p>
           </div>

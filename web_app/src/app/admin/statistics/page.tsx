@@ -150,7 +150,7 @@ export default function AppStatisticsPage() {
 
       <section className="mt-9 border-y border-stone-200 py-6">
         <div className="flex items-center gap-3">
-          <BarChart3 size={20} className="text-gold" />
+          <BarChart3 size={20} className="text-gold-ink" />
           <div>
             <h2 className="font-display text-2xl">Динамика за полгода</h2>
             <p className="mt-1 text-xs text-stone-500">Активные ученики, сданные задания и завершённые тесты.</p>
@@ -176,7 +176,7 @@ export default function AppStatisticsPage() {
       <section className="mt-9">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-gold">По ученикам</p>
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-gold-ink">По ученикам</p>
             <h2 className="font-display mt-2 text-3xl">Активность и обучение</h2>
             <p className="mt-2 text-sm text-stone-500">{data.students.total} учеников в приложении.</p>
           </div>
@@ -291,7 +291,7 @@ function SummaryMetric({
 }) {
   return (
     <article className="min-h-36 rounded-lg border border-stone-200 bg-white p-4 shadow-sm sm:p-5">
-      <Icon size={19} className="text-gold" />
+      <Icon size={19} className="text-gold-ink" />
       <p className="font-display mt-4 text-3xl">{current}</p>
       <p className="mt-1 text-xs font-black text-ink">{label}</p>
       <p className="mt-2 text-[11px] text-stone-500">{changeLabel(current, previous)}</p>

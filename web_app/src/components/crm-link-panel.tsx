@@ -101,7 +101,7 @@ export function CrmLinkPanel({
   return (
     <section className="rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
       <div className="flex items-center gap-3">
-        <Link2 size={18} className="text-gold" />
+        <Link2 size={18} className="text-gold-ink" />
         <div>
           <h2 className="font-display text-2xl">Связь со школой</h2>
           <p className="mt-1 text-sm text-stone-500">

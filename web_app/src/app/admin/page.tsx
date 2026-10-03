@@ -90,7 +90,7 @@ export default function AdminPage() {
         <TeacherStaffTasks />
         <div className="mb-6 rounded-[28px] border border-amber-200 bg-gradient-to-br from-amber-50 to-white p-6 shadow-soft">
           <div className="flex items-start gap-4">
-            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-ink text-gold">
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-ink text-gold-ink">
               <GraduationCap size={22} />
             </span>
             <div>
@@ -112,7 +112,7 @@ export default function AdminPage() {
               </span>
               <h2 className="font-display mt-6 text-3xl">{title}</h2>
               <p className="mt-3 text-sm leading-6 text-stone-500">{text}</p>
-              <span className="mt-5 inline-flex text-xs font-black uppercase tracking-wide text-gold">Открыть →</span>
+              <span className="mt-5 inline-flex text-xs font-black uppercase tracking-wide text-gold-ink">Открыть →</span>
             </Link>
           ))}
         </div>
@@ -361,7 +361,7 @@ function ContentAdminDashboard({ workspaceV2 }: { workspaceV2: boolean }) {
             return (
             <Link key={href} href={href} className="card-hover min-w-0 rounded-[24px] border border-stone-200 bg-paper p-5 shadow-soft">
               <div className="flex items-start justify-between gap-3">
-                <span className="grid h-10 w-10 place-items-center rounded-xl bg-ink text-gold">
+                <span className="grid h-10 w-10 place-items-center rounded-xl bg-ink text-gold-ink">
                   <Icon size={18} />
                 </span>
                 {pending != null && pending > 0 && <AdminPendingHomeworkBadge count={pending} />}
@@ -406,7 +406,7 @@ function SummaryMetric({
     amber: "border-amber-200 bg-amber-50 text-amber-950",
   };
   const iconTones = {
-    ink: "bg-white/10 text-gold",
+    ink: "bg-white/10 text-gold-ink",
     sky: "bg-white text-sky-700",
     emerald: "bg-white text-emerald-700",
     amber: "bg-white text-amber-700",
@@ -440,7 +440,7 @@ function SectionHeading({
         <p className="mt-1 text-xs font-semibold text-stone-400">{detail}</p>
       </div>
       {href ? (
-        <Link href={href} className="inline-flex shrink-0 items-center gap-1 text-xs font-black text-gold">
+        <Link href={href} className="inline-flex shrink-0 items-center gap-1 text-xs font-black text-gold-ink">
           Все <ArrowRight size={14} />
         </Link>
       ) : null}

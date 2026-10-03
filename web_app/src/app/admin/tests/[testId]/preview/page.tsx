@@ -71,7 +71,7 @@ export default function AdminTestPreviewPage() {
         <div className="rounded-2xl border border-stone-200 bg-paper p-4">
           <p className="text-xs text-stone-500">Недельный XP за успех</p>
           <p className="mt-1 flex items-center gap-2 font-display text-2xl">
-            <Flame size={18} className="text-gold" /> +{test.xpRules.firstAttempt} / +{test.xpRules.retry}
+            <Flame size={18} className="text-gold-ink" /> +{test.xpRules.firstAttempt} / +{test.xpRules.retry}
           </p>
         </div>
       </div>
@@ -88,7 +88,7 @@ export default function AdminTestPreviewPage() {
 
       <fieldset className="rounded-[30px] border border-stone-200 bg-paper p-5 shadow-soft sm:p-8">
         <legend className="sr-only">Вопрос {currentQuestion + 1}</legend>
-        <p className="text-xs font-black uppercase tracking-[0.16em] text-gold">Так это увидит ученик</p>
+        <p className="text-xs font-black uppercase tracking-[0.16em] text-gold-ink">Так это увидит ученик</p>
         <h2 className="mt-3 font-display text-2xl leading-tight sm:text-3xl">{question.prompt}</h2>
         <div className="mt-6 grid gap-3">
           {question.options.map((option, index) => {

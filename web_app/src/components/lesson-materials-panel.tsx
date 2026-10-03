@@ -49,7 +49,7 @@ export function LessonMaterialsPanel({
     <div className="space-y-5">
       <div className="rounded-[24px] border border-stone-200 bg-white p-5">
         <div className="flex items-center gap-3">
-          <FilePlus size={20} className="text-gold" />
+          <FilePlus size={20} className="text-gold-ink" />
           <div>
             <h3 className="font-display text-3xl">Материалы урока</h3>
             <p className="mt-1 text-sm text-stone-500">
@@ -122,7 +122,7 @@ export function LessonMaterialsPanel({
       )}
 
       <form onSubmit={onSubmit} className="rounded-[24px] border border-dashed border-stone-300 bg-stone-50 p-5">
-        <p className="text-xs font-bold uppercase tracking-[0.16em] text-gold">Добавить материал</p>
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-gold-ink">Добавить материал</p>
         <h4 className="font-display mt-2 text-2xl">Новый файл или ссылка</h4>
 
         <label className="mt-5 block text-xs font-bold uppercase tracking-wider text-stone-500">

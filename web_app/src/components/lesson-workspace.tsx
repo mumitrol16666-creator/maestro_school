@@ -90,7 +90,7 @@ export function LessonWorkspace({
     <div className="space-y-6">
       <div className="flex flex-col gap-4 border-b border-stone-100 pb-6 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold-ink">
             Урок · {module?.title ?? "Модуль"}
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-3">
@@ -157,9 +157,9 @@ export function LessonWorkspace({
               }`}
             >
               <div className="flex items-center justify-between gap-2">
-                <Icon size={16} className={active ? "text-gold" : needsAttention ? "text-amber-600" : "text-stone-400"} />
+                <Icon size={16} className={active ? "text-gold-ink" : needsAttention ? "text-amber-600" : "text-stone-400"} />
                 {isDone && !needsAttention ? (
-                  <CheckCircle2 size={16} className={active ? "text-gold" : "text-emerald-600"} />
+                  <CheckCircle2 size={16} className={active ? "text-gold-ink" : "text-emerald-600"} />
                 ) : badge != null ? (
                   <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
                     active
@@ -184,8 +184,8 @@ export function LessonWorkspace({
           {lesson.videoUrl ? (
             <section className="rounded-[24px] border border-stone-200 bg-white p-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-xs font-bold uppercase tracking-[0.16em] text-gold">Видео урока</p>
-                <button type="button" onClick={() => onTabChange("settings")} className="text-xs font-bold text-gold hover:underline">
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-gold-ink">Видео урока</p>
+                <button type="button" onClick={() => onTabChange("settings")} className="text-xs font-bold text-gold-ink hover:underline">
                   Изменить ссылку
                 </button>
               </div>
@@ -210,8 +210,8 @@ export function LessonWorkspace({
 
           <section className="rounded-[24px] border border-stone-200 bg-white p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-gold">Описание</p>
-              <button type="button" onClick={() => onTabChange("settings")} className="text-xs font-bold text-gold hover:underline">
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-gold-ink">Описание</p>
+              <button type="button" onClick={() => onTabChange("settings")} className="text-xs font-bold text-gold-ink hover:underline">
                 Редактировать
               </button>
             </div>

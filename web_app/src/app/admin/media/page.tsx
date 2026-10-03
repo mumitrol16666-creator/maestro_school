@@ -149,7 +149,7 @@ export default function MediaAdminPage() {
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {resource.data.map((item) => (
             <div key={`${item.folder}/${item.filename}`} className="rounded-[24px] border border-stone-200 bg-paper p-5 shadow-soft">
-              <span className="grid h-12 w-12 place-items-center rounded-2xl bg-stone-100 text-gold">
+              <span className="grid h-12 w-12 place-items-center rounded-2xl bg-stone-100 text-gold-ink">
                 {item.folder === "images" ? <Image size={19} /> : <File size={19} />}
               </span>
               {editingKey === `${item.folder}/${item.filename}` ? (

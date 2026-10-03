@@ -94,7 +94,7 @@ export default function OnlineLessonDetailPage() {
       <div className="rounded-[30px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">Онлайн-урок</p>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold-ink">Онлайн-урок</p>
             <h1 className="font-display mt-2 text-4xl">{item.directionTitle}</h1>
             <p className="mt-2 text-sm text-stone-500">{item.level} · удобное время: {item.preferredTime}</p>
           </div>
@@ -139,7 +139,7 @@ export default function OnlineLessonDetailPage() {
 
       {assignment && (
         <section className="mt-7 rounded-[30px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">Домашнее задание</p>
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold-ink">Домашнее задание</p>
           <h2 className="font-display mt-3 text-3xl">{assignment.title}</h2>
           <p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-stone-600">{assignment.description}</p>
           {assignment.dueAt && (
@@ -170,7 +170,7 @@ export default function OnlineLessonDetailPage() {
                         }}
                         className="inline-flex items-center gap-1.5 rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-xs font-bold text-ink hover:bg-amber-50 transition"
                       >
-                        <Download size={13} className="text-gold" />
+                        <Download size={13} className="text-gold-ink" />
                         <span>Скачать</span>
                       </a>
                       <a

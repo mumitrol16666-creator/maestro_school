@@ -100,7 +100,7 @@ export function PushNotificationPrompt({
           <BellRing size={20} />
         </span>
         <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gold">Уведомления на телефон</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gold-ink">Уведомления на телефон</p>
           <h2 className="mt-1 text-lg font-black">
             {enabled
               ? "Уведомления включены"

@@ -138,11 +138,11 @@ export function LearningHomeworkAssignmentComposer({
             </p>
             <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-[11px] font-semibold text-stone-500">
               <span className="inline-flex items-center gap-1">
-                <CalendarDays size={13} className="text-gold" />
+                <CalendarDays size={13} className="text-gold-ink" />
                 {formatDueDate(latestAssignment.dueAt)}
               </span>
               <span className="inline-flex items-center gap-1">
-                <Users size={13} className="text-gold" />
+                <Users size={13} className="text-gold-ink" />
                 {recipientLabel(latestAssignment.recipientCount)}
               </span>
               {assignments.length > 1 ? <span>Всего по теме: {assignments.length}</span> : null}
@@ -179,7 +179,7 @@ export function LearningHomeworkAssignmentComposer({
         <label className="min-w-0 flex-1 text-[10px] font-black uppercase text-stone-500">
           Срок необязателен
           <span className="relative mt-1 block">
-            <CalendarDays size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gold" />
+            <CalendarDays size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gold-ink" />
             <input
               type="date"
               value={dueDate}

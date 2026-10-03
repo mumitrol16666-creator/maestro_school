@@ -102,11 +102,11 @@ export function PushNotificationsCard({
     return (
       <div className="rounded-[30px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
         <div className="flex items-start gap-4">
-          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-ink text-gold">
+          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-ink text-gold-ink">
             <Bell size={20} />
           </span>
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold">Уведомления</p>
+            <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold-ink">Уведомления</p>
             <h3 className="font-display mt-2 text-3xl">На этом устройстве</h3>
             <p className="mt-3 text-sm leading-6 text-stone-500">
               Чтобы получать сообщения об уроках и заданиях, откройте Maestro в браузере <strong>Chrome на телефоне Android</strong>.
@@ -121,11 +121,11 @@ export function PushNotificationsCard({
     return (
       <div className="rounded-[30px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
         <div className="flex items-start gap-4">
-          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-ink text-gold">
+          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-ink text-gold-ink">
             <BellOff size={20} />
           </span>
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold">Уведомления</p>
+            <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold-ink">Уведомления</p>
             <h3 className="font-display mt-2 text-3xl">Уведомления внутри кабинета</h3>
             <p className="mt-3 text-sm leading-6 text-stone-500">
               Новые события уже появляются по значку колокольчика. Уведомления на экран телефона пока недоступны.
@@ -141,11 +141,11 @@ export function PushNotificationsCard({
   return (
     <div className="rounded-[30px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
       <div className="flex items-start gap-4">
-        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-ink text-gold">
+        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-ink text-gold-ink">
           {enabled ? <Bell size={20} /> : <BellOff size={20} />}
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold">Уведомления</p>
+          <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold-ink">Уведомления</p>
           <h3 className="font-display mt-2 text-3xl">О важных событиях</h3>
           <p className="mt-3 text-sm leading-6 text-stone-500">
             {audience === "parent"

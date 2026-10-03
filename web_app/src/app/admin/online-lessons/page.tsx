@@ -172,11 +172,11 @@ export default function AdminOnlineLessonsPage() {
                         {onlineLessonStatusLabels[item.status]}
                       </span>
                     </div>
-                    <p className="mt-1 truncate text-xs font-bold text-gold">{item.directionTitle} · {item.level}</p>
+                    <p className="mt-1 truncate text-xs font-bold text-gold-ink">{item.directionTitle} · {item.level}</p>
                     <p className="mt-2 text-sm font-semibold text-ink">{formatPhoneDisplay(item.student.phone)}</p>
                     <p className="mt-1 line-clamp-2 text-sm text-stone-500">{item.preferredTime}</p>
                   </div>
-                  <ArrowRight size={18} className="shrink-0 text-gold" />
+                  <ArrowRight size={18} className="shrink-0 text-gold-ink" />
                 </Link>
               ))}
             </div>

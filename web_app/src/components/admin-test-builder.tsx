@@ -81,7 +81,7 @@ export function AdminTestBuilder({ questions, onChange }: AdminTestBuilderProps)
     <div className="mt-5 rounded-2xl border border-stone-200 bg-white p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-xs font-bold uppercase tracking-wider text-gold">Вопросы теста</p>
+          <p className="text-xs font-bold uppercase tracking-wider text-gold-ink">Вопросы теста</p>
           <p className="mt-1 text-sm text-stone-500">
             Отметьте правильный ответ для каждого вопроса. Ученик увидит результат сразу после сдачи.
           </p>

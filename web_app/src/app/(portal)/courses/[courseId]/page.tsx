@@ -52,7 +52,7 @@ export default function CourseDetailPage() {
         <div className="noise absolute inset-0 opacity-20" />
         <div className="relative grid gap-10 lg:grid-cols-[1fr_300px] lg:items-end">
           <div className="min-w-0">
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-gold">{difficultyLabel(course.difficultyLevel)} · {course.modules.length} модуля</p>
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-gold-ink">{difficultyLabel(course.difficultyLevel)} · {course.modules.length} модуля</p>
             <h1 className="font-display mt-4 break-words text-4xl leading-tight sm:text-6xl">{course.title}</h1>
             {course.description && (
               <MarkdownContent className="mt-5 max-w-2xl break-words text-white/65 [&_h2]:break-words [&_h2]:text-white [&_h3]:break-words [&_h3]:text-white [&_h4]:break-words [&_h4]:text-white [&_strong]:text-white">
@@ -63,7 +63,7 @@ export default function CourseDetailPage() {
           <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
             {enrolled ? (
               <>
-            <div className="mb-3 flex items-end justify-between"><span className="text-sm text-white/55">Прогресс курса</span><span className="font-display text-3xl text-gold">{progressPercent}%</span></div>
+            <div className="mb-3 flex items-end justify-between"><span className="text-sm text-white/55">Прогресс курса</span><span className="font-display text-3xl text-gold-ink">{progressPercent}%</span></div>
             <ProgressBar value={progressPercent} dark />
             <div className="mt-5 grid grid-cols-2 gap-3 text-xs text-white/55"><span className="flex items-center gap-2"><BookOpen size={14} /> {lessons.length} уроков</span><span className="flex items-center gap-2"><Trophy size={14} /> {course.completionCoinsReward > 0 ? `+${course.completionCoinsReward} Coins` : "Без награды"}</span></div>
               </>
@@ -85,7 +85,7 @@ export default function CourseDetailPage() {
         const moduleLessons = lessons.filter((lesson) => lesson.moduleId === module.id);
         return (
           <section className="mt-10" key={module.id}>
-            <div className="mb-5 flex items-end justify-between"><div><p className="text-xs font-bold uppercase tracking-widest text-gold">Модуль {module.sortOrder}</p><h2 className="font-display mt-2 text-3xl">{module.title}</h2></div><span className="text-sm text-stone-400">{completedCount} из {lessons.length} уроков</span></div>
+            <div className="mb-5 flex items-end justify-between"><div><p className="text-xs font-bold uppercase tracking-widest text-gold-ink">Модуль {module.sortOrder}</p><h2 className="font-display mt-2 text-3xl">{module.title}</h2></div><span className="text-sm text-stone-400">{completedCount} из {lessons.length} уроков</span></div>
             <div className="space-y-3">
               {moduleLessons.map((lesson) => {
                 const locked = lesson.status === "locked";

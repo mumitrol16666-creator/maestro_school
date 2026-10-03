@@ -224,7 +224,7 @@ export default function TeacherStudentsPage() {
       <section className="mb-7 border-y border-stone-200 py-5" aria-labelledby="teacher-homework-summary">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.16em] text-gold">
+            <p className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.16em] text-gold-ink">
               <ClipboardList size={15} /> Домашние задания
             </p>
             <h2 id="teacher-homework-summary" className="font-display mt-1 text-2xl">Что происходит с ДЗ</h2>
@@ -390,7 +390,7 @@ function StudentCard({ student, homework }: { student: TeacherStudent; homework:
   return (
     <article className="rounded-[26px] border border-stone-200 bg-paper p-5 shadow-soft sm:p-6">
       <div className="flex items-start gap-4">
-        <div className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-2xl bg-amber-50 text-gold">
+        <div className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-2xl bg-amber-50 text-gold-ink">
           {student.avatarUrl ? (
             <img src={student.avatarUrl} alt="" className="h-full w-full object-cover" />
           ) : (
@@ -431,7 +431,7 @@ function StudentCard({ student, homework }: { student: TeacherStudent; homework:
           {student.appUserId ? "Кабинет подключён" : "Кабинет не подключён"}
         </span>
         <span className="inline-flex min-w-0 items-center gap-2" title={student.appActivity.lastLoginAt ?? undefined}>
-          <Clock3 size={15} className="text-gold" />
+          <Clock3 size={15} className="text-gold-ink" />
           Последний вход: {formatAppActivity(student.appActivity.lastLoginAt ?? student.appActivity.lastActiveAt)}
         </span>
         <span className="inline-flex min-w-0 items-center gap-2">
@@ -467,7 +467,7 @@ function StudentCard({ student, homework }: { student: TeacherStudent; homework:
 
       <section className="mt-5 border-y border-stone-200 py-4">
         <div className="flex items-center gap-2">
-          <TrendingUp size={16} className="text-gold" />
+          <TrendingUp size={16} className="text-gold-ink" />
           <p className="text-[10px] font-black uppercase tracking-wider text-stone-500">Динамика обучения</p>
         </div>
         <div className="mt-3 grid grid-cols-3 gap-2">
@@ -511,7 +511,7 @@ function StudentCard({ student, homework }: { student: TeacherStudent; homework:
               </p>
               <p className="mt-1 text-xs text-stone-500">Посещаемость этого ученика</p>
             </div>
-            <CalendarDays size={17} className="text-gold" />
+            <CalendarDays size={17} className="text-gold-ink" />
           </div>
           <div className="divide-y divide-stone-100">
             {student.attendanceHistory.map((item) => {
@@ -554,7 +554,7 @@ function StudentCard({ student, homework }: { student: TeacherStudent; homework:
               setBonusOpen((value) => !value);
               setBonusFeedback(null);
             }}
-            className="inline-flex items-center gap-2 rounded-full bg-violet-50 px-4 py-2 text-xs font-bold text-violet-800 transition hover:bg-violet-100"
+            className="inline-flex items-center gap-2 rounded-full bg-amber-50 px-4 py-2 text-xs font-bold text-amber-800 transition hover:bg-amber-100"
           >
             <Bolt size={14} />
             {bonusOpen ? "Скрыть бонус" : "Бонус в лиге"}
@@ -586,8 +586,8 @@ function StudentCard({ student, homework }: { student: TeacherStudent; homework:
       </div>
       {dialogFeedback ? <p className="mt-3 text-xs font-bold text-red-700">{dialogFeedback}</p> : null}
       {bonusOpen && student.appUserId ? (
-        <section className="mt-4 rounded-2xl border border-violet-200 bg-violet-50/60 p-4">
-          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-violet-700">Учебное поощрение</p>
+        <section className="mt-4 rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-amber-700">Учебное поощрение</p>
           <p className="mt-2 text-xs leading-5 text-stone-600">
             До 10 XP одному ученику в неделю. Баланс и финансовые данные преподавателю не показываются.
           </p>
@@ -603,7 +603,7 @@ function StudentCard({ student, homework }: { student: TeacherStudent; homework:
                   const val = event.target.value === "" ? 0 : Number(event.target.value);
                   setBonusAmount(Math.max(0, Math.min(10, val)));
                 }}
-                className="mt-2 min-h-11 w-full rounded-xl border border-violet-200 bg-white px-3 text-sm outline-none focus:border-violet-500"
+                className="mt-2 min-h-11 w-full rounded-xl border border-amber-200 bg-white px-3 text-sm outline-none focus:border-amber-500"
               />
               <div className="mt-1 flex gap-1">
                 {[10, 5, 3].map((val) => (
@@ -613,8 +613,8 @@ function StudentCard({ student, homework }: { student: TeacherStudent; homework:
                     onClick={() => setBonusAmount(val)}
                     className={`rounded-md px-2 py-0.5 text-[10px] font-bold transition ${
                       bonusAmount === val
-                        ? "bg-violet-700 text-white"
-                        : "border border-violet-200 bg-white text-violet-800 hover:bg-violet-50"
+                        ? "bg-amber-700 text-white"
+                        : "border border-amber-200 bg-white text-amber-800 hover:bg-amber-50"
                     }`}
                   >
                     +{val}
@@ -629,11 +629,11 @@ function StudentCard({ student, homework }: { student: TeacherStudent; homework:
                 maxLength={160}
                 onChange={(event) => setBonusReason(event.target.value)}
                 placeholder="Например: заметный прогресс в ритме"
-                className="mt-2 min-h-11 w-full rounded-xl border border-violet-200 bg-white px-3 text-sm outline-none focus:border-violet-500"
+                className="mt-2 min-h-11 w-full rounded-xl border border-amber-200 bg-white px-3 text-sm outline-none focus:border-amber-500"
               />
             </label>
           </div>
-          {bonusFeedback ? <p className="mt-3 text-xs font-bold text-violet-800">{bonusFeedback}</p> : null}
+          {bonusFeedback ? <p className="mt-3 text-xs font-bold text-amber-800">{bonusFeedback}</p> : null}
           <button
             type="button"
             disabled={bonusBusy || bonusAmount < 1 || bonusAmount > 10 || bonusReason.trim().length < 3}
@@ -652,7 +652,7 @@ function StudentCard({ student, homework }: { student: TeacherStudent; homework:
                 setBonusFeedback(error instanceof Error ? error.message : "Не удалось начислить бонус");
               }).finally(() => setBonusBusy(false));
             }}
-            className="mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-violet-700 px-4 text-xs font-black text-white transition hover:bg-violet-800 disabled:cursor-not-allowed disabled:opacity-50"
+            className="mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-amber-700 px-4 text-xs font-black text-white transition hover:bg-amber-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {bonusBusy ? <LoaderCircle size={14} className="animate-spin" /> : <Bolt size={14} />}
             Начислить +{bonusAmount || 0} XP
@@ -688,7 +688,7 @@ function GroupCard({ group, homework }: { group: TeacherGroup; homework: Homewor
                 {group.students.length} участник(ов)
               </span>
             </div>
-            <p className="mt-1 text-sm font-bold text-gold">{group.direction || "Направление не указано"}</p>
+            <p className="mt-1 text-sm font-bold text-gold-ink">{group.direction || "Направление не указано"}</p>
             {group.description ? (
               <p className="mt-2 text-sm leading-relaxed text-stone-500">{group.description}</p>
             ) : null}
@@ -711,7 +711,7 @@ function GroupCard({ group, homework }: { group: TeacherGroup; homework: Homewor
         {homework ? (
           <section className="mt-5 border-y border-stone-200 py-4">
             <div className="flex items-center gap-2">
-              <ClipboardList size={16} className="text-gold" />
+              <ClipboardList size={16} className="text-gold-ink" />
               <p className="text-[10px] font-black uppercase tracking-wider text-stone-500">Домашние задания группы</p>
             </div>
             <div className="mt-3 grid grid-cols-4 gap-2 text-center">
@@ -803,7 +803,7 @@ function HomeworkSummary({
 }) {
   return (
     <div className="min-w-0 border-l-2 border-amber-200 pl-3">
-      <Icon size={16} className="text-gold" />
+      <Icon size={16} className="text-gold-ink" />
       <p className={`mt-2 text-2xl font-black tabular-nums ${tone}`}>{value}</p>
       <p className="mt-1 text-[10px] font-bold uppercase leading-4 tracking-[0.08em] text-stone-500">{label}</p>
     </div>
@@ -830,7 +830,7 @@ function Summary({
 }) {
   return (
     <div className="min-h-28 rounded-lg border border-stone-200 bg-white p-3 sm:min-h-0 sm:p-5">
-      <Icon size={17} className="text-gold sm:h-[18px] sm:w-[18px]" />
+      <Icon size={17} className="text-gold-ink sm:h-[18px] sm:w-[18px]" />
       <p className="font-display mt-3 text-2xl sm:text-3xl">{value}</p>
       <p className="mt-1 text-[9px] font-bold uppercase leading-4 text-stone-500 sm:text-xs sm:tracking-wide">{label}</p>
     </div>

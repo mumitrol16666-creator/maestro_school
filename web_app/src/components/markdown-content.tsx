@@ -23,7 +23,7 @@ export function MarkdownContent({ children, className = "" }: { children: string
           a: ({ href, children: content }) => {
             const safeHref = safeMarkdownHref(href);
             if (!safeHref) return <span className="font-semibold text-ink">{content}</span>;
-            return <a href={safeHref} target="_blank" rel="noreferrer" className="font-semibold text-gold underline">{content}</a>;
+            return <a href={safeHref} target="_blank" rel="noreferrer" className="font-semibold text-gold-ink underline">{content}</a>;
           },
           ul: ({ children: content }) => <ul className="list-disc space-y-1 pl-5">{content}</ul>,
           ol: ({ children: content }) => <ol className="list-decimal space-y-1 pl-5">{content}</ol>,

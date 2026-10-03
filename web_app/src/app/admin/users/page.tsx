@@ -72,7 +72,7 @@ export default function AdminUsersPage() {
             href={`/admin/users/${item.id}`}
             className="card-hover flex items-center gap-4 rounded-[24px] border border-stone-200 bg-paper p-5 shadow-soft"
           >
-            <span className="grid h-12 w-12 place-items-center rounded-2xl bg-stone-100 text-gold">
+            <span className="grid h-12 w-12 place-items-center rounded-2xl bg-stone-100 text-gold-ink">
               <UserCog size={20} />
             </span>
             <div className="min-w-0 flex-1">
@@ -83,7 +83,7 @@ export default function AdminUsersPage() {
               <p className="mt-1 text-sm font-semibold text-ink">{formatPhoneDisplay(item.phone)}</p>
               <p className="mt-1 text-xs text-stone-500">@{item.login} · {item.email}</p>
             </div>
-            <ArrowRight size={18} className="text-gold" />
+            <ArrowRight size={18} className="text-gold-ink" />
           </Link>
         ))}
       </div>

@@ -88,7 +88,7 @@ export default function TrialLessonPage() {
             <span className="grid h-16 w-16 place-items-center rounded-full bg-emerald-50 text-emerald-700">
               <CheckCircle2 size={32} />
             </span>
-            <p className="mt-7 text-xs font-bold uppercase tracking-[0.22em] text-gold">Заявка отправлена</p>
+            <p className="mt-7 text-xs font-bold uppercase tracking-[0.22em] text-gold-ink">Заявка отправлена</p>
             <h1 className="font-display mt-3 text-5xl leading-tight">Мы напишем вам в WhatsApp</h1>
             <p className="mt-5 text-base leading-7 text-stone-500">
               Администратор получил заявку на пробный урок по направлению «{direction}» и свяжется с вами по номеру {phone}.
@@ -96,7 +96,7 @@ export default function TrialLessonPage() {
 
             <div className="mt-8 rounded-[28px] border border-gold/20 bg-white p-6 shadow-soft">
               <div className="flex items-start gap-4">
-                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gold/10 text-gold"><Music2 size={20} /></span>
+                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gold/10 text-gold-ink"><Music2 size={20} /></span>
                 <div>
                   <h2 className="font-display text-2xl">Пока ждёте ответ</h2>
                   <p className="mt-2 text-sm leading-6 text-stone-500">
@@ -126,10 +126,10 @@ export default function TrialLessonPage() {
           <Link href="/login" className="inline-flex items-center gap-2 text-sm font-bold text-stone-500 transition hover:text-ink">
             <ArrowLeft size={16} /> Назад ко входу
           </Link>
-          <p className="mt-8 text-xs font-bold uppercase tracking-[0.22em] text-gold">Первое знакомство</p>
+          <p className="mt-8 text-xs font-bold uppercase tracking-[0.22em] text-gold-ink">Первое знакомство</p>
           <h1 className="font-display mt-3 text-5xl leading-tight">Записаться на пробный урок</h1>
           <p className="mt-4 flex items-start gap-2 text-sm leading-6 text-stone-500">
-            <MessageCircle size={17} className="mt-1 shrink-0 text-gold" />
+            <MessageCircle size={17} className="mt-1 shrink-0 text-gold-ink" />
             Аккаунт создавать не нужно. После отправки администратор ответит вам в WhatsApp.
           </p>
 

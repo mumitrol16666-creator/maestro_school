@@ -93,7 +93,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   const sidebar = (
-    <aside className="flex h-full flex-col overflow-y-auto border-r border-white/10 bg-[#151613] px-4 py-5 text-white sm:px-5 sm:py-6">
+    <aside className="flex h-full flex-col overflow-y-auto border-r border-white/10 bg-charcoal px-4 py-5 text-white sm:px-5 sm:py-6">
       <div className="flex items-center justify-between border-b border-white/10 pb-5">
         <Brand />
         <button
@@ -125,13 +125,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               aria-current={active ? "page" : undefined}
               className={`group relative flex min-h-12 items-center gap-3 rounded-2xl border px-3 py-2.5 text-sm font-bold transition ${
                 active
-                  ? "border-gold/30 bg-white text-ink shadow-[0_14px_34px_rgba(0,0,0,0.18)]"
+                  ? "border-gold/35 bg-cream text-ink"
                   : "border-transparent text-white/60 hover:border-white/10 hover:bg-white/5 hover:text-white"
               }`}
             >
               {active ? <span className="absolute inset-y-3 left-0 w-0.5 rounded-full bg-gold" /> : null}
               <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl transition ${
-                active ? "bg-gold/15 text-gold" : "bg-white/5 text-white/55 group-hover:bg-white/10 group-hover:text-white"
+                active ? "bg-gold/15 text-gold-ink" : "bg-white/5 text-white/55 group-hover:bg-white/10 group-hover:text-white"
               }`}>
                 <Icon size={18} strokeWidth={2.15} />
               </span>
@@ -149,7 +149,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           onClick={() => setOpen(false)}
           className="mt-auto rounded-[22px] border border-white/10 bg-white/[0.045] p-4 transition hover:border-gold/25 hover:bg-white/[0.075]"
         >
-          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gold">{roleLabel(user?.role)}</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gold-ink">{roleLabel(user?.role)}</p>
           {student ? (
             <p className="mt-2 text-sm font-semibold">
               {points.toLocaleString("ru-RU")} баллов · {coins.toLocaleString("ru-RU")} Coins
@@ -165,11 +165,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-cream">
+      <a className="brand-skip-link" href="#main-content">Перейти к содержимому</a>
       <div className="fixed inset-y-0 left-0 hidden w-[272px] lg:block print:hidden">{sidebar}</div>
       {open && <div className="fixed inset-y-0 left-0 z-50 w-[min(86vw,320px)] shadow-2xl lg:hidden print:hidden">{sidebar}</div>}
       {open && <button className="fixed inset-0 z-40 bg-black/45 backdrop-blur-[2px] lg:hidden print:hidden" onClick={() => setOpen(false)} aria-label="Закрыть меню по фону" />}
       <div className="lg:pl-[272px] print:pl-0">
-        <header className="sticky top-0 z-30 flex h-[calc(68px+env(safe-area-inset-top,0px))] items-center gap-3 border-b border-stone-200/70 bg-cream/90 px-4 pt-[env(safe-area-inset-top,0px)] backdrop-blur-xl sm:px-8 print:hidden">
+        <header className="sticky top-0 z-30 flex h-[calc(80px+env(safe-area-inset-top,0px))] items-center gap-3 border-b border-stone-200/70 bg-cream/90 px-4 pt-[env(safe-area-inset-top,0px)] backdrop-blur-xl sm:px-8 print:hidden">
           {student ? (
             <div className="flex items-center gap-2 lg:hidden">
               <Brand compact />
@@ -198,7 +199,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <UserMenu />
           </div>
         </header>
-        <main className={`mobile-safe mx-auto max-w-[1500px] p-4 sm:p-8 lg:p-10 print:max-w-none print:p-0 ${
+        <main id="main-content" tabIndex={-1} className={`mobile-safe mx-auto max-w-[1500px] p-4 sm:p-8 lg:p-10 print:max-w-none print:p-0 ${
           pathname.startsWith("/messages") ? "sm:py-5 lg:py-6" : ""
         } ${
           student ? "pb-[calc(6.75rem+env(safe-area-inset-bottom,0px))] sm:pb-[calc(6.75rem+env(safe-area-inset-bottom,0px))] lg:pb-10" : ""
@@ -232,7 +233,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 }`}
               >
                 <span className={`relative grid h-9 w-11 place-items-center rounded-xl ${
-                  active ? "bg-amber-50 text-gold" : ""
+                  active ? "bg-amber-50 text-gold-ink" : ""
                 }`}>
                   <Icon size={19} strokeWidth={2.15} />
                   {badge != null && badge > 0 ? (

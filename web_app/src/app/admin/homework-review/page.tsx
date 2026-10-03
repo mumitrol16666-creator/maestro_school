@@ -131,7 +131,7 @@ export default function HomeworkReviewPage() {
               href={`/admin/homework-review/${item.submissionId}`}
               className="card-hover flex flex-col gap-4 rounded-[24px] border border-stone-200 bg-paper p-5 shadow-soft sm:flex-row sm:items-center"
             >
-              <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-amber-50 text-gold">
+              <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-amber-50 text-gold-ink">
                 <ClipboardCheck size={20} />
               </div>
               <div className="min-w-0 flex-1">
@@ -144,7 +144,7 @@ export default function HomeworkReviewPage() {
                     {statusLabel(item.status)}
                   </span>
                 </div>
-                <p className="mt-1 text-xs font-bold text-gold">
+                <p className="mt-1 text-xs font-bold text-gold-ink">
                   {item.courseTitle} · {item.moduleTitle} · {item.lessonTitle}
                 </p>
                 <p className="mt-2 line-clamp-2 text-sm text-stone-500">

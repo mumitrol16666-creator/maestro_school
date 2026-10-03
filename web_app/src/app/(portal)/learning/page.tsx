@@ -58,7 +58,7 @@ export default function LearningWorkspacePage() {
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
         <section className="flex min-w-0 flex-col rounded-xl border border-ink bg-ink p-5 text-white sm:p-7" aria-labelledby="learning-focus-title">
-          <p className="inline-flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.13em] text-gold">
+          <p className="inline-flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.13em] text-gold-ink">
             <BookOpenCheck size={17} aria-hidden="true" /> {nextTask ? "Задание" : "Подготовка к уроку"}
           </p>
           <h2 id="learning-focus-title" className="font-display mt-4 break-words text-2xl leading-tight sm:text-3xl">

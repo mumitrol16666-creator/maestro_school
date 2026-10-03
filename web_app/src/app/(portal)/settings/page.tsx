@@ -107,7 +107,7 @@ export default function SettingsPage() {
             className="self-start rounded-[30px] bg-ink p-7 text-white shadow-soft"
             data-testid="student-profile-summary"
           >
-            <div className="grid h-20 w-20 place-items-center overflow-hidden rounded-full border border-white/10 bg-white/10 font-display text-2xl text-gold">
+            <div className="grid h-20 w-20 place-items-center overflow-hidden rounded-full border border-white/10 bg-white/10 font-display text-2xl text-gold-ink">
               {profile.avatar ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={profile.avatar} alt="" className="h-full w-full object-cover" />
@@ -116,10 +116,10 @@ export default function SettingsPage() {
             <h2 className="font-display mt-7 text-4xl">{fullName}</h2>
             <p className="mt-2 text-sm text-white/45">Ученик Maestro</p>
             <div className="mt-8 space-y-3 border-t border-white/10 pt-6 text-sm">
-              <div className="flex items-center gap-3 text-white/60"><GraduationCap size={16} className="text-gold" /> {offlineGroups.length ? offlineGroups.map((item) => item.name).join(", ") : "Учебные группы пока не подключены"}</div>
-              <div className="flex items-center gap-3 text-white/60"><BookOpen size={16} className="text-gold" /> {directions.length ? directions.map((item) => item.title).join(", ") : "Онлайн-курсы пока не начаты"}</div>
-              <div className="flex items-center gap-3 text-white/60"><Mail size={16} className="text-gold" /> {profile.email}</div>
-              <div className="flex items-center gap-3 text-white/60"><Phone size={16} className="text-gold" /> {profile.phone && profile.phone !== "00000000000" ? profile.phone : "Телефон не указан"}</div>
+              <div className="flex items-center gap-3 text-white/60"><GraduationCap size={16} className="text-gold-ink" /> {offlineGroups.length ? offlineGroups.map((item) => item.name).join(", ") : "Учебные группы пока не подключены"}</div>
+              <div className="flex items-center gap-3 text-white/60"><BookOpen size={16} className="text-gold-ink" /> {directions.length ? directions.map((item) => item.title).join(", ") : "Онлайн-курсы пока не начаты"}</div>
+              <div className="flex items-center gap-3 text-white/60"><Mail size={16} className="text-gold-ink" /> {profile.email}</div>
+              <div className="flex items-center gap-3 text-white/60"><Phone size={16} className="text-gold-ink" /> {profile.phone && profile.phone !== "00000000000" ? profile.phone : "Телефон не указан"}</div>
             </div>
             <button
               type="button"
@@ -139,28 +139,28 @@ export default function SettingsPage() {
               {achievements ? <ProfileAchievements achievements={achievements} /> : null}
               {school ? <StudentMemberships balanceSnapshot={school.balanceSnapshot} /> : null}
               <div className="rounded-[30px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
-                <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold">Обучение</p>
+                <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold-ink">Обучение</p>
                 <div className={`mt-6 grid gap-4 ${economy?.economyV2Enabled ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>
                   <div className="rounded-2xl bg-stone-50 p-5">
-                    <GraduationCap size={18} className="text-gold" />
+                    <GraduationCap size={18} className="text-gold-ink" />
                     <p className="mt-3 text-xs font-bold uppercase tracking-wider text-stone-400">Онлайн-курсы</p>
                     <p className="font-display mt-3 text-2xl">{directions.length || 0}</p>
                   </div>
                   {economy?.economyV2Enabled ? (
                     <div className="rounded-2xl bg-stone-50 p-5">
-                      <Star size={18} className="text-gold" />
+                      <Star size={18} className="text-gold-ink" />
                       <p className="mt-3 text-xs font-bold uppercase tracking-wider text-stone-400">Учебные группы</p>
                       <p className="font-display mt-3 text-2xl">{offlineGroups.length}</p>
                     </div>
                   ) : (
                     <>
                       <div className="rounded-2xl bg-stone-50 p-5">
-                        <Star size={18} className="text-gold" />
+                        <Star size={18} className="text-gold-ink" />
                         <p className="mt-3 text-xs font-bold uppercase tracking-wider text-stone-400">Баллы</p>
                         <p className="font-display mt-3 text-2xl">{(profile.points ?? 0).toLocaleString("ru-RU")}</p>
                       </div>
                       <div className="rounded-2xl bg-amber-50 p-5">
-                        <Coins size={18} className="text-gold" />
+                        <Coins size={18} className="text-gold-ink" />
                         <p className="mt-3 text-xs font-bold uppercase tracking-wider text-amber-700">Бонусы Maestro</p>
                         <p className="font-display mt-3 text-2xl text-amber-950">{(profile.coins ?? 0).toLocaleString("ru-RU")}</p>
                         <p className="mt-2 text-xs leading-5 text-amber-800">Для обмена на награды; на уровень не влияют</p>
@@ -170,11 +170,11 @@ export default function SettingsPage() {
                 </div>
               </div>
               <div className="rounded-[30px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
-                <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold">Активные курсы</p>
+                <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold-ink">Активные курсы</p>
                 <div className="mt-5 space-y-3">
                   {courses.length ? courses.map((course) => (
                     <Link key={course.id} href={`/courses/${course.id}`} className="card-hover flex items-center gap-4 rounded-2xl border border-transparent bg-stone-50 p-4">
-                      <span className="grid h-10 w-10 place-items-center rounded-xl bg-white text-gold ring-1 ring-gold/10"><BookOpen size={17} /></span>
+                      <span className="grid h-10 w-10 place-items-center rounded-xl bg-white text-gold-ink ring-1 ring-gold/10"><BookOpen size={17} /></span>
                       <div>
                         <p className="font-bold">{course.title}</p>
                         <p className="mt-1 text-xs text-stone-400">{course.direction.title}</p>
@@ -259,7 +259,7 @@ function ParentVisibilityRequestCard() {
 
   return (
     <section className="rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8" data-testid="parent-visibility-student">
-      <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold">Семейный доступ</p>
+      <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold-ink">Семейный доступ</p>
       <h3 className="font-display mt-2 text-3xl">Что видят родители</h3>
       <p className="mt-2 text-sm leading-6 text-stone-500">
         Выберите желаемые разделы и отправьте запрос. Изменения применит администратор для всех привязанных родителей.
@@ -272,7 +272,7 @@ function ParentVisibilityRequestCard() {
               checked={requested[item.key]}
               disabled={Boolean(pending)}
               onChange={(event) => setRequested({ ...requested, [item.key]: event.target.checked })}
-              className="h-5 w-5 accent-[#c59a45]"
+              className="h-5 w-5 accent-gold"
             />
             {item.label}
           </label>
@@ -315,24 +315,24 @@ function EconomyProfileSummary({
     <section className="rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8" data-testid="economy-profile-summary">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold">Активность</p>
+          <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold-ink">Активность</p>
           <h3 className="font-display mt-2 text-3xl">Серия и медали</h3>
         </div>
-        <Link href="/league" className="text-sm font-bold text-stone-600 hover:text-gold">Открыть лигу</Link>
+        <Link href="/league" className="text-sm font-bold text-stone-600 hover:text-gold-ink">Открыть лигу</Link>
       </div>
       <div className="mt-6 grid divide-y divide-stone-200 border-y border-stone-200 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
         <div className="py-4 sm:px-4 sm:first:pl-0">
-          <Coins size={18} className="text-gold" />
+          <Coins size={18} className="text-gold-ink" />
           <p className="font-display mt-2 text-3xl">{economy.coins.toLocaleString("ru-RU")}</p>
           <p className="text-xs font-bold text-stone-500">Coins</p>
         </div>
         <div className="py-4 sm:px-4">
-          <Flame size={18} className="text-gold" />
+          <Flame size={18} className="text-gold-ink" />
           <p className="font-display mt-2 text-3xl">{economy.streak?.currentWeeks ?? 0}</p>
           <p className="text-xs font-bold text-stone-500">текущая серия</p>
         </div>
         <div className="py-4 sm:px-4 sm:last:pr-0">
-          <Award size={18} className="text-gold" />
+          <Award size={18} className="text-gold-ink" />
           <p className="font-display mt-2 text-3xl">{earnedCount} / {economy.milestones.length}</p>
           <p className="text-xs font-bold text-stone-500">медалей · лучшая серия {economy.streak?.bestWeeks ?? 0}</p>
         </div>
@@ -363,7 +363,7 @@ function ProfileAchievements({
     <section id="achievements" className="scroll-mt-24 rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8" data-testid="profile-achievements">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold">Учебный путь</p>
+          <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold-ink">Учебный путь</p>
           <h3 className="font-display mt-2 text-3xl">Достижения</h3>
           <p className="mt-2 text-sm text-stone-500">Получено {earnedCount} из {totalCount}</p>
         </div>
@@ -371,7 +371,7 @@ function ProfileAchievements({
           <button
             type="button"
             onClick={() => setShowAll((current) => !current)}
-            className="min-h-10 text-sm font-bold text-stone-600 hover:text-gold"
+            className="min-h-10 text-sm font-bold text-stone-600 hover:text-gold-ink"
             aria-expanded={showAll}
           >
             {showAll ? "Свернуть" : "Показать все"}
@@ -490,7 +490,7 @@ function ProfileEditCard({
 
   return (
     <div className="rounded-[30px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
-      <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold">Личные данные</p>
+      <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold-ink">Личные данные</p>
       <h3 className="font-display mt-3 text-3xl">Профиль ученика</h3>
       <div className="mt-6 flex flex-wrap items-center gap-4">
         <div className="grid h-20 w-20 place-items-center overflow-hidden rounded-full bg-stone-100 text-lg font-bold text-stone-400">
@@ -501,7 +501,7 @@ function ProfileEditCard({
             <UserRound size={26} />
           )}
         </div>
-        <label className="inline-flex min-h-12 cursor-pointer items-center gap-2 rounded-2xl border border-stone-200 bg-white px-4 py-3 text-sm font-bold text-ink transition-colors hover:border-gold/50 hover:text-gold focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-gold">
+        <label className="inline-flex min-h-12 cursor-pointer items-center gap-2 rounded-2xl border border-stone-200 bg-white px-4 py-3 text-sm font-bold text-ink transition-colors hover:border-gold/50 hover:text-gold-ink focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-gold">
           {uploadingAvatar ? <LoaderCircle size={16} className="animate-spin" /> : <Camera size={16} />}
           {uploadingAvatar ? "Загружаем фото" : "Загрузить фото"}
           <input name="avatar" type="file" accept="image/png,image/jpeg,image/webp" onChange={handleAvatarChange} className="sr-only" />
@@ -606,7 +606,7 @@ function PasswordChangeCard() {
 
   return (
     <div className="rounded-[30px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
-      <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold">Безопасность</p>
+      <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold-ink">Безопасность</p>
       <h3 className="mt-3 text-lg font-bold">Сменить пароль</h3>
       <form onSubmit={handleSubmit} className="mt-5 space-y-4">
         <label className="block">

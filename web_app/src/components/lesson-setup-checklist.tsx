@@ -44,7 +44,7 @@ export function LessonSetupChecklist(props: LessonSetupChecklistProps) {
         <button
           type="button"
           onClick={() => props.onGoTo(firstPendingTab(props))}
-          className="text-xs font-bold text-gold hover:underline"
+          className="text-xs font-bold text-gold-ink hover:underline"
         >
           Перейти к незаполненному
         </button>

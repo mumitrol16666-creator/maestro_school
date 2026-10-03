@@ -40,7 +40,7 @@ export function CourseReadiness({ modules, onSelectLesson }: CourseReadinessProp
   return <section className="mb-6 rounded-[28px] border border-stone-200 bg-paper p-5 shadow-soft">
     <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
       <div>
-        <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">Готовность курса</p>
+        <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold-ink">Готовность курса</p>
         <div className="mt-2 flex items-baseline gap-3"><span className="font-display text-4xl">{percentage}%</span><span className="text-sm text-stone-500">{ready} из {lessons.length} уроков готовы</span></div>
       </div>
       <div className="w-full max-w-sm"><ProgressBar value={percentage} /><p className="mt-2 text-right text-xs text-stone-400">{published} опубликовано</p></div>
@@ -52,7 +52,7 @@ export function CourseReadiness({ modules, onSelectLesson }: CourseReadinessProp
         return <button key={issue} type="button" onClick={() => setActiveIssue(active ? null : issue)} className={`flex items-center gap-3 rounded-2xl border px-4 py-3 text-left transition ${active ? "border-gold bg-amber-50" : "border-stone-200 bg-white hover:border-stone-300"}`}>
           <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${count ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"}`}>{count ? <CircleAlert size={17} /> : <CheckCircle2 size={17} />}</span>
           <span className="min-w-0 flex-1"><span className="block text-sm font-bold">{issueLabels[issue]}</span><span className="mt-0.5 block text-xs text-stone-400">{count} уроков</span></span>
-          <ChevronRight size={15} className={active ? "rotate-90 text-gold" : "text-stone-300"} />
+          <ChevronRight size={15} className={active ? "rotate-90 text-gold-ink" : "text-stone-300"} />
         </button>;
       })}
     </div>

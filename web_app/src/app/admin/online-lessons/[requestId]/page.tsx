@@ -86,7 +86,7 @@ export default function AdminOnlineLessonDetailPage() {
       <section className="rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">Заявка на онлайн-урок</p>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold-ink">Заявка на онлайн-урок</p>
             <h1 className="font-display mt-2 text-4xl">{studentName}</h1>
             <div className="mt-3">
               <StudentPhoneLine
@@ -148,14 +148,14 @@ export default function AdminOnlineLessonDetailPage() {
       </section>
 
       {!isTeacher && ["new", "assigned"].includes(item.status) ? (
-        <section className="mt-6 rounded-[28px] border border-violet-200 bg-violet-50 p-6">
+        <section className="mt-6 rounded-[28px] border border-amber-200 bg-amber-50 p-6">
           <div className="flex items-center gap-3">
-            <span className="grid h-11 w-11 place-items-center rounded-2xl bg-white text-violet-800">
+            <span className="grid h-11 w-11 place-items-center rounded-2xl bg-white text-amber-800">
               <UserRound size={19} />
             </span>
             <div>
               <h2 className="font-display text-2xl">Назначить преподавателя</h2>
-              <p className="mt-1 text-sm text-violet-900/70">Урок останется в общей очереди, но будет закреплён за выбранным педагогом.</p>
+              <p className="mt-1 text-sm text-amber-900/70">Урок останется в общей очереди, но будет закреплён за выбранным педагогом.</p>
             </div>
           </div>
           <div className="mt-5 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
@@ -345,7 +345,7 @@ export default function AdminOnlineLessonDetailPage() {
           <h2 className="font-display text-2xl">Проверка домашнего задания</h2>
           <p className="mt-3 text-sm text-stone-600">{pendingSubmission.comment || "Без комментария"}</p>
           {pendingSubmission.attachmentUrl && (
-            <a href={pendingSubmission.attachmentUrl} target="_blank" rel="noreferrer" className="mt-2 inline-block text-sm font-bold text-gold hover:underline">
+            <a href={pendingSubmission.attachmentUrl} target="_blank" rel="noreferrer" className="mt-2 inline-block text-sm font-bold text-gold-ink hover:underline">
               Открыть материал
             </a>
           )}

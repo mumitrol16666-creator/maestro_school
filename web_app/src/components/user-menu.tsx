@@ -43,7 +43,7 @@ export function UserMenu() {
         aria-haspopup="menu"
         className="flex items-center gap-2.5 rounded-full border border-stone-200/90 bg-white py-1.5 pl-1.5 pr-3 shadow-sm transition hover:border-gold/35 hover:shadow-soft sm:gap-3"
       >
-        <span className="grid h-9 w-9 place-items-center rounded-full bg-ink text-xs font-bold text-gold ring-2 ring-gold/15">
+        <span className="grid h-9 w-9 place-items-center rounded-full bg-ink text-xs font-bold text-gold-ink ring-2 ring-gold/15">
           {initials}
         </span>
         <span className="hidden text-left sm:block">
@@ -71,17 +71,17 @@ export function UserMenu() {
               onClick={() => setOpen(false)}
               className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-stone-700 transition hover:bg-stone-100"
             >
-              <Settings size={16} className="text-gold" />
+              <Settings size={16} className="text-gold-ink" />
               {student ? "Профиль и настройки" : "Настройки аккаунта"}
             </Link>
             {student ? (
               <div className="mx-1 space-y-1">
                 <div className="flex items-center gap-2 rounded-xl bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
-                  <Star size={14} className="text-gold" fill="currentColor" />
+                  <Star size={14} className="text-gold-ink" fill="currentColor" />
                   {(user?.points ?? 0).toLocaleString("ru-RU")} баллов Maestro
                 </div>
                 <div className="flex items-center gap-2 rounded-xl bg-stone-100 px-3 py-2 text-xs font-semibold text-stone-700">
-                  <Coins size={14} className="text-gold" />
+                  <Coins size={14} className="text-gold-ink" />
                   {(user?.coins ?? 0).toLocaleString("ru-RU")} Maestro Coins
                 </div>
               </div>

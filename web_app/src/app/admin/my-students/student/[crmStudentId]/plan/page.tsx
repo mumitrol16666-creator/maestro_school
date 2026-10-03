@@ -52,7 +52,7 @@ export default function StudentPlanPage() {
       />
 
       <div className="mt-5 flex items-center gap-2 text-sm font-semibold text-stone-500">
-        <GraduationCap size={17} className="text-gold" />
+        <GraduationCap size={17} className="text-gold-ink" />
         {student.directions.join(" · ") || "Направление не указано"}
       </div>
 

@@ -131,7 +131,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   }, [pathname, reloadPendingHomeworkCount, reloadPendingQuestionsCount]);
 
   const sidebar = (
-    <aside className="flex h-full flex-col overflow-y-auto border-r border-white/10 bg-[#151613] px-4 py-5 text-white sm:px-5 sm:py-6">
+    <aside className="flex h-full flex-col overflow-y-auto border-r border-white/10 bg-charcoal px-4 py-5 text-white sm:px-5 sm:py-6">
       <div className="flex items-center justify-between border-b border-white/10 pb-5">
         <Brand href="/admin" />
         <button
@@ -145,7 +145,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       </div>
 
       <div className="mt-6 flex items-center justify-between gap-3 px-2">
-        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gold">{sidebarTitle}</p>
+        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gold-ink">{sidebarTitle}</p>
         <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2 py-1 text-[9px] font-black uppercase tracking-wide text-emerald-300">
           Рабочий кабинет
         </span>
@@ -183,37 +183,37 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             aria-current={active ? "page" : undefined}
             className={`group relative flex min-h-12 items-center gap-3 overflow-hidden rounded-2xl border px-3 py-2.5 text-sm font-bold transition ${
               active
-                ? "border-gold/30 bg-white text-ink shadow-[0_14px_34px_rgba(0,0,0,0.18)]"
+                ? "border-gold/35 bg-cream text-ink"
                 : "border-transparent text-white/60 hover:border-white/10 hover:bg-white/5 hover:text-white"
             }`}
           >
             {active ? <span className="absolute inset-y-3 left-0 w-0.5 rounded-full bg-gold" /> : null}
             <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl transition ${
-              active ? "bg-gold/15 text-gold" : "bg-white/5 text-white/55 group-hover:bg-white/10 group-hover:text-white"
+              active ? "bg-gold/15 text-gold-ink" : "bg-white/5 text-white/55 group-hover:bg-white/10 group-hover:text-white"
             }`}>
               <Icon size={17} strokeWidth={2.2} />
             </span>
             <span className="min-w-0 flex-1 leading-4">{label}</span>
             {pending != null && pending > 0 && <AdminPendingHomeworkBadge count={pending} />}
-            <ChevronRight size={15} className={`shrink-0 transition ${active ? "text-gold" : "text-white/20 group-hover:translate-x-0.5 group-hover:text-white/50"}`} />
+            <ChevronRight size={15} className={`shrink-0 transition ${active ? "text-gold-ink" : "text-white/20 group-hover:translate-x-0.5 group-hover:text-white/50"}`} />
           </Link>
         );
       })}</nav>
 
       {!isContentAdmin ? (
         <div className="mt-6 rounded-[22px] border border-white/10 bg-white/[0.035] p-4">
-          <p className="text-[9px] font-black uppercase tracking-[0.18em] text-gold">Порядок после урока</p>
+          <p className="text-[9px] font-black uppercase tracking-[0.18em] text-gold-ink">Порядок после урока</p>
           <div className="mt-3 flex items-center gap-2 text-[11px] font-bold text-white/65">
             <span>Посещаемость</span>
-            <ArrowRight size={12} className="text-gold/60" />
+            <ArrowRight size={12} className="text-gold-ink/60" />
             <span>Отчёт</span>
-            <ArrowRight size={12} className="text-gold/60" />
+            <ArrowRight size={12} className="text-gold-ink/60" />
             <span>Отправить</span>
           </div>
           <Link
             href="/admin/offline-lessons"
             onClick={() => setOpen(false)}
-            className="mt-4 inline-flex items-center gap-2 text-xs font-bold text-white transition hover:text-gold"
+            className="mt-4 inline-flex items-center gap-2 text-xs font-bold text-white transition hover:text-gold-ink"
           >
             Перейти к урокам
             <ArrowRight size={13} />
@@ -230,22 +230,23 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           {user?.avatar ? <img src={user.avatar} alt="" className="h-full w-full object-cover" /> : initials}
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block text-[9px] font-black uppercase tracking-[0.16em] text-gold">{roleLabel(user?.role)}</span>
+          <span className="block text-[9px] font-black uppercase tracking-[0.16em] text-gold-ink">{roleLabel(user?.role)}</span>
           <span className="mt-1 block truncate text-sm font-bold text-white">{displayName}</span>
           <span className="mt-0.5 block truncate text-[11px] text-white/40">
             {user?.role === "teacher" ? teacherDirections.join(" · ") || "Преподаватель" : roleLabel(user?.role)}
           </span>
         </span>
-        <Settings size={16} className="shrink-0 text-white/30 transition group-hover:rotate-12 group-hover:text-gold" />
+        <Settings size={16} className="shrink-0 text-white/30 transition group-hover:rotate-12 group-hover:text-gold-ink" />
       </Link>
     </aside>
   );
   return <div className="min-h-screen bg-cream">
+    <a className="brand-skip-link" href="#main-content">Перейти к содержимому</a>
     <div className="fixed inset-y-0 left-0 z-40 hidden w-[272px] lg:block">{sidebar}</div>
     {open && <div className="fixed inset-y-0 left-0 z-50 w-[min(86vw,320px)] shadow-2xl lg:hidden">{sidebar}</div>}
     {open && <button className="fixed inset-0 z-40 bg-black/45 backdrop-blur-[2px] lg:hidden" onClick={() => setOpen(false)} aria-label="Закрыть меню" />}
     <div className="lg:pl-[272px]">
-      <header className="sticky top-0 z-30 flex h-[calc(68px+env(safe-area-inset-top,0px))] items-center gap-3 border-b border-stone-200/80 bg-cream/90 px-4 pt-[env(safe-area-inset-top,0px)] backdrop-blur-xl sm:h-[calc(80px+env(safe-area-inset-top,0px))] sm:px-8">
+      <header className="sticky top-0 z-30 flex h-[calc(80px+env(safe-area-inset-top,0px))] items-center gap-3 border-b border-stone-200/80 bg-cream/90 px-4 pt-[env(safe-area-inset-top,0px)] backdrop-blur-xl sm:px-8">
         {user?.role === "teacher" ? (
           <span className="lg:hidden">
             <Brand compact href="/admin" />
@@ -254,7 +255,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           <button onClick={() => setOpen(true)} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-stone-200/80 bg-white shadow-sm transition hover:border-gold/30 lg:hidden" aria-label="Открыть меню"><Menu size={20} /></button>
         )}
         <div className={`min-w-0 ${isContentAdmin ? "hidden sm:block" : ""}`}>
-          <p className="truncate text-[10px] font-bold uppercase tracking-[0.16em] text-gold sm:text-xs sm:tracking-[0.18em]">{headerTitle}</p>
+          <p className="truncate text-[10px] font-bold uppercase tracking-[0.16em] text-gold-ink sm:text-xs sm:tracking-[0.18em]">{headerTitle}</p>
           <p className="truncate text-xs font-semibold text-stone-500 sm:text-sm">{headerSubtitle}</p>
           {pendingHomeworkCount != null && pendingHomeworkCount > 0 && (
             <Link href="/admin/homework-review?status=submitted" className="mt-1 hidden items-center gap-2 text-xs font-bold text-amber-700 hover:underline sm:inline-flex">
@@ -290,7 +291,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           </button>
         </div>
       </header>
-      <main className={`mobile-safe mx-auto max-w-[1500px] p-4 sm:p-8 lg:p-10 ${
+      <main id="main-content" tabIndex={-1} className={`mobile-safe mx-auto max-w-[1500px] p-4 sm:p-8 lg:p-10 ${
         pathname.startsWith("/admin/messages") ? "sm:py-5 lg:py-6" : ""
       } ${
         teacherMobileNavigation.length
@@ -319,7 +320,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               }`}
             >
               <span className={`relative grid h-9 w-12 place-items-center rounded-xl ${
-                active ? "bg-amber-50 text-gold" : ""
+                active ? "bg-amber-50 text-gold-ink" : ""
               }`}>
                 <Icon size={19} strokeWidth={2.15} />
                 {pending != null && pending > 0 ? (

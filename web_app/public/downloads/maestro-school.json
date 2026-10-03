@@ -1,9 +1,9 @@
 {
   "applicationId": "kz.maestro.school",
-  "versionName": "1.0.1",
-  "versionCode": 3,
+  "versionName": "1.0.2",
+  "versionCode": 4,
   "file": "maestro-school.apk",
-  "sizeBytes": 1028548,
-  "sha256": "73f4e84702daf7947966289e9469addf8127b2a70d67d7d5cc0d5d2de6e4d380",
-  "builtAt": "2026-07-29T04:24:02Z"
+  "sizeBytes": 1781315,
+  "sha256": "45b4d39ff8520999225de84c40775a0467104c4b88e4abb4c192af4fc83b5b6c",
+  "builtAt": "2026-10-03T06:30:44Z"
 }

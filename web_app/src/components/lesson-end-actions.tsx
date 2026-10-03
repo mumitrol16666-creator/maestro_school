@@ -82,7 +82,7 @@ export function LessonEndActions({
 
   return (
     <section className="mt-9 rounded-[30px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
-      <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">После урока</p>
+      <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold-ink">После урока</p>
       <h2 className="font-display mt-3 text-3xl">Нужна помощь или следующий шаг?</h2>
       <p className="mt-3 max-w-2xl text-sm leading-6 text-stone-500">
         Задайте вопрос по уроку «{lessonTitle}» или запишитесь на следующий этап обучения.

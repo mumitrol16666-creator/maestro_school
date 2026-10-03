@@ -84,10 +84,10 @@ export default function FamilyPage() {
   return (
     <div className="space-y-8">
       <header>
-        <p className="text-xs font-bold uppercase tracking-[0.2em] text-gold">Семейный кабинет</p>
+        <p className="text-xs font-bold uppercase tracking-[0.2em] text-gold-ink">Семейный кабинет</p>
         <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1 className="font-display text-4xl sm:text-5xl">Главное об обучении</h1>
+            <h1 className="font-display text-balance text-3xl sm:text-[2.5rem]">Главное об обучении</h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-stone-500">
               Расписание, оплата и прогресс ребёнка в одном месте.
             </p>
@@ -119,17 +119,17 @@ function ChildOverview({ child }: { child: FamilyChild }) {
   const visibleModules = Object.values(visibility).filter(Boolean).length;
   return (
     <div className="space-y-6">
-      <section className="bg-ink px-5 py-7 text-white shadow-soft sm:px-8 sm:py-9">
+      <section className="rounded-2xl bg-charcoal px-5 py-7 text-white shadow-soft sm:px-8 sm:py-9">
         <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-center gap-4">
-            <div className="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-full bg-white/10 font-display text-xl text-gold">
+            <div className="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-full bg-white/10 font-display text-xl text-gold-ink">
               {child.avatar ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={child.avatar} alt="" className="h-full w-full object-cover" />
               ) : child.firstName.slice(0, 1)}
             </div>
             <div className="min-w-0">
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-gold">{relationshipLabels[child.relationship] ?? "Ученик"}</p>
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-gold-ink">{relationshipLabels[child.relationship] ?? "Ученик"}</p>
               <h2 className="font-display mt-1 break-words text-3xl sm:text-4xl">{child.fullName}</h2>
               <p className="mt-1 break-words text-sm text-white/50">{summary.profile.groups.map((group) => group.name).join(", ") || "Направление уточняется"}</p>
             </div>
@@ -169,8 +169,8 @@ function Schedule({ summary }: { summary: FamilySchoolSummary }) {
   return (
     <section className="border-t-2 border-gold bg-paper p-5 shadow-soft sm:p-7">
       <div className="flex items-center justify-between gap-4">
-        <div><p className="text-xs font-bold uppercase tracking-[0.17em] text-gold">Ближайшие занятия</p><h2 className="font-display mt-2 text-3xl">Расписание</h2></div>
-        <CalendarDays className="text-gold" />
+        <div><p className="text-xs font-bold uppercase tracking-[0.17em] text-gold-ink">Ближайшие занятия</p><h2 className="font-display mt-2 text-3xl">Расписание</h2></div>
+        <CalendarDays className="text-gold-ink" />
       </div>
       {summary.upcomingLessons.length ? (
         <div className="mt-6 divide-y divide-stone-200">
@@ -212,8 +212,8 @@ function MonthlyPlans({ studentId }: { studentId: string }) {
     <section className="border-t-2 border-stone-300 bg-paper p-5 shadow-soft sm:p-7">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <Target className="text-gold" />
-          <p className="mt-5 text-xs font-bold uppercase tracking-[0.17em] text-gold">{formatMonth(month)}</p>
+          <Target className="text-gold-ink" />
+          <p className="mt-5 text-xs font-bold uppercase tracking-[0.17em] text-gold-ink">{formatMonth(month)}</p>
           <h2 className="font-display mt-2 text-3xl">Учебный план</h2>
         </div>
         <div className="w-full sm:w-[260px]"><PlanMonthField value={month} onChange={setMonth} /></div>
@@ -229,7 +229,7 @@ function MonthlyPlans({ studentId }: { studentId: string }) {
         <>
           <div className="mt-5 flex items-end justify-between gap-3">
             <p className="text-sm font-bold text-stone-600">Завершено тем: {aggregate?.completed ?? 0} из {aggregate?.total ?? 0}</p>
-            <span className="font-display text-3xl text-gold">{aggregate?.percent ?? 0}%</span>
+            <span className="font-display text-3xl text-gold-ink">{aggregate?.percent ?? 0}%</span>
           </div>
           <div className="mt-3"><ProgressBar value={aggregate?.percent ?? 0} /></div>
           <div className="mt-6 grid gap-5">
@@ -280,7 +280,7 @@ function FamilyPlanDetails({ plan }: { plan: StudentHomeMonthlyPlan }) {
 function Achievements({ achievements }: { achievements: FamilySchoolSummary["achievements"] }) {
   return (
     <section className="border-t border-stone-200 py-2">
-      <div className="flex items-center gap-3"><Award className="text-gold" /><div><p className="text-xs font-bold uppercase tracking-[0.17em] text-gold">Результат</p><h2 className="font-display mt-1 text-3xl">Достижения</h2></div></div>
+      <div className="flex items-center gap-3"><Award className="text-gold-ink" /><div><p className="text-xs font-bold uppercase tracking-[0.17em] text-gold-ink">Результат</p><h2 className="font-display mt-1 text-3xl">Достижения</h2></div></div>
       {achievements.length ? <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{achievements.slice(0, 6).map((item) => <article key={item.code} className="border-l-2 border-gold bg-paper px-4 py-4"><p className="font-bold text-ink">{item.title}</p><p className="mt-2 text-xs leading-5 text-stone-500">{item.description || "Достижение получено"}</p></article>)}</div> : <p className="mt-5 text-sm text-stone-500">Первые достижения появятся по мере обучения.</p>}
     </section>
   );
@@ -289,7 +289,7 @@ function Achievements({ achievements }: { achievements: FamilySchoolSummary["ach
 function FamilyNews({ posts, loading, error, retry }: { posts: FamilyNewsPost[]; loading: boolean; error: string | null; retry: () => Promise<void> }) {
   return (
     <section className="border-t border-stone-200 pt-7">
-      <div className="flex items-center gap-3"><Newspaper className="text-gold" /><div><p className="text-xs font-bold uppercase tracking-[0.17em] text-gold">Maestro</p><h2 className="font-display mt-1 text-3xl">Новости школы</h2></div></div>
+      <div className="flex items-center gap-3"><Newspaper className="text-gold-ink" /><div><p className="text-xs font-bold uppercase tracking-[0.17em] text-gold-ink">Maestro</p><h2 className="font-display mt-1 text-3xl">Новости школы</h2></div></div>
       {loading ? <div className="mt-5"><LoadingState label="Загружаем новости" /></div> : error ? <div className="mt-5"><ErrorState message={error} retry={retry} /></div> : posts.length ? <div className="mt-5 divide-y divide-stone-200 border-y border-stone-200">{posts.map((post) => <article key={post.id} className="grid gap-2 py-5 sm:grid-cols-[150px_1fr]"><p className="text-xs font-semibold text-stone-400">{formatDate(post.publishedAt, true)}</p><div><h3 className="font-display text-2xl">{post.title}</h3><p className="mt-2 whitespace-pre-line text-sm leading-6 text-stone-600">{post.excerpt}</p></div></article>)}</div> : <p className="mt-5 text-sm text-stone-500">Новых объявлений для родителей пока нет.</p>}
     </section>
   );

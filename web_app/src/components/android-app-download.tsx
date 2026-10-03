@@ -40,7 +40,7 @@ export function AndroidAppDownloadLink() {
     <a
       href={ANDROID_APK_URL}
       download="maestro-school.apk"
-      className="mt-4 inline-flex w-full min-h-12 items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 text-sm font-bold text-emerald-900 transition hover:border-emerald-300 hover:bg-emerald-100"
+      className="brand-button-secondary mt-3 w-full"
     >
       <Download size={17} />
       Скачать приложение для Android

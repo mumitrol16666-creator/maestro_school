@@ -32,7 +32,7 @@ export function HomeworkTestForm({
 
   return (
     <form onSubmit={handleSubmit} className="mt-9 rounded-[30px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
-      <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">Тест к уроку</p>
+      <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold-ink">Тест к уроку</p>
       <h2 className="font-display mt-3 text-3xl">Проверьте знания</h2>
       <MarkdownContent className="mt-4">{description}</MarkdownContent>
       <p className="mt-4 text-sm font-semibold text-stone-500">

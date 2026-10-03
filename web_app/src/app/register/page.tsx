@@ -18,7 +18,7 @@ export default function RegisterPage() {
           <Link href="/login" className="inline-flex items-center gap-2 text-sm font-bold text-stone-500 transition hover:text-ink">
             <ArrowLeft size={16} /> Назад ко входу
           </Link>
-          <p className="mt-8 text-xs font-bold uppercase tracking-[0.22em] text-gold">Внутренняя экосистема</p>
+          <p className="mt-8 text-xs font-bold uppercase tracking-[0.22em] text-gold-ink">Внутренняя экосистема</p>
           <h2 className="font-display mt-3 text-5xl leading-tight">Доступ выдаёт школа</h2>
           <p className="mt-5 text-sm leading-6 text-stone-500">
             Платформа Maestro создана для действующих учеников: здесь уроки, домашние задания, материалы,
@@ -26,7 +26,7 @@ export default function RegisterPage() {
           </p>
 
           <div className="mt-8 rounded-[28px] border border-gold/20 bg-white p-6 shadow-soft">
-            <span className="grid h-12 w-12 place-items-center rounded-2xl bg-gold/10 text-gold">
+            <span className="grid h-12 w-12 place-items-center rounded-2xl bg-gold/10 text-gold-ink">
               <ShieldCheck size={22} />
             </span>
             <h3 className="mt-5 font-display text-3xl text-ink">Хотите начать обучение?</h3>

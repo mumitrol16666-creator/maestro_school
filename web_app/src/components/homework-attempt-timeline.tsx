@@ -59,7 +59,7 @@ export function HomeworkAttemptTimeline({ attempts, currentSubmissionId }: Homew
                   href={attempt.attachmentUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="mt-3 inline-flex items-center gap-2 text-sm font-bold text-gold"
+                  className="mt-3 inline-flex items-center gap-2 text-sm font-bold text-gold-ink"
                 >
                   <ExternalLink size={14} /> Открыть материал
                 </a>

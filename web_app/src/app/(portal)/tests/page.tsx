@@ -57,7 +57,7 @@ export default function TestsPage() {
               <ClipboardCheck size={22} />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block text-xs font-bold uppercase tracking-[0.16em] text-gold">
+              <span className="block text-xs font-bold uppercase tracking-[0.16em] text-gold-ink">
                 Продолжить
               </span>
               <span className="mt-1 block font-display text-2xl leading-tight">{next.title}</span>
@@ -65,7 +65,7 @@ export default function TestsPage() {
                 {next.questionCount} вопросов · проходной результат {next.passingScore}%
               </span>
             </span>
-            <ChevronRight className="shrink-0 text-gold transition group-hover:translate-x-1" />
+            <ChevronRight className="shrink-0 text-gold-ink transition group-hover:translate-x-1" />
           </Link>
         ) : completedCount === total ? (
           <div className="flex items-center gap-4 rounded-[28px] border border-emerald-200 bg-emerald-50 p-5 text-emerald-900 sm:p-6">
@@ -85,7 +85,7 @@ export default function TestsPage() {
           </div>
         )}
         <div className="flex items-center gap-4 rounded-[28px] border border-amber-200 bg-amber-50 p-5 text-amber-950 sm:p-6">
-          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gold/20 text-gold">
+          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gold/20 text-gold-ink">
             <Flame size={22} />
           </span>
           <div>
@@ -102,7 +102,7 @@ export default function TestsPage() {
         {sections.map((section) => (
           <section key={section}>
             <div className="mb-3 flex items-center gap-3">
-              <span className="grid h-9 w-9 place-items-center rounded-xl bg-ink font-display text-lg text-gold">
+              <span className="grid h-9 w-9 place-items-center rounded-xl bg-ink font-display text-lg text-gold-ink">
                 {section}
               </span>
               <div>
@@ -128,7 +128,7 @@ export default function TestsPage() {
                     test.passed
                       ? "bg-emerald-100 text-emerald-700"
                       : test.available
-                        ? "bg-amber-50 text-gold"
+                        ? "bg-amber-50 text-gold-ink"
                         : test.exhausted || test.dailyLocked
                           ? "bg-amber-100 text-amber-700"
                           : "bg-stone-200 text-stone-400"

@@ -158,7 +158,7 @@ export function StudentLessonCalendar({
     >
       <div className="flex items-center justify-between gap-2">
         <h2 className="flex items-center gap-2 text-base font-bold">
-          <CalendarDays size={18} className="text-gold" />
+          <CalendarDays size={18} className="text-gold-ink" />
           Мои занятия
         </h2>
       </div>

@@ -118,7 +118,7 @@ export default function DashboardPage() {
     <div className="mx-auto max-w-[1400px]">
       <header className="mb-4 flex flex-wrap items-center justify-between gap-3 sm:mb-5 sm:gap-4">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gold sm:text-xs">Твоя учебная неделя</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gold-ink sm:text-xs">Твоя учебная неделя</p>
           <h1 className="font-display mt-1.5 text-[32px] leading-tight sm:mt-2 sm:text-4xl">
             Привет, {user?.firstName || "ученик"}!
           </h1>
@@ -201,7 +201,7 @@ export default function DashboardPage() {
 
       {!hasLearningData ? (
         <section className="mt-8 rounded-[28px] border border-dashed border-stone-300 bg-white p-8 text-center">
-          <Sparkles className="mx-auto text-gold" />
+          <Sparkles className="mx-auto text-gold-ink" />
           <h2 className="font-display mt-4 text-3xl">Учебный маршрут готовится</h2>
           <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-stone-500">
             После назначения расписания, домашнего задания или плана месяца здесь появятся следующие действия.
@@ -240,14 +240,14 @@ function DashboardTasks({
     <section>
       <div className="mb-3 flex items-end justify-between gap-3">
         <div>
-          <p className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-gold"><ListTodo size={16} /> Ближайшие задания</p>
+          <p className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-gold-ink"><ListTodo size={16} /> Ближайшие задания</p>
           <h2 className="font-display mt-1 text-2xl">
             {hiddenInHero ? "Ещё нужно сделать" : "Нужно сделать"} · {visibleActionCount}
           </h2>
         </div>
         <Link
           href="/tasks"
-          className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 text-xs font-bold text-stone-600 transition hover:border-gold/40 hover:text-gold"
+          className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 text-xs font-bold text-stone-600 transition hover:border-gold/40 hover:text-gold-ink"
         >
           Все задания
           <ChevronRight size={18} />
@@ -354,12 +354,12 @@ function MetricChip({
   const className = `group flex min-h-12 min-w-0 items-center justify-center gap-2 rounded-xl border border-stone-200 bg-white px-2 py-2 shadow-sm transition sm:min-h-14 sm:justify-start sm:rounded-2xl sm:px-3 ${interactive ? "cursor-pointer hover:-translate-y-0.5 hover:border-gold/50 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold" : ""}`;
   const content = (
     <>
-      {leading ?? (Icon ? <Icon size={17} className="shrink-0 text-gold" /> : null)}
+      {leading ?? (Icon ? <Icon size={17} className="shrink-0 text-gold-ink" /> : null)}
       <span className="min-w-0 text-[10px] text-stone-500 sm:text-xs">
         <strong className="mr-1 text-sm text-ink sm:text-base">{value}</strong>
         <span className="break-words">{label}</span>
       </span>
-      {interactive ? <ChevronRight size={14} className="hidden shrink-0 text-stone-300 transition group-hover:text-gold sm:block" /> : null}
+      {interactive ? <ChevronRight size={14} className="hidden shrink-0 text-stone-300 transition group-hover:text-gold-ink sm:block" /> : null}
     </>
   );
   if (href) {
@@ -387,14 +387,14 @@ function NowHero({ hero }: { hero: StudentHomeHero }) {
   const DetailIcon = hero.badge?.tone === "danger" ? RotateCcw : CalendarDays;
 
   return (
-    <section className="h-full overflow-hidden rounded-[20px] border border-white/10 bg-[#171813] p-4 text-white shadow-soft sm:p-5">
+    <section className="h-full overflow-hidden rounded-[20px] border border-white/10 bg-charcoal p-4 text-white shadow-soft sm:p-5">
       <div className="flex h-full flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0 max-w-3xl">
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-            <span className="grid h-8 w-8 place-items-center rounded-lg bg-white/10 text-gold">
+            <span className="grid h-8 w-8 place-items-center rounded-lg bg-white/10 text-gold-ink">
               <Icon size={17} />
             </span>
-            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-gold sm:text-xs">{hero.eyebrow}</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-gold-ink sm:text-xs">{hero.eyebrow}</p>
             {hero.badge ? (
               <span className={`inline-flex min-h-6 items-center rounded-md px-2.5 text-[10px] font-black ${badgeClass}`}>
                 {hero.badge.label}
@@ -405,7 +405,7 @@ function NowHero({ hero }: { hero: StudentHomeHero }) {
           {hero.subtitle ? <p className="mt-2 line-clamp-1 break-words text-xs leading-5 text-white/70 sm:text-sm">{hero.subtitle}</p> : null}
           {hero.detail ? (
             <p className={`mt-2 inline-flex items-start gap-2 text-xs leading-5 sm:text-[13px] ${hero.badge?.tone === "danger" ? "rounded-xl border border-red-400/20 bg-red-500/10 p-2.5 text-red-50" : "text-white/60"}`}>
-              <DetailIcon size={16} className="mt-0.5 shrink-0 text-gold" /> {hero.detail}
+              <DetailIcon size={16} className="mt-0.5 shrink-0 text-gold-ink" /> {hero.detail}
             </p>
           ) : null}
         </div>
@@ -432,14 +432,14 @@ function LeagueMiniWidget() {
   const medals = ["🥇", "🥈", "🥉"];
 
   return (
-    <section className="h-full rounded-[20px] border border-stone-200 bg-[#171813] p-4 text-white shadow-soft sm:p-6">
+    <section className="h-full rounded-[20px] border border-stone-200 bg-charcoal p-4 text-white shadow-soft sm:p-6">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
-          <span className="grid h-9 w-9 place-items-center rounded-xl bg-gold/15 text-gold sm:h-10 sm:w-10">
+          <span className="grid h-9 w-9 place-items-center rounded-xl bg-gold/15 text-gold-ink sm:h-10 sm:w-10">
             <Trophy size={18} />
           </span>
           <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-gold">Недельная лига</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-gold-ink">Недельная лига</p>
             <h3 className="font-display text-base sm:text-lg">Лидеры недели</h3>
           </div>
         </div>
@@ -459,14 +459,14 @@ function LeagueMiniWidget() {
             <div
               key={item.displayName}
               className={`flex items-center justify-between gap-3 rounded-xl px-3 py-2 text-xs font-bold ${
-                item.isCurrentStudent ? "bg-gold/20 text-gold" : "bg-white/[0.04] text-white/80"
+                item.isCurrentStudent ? "bg-gold/20 text-gold-ink" : "bg-white/[0.04] text-white/80"
               }`}
             >
               <div className="flex items-center gap-2 truncate">
                 <span>{medals[idx]}</span>
                 <span className="truncate">{item.displayName} {item.isCurrentStudent ? "(вы)" : ""}</span>
               </div>
-              <span className="shrink-0 font-display text-sm text-gold">{item.xp} XP</span>
+              <span className="shrink-0 font-display text-sm text-gold-ink">{item.xp} XP</span>
             </div>
           ))}
         </div>
@@ -496,7 +496,7 @@ function HomeworkCard({ homework, lastReview }: { homework: StudentHomeHomework;
   return (
     <section className="rounded-[28px] border border-stone-200 bg-white p-6 shadow-soft">
       <div className="flex items-start justify-between gap-3">
-        <span className="grid h-11 w-11 place-items-center rounded-2xl bg-amber-50 text-gold"><BookOpenCheck size={21} /></span>
+        <span className="grid h-11 w-11 place-items-center rounded-2xl bg-amber-50 text-gold-ink"><BookOpenCheck size={21} /></span>
         <span className={`rounded-full px-3 py-1.5 text-[10px] font-black uppercase tracking-wide ${status.className}`}>{status.label}</span>
       </div>
       <p className="mt-6 text-xs font-black uppercase tracking-[0.18em] text-stone-400">Текущее домашнее задание</p>
@@ -554,16 +554,16 @@ function MonthlyPlanCard({
   return (
     <section className="rounded-[28px] border border-stone-200 bg-white p-6 shadow-soft sm:p-7">
       <div className="flex items-start justify-between gap-3">
-        <span className="grid h-11 w-11 place-items-center rounded-2xl bg-amber-50 text-gold">
+        <span className="grid h-11 w-11 place-items-center rounded-2xl bg-amber-50 text-gold-ink">
           <CircleDot size={22} />
         </span>
         <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3.5 py-1.5 text-xs font-black text-amber-950">
-          <Sparkles size={13} className="text-gold" />
+          <Sparkles size={13} className="text-gold-ink" />
           {aggregateProgress.percent}% выполнено
         </span>
       </div>
 
-      <p className="mt-5 text-xs font-black uppercase tracking-[0.2em] text-gold">
+      <p className="mt-5 text-xs font-black uppercase tracking-[0.2em] text-gold-ink">
         План на {monthTitle(first.month)}
       </p>
       <h2 className="font-display mt-2 text-3xl leading-tight text-ink sm:text-4xl">
@@ -604,7 +604,7 @@ function UpcomingLessons({ lessons }: { lessons: SchoolOfflineLesson[] }) {
           href="/school-lessons?tab=schedule"
           aria-label="Открыть все уроки"
           title="Все уроки"
-          className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-stone-200 text-stone-500 transition hover:border-gold/40 hover:text-gold"
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-stone-200 text-stone-500 transition hover:border-gold/40 hover:text-gold-ink"
         >
           <ChevronRight size={18} />
         </Link>

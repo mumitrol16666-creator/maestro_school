@@ -318,7 +318,7 @@ function StudentMonthlyPlanEditorContent({
       {/* 1. Главная цель на месяц */}
       <div className="mt-5">
         <label className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-amber-950">
-          <Target size={15} className="text-gold" />
+          <Target size={15} className="text-gold-ink" />
           1. Главная цель на месяц
         </label>
         <p className="mt-1 text-[11px] text-amber-900/70">

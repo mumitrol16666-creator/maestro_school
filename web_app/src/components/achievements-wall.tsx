@@ -25,7 +25,7 @@ function AchievementIcon({ code, earned }: { code: string; earned: boolean }) {
   return (
     <span
       className={`grid h-12 w-12 place-items-center rounded-2xl ${
-        earned ? "bg-gold/15 text-gold ring-1 ring-gold/30" : "bg-stone-100 text-stone-300"
+        earned ? "bg-gold/15 text-gold-ink ring-1 ring-gold/30" : "bg-stone-100 text-stone-300"
       }`}
     >
       <Icon size={22} />

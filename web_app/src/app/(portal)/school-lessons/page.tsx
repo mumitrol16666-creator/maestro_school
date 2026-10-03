@@ -259,12 +259,12 @@ function LessonCard({
           )}
 
           {lesson.status === "completed" && hasLearningResults ? (
-            <div className="rounded-2xl border border-violet-100 bg-violet-50/60 p-4">
-              <p className="text-xs font-bold uppercase tracking-wider text-violet-700">
+            <div className="rounded-2xl border border-amber-100 bg-amber-50/60 p-4">
+              <p className="text-xs font-bold uppercase tracking-wider text-amber-700">
                 Учебный результат
               </p>
               {(lesson.lessonPoints ?? 0) > 0 ? (
-                <p className="mt-2 text-sm font-bold text-violet-950">
+                <p className="mt-2 text-sm font-bold text-amber-950">
                   +{lesson.lessonPoints} учебных баллов
                 </p>
               ) : null}
@@ -274,10 +274,10 @@ function LessonCard({
                     <div
                       key={`${item.topicId}-${item.occurredAt}`}
                       data-testid="learning-topic-result"
-                      className="rounded-xl border border-violet-100 bg-white/80 p-3"
+                      className="rounded-xl border border-amber-100 bg-white/80 p-3"
                     >
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                        <p className="min-w-0 text-sm font-bold leading-5 text-violet-950">
+                        <p className="min-w-0 text-sm font-bold leading-5 text-amber-950">
                           {item.title}
                         </p>
                         <span
@@ -291,7 +291,7 @@ function LessonCard({
                         </span>
                       </div>
                       <div className="mt-2 flex flex-wrap items-center gap-2">
-                        <span className="rounded-lg bg-violet-100 px-2.5 py-1 text-xs font-black text-violet-900">
+                        <span className="rounded-lg bg-amber-100 px-2.5 py-1 text-xs font-black text-amber-900">
                           {item.fromPercent == null
                             ? "—"
                             : `${item.fromPercent}%`}{" "}
@@ -476,7 +476,7 @@ function TabNav({
         >
           <Icon
             size={17}
-            className={active === key ? "text-gold" : undefined}
+            className={active === key ? "text-gold-ink" : undefined}
           />
           <span className="w-full truncate text-center sm:hidden">
             {mobileLabel}

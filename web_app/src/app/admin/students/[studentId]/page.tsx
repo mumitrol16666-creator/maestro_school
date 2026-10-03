@@ -50,7 +50,7 @@ export default function AdminStudentDetailPage() {
       </Link>
 
       <section className="rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
-        <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">Карточка ученика</p>
+        <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold-ink">Карточка ученика</p>
         <h1 className="font-display mt-2 text-4xl">{studentName}</h1>
         <div className="mt-4">
           <StudentPhoneLine phone={student.phone} login={student.login} email={student.email} />
@@ -162,13 +162,13 @@ function ParentVisibilityCard({ studentId, studentName }: { studentId: string; s
     <section className="mt-6 rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8" data-testid="parent-visibility-admin">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold">Доступ родителей</p>
+          <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold-ink">Доступ родителей</p>
           <h2 className="font-display mt-2 text-3xl">Что видно семье</h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-500">
             Одна настройка для всех родителей {studentName}. Ученик может только отправить запрос, решение принимает администратор.
           </p>
         </div>
-        <Eye className="text-gold" />
+        <Eye className="text-gold-ink" />
       </div>
 
       {pending ? (
@@ -192,7 +192,7 @@ function ParentVisibilityCard({ studentId, studentName }: { studentId: string; s
               type="checkbox"
               checked={visibility[item.key]}
               onChange={(event) => setVisibility({ ...visibility, [item.key]: event.target.checked })}
-              className="mt-0.5 h-5 w-5 accent-[#c59a45]"
+              className="mt-0.5 h-5 w-5 accent-gold"
             />
             <span><span className="block text-sm font-bold text-ink">{item.label}</span><span className="mt-1 block text-xs text-stone-500">{item.description}</span></span>
           </label>
@@ -311,7 +311,7 @@ function ParentAccessCard({
     <section className="mt-6 rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold">Семейный доступ</p>
+          <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold-ink">Семейный доступ</p>
           <h2 className="font-display mt-2 text-3xl">Родители</h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-500">
             Родитель видит расписание, ДЗ, итоги уроков и абонемент {studentName}.
@@ -543,7 +543,7 @@ function StatCard({
 }) {
   return (
     <div className="rounded-2xl border border-stone-200 bg-white p-5">
-      <Icon size={18} className="text-gold" />
+      <Icon size={18} className="text-gold-ink" />
       <p className="font-display mt-4 text-3xl">{value}</p>
       <p className="mt-1 text-sm text-stone-500">{label}</p>
     </div>

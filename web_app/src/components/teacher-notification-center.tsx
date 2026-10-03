@@ -131,7 +131,7 @@ function NotificationRow({
       </span>
       <ChevronRight
         size={17}
-        className="mt-1 shrink-0 text-stone-300 transition-transform group-hover:translate-x-0.5 group-hover:text-gold"
+        className="mt-1 shrink-0 text-stone-300 transition-transform group-hover:translate-x-0.5 group-hover:text-gold-ink"
       />
     </button>
   );
@@ -242,7 +242,7 @@ export function NotificationCenter({
           >
             <header className="flex shrink-0 items-start gap-3 border-b border-stone-200 bg-paper px-4 pb-4 pt-[max(1rem,env(safe-area-inset-top,0px))] sm:px-5 sm:py-5">
               <div className="min-w-0 flex-1">
-                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gold">
+                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gold-ink">
                   {audienceCopy(audience)}
                 </p>
                 <h2 id="notifications-title" className="mt-1 text-xl font-black text-ink">

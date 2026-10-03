@@ -122,7 +122,7 @@ function LegacyLessonQuestionsPage() {
                     <MessageCircleQuestion size={20} />
                   </span>
                   <div>
-                    <p className="text-xs font-bold uppercase tracking-wider text-gold">
+                    <p className="text-xs font-bold uppercase tracking-wider text-gold-ink">
                       {item.lesson.module.course.title} → {item.lesson.title}
                     </p>
                     <p className="mt-1 text-sm font-bold text-ink">

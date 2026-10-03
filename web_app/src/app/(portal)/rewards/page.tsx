@@ -56,11 +56,11 @@ function getCategoryStyle(category: string) {
     case "rehearsal":
       return { bg: "bg-emerald-50 text-emerald-800", icon: Calendar };
     case "studio":
-      return { bg: "bg-purple-50 text-purple-700", icon: Video };
+      return { bg: "bg-amber-50 text-amber-700", icon: Video };
     case "discount":
       return { bg: "bg-teal-50 text-teal-800", icon: Percent };
     default:
-      return { bg: "bg-violet-50 text-violet-700", icon: Gift };
+      return { bg: "bg-amber-50 text-amber-700", icon: Gift };
   }
 }
 
@@ -196,7 +196,7 @@ export default function RewardsPage() {
 
       <div className="mt-8 overflow-hidden rounded-[28px] border border-amber-200/80 bg-gradient-to-br from-amber-50/70 via-white to-stone-50 p-7 shadow-soft sm:p-12">
         <div className="mx-auto max-w-xl text-center">
-          <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-gold/15 text-gold shadow-inner sm:h-20 sm:w-20">
+          <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-gold/15 text-gold-ink shadow-inner sm:h-20 sm:w-20">
             <ShoppingBag size={38} strokeWidth={2} />
           </div>
           <span className="mt-5 inline-block rounded-full border border-amber-300/80 bg-amber-100/80 px-3.5 py-1 text-xs font-black uppercase tracking-wider text-amber-950">
@@ -208,7 +208,7 @@ export default function RewardsPage() {
           </p>
 
           <div className="mt-8 flex flex-col gap-3.5 rounded-2xl border border-stone-200/80 bg-white/90 p-4 text-left shadow-sm sm:flex-row sm:items-center">
-            <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-gold/15 text-gold">
+            <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-gold/15 text-gold-ink">
               <Sparkles size={22} />
             </div>
             <div className="min-w-0 flex-1">
@@ -269,7 +269,7 @@ export default function RewardsPage() {
           >
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-xs font-black uppercase tracking-[0.18em] text-gold">Подтверждение</p>
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-gold-ink">Подтверждение</p>
                 <h2 id="reward-redemption-title" className="font-display mt-2 text-3xl">{selected.title}</h2>
               </div>
               <button
@@ -343,7 +343,7 @@ export default function RewardsPage() {
           >
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <p className="text-xs font-black uppercase tracking-[0.18em] text-gold">Maestro Coins</p>
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-gold-ink">Maestro Coins</p>
                 <h2 id="coins-guide-title" className="font-display mt-2 text-3xl text-ink sm:text-4xl">
                   Как получить Coins
                 </h2>
@@ -381,7 +381,7 @@ export default function RewardsPage() {
                 const SourceIcon = source.icon;
                 return (
                   <article key={source.title} data-testid="coin-source" className="flex gap-3 border-b border-stone-200 px-1 pb-4 sm:min-h-36 sm:border sm:border-stone-200 sm:p-4">
-                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-stone-950 text-gold">
+                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-stone-950 text-gold-ink">
                       <SourceIcon size={18} />
                     </span>
                     <div className="min-w-0">

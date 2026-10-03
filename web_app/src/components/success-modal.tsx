@@ -58,7 +58,7 @@ export function SuccessModal({
           type="button"
           onClick={onClose}
           data-dialog-initial-focus="true"
-          className="mt-6 min-h-12 w-full rounded-lg bg-ink px-5 text-sm font-bold text-white transition-colors hover:bg-gold hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold"
+          className="brand-button-primary mt-6 min-h-12 w-full"
         >
           {confirmLabel}
         </button>

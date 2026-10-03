@@ -25,7 +25,7 @@ function FounderAvatar() {
   return (
     <span
       aria-hidden
-      className="grid h-20 w-20 shrink-0 place-items-center rounded-full bg-ink font-display text-xl text-gold ring-2 ring-gold/35 ring-offset-2 ring-offset-paper"
+      className="grid h-20 w-20 shrink-0 place-items-center rounded-full bg-ink font-display text-xl text-gold-ink ring-2 ring-gold/35 ring-offset-2 ring-offset-paper"
     >
       ВС
     </span>
@@ -35,7 +35,7 @@ function FounderAvatar() {
 export function FounderMessage({ className = "" }: { className?: string }) {
   return (
     <section className={`rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8 ${className}`}>
-      <p className="text-xs font-bold uppercase tracking-[0.2em] text-gold">О школе Maestro</p>
+      <p className="text-xs font-bold uppercase tracking-[0.2em] text-gold-ink">О школе Maestro</p>
       <h2 className="font-display mt-3 text-3xl sm:text-4xl">Сообщение от основателя</h2>
 
       <div className="mt-6 flex flex-col gap-6 sm:flex-row sm:items-start">

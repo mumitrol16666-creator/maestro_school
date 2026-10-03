@@ -42,7 +42,7 @@ export function LearningHomeworkReviewPreview() {
     <section className="mb-6 overflow-hidden rounded-[28px] border border-amber-200 bg-white shadow-soft">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-amber-100 bg-amber-50 px-5 py-4 sm:px-6">
         <div className="flex min-w-0 items-center gap-3">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-ink text-gold">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-ink text-gold-ink">
             <ClipboardCheck size={18} />
           </span>
           <div className="min-w-0">
@@ -72,7 +72,7 @@ export function LearningHomeworkReviewPreview() {
             <span className="hidden shrink-0 items-center gap-1.5 text-xs font-semibold text-stone-400 sm:inline-flex">
               <Clock3 size={13} /> {formatDate(item.submittedAt)}
             </span>
-            <ArrowRight size={16} className="shrink-0 text-gold" />
+            <ArrowRight size={16} className="shrink-0 text-gold-ink" />
           </Link>
         ))}
       </div>

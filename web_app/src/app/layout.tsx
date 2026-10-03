@@ -1,9 +1,17 @@
 import type { Metadata, Viewport } from "next";
+import localFont from "next/font/local";
 import "./globals.css";
 import { AuthProvider } from "@/components/auth-provider";
 import { ClientRuntimeRecovery } from "@/components/client-runtime-recovery";
 import { PwaProvider } from "@/components/pwa-provider";
 import { APP_CACHE_VERSION } from "@/lib/pwa-version";
+
+const inter = localFont({
+  src: "../fonts/Inter.woff2", variable: "--font-inter", display: "swap", weight: "100 900",
+});
+const playfair = localFont({
+  src: "../fonts/PlayfairDisplay.woff2", variable: "--font-playfair", display: "swap", weight: "400 900",
+});
 
 export const metadata: Metadata = {
   title: "Maestro — образовательная платформа",
@@ -17,11 +25,9 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
-      { url: "/icons/icon-192.png?v=student-purple-1", sizes: "192x192", type: "image/png" },
-      { url: "/icons/icon-512.png?v=student-purple-1", sizes: "512x512", type: "image/png" },
-      { url: "/icons/icon.svg?v=student-purple-1", type: "image/svg+xml" },
+      { url: "/brand/guitar-avatar.png", sizes: "512x512", type: "image/png" },
     ],
-    apple: [{ url: "/icons/icon-192.png?v=student-purple-1", sizes: "192x192", type: "image/png" }],
+    apple: [{ url: "/brand/guitar-avatar.png", sizes: "512x512", type: "image/png" }],
   },
   formatDetection: {
     telephone: false,
@@ -29,7 +35,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#24134F",
+  themeColor: "#0D0D0D",
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
@@ -37,7 +43,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="ru">
+    <html lang="ru" className={`${inter.variable} ${playfair.variable}`}>
       <head>
         <meta name="maestro-release" content={APP_CACHE_VERSION} />
       </head>

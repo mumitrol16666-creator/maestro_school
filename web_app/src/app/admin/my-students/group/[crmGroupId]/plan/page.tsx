@@ -50,7 +50,7 @@ export default function GroupPlanPage() {
 
       <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm font-semibold text-stone-500">
         <span className="inline-flex items-center gap-2">
-          <Users size={17} className="text-gold" />
+          <Users size={17} className="text-gold-ink" />
           {group.students.length} участник(ов)
         </span>
         <span>{group.direction || "Направление не указано"}</span>

@@ -136,7 +136,7 @@ export function MonthlyReportModal({
         {/* Header bar (hidden on print) */}
         <div className="flex flex-wrap items-center gap-3 border-b border-stone-100 px-4 py-4 sm:px-6 print:hidden">
           <div className="order-1 flex min-w-0 flex-1 items-center gap-3">
-            <span className="grid h-10 w-10 place-items-center rounded-xl bg-gold/15 text-gold">
+            <span className="grid h-10 w-10 place-items-center rounded-xl bg-gold/15 text-gold-ink">
               <FileSpreadsheet size={20} />
             </span>
             <div className="min-w-0">
@@ -172,7 +172,7 @@ export function MonthlyReportModal({
           {/* School Header Banner */}
           <div className="flex flex-wrap items-start justify-between gap-4 border-b border-stone-200 pb-6">
             <div>
-              <div className="flex items-center gap-2 text-gold">
+              <div className="flex items-center gap-2 text-gold-ink">
                 <Sparkles size={18} />
                 <span className="text-xs font-black uppercase tracking-[0.2em]">Maestro School</span>
               </div>
@@ -193,7 +193,7 @@ export function MonthlyReportModal({
           <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <div className="rounded-2xl border border-stone-200 bg-stone-50/80 p-4">
               <span className="flex items-center gap-1.5 text-xs font-bold text-stone-600">
-                <BookOpen size={14} className="text-gold" /> Уроков проведено
+                <BookOpen size={14} className="text-gold-ink" /> Уроков проведено
               </span>
               <p className="font-display mt-2 text-2xl font-bold text-ink">{totalLessons}</p>
               <span className="text-[11px] text-stone-600">за {selectedMonth}</span>
@@ -209,7 +209,7 @@ export function MonthlyReportModal({
 
             <div className="rounded-2xl border border-stone-200 bg-stone-50/80 p-4">
               <span className="flex items-center gap-1.5 text-xs font-bold text-stone-600">
-                <CheckCircle2 size={14} className="text-violet-600" /> Темы плана
+                <CheckCircle2 size={14} className="text-amber-600" /> Темы плана
               </span>
               <p className="font-display mt-2 text-2xl font-bold text-ink">
                 {completedTopics.length} <span className="text-sm font-normal text-stone-600">/ {planItems.length || "—"}</span>
@@ -302,7 +302,7 @@ export function MonthlyReportModal({
 
                       <div className="flex items-center gap-2">
                         {lesson.teacherName && (
-                          <span className="rounded-full bg-violet-50 px-2.5 py-1 text-xs font-bold text-violet-800">
+                          <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-800">
                             {lesson.teacherName}
                           </span>
                         )}

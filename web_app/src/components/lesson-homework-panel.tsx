@@ -41,7 +41,7 @@ export function LessonHomeworkPanel({
       <div className="rounded-[24px] border border-stone-200 bg-white p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex items-start gap-3">
-            <ClipboardList size={20} className="mt-1 text-gold" />
+            <ClipboardList size={20} className="mt-1 text-gold-ink" />
             <div>
               <h3 className="font-display text-3xl">Задание и тест</h3>
               <p className="mt-1 text-sm text-stone-500">
@@ -61,7 +61,7 @@ export function LessonHomeworkPanel({
       </div>
 
       <section className="rounded-[24px] border border-stone-200 bg-stone-50 p-5">
-        <p className="text-xs font-bold uppercase tracking-[0.16em] text-gold">Шаг 1</p>
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-gold-ink">Шаг 1</p>
         <h4 className="font-display mt-2 text-2xl">Формат сдачи</h4>
         <p className="mt-1 text-sm text-stone-500">Выберите, как ученик будет подтверждать прохождение урока.</p>
 
@@ -122,7 +122,7 @@ export function LessonHomeworkPanel({
       </section>
 
       <section className="rounded-[24px] border border-stone-200 bg-stone-50 p-5">
-        <p className="text-xs font-bold uppercase tracking-[0.16em] text-gold">Шаг 2</p>
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-gold-ink">Шаг 2</p>
         <h4 className="font-display mt-2 text-2xl">Описание задания</h4>
         <p className="mt-1 text-sm text-stone-500">
           {isTest ? "Кратко объясните, что проверяет тест." : "Что именно нужно сделать ученику."}
@@ -138,7 +138,7 @@ export function LessonHomeworkPanel({
 
       {isTest && (
         <section className="rounded-[24px] border border-stone-200 bg-stone-50 p-5">
-          <p className="text-xs font-bold uppercase tracking-[0.16em] text-gold">Шаг 3</p>
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-gold-ink">Шаг 3</p>
           <h4 className="font-display mt-2 text-2xl">Вопросы теста</h4>
           <p className="mt-1 text-sm text-stone-500">
             Тест проверяется автоматически. При провале ученик может пересдать.

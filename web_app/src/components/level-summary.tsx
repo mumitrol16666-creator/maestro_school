@@ -109,10 +109,10 @@ export function LevelProgressDialog({
     <div className="fixed inset-0 z-[120] flex items-end justify-center bg-stone-950/65 p-0 backdrop-blur-sm sm:items-center sm:p-5" onMouseDown={(event) => {
       if (event.target === event.currentTarget) onClose();
     }}>
-      <section role="dialog" aria-modal="true" aria-labelledby="level-dialog-title" data-testid="level-progress-dialog" className="flex max-h-[94dvh] w-full max-w-4xl flex-col overflow-hidden rounded-t-2xl border border-white/10 bg-[#171813] text-white shadow-2xl sm:max-h-[88dvh] sm:rounded-2xl">
+      <section role="dialog" aria-modal="true" aria-labelledby="level-dialog-title" data-testid="level-progress-dialog" className="flex max-h-[94dvh] w-full max-w-4xl flex-col overflow-hidden rounded-t-2xl border border-white/10 bg-charcoal text-white shadow-2xl sm:max-h-[88dvh] sm:rounded-2xl">
         <header className="flex shrink-0 items-start justify-between gap-4 border-b border-white/10 px-5 py-4 sm:px-7 sm:py-5">
           <div className="min-w-0">
-            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-gold">Постоянный прогресс</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-gold-ink">Постоянный прогресс</p>
             <h2 id="level-dialog-title" className="font-display mt-1.5 text-3xl sm:text-4xl">Уровни Maestro</h2>
           </div>
           <button type="button" autoFocus onClick={onClose} className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-white/15 text-white/65 transition hover:bg-white/10 hover:text-white" aria-label="Закрыть уровни">
@@ -142,8 +142,8 @@ export function LevelProgressDialog({
           </div>
 
           <div className="mt-5 grid gap-3 rounded-xl border border-white/10 bg-white/[0.045] p-4 text-sm leading-6 text-white/65 sm:grid-cols-2">
-            <p className="flex gap-2"><Star size={16} className="mt-1 shrink-0 text-gold" />Баллы показывают постоянный результат обучения и не сгорают каждую неделю.</p>
-            <p className="flex gap-2"><Info size={16} className="mt-1 shrink-0 text-gold" />Недельный XP считается отдельно для лиги, а Coins используются в магазине наград.</p>
+            <p className="flex gap-2"><Star size={16} className="mt-1 shrink-0 text-gold-ink" />Баллы показывают постоянный результат обучения и не сгорают каждую неделю.</p>
+            <p className="flex gap-2"><Info size={16} className="mt-1 shrink-0 text-gold-ink" />Недельный XP считается отдельно для лиги, а Coins используются в магазине наград.</p>
           </div>
 
           <div className="mt-6">
@@ -162,7 +162,7 @@ export function LevelProgressDialog({
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-2">
                         <p className="font-black">{level.title}</p>
-                        <span className={`text-[9px] font-black uppercase tracking-[0.1em] ${current ? "text-gold" : achieved ? "text-emerald-300" : next ? "text-white/60" : "text-white/25"}`}>
+                        <span className={`text-[9px] font-black uppercase tracking-[0.1em] ${current ? "text-gold-ink" : achieved ? "text-emerald-300" : next ? "text-white/60" : "text-white/25"}`}>
                           {current ? "Текущий" : achieved ? "Получен" : next ? "Следующий" : "Закрыт"}
                         </span>
                       </div>
@@ -189,7 +189,7 @@ export function LevelSummary({
   const tone = toneStyles[progress.level.tone];
   const [detailsOpen, setDetailsOpen] = useState(false);
   return (
-    <section data-testid="level-summary" className={`overflow-hidden rounded-[28px] bg-[#171813] text-white shadow-soft ${compact ? "p-5" : "p-6 sm:p-8"}`}>
+    <section data-testid="level-summary" className={`overflow-hidden rounded-[28px] bg-charcoal text-white shadow-soft ${compact ? "p-5" : "p-6 sm:p-8"}`}>
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <p className={`flex items-center gap-2 text-xs font-black uppercase ${tone.accent}`}>

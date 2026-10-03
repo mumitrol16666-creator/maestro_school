@@ -82,9 +82,9 @@ function HomeworkMaterialAction({
   const content = (
     <>
       {material.privateFile ? (
-        <Download size={13} className="shrink-0 text-gold" />
+        <Download size={13} className="shrink-0 text-gold-ink" />
       ) : (
-        <ExternalLink size={13} className="shrink-0 text-gold" />
+        <ExternalLink size={13} className="shrink-0 text-gold-ink" />
       )}
       <span className="min-w-0 flex-1 truncate">
         {material.title || "Материал"}
@@ -214,7 +214,7 @@ export function LearningHomeworkCard({
       <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-start gap-2">
-            <BookOpen size={17} className="mt-1 shrink-0 text-gold" />
+            <BookOpen size={17} className="mt-1 shrink-0 text-gold-ink" />
             <div className="min-w-0">
               <p className="text-[10px] font-black uppercase text-stone-400">
                 {assignment.topic.direction.title} ·{" "}
@@ -240,7 +240,7 @@ export function LearningHomeworkCard({
           </p>
           <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs font-semibold text-stone-500">
             <span className="inline-flex items-center gap-1.5">
-              <CalendarDays size={13} className="text-gold" />
+              <CalendarDays size={13} className="text-gold-ink" />
               {compact ? "" : "Назначено "}
               {formatDate(assignment.assignedAt)}
             </span>
@@ -386,7 +386,7 @@ export function LearningHomeworkCard({
                       key={`${file.name}-${file.size}-${index}`}
                       className="inline-flex max-w-full items-center gap-2 rounded-lg border border-stone-200 bg-white px-2.5 py-2 text-xs font-semibold text-stone-700"
                     >
-                      <Paperclip size={13} className="shrink-0 text-gold" />
+                      <Paperclip size={13} className="shrink-0 text-gold-ink" />
                       <span className="min-w-0 truncate">{file.name}</span>
                       <span className="shrink-0 text-[10px] text-stone-400">
                         {formatBytes(file.size)}

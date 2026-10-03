@@ -459,7 +459,7 @@ function GroupMonthlyPlanEditorContent({
       <div className="mt-6 border-t border-amber-200 pt-5">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <FilePlus2 size={16} className="text-gold" />
+            <FilePlus2 size={16} className="text-gold-ink" />
             <p className="text-xs font-black uppercase tracking-wider text-stone-500">Материалы группы</p>
           </div>
           <button

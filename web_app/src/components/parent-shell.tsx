@@ -36,11 +36,12 @@ export function ParentShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-cream">
-      <aside className="fixed inset-y-0 left-0 hidden w-[272px] flex-col border-r border-white/10 bg-[#151613] px-5 py-6 text-white lg:flex">
+      <a className="brand-skip-link" href="#main-content">Перейти к содержимому</a>
+      <aside className="fixed inset-y-0 left-0 hidden w-[272px] flex-col border-r border-white/10 bg-charcoal px-5 py-6 text-white lg:flex">
         <div className="border-b border-white/10 pb-5">
           <Brand />
           <p className="mt-3 flex items-center gap-2 text-xs font-bold text-white/45">
-            <ShieldCheck size={14} className="text-gold" />
+            <ShieldCheck size={14} className="text-gold-ink" />
             Семейный кабинет
           </p>
         </div>
@@ -54,12 +55,12 @@ export function ParentShell({ children }: { children: React.ReactNode }) {
                 href={item.href}
                 className={`flex min-h-12 items-center gap-3 rounded-2xl border px-3 py-2.5 text-sm font-bold transition ${
                   active
-                    ? "border-gold/30 bg-white text-ink"
+                    ? "border-gold/35 bg-cream text-ink"
                     : "border-transparent text-white/60 hover:bg-white/5 hover:text-white"
                 }`}
               >
                 <span className={`grid h-9 w-9 place-items-center rounded-xl ${
-                  active ? "bg-gold/15 text-gold" : "bg-white/5"
+                  active ? "bg-gold/15 text-gold-ink" : "bg-white/5"
                 }`}>
                   <Icon size={18} />
                 </span>
@@ -72,7 +73,7 @@ export function ParentShell({ children }: { children: React.ReactNode }) {
           })}
         </nav>
         <div className="mt-auto rounded-[22px] border border-white/10 bg-white/[0.045] p-4">
-          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gold">Доступ родителя</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gold-ink">Доступ родителя</p>
           <p className="mt-2 text-xs leading-5 text-white/50">
             Расписание, баланс, учебный план и достижения в пределах доступа ученика.
           </p>
@@ -80,7 +81,7 @@ export function ParentShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       <div className="lg:pl-[272px]">
-        <header className="sticky top-0 z-30 flex h-[calc(68px+env(safe-area-inset-top,0px))] items-center border-b border-stone-200/70 bg-cream/90 px-4 pt-[env(safe-area-inset-top,0px)] backdrop-blur-xl sm:px-8">
+        <header className="sticky top-0 z-30 flex h-[calc(80px+env(safe-area-inset-top,0px))] items-center border-b border-stone-200/70 bg-cream/90 px-4 pt-[env(safe-area-inset-top,0px)] backdrop-blur-xl sm:px-8">
           <div className="lg:hidden">
             <Brand compact />
           </div>
@@ -99,7 +100,7 @@ export function ParentShell({ children }: { children: React.ReactNode }) {
             <UserMenu />
           </div>
         </header>
-        <main className="mobile-safe mx-auto max-w-[1400px] p-4 pb-[calc(6rem+env(safe-area-inset-bottom,0px))] sm:p-8 lg:p-10">
+        <main id="main-content" tabIndex={-1} className="mobile-safe mx-auto max-w-[1400px] p-4 pb-[calc(6rem+env(safe-area-inset-bottom,0px))] sm:p-8 lg:p-10">
           {children}
         </main>
       </div>
@@ -117,7 +118,7 @@ export function ParentShell({ children }: { children: React.ReactNode }) {
               }`}
             >
               <span className={`relative grid h-9 w-12 place-items-center rounded-xl ${
-                active ? "bg-amber-50 text-gold" : ""
+                active ? "bg-amber-50 text-gold-ink" : ""
               }`}>
                 <Icon size={19} />
                 {item.href === "/family/messages" && unreadMessages != null && unreadMessages > 0 ? (

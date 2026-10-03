@@ -54,7 +54,7 @@ function Avatar({
 }) {
   const className = size === "small" ? "h-10 w-10 rounded-xl" : "h-12 w-12 rounded-2xl";
   return (
-    <span className={`grid shrink-0 place-items-center overflow-hidden bg-amber-50 font-black text-gold ${className}`}>
+    <span className={`grid shrink-0 place-items-center overflow-hidden bg-amber-50 font-black text-gold-ink ${className}`}>
       {avatar ? <img src={avatar} alt="" className="h-full w-full object-cover" /> : name.slice(0, 1).toUpperCase() || <UserRound size={18} />}
     </span>
   );
@@ -307,7 +307,7 @@ export function MessageMailbox({ role }: { role: "student" | "teacher" }) {
           <div className={`${active || threadLoading ? "flex" : "hidden md:flex"} min-w-0 flex-col bg-stone-50/55`}>
             {threadLoading && !active ? (
               <div className="grid flex-1 place-items-center">
-                <LoaderCircle className="animate-spin text-gold" size={28} />
+                <LoaderCircle className="animate-spin text-gold-ink" size={28} />
               </div>
             ) : active ? (
               <>
@@ -397,7 +397,7 @@ export function MessageMailbox({ role }: { role: "student" | "teacher" }) {
           <section role="dialog" aria-modal="true" aria-labelledby="compose-title" className="w-full max-w-lg rounded-[26px] bg-white p-5 shadow-2xl sm:p-7">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-gold">Новое сообщение</p>
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-gold-ink">Новое сообщение</p>
                 <h2 id="compose-title" className="font-display mt-2 text-3xl">
                   {role === "student" ? "Создать обращение" : "Написать ученику"}
                 </h2>

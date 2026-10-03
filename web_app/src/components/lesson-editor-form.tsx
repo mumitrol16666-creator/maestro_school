@@ -74,7 +74,7 @@ export function LessonEditorForm({
   return (
     <form onSubmit={onSubmit} className="space-y-5">
       <div className="rounded-[24px] border border-stone-200 bg-white p-5 sm:p-6">
-        <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">
+        <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold-ink">
           {mode === "new-lesson" ? "Новый урок" : "Настройки урока"}
         </p>
         <h2 className="font-display mt-2 text-4xl">
