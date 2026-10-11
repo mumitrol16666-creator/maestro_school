@@ -87,14 +87,7 @@ async function prepareEditableLesson(request: APIRequestContext) {
   );
   expect(cardResponse.ok()).toBe(true);
   let status = (await cardResponse.json()).data.status as string;
-  if (status === "completed") {
-    const reopen = await request.post(
-      `/api/v1/admin/offline-lessons/${DRAFT_LESSON_ID}/reopen`,
-      { headers, data: { reason: "Локальная проверка серверного черновика" } },
-    );
-    expect(reopen.ok()).toBe(true);
-    status = (await reopen.json()).data.status;
-  }
+  expect(status, "Пересоздайте QA fixtures: подтверждённый урок переоткрывается только в CRM").not.toBe("completed");
   if (status === "pending_admin_review") {
     const returned = await request.post(
       `/api/v1/admin/offline-lessons/${DRAFT_LESSON_ID}/return-to-teacher`,

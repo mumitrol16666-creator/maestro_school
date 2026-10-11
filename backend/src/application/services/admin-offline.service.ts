@@ -1,3 +1,4 @@
+import { requireCrmLessonReopen } from "../../domain/offline-lesson-approval-policy.js";
 import { prisma } from "../../infrastructure/database/prisma.js";
 import {
   fetchClassCard,
@@ -8,7 +9,6 @@ import {
   postTeacherStart,
   postTeacherSubmit,
   postAdminAttendance,
-  postAdminReopenClass,
   postAdminReturnClass,
   type TeacherSubmitPayload,
 } from "../../infrastructure/crm/crm-client.js";
@@ -315,30 +315,6 @@ export async function adminOfflineReturn(actorUserId: string, crmClassId: string
   return result;
 }
 
-export async function adminOfflineReopen(actorUserId: string, crmClassId: string, reason?: string) {
-  if (!lessonSyncV2Enabled()) {
-    const result = await postAdminReopenClass(crmClassId, reason);
-    return { ...result, correction: null };
-  }
-  if (!reason?.trim()) {
-    throw new BadRequestError(
-      "Укажите причину переоткрытия отчёта.",
-      "LESSON_CORRECTION_REASON_REQUIRED",
-    );
-  }
-
-  const reservation = await reserveOfflineLessonCorrection(crmClassId, actorUserId, reason);
-  const correction = reservation ? {
-    reportId: reservation.reportId,
-    reportVersion: reservation.reportVersion,
-    reason: reservation.reason,
-  } : undefined;
-  const result = await postAdminReopenClass(
-    crmClassId,
-    reason,
-    correction,
-    correction ? `lesson-correction:${crmClassId}:v${correction.reportVersion}` : undefined,
-  );
-  await completeOfflineLessonCorrection(reservation);
-  return { ...result, correction: correction ?? null };
+export async function adminOfflineReopen(_actorUserId: string, _crmClassId: string, _reason?: string): Promise<never> {
+  return requireCrmLessonReopen();
 }

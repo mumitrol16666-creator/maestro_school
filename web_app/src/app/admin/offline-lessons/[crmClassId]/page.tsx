@@ -2040,18 +2040,12 @@ export default function AdminOfflineLessonDetailPage() {
             </button>
           ) : null}
 
-          {isAdmin && lesson.status === "cancelled" ? (
-            <button
-              disabled={busy != null}
-              onClick={() => {
-                const reason = askReason("Восстановить отменённый урок в расписании?");
-                if (reason) void runAction("reopen", () => adminOfflineApi.reopen(crmClassId, reason));
-              }}
-              className="flex w-full items-center justify-center gap-2 rounded-[24px] border border-amber-300 bg-amber-50 px-5 py-4 text-sm font-bold text-amber-900 disabled:opacity-50"
-            >
-              {busy === "reopen" ? <LoaderCircle className="animate-spin" size={16} /> : <RotateCcw size={16} />}
-              Восстановить урок
-            </button>
+          {isAdmin && ["completed", "cancelled"].includes(lesson.status) ? (
+            <div className="rounded-[20px] border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
+              <p>Пересмотр урока и возврат списания выполняются в CRM.</p>
+              <a href={`${(process.env.NEXT_PUBLIC_CRM_API_URL ?? "https://app-maestro-school.duckdns.org").replace(/\/$/, "")}/admin.html#schedule`}
+                target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex min-h-11 items-center font-bold underline">Открыть расписание CRM</a>
+            </div>
           ) : null}
 
           {canApprove && !isNotHeld && unmarkedCount > 0 ? (

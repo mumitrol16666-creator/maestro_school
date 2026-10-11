@@ -1,4 +1,4 @@
-import { requireCrmLessonApproval } from "../../domain/offline-lesson-approval-policy.js";
+import { requireCrmLessonApproval, requireCrmLessonReopen } from "../../domain/offline-lesson-approval-policy.js";
 import { env } from "../../config/env.js";
 import { AppError } from "../../domain/errors.js";
 
@@ -639,11 +639,7 @@ export async function postAdminReopenClass(
   correction?: { reportId: string; reportVersion: number; reason: string },
   idempotencyKey?: string,
 ) {
-  return crmPost<Record<string, unknown>>(
-    `/api/integration/v1/classes/${encodeURIComponent(crmClassId)}/reopen`,
-    { reason, correction },
-    idempotencyKey,
-  );
+  return requireCrmLessonReopen();
 }
 
 export async function syncStudentFromApp(payload: {
