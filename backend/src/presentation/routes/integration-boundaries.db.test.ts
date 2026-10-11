@@ -56,7 +56,7 @@ if (!process.env.TEST_DATABASE_URL) {
   test("student identity cannot reset a teacher account by adding appUserId or mixing both kinds", async () => {
     const teacher = await makeUser("teacher");
     const crmTeacherId = randomUUID();
-    await prisma.user.update({ where: { id: teacher.id }, data: { crmTeacherId } });
+    await prisma.user.update({ where: { id: teacher.id }, data: { crmTeacherId, crmStudentId: randomUUID() } });
     assert.equal((await post("/users/update-password", { appUserId: teacher.id, crmStudentId: randomUUID(), password: "replacement-password" })).statusCode, 409);
     assert.equal((await post("/users/update-password", { crmTeacherId, crmStudentId: randomUUID(), password: "replacement-password" })).statusCode, 400);
     assert.equal((await post("/users/update-password", { crmTeacherId, password: "replacement-password" })).statusCode, 200);

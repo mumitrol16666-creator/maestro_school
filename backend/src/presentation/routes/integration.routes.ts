@@ -255,7 +255,7 @@ export async function integrationRoutes(app: FastifyInstance) {
     if (Boolean(crmStudentId) === Boolean(crmTeacherId)
       || (appUserId && appUserId !== user.id)
       || (crmStudentId && (user.crmStudentId !== crmStudentId || user.role.slug !== "student" || user.crmTeacherId))
-      || (crmTeacherId && (user.crmTeacherId !== crmTeacherId || user.role.slug !== "teacher" || user.crmStudentId))) {
+      || (crmTeacherId && (user.crmTeacherId !== crmTeacherId || user.role.slug !== "teacher"))) {
       throw new ConflictError("Тип карточки CRM не позволяет менять пароль этого аккаунта");
     }
 
