@@ -1,3 +1,4 @@
+import { sessionClaims } from "../../application/services/account-session.service.js";
 import type { FastifyInstance } from "fastify";
 import { Prisma } from "@prisma/client";
 import bcrypt from "bcryptjs";
@@ -124,8 +125,8 @@ async function studentStats(userId: string, roleSlug: string) {
 export async function authRoutes(app: FastifyInstance) {
   app.post("/auth/sso-exchange", { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } }, async (request, reply) => {
     const { token } = ssoExchangeSchema.parse(request.body);
-    const { user, stats } = await exchangeSsoBridgeToken(token);
-    const sessionToken = await reply.jwtSign({ sub: user.id, role: user.role.slug });
+    const { user, stats, session } = await exchangeSsoBridgeToken(token);
+    const sessionToken = await reply.jwtSign(session, { expiresIn: "7d" });
     if (user.role.slug === "student") {
       await recordStudentLogin(user.id, "sso").catch(() => undefined);
     }
@@ -171,7 +172,7 @@ export async function authRoutes(app: FastifyInstance) {
       throw new UnauthorizedError("Неверный логин, email или пароль");
     }
 
-    const token = await reply.jwtSign({ sub: user.id, role: user.role.slug });
+    const token = await reply.jwtSign(await sessionClaims(user), { expiresIn: "7d" });
     const stats = await studentStats(user.id, user.role.slug);
     if (user.role.slug === "student") {
       await recordStudentLogin(user.id, "password").catch(() => undefined);
@@ -243,7 +244,6 @@ export async function authRoutes(app: FastifyInstance) {
       }
       throw error;
     }
-    const token = await reply.jwtSign({ sub: user.id, role: user.role.slug });
     await recordStudentLogin(user.id, "registration").catch(() => undefined);
 
     await syncNewStudentToCrm({
@@ -254,6 +254,12 @@ export async function authRoutes(app: FastifyInstance) {
       middleName: user.middleName,
       email: user.email ?? "",
     });
+
+    // Linking updates the account revision. Issue against that completed state,
+    // but never turn a concurrent password reset into a new authenticated login.
+    const linkedUser = await findUserWithRoleById(user.id);
+    if (!linkedUser || linkedUser.passwordHash !== user.passwordHash) throw new UnauthorizedError();
+    const token = await reply.jwtSign(await sessionClaims(linkedUser), { expiresIn: "7d" });
 
     return reply.status(201).send({
       data: {
@@ -357,7 +363,7 @@ export async function authRoutes(app: FastifyInstance) {
     });
   });
 
-  app.patch("/auth/me/password", { preHandler: [authenticate] }, async (request) => {
+  app.patch("/auth/me/password", { preHandler: [authenticate] }, async (request, reply) => {
     const authUser = request.user!;
     const body = passwordChangeSchema.parse(request.body);
     if (body.currentPassword === body.newPassword) {
@@ -369,10 +375,15 @@ export async function authRoutes(app: FastifyInstance) {
       throw new UnauthorizedError("Текущий пароль указан неверно");
     }
 
-    await updateUserPassword(authUser.id, await bcrypt.hash(body.newPassword, 10));
+    const updated = await updateUserPassword(authUser.id, await bcrypt.hash(body.newPassword, 10));
+    // Authentication already checked CRM. Do not make a fallible remote call
+    // after committing the new password; retain that checked revision instead.
+    const token = await reply.jwtSign({ sub: updated.id, role: user.role.slug, sessionVersion: updated.sessionVersion,
+      ...(authUser.crmSessionVersion === undefined ? {} : { crmSessionVersion: authUser.crmSessionVersion }),
+    }, { expiresIn: "7d" });
 
     return {
-      data: { ok: true },
+      data: { ok: true, token },
     };
   });
 }

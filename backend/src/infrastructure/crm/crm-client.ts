@@ -106,6 +106,13 @@ export async function fetchTeacherOfflineClasses(
   }>(`/api/integration/v1/teachers/${encodeURIComponent(crmTeacherId)}/offline-classes${qs ? `?${qs}` : ""}`);
 }
 
+export async function fetchCrmAccountSession(crmUserId: string, appUserId: string) {
+  const query = new URLSearchParams({ appUserId });
+  return crmGet<{ crmUserId: string; appUserId: string; role: string; sessionVersion: number }>(
+    `/api/integration/v1/users/${encodeURIComponent(crmUserId)}/session-state?${query}`,
+  );
+}
+
 export type CrmDirectionRef = {
   crmDirectionId: string;
   title: string;

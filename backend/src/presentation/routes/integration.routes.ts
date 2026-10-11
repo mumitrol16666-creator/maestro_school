@@ -9,7 +9,7 @@ import {
   findUserByAppUserId,
 } from "../../application/repositories/user-link.repository.js";
 import { findUserWithRoleById, updateUserPassword } from "../../application/repositories/auth.repository.js";
-import { BadRequestError, ConflictError } from "../../domain/errors.js";
+import { BadRequestError, ConflictError, UnauthorizedError } from "../../domain/errors.js";
 import { requireIntegrationAuth } from "../guards/integration.guards.js";
 import { exchangeSsoBridgeToken } from "../../application/services/sso-bridge.service.js";
 import { provisionTeacherFromCrm } from "../../application/services/teacher-provision.service.js";
@@ -170,6 +170,17 @@ function integrationProfile(
 export async function integrationRoutes(app: FastifyInstance) {
   app.addHook("preHandler", requireIntegrationAuth);
 
+  app.get("/users/:id/session-state", async (request) => {
+    const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+    const { crmUserId } = z.object({ crmUserId: z.string().min(1).max(64) }).parse(request.query);
+    const user = await findUserWithRoleById(id);
+    if (!user || user.externalLinkStatus !== "linked"
+        || (user.crmTeacherId || user.crmStudentId) !== crmUserId) {
+      throw new UnauthorizedError("Account access or link is no longer valid");
+    }
+    return { success: true, data: { sessionVersion: user.sessionVersion, role: user.role.slug } };
+  });
+
   app.post("/shop/coins/balance", async (request) => {
     requireCrmIntegration(request);
     const body = shopCoinBalanceSchema.parse(request.body);
@@ -321,8 +332,8 @@ export async function integrationRoutes(app: FastifyInstance) {
 
   app.post("/auth/sso-exchange", async (request, reply) => {
     const { token } = ssoExchangeSchema.parse(request.body);
-    const { user, crmStudentId } = await exchangeSsoBridgeToken(token);
-    const sessionToken = await reply.jwtSign({ sub: user.id, role: user.role.slug });
+    const { user, crmStudentId, session } = await exchangeSsoBridgeToken(token);
+    const sessionToken = await reply.jwtSign(session, { expiresIn: "7d" });
     if (user.role.slug === "student") {
       await recordStudentLogin(user.id, "sso").catch(() => undefined);
     }

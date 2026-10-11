@@ -46,6 +46,7 @@ async function bootstrap() {
 
   await app.register(jwt, {
     secret: env.JWT_SECRET,
+    sign: { expiresIn: "7d" },
   });
 
   await app.register(rateLimit, { global: false });
