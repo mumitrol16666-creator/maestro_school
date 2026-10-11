@@ -1,7 +1,8 @@
 import type { FastifyRequest } from "fastify";
-import { UnauthorizedError, ForbiddenError } from "../../domain/errors.js";
+import { UnauthorizedError, ForbiddenError, AppError } from "../../domain/errors.js";
 import { findUserWithRoleById } from "../../application/repositories/auth.repository.js";
 import { isContentAdminRole, isOfflineCoordinatorRole } from "../../domain/cms-access.js";
+import { assertCurrentSession } from "../../application/services/account-session.service.js";
 
 /**
  * Auth guards as plain functions — safe inside encapsulated route plugins.
@@ -10,18 +11,20 @@ import { isContentAdminRole, isOfflineCoordinatorRole } from "../../domain/cms-a
  */
 export async function authenticate(request: FastifyRequest): Promise<void> {
   try {
-    const payload = await request.jwtVerify<{ sub: string }>();
+    const payload = await request.jwtVerify<{ sub: string; iat: number; sessionVersion?: unknown; crmSessionVersion?: unknown }>();
     const user = await findUserWithRoleById(payload.sub);
     if (!user) throw new UnauthorizedError();
+    const verifiedSession = await assertCurrentSession(user, payload);
 
     request.user = {
       id: user.id,
       email: user.email,
       roleSlug: user.role.slug,
       permissions: user.role.rolePermissions.map((rp) => rp.permission.code),
+      ...verifiedSession,
     };
   } catch (error) {
-    if (error instanceof UnauthorizedError) throw error;
+    if (error instanceof UnauthorizedError || (error instanceof AppError && error.statusCode >= 500)) throw error;
     throw new UnauthorizedError();
   }
 }

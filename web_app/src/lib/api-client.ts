@@ -176,11 +176,14 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
-  changePassword: (currentPassword: string, newPassword: string) =>
-    apiRequest<{ ok: boolean }>("/auth/me/password", {
+  changePassword: async (currentPassword: string, newPassword: string) => {
+    const result = await apiRequest<{ ok: boolean; token: string }>("/auth/me/password", {
       method: "PATCH",
       body: JSON.stringify({ currentPassword, newPassword }),
-    }),
+    });
+    if (typeof window !== "undefined") localStorage.setItem(TOKEN_KEY, result.token);
+    return result;
+  },
   directions: () => apiRequest<ApiDirection[]>("/directions"),
   courses: (directionId?: string) =>
     apiRequest<ApiCourseSummary[]>(`/courses${directionId ? `?directionId=${encodeURIComponent(directionId)}` : ""}`),

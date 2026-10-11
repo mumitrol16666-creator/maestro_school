@@ -3,12 +3,15 @@ import { findUserWithRoleById } from "../repositories/auth.repository.js";
 import { UnauthorizedError } from "../../domain/errors.js";
 import { getStudentCoins } from "./coins.service.js";
 import { getStudentPointsBalance } from "./points.service.js";
+import { linkedCrmSession, sessionVersionMatches } from "./account-session.service.js";
 
 type SsoPayload = {
   purpose?: string;
   crmStudentId?: string;
   appUserId?: string;
   role?: string;
+  sessionVersion?: unknown;
+  crmSessionVersion?: unknown;
 };
 
 function ssoSecret(): string {
@@ -36,7 +39,7 @@ export async function exchangeSsoBridgeToken(token: string) {
     throw new UnauthorizedError("Ссылка для входа недействительна или устарела");
   }
 
-  if (payload.purpose !== "sso-bridge" || !payload.appUserId) {
+  if (payload.purpose !== "sso-bridge" || !payload.appUserId || !payload.crmStudentId) {
     throw new UnauthorizedError("Некорректный SSO-токен");
   }
 
@@ -45,12 +48,20 @@ export async function exchangeSsoBridgeToken(token: string) {
     throw new UnauthorizedError("Аккаунт в платформе не найден");
   }
 
+  const crm = await linkedCrmSession(user);
+  if (!crm || payload.crmStudentId !== crm.crmUserId || payload.role !== crm.role
+      || !sessionVersionMatches(payload.sessionVersion, user.sessionVersion)
+      || !sessionVersionMatches(payload.crmSessionVersion, crm.sessionVersion)) {
+    throw new UnauthorizedError("Ссылка для входа отозвана. Запросите новую ссылку.");
+  }
+
   const stats = await studentStats(user.id, user.role.slug);
 
   return {
     user,
     stats,
     crmStudentId: payload.crmStudentId ?? null,
+    session: { sub: user.id, role: user.role.slug, sessionVersion: user.sessionVersion, crmSessionVersion: crm.sessionVersion },
   };
 }
 

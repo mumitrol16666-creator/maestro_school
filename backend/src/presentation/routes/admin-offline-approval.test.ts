@@ -11,7 +11,7 @@ test("Platform HTTP approval is disabled for admins and remains forbidden for te
   let role = "admin";
   const findFirst = prisma.user.findFirst;
   prisma.user.findFirst = (async () => ({
-    id: "fixture-user", email: null,
+    id: "fixture-user", email: null, sessionVersion: 0,
     role: { slug: role, rolePermissions: [{ permission: { code: "offline_school.write" } }] },
   })) as typeof findFirst;
   t.after(() => { prisma.user.findFirst = findFirst; });
