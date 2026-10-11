@@ -2235,3 +2235,13 @@ model AppUsageEvent {
   @@index([occurredAt])
   @@map("app_usage_events")
 }
+
+model CrmFamilyProvision {
+  operationId  String   @id @map("operation_id") @db.VarChar(128)
+  fingerprint  String   @db.VarChar(64)
+  crmStudentId String   @map("crm_student_id") @db.VarChar(64)
+  crmActorId   String   @map("crm_actor_id") @db.VarChar(64)
+  linkId       String   @map("link_id") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  @@map("crm_family_provisions")
+}

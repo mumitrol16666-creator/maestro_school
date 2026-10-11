@@ -19,6 +19,7 @@ import { selectProvisionCandidate } from "../../domain/shared-phone-accounts.js"
 
 export type ProvisionStudentInput = {
   crmStudentId: string;
+  preserveExistingPassword?: boolean;
   phone: string;
   firstName: string;
   lastName: string;
@@ -67,7 +68,7 @@ export async function provisionStudentFromCrm(input: ProvisionStudentInput) {
     if (byCrmId.role.slug !== "student" || byCrmId.crmTeacherId) {
       throw new ConflictError("Карточка ученика связана с аккаунтом другой роли. Исправьте связь перед созданием доступа.");
     }
-    if (input.password) {
+    if (input.password && !input.preserveExistingPassword) {
       const passwordHash = await bcrypt.hash(input.password.trim(), 10);
       await updateUserPassword(byCrmId.id, passwordHash);
     }
@@ -106,7 +107,7 @@ export async function provisionStudentFromCrm(input: ProvisionStudentInput) {
       throw new BadRequestError(linkResult.error);
     }
 
-    if (input.password) {
+    if (input.password && !input.preserveExistingPassword) {
       const passwordHash = await bcrypt.hash(input.password.trim(), 10);
       await updateUserPassword(byPhone.id, passwordHash);
     }

@@ -1,3 +1,4 @@
+import { getCrmFamilyAccess, previewCrmParent, provisionCrmParent } from "../../application/services/crm-family-access.service.js";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
@@ -57,6 +58,7 @@ const provisionTeacherSchema = z.object({
 });
 
 const provisionStudentSchema = z.object({
+  preserveExistingPassword: z.boolean().optional(),
   crmStudentId: z.string().min(1).max(64),
   phone: z.string().min(10).max(32),
   firstName: z.string().trim().min(1).max(128),
@@ -225,6 +227,29 @@ export async function integrationRoutes(app: FastifyInstance) {
     return reply.status(result.created ? 201 : 200).send({ success: true, data: result });
   });
 
+  app.get("/family/:crmStudentId", async (request) => {
+    requireCrmIntegration(request);
+    const { crmStudentId } = z.object({ crmStudentId: z.string().min(1).max(64) }).parse(request.params);
+    return { success: true, data: await getCrmFamilyAccess(crmStudentId) };
+  });
+  app.post("/family/parent-preview", async (request) => {
+    requireCrmIntegration(request);
+    const { login } = z.object({ login: z.string().min(3).max(32) }).parse(request.body);
+    return { success: true, data: await previewCrmParent(login) };
+  });
+  app.post("/family/parent", async (request) => {
+    requireCrmIntegration(request);
+    const body = z.object({
+      crmStudentId: z.string().min(1).max(64), crmActorId: z.string().min(1).max(64),
+      operationId: z.string().min(8).max(128), mode: z.enum(["create", "link"]),
+      login: z.string().min(3).max(32), firstName: z.string().trim().min(1).max(128).optional(),
+      lastName: z.string().trim().min(1).max(128).optional(), middleName: z.string().trim().max(128).optional(),
+      phone: z.string().max(32).optional(), password: z.string().min(8).max(72).optional(),
+      parentUserId: z.string().uuid().optional(), identityVerified: z.boolean(),
+      relationship: z.enum(["mother", "father", "guardian"]),
+    }).parse(request.body);
+    return { success: true, data: await provisionCrmParent(body) };
+  });
   app.post("/users/provision-student", async (request, reply) => {
     const body = provisionStudentSchema.parse(request.body);
     const result = await provisionStudentFromCrm({
