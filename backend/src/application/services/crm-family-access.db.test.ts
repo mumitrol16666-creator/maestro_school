@@ -45,6 +45,11 @@ if (!process.env.TEST_DATABASE_URL) {
     assert.equal((await post("/family/parent", { ...payload, firstName: "Someone else" })).statusCode, 409);
     const state = await app.inject({ method: "GET", url: `/api/integration/v1/family/${crmStudentId}`, headers: { authorization: "Bearer family-integration-secret", "x-integration-system": "crm" } });
     assert.equal(state.json().data.parents[0].id, parentId);
+    const recovered = await post("/family/parent", { crmStudentId, operationId, crmActorId: "another-admin", mode: "link",
+      login: parent.login, parentUserId: parentId, relationship: "mother", identityVerified: true });
+    assert.equal(recovered.statusCode, 200, recovered.body);
+    assert.equal(recovered.json().data.parent.id, parentId);
+    assert.equal((await prisma.user.findUniqueOrThrow({ where: { id: parentId } })).passwordHash, parent.passwordHash);
     const stranger = await make("student", randomUUID());
     assert.equal(await prisma.parentStudentLink.count({ where: { parentUserId: parentId, studentUserId: stranger.id } }), 0);
   });

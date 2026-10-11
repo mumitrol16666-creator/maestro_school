@@ -42,10 +42,14 @@ export async function provisionCrmParent(input: CrmParentInput) {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`crm-parent:${input.operationId}`}, 0)) IS NULL`;
     const prior = await tx.crmFamilyProvision.findUnique({ where: { operationId: input.operationId } });
     if (prior) {
-      if (prior.fingerprint !== fingerprint) throw new ConflictError("Операция уже использована с другими данными");
       const link = await tx.parentStudentLink.findFirst({ where: { id: prior.linkId, isActive: true,
         parent: { isActive: true, role: { slug: "parent" }, ...notDeleted },
         student: { crmStudentId: input.crmStudentId, role: { slug: "student" }, ...notDeleted } }, include: { parent: { select: accountSelect } } });
+      // After a lost response, an admin may find the already-created parent by login.
+      // Only that exact parent/link can recover this operation; never switch family identity.
+      const recoveringSameParent = input.mode === "link" && link && input.parentUserId === link.parent.id
+        && login === link.parent.login && input.relationship === link.relationship;
+      if (prior.fingerprint !== fingerprint && !recoveringSameParent) throw new ConflictError("Операция уже использована с другими данными");
       if (!link) throw new ConflictError("Ранее созданная связь отключена. Проверьте доступ в приложении.");
       return { parent: link.parent, linkId: link.id, created: false, repeated: true };
     }
