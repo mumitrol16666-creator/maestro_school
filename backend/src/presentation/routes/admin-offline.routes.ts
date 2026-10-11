@@ -286,19 +286,7 @@ export async function adminOfflineRoutes(app: FastifyInstance) {
     async (request) => {
       const { crmClassId } = z.object({ crmClassId: z.string().min(1) }).parse(request.params);
       const body = z.object({ reason: z.string().min(3).max(1000) }).parse(request.body ?? {});
-      const result = await adminOfflineReopen(request.user!.id, crmClassId, body.reason);
-      await writeAuditLog({
-        entityType: "offline_lesson",
-        entityId: crmClassId,
-        action: "update",
-        actorId: request.user!.id,
-        payload: {
-          event: "offline_lesson_reopened",
-          reason: body.reason,
-          correction: result.correction,
-        },
-      });
-      return { data: result };
+      return adminOfflineReopen(request.user!.id, crmClassId, body.reason);
     },
   );
 

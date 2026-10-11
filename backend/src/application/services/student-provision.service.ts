@@ -64,6 +64,9 @@ export async function provisionStudentFromCrm(input: ProvisionStudentInput) {
 
   const byCrmId = await findUserByCrmStudentId(crmStudentId);
   if (byCrmId) {
+    if (byCrmId.role.slug !== "student" || byCrmId.crmTeacherId) {
+      throw new ConflictError("Карточка ученика связана с аккаунтом другой роли. Исправьте связь перед созданием доступа.");
+    }
     if (input.password) {
       const passwordHash = await bcrypt.hash(input.password.trim(), 10);
       await updateUserPassword(byCrmId.id, passwordHash);
@@ -89,10 +92,6 @@ export async function provisionStudentFromCrm(input: ProvisionStudentInput) {
   if (provisionCandidate.kind === "reuse") {
     const byPhone = provisionCandidate.user;
 
-    if (input.password) {
-      const passwordHash = await bcrypt.hash(input.password.trim(), 10);
-      await updateUserPassword(byPhone.id, passwordHash);
-    }
 
     const linkResult = await applyUserLink({
       appUserId: byPhone.id,
@@ -105,6 +104,11 @@ export async function provisionStudentFromCrm(input: ProvisionStudentInput) {
     if (!linkResult.success) {
       if (linkResult.status === "conflict") throw new ConflictError(linkResult.error);
       throw new BadRequestError(linkResult.error);
+    }
+
+    if (input.password) {
+      const passwordHash = await bcrypt.hash(input.password.trim(), 10);
+      await updateUserPassword(byPhone.id, passwordHash);
     }
 
     return {

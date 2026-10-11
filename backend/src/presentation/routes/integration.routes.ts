@@ -251,6 +251,14 @@ export async function integrationRoutes(app: FastifyInstance) {
       throw new BadRequestError("Пользователь не найден в Learning Platform");
     }
 
+    // Require the exact CRM identity and kind, even for legacy malformed links.
+    if (Boolean(crmStudentId) === Boolean(crmTeacherId)
+      || (appUserId && appUserId !== user.id)
+      || (crmStudentId && (user.crmStudentId !== crmStudentId || user.role.slug !== "student" || user.crmTeacherId))
+      || (crmTeacherId && (user.crmTeacherId !== crmTeacherId || user.role.slug !== "teacher" || user.crmStudentId))) {
+      throw new ConflictError("Тип карточки CRM не позволяет менять пароль этого аккаунта");
+    }
+
     const passwordHash = await bcrypt.hash(password, 10);
     await updateUserPassword(user.id, passwordHash);
 

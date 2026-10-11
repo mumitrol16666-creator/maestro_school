@@ -63,7 +63,7 @@ export async function applyUserLink(params: {
   if (params.appUserId) {
     user = await findUserByAppUserId(params.appUserId);
   }
-  if (!user && digits) {
+  if (!params.appUserId && digits) {
     const candidates = await findUsersByPhoneNormalized(digits);
     if (candidates.length > 1) {
       return {
@@ -77,6 +77,14 @@ export async function applyUserLink(params: {
 
   if (!user) {
     return { success: false as const, error: "App user not found for this phone" };
+  }
+
+  // A student card can never confer access to staff or parent credentials.
+  // force resolves same-kind link conflicts, not identity/role mismatches.
+  if (Boolean(params.crmStudentId) === Boolean(params.crmTeacherId)
+    || (params.crmStudentId && (user.role.slug !== "student" || user.crmTeacherId))
+    || (params.crmTeacherId && (user.crmStudentId || (user.role.slug !== "teacher" && user.crmTeacherId !== params.crmTeacherId)))) {
+    return { success: false as const, status: "conflict" as const, error: "Тип карточки CRM не соответствует аккаунту Платформы" };
   }
 
   if (params.crmStudentId) {

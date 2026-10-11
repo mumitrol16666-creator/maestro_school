@@ -26,6 +26,12 @@ test("Platform HTTP approval is disabled for admins and remains forbidden for te
     assert.equal(response.statusCode, 409);
     assert.equal(response.json().code, "CRM_APPROVAL_REQUIRED");
   }
+  for (const coordinator of ["admin", "curator", "branch_manager"]) {
+    role = coordinator;
+    const response = await app.inject({ method: "POST", url: "/admin/offline-lessons/fixture/reopen", headers, payload: { reason: "Correct lesson" } });
+    assert.equal(response.statusCode, 409);
+    assert.equal(response.json().code, "CRM_REOPEN_REQUIRED");
+  }
   role = "teacher";
   assert.equal((await app.inject({ method: "POST", url: "/admin/offline-lessons/fixture/approve", headers, payload: {} })).statusCode, 403);
   assert.equal(networkCalls, 0);
