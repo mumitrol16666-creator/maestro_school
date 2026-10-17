@@ -1161,6 +1161,7 @@ type CrmOutboxProcessorDependencies = {
   confirmApproval: typeof confirmOfflineLessonApproval;
   finalizeApproval: typeof finalizeOfflineLessonApproval;
   notifyApproval: typeof notifyOfflineLessonApproved;
+  readLessonCard: (crmClassId: string) => Promise<JsonRecord>;
   now: () => Date;
 };
 
@@ -1172,6 +1173,7 @@ const defaultCrmOutboxProcessorDependencies: CrmOutboxProcessorDependencies = {
   confirmApproval: confirmOfflineLessonApproval,
   finalizeApproval: finalizeOfflineLessonApproval,
   notifyApproval: notifyOfflineLessonApproved,
+  readLessonCard: (crmClassId) => fetchClassCard(crmClassId) as Promise<JsonRecord>,
   now: () => new Date(),
 };
 
@@ -1237,6 +1239,7 @@ export async function deliverQueuedOfflineLessonApprovedNotification(
   const report = await dependencies.database.offlineLessonReport.findUnique({
     where: { crmClassId: event.aggregateId },
     select: {
+      id: true,
       currentVersion: true,
       status: true,
       confirmedVersion: true,
@@ -1265,8 +1268,18 @@ export async function deliverQueuedOfflineLessonApprovedNotification(
   }
 
   try {
+    // CRM UI approval does not know the roster; the confirmed version's attendance
+    // snapshot is the durable source of who took part in this exact report.
+    const crmStudentIds = delivery.request.crmStudentIds?.length
+      ? delivery.request.crmStudentIds
+      : await readConfirmedVersionStudentIds(
+        report.id,
+        delivery.reportVersion,
+        dependencies.database,
+      );
     const result = await dependencies.notifyApproval({
       ...delivery.request,
+      crmStudentIds,
       dedupeIdentity: `offline-lesson-approval:${event.aggregateId}:v${delivery.reportVersion}`,
     });
     const delivered: ApprovalNotificationDelivery = {
@@ -1296,6 +1309,25 @@ export async function deliverQueuedOfflineLessonApprovedNotification(
   }
 }
 
+async function readConfirmedVersionStudentIds(
+  reportId: string,
+  reportVersion: number,
+  database: typeof prisma,
+) {
+  const version = await database.offlineLessonReportVersion.findUnique({
+    where: { reportId_version: { reportId, version: reportVersion } },
+    select: { attendancePayload: true },
+  });
+  if (!Array.isArray(version?.attendancePayload)) return [];
+  const ids = new Set<string>();
+  for (const entry of version.attendancePayload) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
+    const crmStudentId = (entry as JsonRecord).crmStudentId;
+    if (typeof crmStudentId === "string" && crmStudentId.trim()) ids.add(crmStudentId.trim());
+  }
+  return [...ids].sort();
+}
+
 function emptyApprovalNotificationResult(): ApprovalNotificationResult {
   return {
     delivered: false,
@@ -1313,7 +1345,7 @@ export async function queueOfflineLessonApprovedNotification(
 ) {
   const dependencies = crmOutboxProcessorDependencies(overrides);
   const queuedAt = dependencies.now().toISOString();
-  const staged = await dependencies.database.$transaction(async (tx) => {
+  const stage = () => dependencies.database.$transaction(async (tx) => {
     const report = await tx.offlineLessonReport.findUnique({
       where: { crmClassId: request.crmClassId },
     });
@@ -1396,9 +1428,37 @@ export async function queueOfflineLessonApprovedNotification(
     return { event: liveEvent, report, delivery };
   });
 
+  // The CRM callback usually arrives before the 30-second reconciliation job has
+  // noticed the approval. Instead of answering 409 and losing the notification,
+  // read the lesson card and stage the same canonical admin_approve event here.
+  let staged: Awaited<ReturnType<typeof stage>>;
+  try {
+    staged = await stage();
+  } catch (error) {
+    if (!(error instanceof AppError) || error.code !== "LESSON_APPROVAL_CALLBACK_EVENT_MISSING") {
+      throw error;
+    }
+    const lesson = await dependencies.readLessonCard(request.crmClassId);
+    const reconciled = await reconcileObservedCrmApproval(request.crmClassId, lesson, {
+      database: dependencies.database,
+      processNow: false,
+      now: dependencies.now,
+    });
+    if (!reconciled.event) throw error;
+    staged = await stage();
+  }
+
   let drain: ApprovalNotificationDrainResult | null = null;
   if (staged.event.status === "succeeded") {
     drain = await deliverQueuedOfflineLessonApprovedNotification(staged.event.id, dependencies);
+  } else if (["pending", "failed"].includes(staged.event.status)) {
+    // Confirm and finalize right away so the student sees the result without
+    // waiting for the outbox worker; a CRM hiccup here is left to the worker's retry.
+    try {
+      await processCrmOutboxEvent(staged.event.id, overrides);
+    } catch {
+      // processCrmOutboxEvent already recorded the failure on the event.
+    }
   }
   const liveEvent = await dependencies.database.crmOutboxEvent.findUnique({
     where: { id: staged.event.id },
@@ -1414,8 +1474,12 @@ export async function queueOfflineLessonApprovedNotification(
     ? liveEvent.responsePayload as JsonRecord
     : null;
   const approvalStatus = liveEvent?.status ?? staged.event.status;
-  const confirmed = staged.report.status === "confirmed"
-    && staged.report.confirmedVersion === liveDelivery.reportVersion
+  // Synchronous processing above may have confirmed the report after staging.
+  const liveReport = await dependencies.database.offlineLessonReport.findUnique({
+    where: { crmClassId: request.crmClassId },
+  }) ?? staged.report;
+  const confirmed = liveReport.status === "confirmed"
+    && liveReport.confirmedVersion === liveDelivery.reportVersion
     && approvalStatus === "succeeded";
 
   return {
@@ -1426,7 +1490,7 @@ export async function queueOfflineLessonApprovedNotification(
     learningRewards: response?.learningRewards ?? null,
     reconciliation: {
       reportVersion: liveDelivery.reportVersion,
-      reportStatus: staged.report.status,
+      reportStatus: liveReport.status,
       approvalStatus,
       current: confirmed,
     },

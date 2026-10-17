@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  deliverQueuedOfflineLessonApprovedNotification,
   processCrmOutboxEvent,
   processDueCrmOutboxEvents,
+  queueOfflineLessonApprovedNotification,
   readObservedCrmApproval,
   reconcileObservedCrmApproval,
 } from "./crm-outbox.service.js";
@@ -1000,4 +1002,141 @@ test("a waiting legacy approval resumes only after a fresh confirmation observed
   assert.equal(fixture.getEvent()?.status, "pending");
   assert.equal(fixture.getEvent()?.payload.approvalSource, "crm_observed");
   assert.equal(processed, 1);
+});
+
+test("approval callback arriving before reconciliation stages the approval and notifies the roster", async () => {
+  const fixture = createObservedApprovalDatabase();
+  const version = fixture.version as Record<string, unknown>;
+  version.attendancePayload = [
+    { crmStudentId: "student-present", attendanceStatus: "present" },
+    { crmStudentId: "student-absent", attendanceStatus: "absent" },
+  ];
+  fixture.database.crmOutboxEvent.findUniqueOrThrow = async () => ({ ...fixture.getEvent()! });
+  fixture.database.offlineLessonReportVersion.update = async ({ data }: any) => {
+    Object.assign(version, data);
+    return { ...version };
+  };
+  const crmLesson = { status: "completed", reviewedAt: "2026-09-06T04:14:45.271Z" };
+  let lessonReads = 0;
+  let notified: Record<string, unknown> | null = null;
+
+  const result = await queueOfflineLessonApprovedNotification({
+    crmClassId: "crm-class-1",
+    crmTeacherId: "crm-teacher-1",
+    crmStudentIds: [],
+    lessonTitle: "Гитара",
+  } as any, {
+    database: fixture.database,
+    readLessonCard: async () => {
+      lessonReads += 1;
+      return crmLesson;
+    },
+    readLocallyConfirmedApproval: async () => crmLesson,
+    readApprovalRetryStatus: async () => crmLesson,
+    deliverEvent: async () => ({ accepted: true }),
+    confirmApproval: async () => {
+      fixture.report.status = "confirmed";
+      fixture.report.confirmedVersion = 1;
+      fixture.report.crmConfirmedAt = new Date("2026-09-06T04:14:45.271Z");
+      return {
+        reportVersion: 1,
+        approvedBy: "admin-1",
+        learningResultsV2: { homeworkDecisions: [], topicUpdates: [] },
+      };
+    },
+    finalizeApproval: async () => ({ attendance: [], learningV2: { topicUpdates: [] } }),
+    notifyApproval: async (params: Record<string, unknown>) => {
+      notified = params;
+      return {
+        delivered: true,
+        teacherLinked: true,
+        studentsDelivered: 2,
+        parentsDelivered: 0,
+        duplicate: false,
+        notificationId: null,
+      };
+    },
+    now: () => new Date("2026-09-06T04:15:00.000Z"),
+  } as any);
+
+  assert.equal(lessonReads, 1);
+  assert.equal(fixture.getCreateCalls(), 1);
+  assert.equal(fixture.getEvent()?.payload.approvalSource, "crm_observed");
+  assert.equal(fixture.getEvent()?.status, "succeeded");
+  assert.equal(fixture.report.status, "confirmed");
+  assert.equal(result.deliveryState, "delivered");
+  assert.equal(result.reconciliation.current, true);
+  assert.deepEqual(notified?.crmStudentIds, ["student-absent", "student-present"]);
+});
+
+test("approval callback still answers 409 when CRM has not approved the lesson", async () => {
+  const fixture = createObservedApprovalDatabase();
+  let lessonReads = 0;
+
+  await assert.rejects(
+    queueOfflineLessonApprovedNotification({
+      crmClassId: "crm-class-1",
+      crmTeacherId: "crm-teacher-1",
+    } as any, {
+      database: fixture.database,
+      readLessonCard: async () => {
+        lessonReads += 1;
+        return { status: "pending_admin_review" };
+      },
+    } as any),
+    (error: any) => error?.code === "LESSON_APPROVAL_CALLBACK_EVENT_MISSING",
+  );
+  assert.equal(lessonReads, 1);
+  assert.equal(fixture.getCreateCalls(), 0);
+  assert.equal(fixture.report.status, "pending_review");
+});
+
+test("queued approval notification falls back to the confirmed version roster when CRM sent no students", async () => {
+  const event = outboxEvent("admin_approve");
+  event.status = "succeeded";
+  event.payload.approvalNotificationDelivery = {
+    reportVersion: 1,
+    state: "pending",
+    queuedAt: "2026-09-06T04:15:00.000Z",
+    request: {
+      crmClassId: "crm-class-1",
+      crmTeacherId: "crm-teacher-1",
+      crmStudentIds: [],
+      lessonTitle: "Гитара",
+    },
+  };
+  const { database } = createOutboxDatabase(event, {
+    id: "33333333-3333-4333-8333-333333333333",
+    crmClassId: "crm-class-1",
+    currentVersion: 1,
+    status: "confirmed",
+    confirmedVersion: 1,
+    crmConfirmedAt: new Date("2026-09-06T04:14:45.271Z"),
+  }, {
+    attendancePayload: [
+      { crmStudentId: "student-present", attendanceStatus: "present" },
+      { crmStudentId: "student-absent", attendanceStatus: "absent" },
+    ],
+  });
+  let notified: Record<string, unknown> | null = null;
+
+  const drain = await deliverQueuedOfflineLessonApprovedNotification(event.id, {
+    database,
+    notifyApproval: async (params: Record<string, unknown>) => {
+      notified = params;
+      return {
+        delivered: true,
+        teacherLinked: true,
+        studentsDelivered: 2,
+        parentsDelivered: 1,
+        duplicate: false,
+        notificationId: null,
+      };
+    },
+    now: () => new Date("2026-09-06T04:15:30.000Z"),
+  } as any);
+
+  assert.equal(drain?.state, "delivered");
+  assert.deepEqual(notified?.crmStudentIds, ["student-absent", "student-present"]);
+  assert.equal(event.payload.approvalNotificationDelivery?.state, "delivered");
 });
