@@ -392,6 +392,7 @@ enum UserNotificationType {
   offline_lesson_approved
   offline_lesson_report_ready
   offline_lesson_returned
+  offline_lesson_reopened
   offline_lesson_cancelled
   offline_lesson_rescheduled
   offline_lesson_report_due
@@ -1427,6 +1428,8 @@ model LeagueXpEvent {
   awardedById     String?            @map("awarded_by") @db.Uuid
   createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
   recordedAt      DateTime           @default(now()) @map("recorded_at") @db.Timestamptz(6)
+  reversedAt      DateTime?          @map("reversed_at") @db.Timestamptz(6)
+  reversalReason  String?            @map("reversal_reason") @db.VarChar(500)
 
   economicEpoch EconomicEpoch? @relation(fields: [economicEpochId], references: [id], onDelete: SetNull)
   student       User           @relation("LeagueXpStudent", fields: [studentId], references: [id], onDelete: Cascade)
@@ -1521,6 +1524,7 @@ model WeeklyLeagueActivityEvent {
   sourceKey       String                   @unique @map("source_key") @db.VarChar(191)
   occurredAt      DateTime                 @map("occurred_at") @db.Timestamptz(6)
   recordedAt      DateTime                 @default(now()) @map("recorded_at") @db.Timestamptz(6)
+  reversedAt      DateTime?                @map("reversed_at") @db.Timestamptz(6)
 
   economicEpoch EconomicEpoch @relation(fields: [economicEpochId], references: [id], onDelete: Cascade)
   student       User          @relation(fields: [studentId], references: [id], onDelete: Cascade)

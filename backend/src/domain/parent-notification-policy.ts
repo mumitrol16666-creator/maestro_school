@@ -1,11 +1,12 @@
 export type ParentOfflineEvent =
   | "approved"
   | "returned"
+  | "reopened"
   | "cancelled"
   | "rescheduled";
 
 export function shouldNotifyParentForOfflineEvent(event: ParentOfflineEvent) {
-  return event !== "returned";
+  return event !== "returned" && event !== "reopened";
 }
 
 export function parentOfflineEventType(

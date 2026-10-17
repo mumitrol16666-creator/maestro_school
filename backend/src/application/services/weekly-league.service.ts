@@ -57,6 +57,7 @@ async function listRankedWeek(
       ...(economicEpochId ? { economicEpochId } : {}),
       ...(recordedBefore ? { recordedAt: { lte: recordedBefore } } : {}),
       createdAt: { gte: range.start, lt: range.end },
+      reversedAt: null,
       student: {
         leagueEligible: true,
         isActive: true,
@@ -208,6 +209,7 @@ export async function previewOfflineLessonAttendanceXp(params: {
             studentId: { in: studentIds },
             sourceType: { in: LESSON_ATTENDANCE_SOURCE_TYPES },
             createdAt: { gte: range.start, lt: range.end },
+            reversedAt: null,
           },
           _count: { _all: true },
         })
@@ -305,7 +307,7 @@ export async function awardLessonAttendanceXp(params: {
         sourceKey: `weekly-activity:${economicEpoch.id}:${params.sourceKey}`,
         occurredAt: params.eventAt,
       },
-      update: {},
+      update: { reversedAt: null },
     });
     const duplicate = await tx.leagueXpEvent.findUnique({
       where: { sourceKey: params.sourceKey },
@@ -325,6 +327,7 @@ export async function awardLessonAttendanceXp(params: {
         studentId: params.studentId,
         sourceType: { in: LESSON_ATTENDANCE_SOURCE_TYPES },
         createdAt: { gte: range.start, lt: range.end },
+        reversedAt: null,
       },
     });
     const amount = lessonAttendanceXpForWeek(awardedLessonCount);
@@ -457,7 +460,7 @@ export async function awardHomeworkAcceptedXp(params: {
         sourceKey: `weekly-activity:${economicEpoch.id}:${params.sourceKey}`,
         occurredAt: eventAt,
       },
-      update: {},
+      update: { reversedAt: null },
     });
     const duplicate = await tx.leagueXpEvent.findUnique({
       where: { sourceKey: params.sourceKey },
@@ -477,6 +480,7 @@ export async function awardHomeworkAcceptedXp(params: {
         directionId: params.directionId,
         sourceType: { in: HOMEWORK_SOURCE_TYPES },
         createdAt: { gte: range.start, lt: range.end },
+        reversedAt: null,
       },
     });
     if (awardedCount >= WEEKLY_HOMEWORK_DIRECTION_LIMIT) {
@@ -561,6 +565,7 @@ export async function awardPreparedTestXp(params: {
         studentId: params.studentId,
         sourceType: "prepared_test",
         createdAt: { gte: range.start, lt: range.end },
+        reversedAt: null,
       },
     });
     if (awardedCount >= WEEKLY_PREPARED_TEST_LIMIT) {
@@ -653,6 +658,7 @@ export async function awardTeacherLeagueBonus(params: {
         awardedById: params.teacherId,
         sourceType: "teacher_bonus",
         createdAt: { gte: range.start, lt: range.end },
+        reversedAt: null,
       },
       _sum: { amount: true },
     });
@@ -1239,6 +1245,7 @@ export async function createWeeklyStreakProtection(params: {
         economicEpochId: economicEpoch.id,
         studentId: params.studentId,
         occurredAt: { gte: week.start, lt: week.end },
+        reversedAt: null,
       },
       select: { id: true },
     });
@@ -1393,6 +1400,7 @@ export async function finalizeWeeklyLeagueSnapshot(params: {
           economicEpochId: params.economicEpochId,
           createdAt: { gte: params.week.start, lt: params.week.end },
           recordedAt: { lte: params.finalizedAt },
+          reversedAt: null,
           student: {
             leagueEligible: true,
             isActive: true,
@@ -1430,6 +1438,7 @@ export async function finalizeWeeklyLeagueSnapshot(params: {
           economicEpochId: params.economicEpochId,
           occurredAt: { gte: params.week.start, lt: params.week.end },
           recordedAt: { lte: params.finalizedAt },
+          reversedAt: null,
         },
         select: { studentId: true },
       }),

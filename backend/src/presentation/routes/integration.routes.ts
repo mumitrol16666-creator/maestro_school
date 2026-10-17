@@ -20,6 +20,7 @@ import {
   notifyOfflineLessonEvent,
   notifyStaffTaskAssigned,
 } from "../../application/services/notification.service.js";
+import { applyCrmOfflineLessonEvent } from "../../application/services/offline-lesson-reversal.service.js";
 import { queueOfflineLessonApprovedNotification } from "../../application/services/crm-outbox.service.js";
 import { generateWhatsappHomeworkDrafts } from "../../application/services/whatsapp-homework-message.service.js";
 import { archiveStudentAccess } from "../../application/services/student-access-archive.service.js";
@@ -105,7 +106,7 @@ const offlineLessonApprovedSchema = z.object({
 
 const offlineLessonEventSchema = offlineLessonApprovedSchema.extend({
   crmTeacherId: z.string().min(1).max(64).optional(),
-  event: z.enum(["returned", "cancelled", "rescheduled"]),
+  event: z.enum(["returned", "reopened", "cancelled", "rescheduled"]),
   message: z.string().trim().max(2000).optional().nullable(),
 });
 
@@ -324,9 +325,15 @@ export async function integrationRoutes(app: FastifyInstance) {
 
   app.post("/notifications/offline-lesson-event", async (request) => {
     const body = offlineLessonEventSchema.parse(request.body);
+    // A return from CRM changes the report (and undoes rewards of a confirmed
+    // one) before anyone is told; a reopen only informs the teacher.
+    const state = await applyCrmOfflineLessonEvent(body);
+    const notification = await notifyOfflineLessonEvent(
+      body.event === "reopened" ? { ...body, crmStudentIds: [] } : body,
+    );
     return {
       success: true,
-      data: await notifyOfflineLessonEvent(body),
+      data: { ...notification, reportState: state.reportState, reversal: state.reversal },
     };
   });
 

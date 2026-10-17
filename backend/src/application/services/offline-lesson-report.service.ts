@@ -631,6 +631,7 @@ export async function reserveOfflineLessonCorrection(
   crmClassId: string,
   actorUserId: string,
   reason: string,
+  options: { afterReversal?: boolean } = {},
 ): Promise<OfflineLessonCorrectionReservation | null> {
   const normalizedReason = reason.trim();
   if (!normalizedReason) {
@@ -658,13 +659,17 @@ export async function reserveOfflineLessonCorrection(
         select: { id: true },
       }),
     ]);
-    assertOfflineLessonCorrectionIsSafe({
-      status: report.status,
-      confirmedVersion: report.confirmedVersion,
-      crmConfirmedAt: report.crmConfirmedAt,
-      rewardsApplied: Boolean(appliedReward),
-      approvalDelivered: Boolean(deliveredApproval),
-    });
+    // After reverseOfflineLessonApproval the rewards are already undone, so the
+    // confirmed state is no longer a reason to refuse the correction.
+    if (!options.afterReversal) {
+      assertOfflineLessonCorrectionIsSafe({
+        status: report.status,
+        confirmedVersion: report.confirmedVersion,
+        crmConfirmedAt: report.crmConfirmedAt,
+        rewardsApplied: Boolean(appliedReward),
+        approvalDelivered: Boolean(deliveredApproval),
+      });
+    }
     if (report.status === "editing" && !report.crmConfirmedAt && !report.confirmedVersion) {
       return {
         reportId: report.id,
@@ -853,8 +858,9 @@ export async function reopenOfflineLessonReport(
   crmClassId: string,
   actorUserId: string,
   reason: string,
+  options: { afterReversal?: boolean } = {},
 ) {
-  const reservation = await reserveOfflineLessonCorrection(crmClassId, actorUserId, reason);
+  const reservation = await reserveOfflineLessonCorrection(crmClassId, actorUserId, reason, options);
   return completeOfflineLessonCorrection(reservation);
 }
 

@@ -160,6 +160,7 @@ export async function markAllNotificationsRead(userId: string, type?: UserNotifi
 export type OfflineLessonNotificationEvent =
   | "approved"
   | "returned"
+  | "reopened"
   | "cancelled"
   | "rescheduled";
 
@@ -371,6 +372,12 @@ export async function notifyOfflineLessonEvent(params: {
       title: "Отчёт по уроку возвращён",
       body: `${lessonTitle}${context}. Администратор вернул отчёт на доработку.${params.message?.trim() ? ` ${params.message.trim()}` : ""}`,
       tag: "offline-lesson-returned",
+    },
+    reopened: {
+      type: "offline_lesson_reopened" as const,
+      title: "Урок пересматривается",
+      body: `${lessonTitle}${context}. Администратор пересматривает подтверждённый урок в CRM; отчёт и учебные результаты пока без изменений.${params.message?.trim() ? ` ${params.message.trim()}` : ""}`,
+      tag: "offline-lesson-reopened",
     },
     cancelled: {
       type: "offline_lesson_cancelled" as const,

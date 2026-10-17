@@ -12,6 +12,7 @@ export type UserNotificationType =
   | "offline_lesson_approved"
   | "offline_lesson_report_ready"
   | "offline_lesson_returned"
+  | "offline_lesson_reopened"
   | "offline_lesson_cancelled"
   | "offline_lesson_rescheduled"
   | "offline_lesson_report_due"

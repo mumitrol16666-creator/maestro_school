@@ -86,6 +86,7 @@ async function loadStudentSnapshots(
         studentId: { in: studentIds },
         economicEpochId: null,
         createdAt: { gte: week.start, lt: startsAt },
+        reversedAt: null,
       },
       _sum: { amount: true },
     }),
