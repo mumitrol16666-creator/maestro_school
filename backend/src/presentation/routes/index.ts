@@ -33,6 +33,7 @@ import { appUsageRoutes } from "./app-usage.routes.js";
 import { appAnalyticsRoutes } from "./app-analytics.routes.js";
 import { homeworkStatisticsRoutes } from "./homework-statistics.routes.js";
 import { shopRoutes } from "./shop.routes.js";
+import { sectorRoutes } from "./sector.routes.js";
 
 export async function registerRoutes(app: FastifyInstance) {
   await app.register(async (api) => {
@@ -59,6 +60,7 @@ export async function registerRoutes(app: FastifyInstance) {
     await api.register(preparedTestsRoutes);
     await api.register(rewardsRoutes);
     await api.register(weeklyLeagueRoutes);
+    await api.register(sectorRoutes);
     await api.register(familyRoutes);
     await api.register(studentTasksRoutes);
     await api.register(learningHomeworkRoutes);

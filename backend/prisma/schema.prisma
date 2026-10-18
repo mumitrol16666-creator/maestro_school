@@ -393,6 +393,8 @@ enum UserNotificationType {
   offline_lesson_report_ready
   offline_lesson_returned
   offline_lesson_reopened
+  sector_proposal_created
+  sector_proposal_decided
   offline_lesson_cancelled
   offline_lesson_rescheduled
   offline_lesson_report_due
@@ -505,6 +507,8 @@ model User {
   learningTopicsResponsible          LearningTopic[]                        @relation("LearningTopicResponsibleTeacher")
   learningTopicProgressChanges       LearningTopicProgress[]                @relation("LearningTopicProgressAuthor")
   learningPlansCreated               LearningPlan[]                         @relation("LearningPlanCreator")
+  sectorProposals                    LearningSectorProposal[]               @relation("LearningSectorProposalStudent")
+  sectorProposalsDecided             LearningSectorProposal[]               @relation("LearningSectorProposalDecider")
   learningPlanVersionsCreated        LearningPlanVersion[]                  @relation("LearningPlanVersionCreator")
   learningHomeworkAssignmentsCreated LearningHomeworkAssignment[]           @relation("LearningHomeworkAssignmentCreator")
   learningHomeworkRecipients         LearningHomeworkRecipient[]            @relation("LearningHomeworkRecipientStudent")
@@ -908,34 +912,137 @@ model LearningTopicProgress {
   @@map("learning_topic_progress")
 }
 
+/// A sector (ступень программы) of one student or group in one direction.
+/// Sectors follow each other by `sequence`; exactly one is `active` per owner and
+/// direction. `month` is only the month the sector was opened in.
 model LearningPlan {
-  id                        String    @id @default(uuid()) @db.Uuid
-  directionId               String    @map("direction_id") @db.Uuid
-  crmStudentId              String?   @map("crm_student_id") @db.VarChar(128)
-  crmGroupId                String?   @map("crm_group_id") @db.VarChar(128)
-  month                     String    @db.VarChar(7)
-  currentVersionNumber      Int       @default(0) @map("current_version_number")
-  publishedVersionNumber    Int?      @map("published_version_number")
-  createdById               String?   @map("created_by_id") @db.Uuid
-  legacyStudentPlanId       String?   @unique @map("legacy_student_plan_id") @db.Uuid
-  legacyGroupPlanId         String?   @unique @map("legacy_group_plan_id") @db.Uuid
-  completionRewardSourceKey String?   @unique @map("completion_reward_source_key") @db.VarChar(255)
-  completedAt               DateTime? @map("completed_at") @db.Timestamptz(6)
-  lockedAt                  DateTime? @map("locked_at") @db.Timestamptz(6)
-  createdAt                 DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt                 DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id                        String               @id @default(uuid()) @db.Uuid
+  directionId               String               @map("direction_id") @db.Uuid
+  crmStudentId              String?              @map("crm_student_id") @db.VarChar(128)
+  crmGroupId                String?              @map("crm_group_id") @db.VarChar(128)
+  month                     String               @db.VarChar(7)
+  sequence                  Int                  @default(1)
+  status                    LearningSectorStatus @default(active)
+  templateStepId            String?              @map("template_step_id") @db.Uuid
+  preparedTestId            String?              @map("prepared_test_id") @db.VarChar(64)
+  testPassedAt              DateTime?            @map("test_passed_at") @db.Timestamptz(6)
+  closedAt                  DateTime?            @map("closed_at") @db.Timestamptz(6)
+  closeReason               String?              @map("close_reason") @db.VarChar(32)
+  currentVersionNumber      Int                  @default(0) @map("current_version_number")
+  publishedVersionNumber    Int?                 @map("published_version_number")
+  createdById               String?              @map("created_by_id") @db.Uuid
+  legacyStudentPlanId       String?              @unique @map("legacy_student_plan_id") @db.Uuid
+  legacyGroupPlanId         String?              @unique @map("legacy_group_plan_id") @db.Uuid
+  completionRewardSourceKey String?              @unique @map("completion_reward_source_key") @db.VarChar(255)
+  completedAt               DateTime?            @map("completed_at") @db.Timestamptz(6)
+  lockedAt                  DateTime?            @map("locked_at") @db.Timestamptz(6)
+  createdAt                 DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                 DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  direction         Direction             @relation(fields: [directionId], references: [id], onDelete: Restrict)
-  createdBy         User?                 @relation("LearningPlanCreator", fields: [createdById], references: [id], onDelete: SetNull)
-  legacyStudentPlan StudentMonthlyPlan?   @relation("LegacyStudentMonthlyPlan", fields: [legacyStudentPlanId], references: [id], onDelete: SetNull)
-  legacyGroupPlan   GroupMonthlyPlan?     @relation("LegacyGroupMonthlyPlan", fields: [legacyGroupPlanId], references: [id], onDelete: SetNull)
+  direction         Direction                @relation(fields: [directionId], references: [id], onDelete: Restrict)
+  createdBy         User?                    @relation("LearningPlanCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  legacyStudentPlan StudentMonthlyPlan?      @relation("LegacyStudentMonthlyPlan", fields: [legacyStudentPlanId], references: [id], onDelete: SetNull)
+  legacyGroupPlan   GroupMonthlyPlan?        @relation("LegacyGroupMonthlyPlan", fields: [legacyGroupPlanId], references: [id], onDelete: SetNull)
+  templateStep      SectorTemplate?          @relation(fields: [templateStepId], references: [id], onDelete: SetNull)
   versions          LearningPlanVersion[]
+  proposals         LearningSectorProposal[]
 
   @@index([directionId, month])
   @@index([crmStudentId, month])
   @@index([crmGroupId, month])
+  @@index([crmStudentId, directionId, status])
+  @@index([crmGroupId, directionId, status])
   @@index([createdById])
   @@map("learning_plans")
+}
+
+enum LearningSectorStatus {
+  active
+  closed
+}
+
+enum SectorTemplateLine {
+  melody
+  chords
+  theory
+  song
+  other
+}
+
+/// Ступень программы: шаблон, из которого преподаватель открывает сектор ученику.
+model SectorTemplate {
+  id             String   @id @default(uuid()) @db.Uuid
+  directionId    String?  @map("direction_id") @db.Uuid
+  number         Int
+  title          String   @db.VarChar(255)
+  summary        String   @default("") @db.Text
+  preparedTestId String?  @map("prepared_test_id") @db.VarChar(64)
+  isPublished    Boolean  @default(false) @map("is_published")
+  createdById    String?  @map("created_by_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  direction Direction?            @relation(fields: [directionId], references: [id], onDelete: SetNull)
+  topics    SectorTemplateTopic[]
+  sectors   LearningPlan[]
+
+  @@index([directionId, number])
+  @@map("sector_templates")
+}
+
+model SectorTemplateTopic {
+  id              String             @id @default(uuid()) @db.Uuid
+  templateId      String             @map("template_id") @db.Uuid
+  sortOrder       Int                @default(0) @map("sort_order")
+  line            SectorTemplateLine @default(other)
+  title           String             @db.VarChar(1000)
+  masteryCriteria String             @default("") @map("mastery_criteria") @db.Text
+  materials       Json               @default("[]") @db.JsonB
+
+  template SectorTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@index([templateId, sortOrder])
+  @@map("sector_template_topics")
+}
+
+enum LearningSectorProposalKind {
+  topic
+  song
+  goal
+}
+
+enum LearningSectorProposalStatus {
+  new
+  accepted
+  declined
+}
+
+/// Предложение ученика в сектор: тема, песня или цель. Решает преподаватель.
+model LearningSectorProposal {
+  id              String                       @id @default(uuid()) @db.Uuid
+  planId          String?                      @map("plan_id") @db.Uuid
+  directionId     String                       @map("direction_id") @db.Uuid
+  crmStudentId    String                       @map("crm_student_id") @db.VarChar(128)
+  studentUserId   String                       @map("student_user_id") @db.Uuid
+  kind            LearningSectorProposalKind   @default(topic)
+  text            String                       @db.Text
+  link            String?                      @db.VarChar(1024)
+  status          LearningSectorProposalStatus @default(new)
+  teacherReply    String?                      @map("teacher_reply") @db.Text
+  acceptedTopicId String?                      @map("accepted_topic_id") @db.Uuid
+  decidedById     String?                      @map("decided_by_id") @db.Uuid
+  decidedAt       DateTime?                    @map("decided_at") @db.Timestamptz(6)
+  createdAt       DateTime                     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime                     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  plan      LearningPlan? @relation(fields: [planId], references: [id], onDelete: SetNull)
+  direction Direction     @relation(fields: [directionId], references: [id], onDelete: Restrict)
+  student   User          @relation("LearningSectorProposalStudent", fields: [studentUserId], references: [id], onDelete: Cascade)
+  decidedBy User?         @relation("LearningSectorProposalDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+
+  @@index([crmStudentId, directionId, status, createdAt])
+  @@index([studentUserId, createdAt])
+  @@map("learning_sector_proposals")
 }
 
 model LearningPlanVersion {
@@ -988,14 +1095,14 @@ model LearningPlanTopic {
 // New school-homework lifecycle. Legacy course homework and offline lesson
 // checks remain separate compatibility sources until their explicit cutover.
 model LegacyHomeworkResolution {
-  id             String   @id @default(uuid()) @db.Uuid
-  crmStudentId   String   @map("crm_student_id") @db.VarChar(128)
-  crmClassId     String   @map("crm_class_id") @db.VarChar(128)
-  decision       String   @db.VarChar(32)
-  comment        String   @default("") @db.Text
-  revision       Int      @default(1)
-  history        Json     @default("[]") @db.JsonB
-  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id           String   @id @default(uuid()) @db.Uuid
+  crmStudentId String   @map("crm_student_id") @db.VarChar(128)
+  crmClassId   String   @map("crm_class_id") @db.VarChar(128)
+  decision     String   @db.VarChar(32)
+  comment      String   @default("") @db.Text
+  revision     Int      @default(1)
+  history      Json     @default("[]") @db.JsonB
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@unique([crmStudentId, crmClassId])
   @@map("legacy_homework_resolutions")
@@ -1122,11 +1229,13 @@ model Direction {
   updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt      DateTime? @map("deleted_at") @db.Timestamptz(6)
 
-  school               School?               @relation(fields: [schoolId], references: [id], onDelete: SetNull)
+  school               School?                  @relation(fields: [schoolId], references: [id], onDelete: SetNull)
   courses              Course[]
   onlineLessonRequests OnlineLessonRequest[]
   learningTopics       LearningTopic[]
   learningPlans        LearningPlan[]
+  sectorTemplates      SectorTemplate[]
+  sectorProposals      LearningSectorProposal[]
   leagueXpEvents       LeagueXpEvent[]
 
   @@index([slug])
@@ -2247,5 +2356,6 @@ model CrmFamilyProvision {
   crmActorId   String   @map("crm_actor_id") @db.VarChar(64)
   linkId       String   @map("link_id") @db.Uuid
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
   @@map("crm_family_provisions")
 }
