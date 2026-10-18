@@ -50,7 +50,6 @@ export type FamilySchoolSummary = {
     source: "crm";
   } | null;
   upcomingLessons: FamilySchoolLesson[];
-  monthlyPlan: StudentOfflineSummary["monthlyPlan"];
   achievements: StudentAchievementItem[];
 };
 

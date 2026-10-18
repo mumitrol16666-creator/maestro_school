@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, BookMarked, ChevronRight, ClipboardCheck, ClipboardPenLine, FolderKanban, Gift, LayoutDashboard, LibraryBig, ListChecks, LogOut, Megaphone, Menu, MessagesSquare, Presentation, Settings, Trophy, UserCog, UsersRound, X } from "lucide-react";
+import { ArrowRight, BookMarked, ChevronRight, ClipboardCheck, ClipboardPenLine, FolderKanban, Gift, Layers3, LayoutDashboard, LibraryBig, ListChecks, LogOut, Megaphone, Menu, MessagesSquare, Presentation, Settings, Trophy, UserCog, UsersRound, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -22,6 +22,7 @@ import { RefreshAppButton } from "./refresh-app-button";
 const cmsNavigation = [
   { href: "/admin", label: "Обзор", icon: LayoutDashboard },
   { href: "/admin/directions", label: "Направления", icon: FolderKanban },
+  { href: "/admin/sector-templates", label: "Ступени программы", icon: Layers3 },
   { href: "/admin/courses", label: "Курсы", icon: BookMarked },
   { href: "/admin/tests", label: "Тесты", icon: ClipboardCheck },
   { href: "/admin/league", label: "Недельная лига", icon: Trophy },

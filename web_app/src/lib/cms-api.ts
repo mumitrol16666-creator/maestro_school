@@ -1,4 +1,5 @@
 import { apiRequest, apiRequestEnvelope } from "@/lib/api-client";
+import type { PreparedTestOption, SectorTemplate } from "@/types/teacher-students";
 import type { CmsCourse, CmsCourseTree, CmsDirection, CmsHomework, CmsHomeworkTestTemplate, CmsLesson, CmsMaterial, CmsMaterialUsage, CmsMedia, CmsMeta, CmsModule, CmsNews } from "@/types/cms";
 
 const json = (method: string, body?: unknown): RequestInit => ({
@@ -7,6 +8,12 @@ const json = (method: string, body?: unknown): RequestInit => ({
 });
 
 export const cmsApi = {
+  sectorTemplates: (crmDirectionId = "") =>
+    apiRequest<SectorTemplate[]>(`/admin/sector-templates${crmDirectionId ? `?crmDirectionId=${encodeURIComponent(crmDirectionId)}` : ""}`),
+  createSectorTemplate: (body: unknown) => apiRequest<SectorTemplate>("/admin/sector-templates", json("POST", body)),
+  updateSectorTemplate: (id: string, body: unknown) => apiRequest<SectorTemplate>(`/admin/sector-templates/${id}`, json("PUT", body)),
+  publishSectorTemplate: (id: string, isPublished: boolean) => apiRequest<SectorTemplate>(`/admin/sector-templates/${id}/publish`, json("POST", { isPublished })),
+  preparedTests: () => apiRequest<PreparedTestOption[]>("/teachers/me/prepared-tests"),
   directions: (search = "", page = 1, limit = 20) => apiRequestEnvelope<CmsDirection[], CmsMeta>(`/admin/directions?search=${encodeURIComponent(search)}&page=${page}&limit=${limit}`),
   createDirection: (body: unknown) => apiRequest<CmsDirection>("/admin/directions", json("POST", body)),
   updateDirection: (id: string, body: unknown) => apiRequest<CmsDirection>(`/admin/directions/${id}`, json("PATCH", body)),

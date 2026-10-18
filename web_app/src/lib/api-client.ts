@@ -1,3 +1,4 @@
+import type { SectorProposal } from "@/types/teacher-students";
 import type { HomeworkAttempt, HomeworkAttachmentType } from "@/types/homework";
 import type {
   ApiAuthUser,
@@ -212,8 +213,11 @@ export const api = {
   studentLevel: () => apiRequest<StudentPointsReadModel>("/students/me/level"),
   studentEconomyProfile: () => apiRequest<StudentEconomyProfile>("/students/me/economy-profile"),
   studentHome: () => apiRequest<ApiStudentHome>("/students/me/home"),
-  studentMonthlyPlans: (month?: string) => apiRequest<StudentMonthlyPlansResponse>(
-    `/students/me/monthly-plans${month ? `?month=${encodeURIComponent(month)}` : ""}`,
+  sectorProposals: () => apiRequest<SectorProposal[]>("/students/me/sector-proposals"),
+  createSectorProposal: (body: { crmDirectionId: string; kind: "topic" | "song" | "goal"; text: string; link?: string | null }) =>
+    apiRequest<SectorProposal>("/students/me/sector-proposals", { method: "POST", body: JSON.stringify(body) }),
+  studentMonthlyPlans: (options: { history?: boolean } = {}) => apiRequest<StudentMonthlyPlansResponse>(
+    `/students/me/monthly-plans${options.history ? "?history=1" : ""}`,
   ),
   studentTasks: (filters: UnifiedTaskFilters = {}) => {
     const query = new URLSearchParams();

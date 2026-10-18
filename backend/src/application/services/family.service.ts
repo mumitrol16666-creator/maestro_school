@@ -392,7 +392,6 @@ export async function getParentChildOfflineSummary(
           profile: { name: formatFio(link.student), groups: [] },
           balanceSnapshot: {},
           upcomingLessons: [],
-          monthlyPlan: null,
         }, { ...visibility, showBalance: false, showSchedule: false })),
     crmUnavailable: !offlineRead.value,
     crmError: offlineRead.error?.code ?? null,

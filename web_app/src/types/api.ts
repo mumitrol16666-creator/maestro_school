@@ -233,7 +233,12 @@ export interface StudentHomeMonthlyPlan {
   id: string;
   scope: "student" | "group";
   targetId: string;
+  /** Month the sector was opened in; informational only. */
   month: string;
+  sequence?: number;
+  status?: "active" | "closed";
+  closedAt?: string | null;
+  preparedTest?: { id: string; title: string; passedAt: string | null } | null;
   direction?: {
     id: string;
     crmDirectionId: string | null;
@@ -255,7 +260,6 @@ export interface StudentHomeMonthlyPlan {
     status: "planned" | "in_progress" | "completed" | "moved";
     progressPercent?: number | null;
     state?: "active" | "transferred" | "replaced";
-    continuedFromMonth?: string | null;
   }>;
   progress: {
     completed: number;

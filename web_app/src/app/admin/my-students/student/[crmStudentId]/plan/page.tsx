@@ -16,7 +16,7 @@ export default function StudentPlanPage() {
   const studentsResource = useApiResource(() => teacherStudentsApi.list(), []);
 
   if (studentsResource.loading) {
-    return <LoadingState label="Открываем учебный план" />;
+    return <LoadingState label="Открываем сектор" />;
   }
 
   if (studentsResource.error) {
@@ -46,9 +46,9 @@ export default function StudentPlanPage() {
       </Link>
 
       <PageHeader
-        eyebrow="Учебный план ученика"
+        eyebrow="Сектор ученика"
         title={displayName}
-        description="Цель месяца, темы, прогресс и домашние задания в одном рабочем экране."
+        description="Цель сектора, темы, тест и предложения ученика в одном рабочем экране."
       />
 
       <div className="mt-5 flex items-center gap-2 text-sm font-semibold text-stone-500">

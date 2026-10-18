@@ -38,7 +38,7 @@ test("parent sees the compact CRM-backed family skeleton", async ({ page, reques
   await expect(page.getByRole("heading", { name: "Казыбаев Камбар" })).toBeVisible();
   await expect(page.getByText("Баланс", { exact: true }).first()).toBeVisible();
   await expect(page.getByRole("heading", { name: "Расписание" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Учебный план" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /^(Сектор \d+|Текущий сектор)$/ })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Достижения" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Новости школы" })).toBeVisible();
   await expect(page.getByText("Домашняя работа")).toHaveCount(0);

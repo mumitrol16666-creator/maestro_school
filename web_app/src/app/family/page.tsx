@@ -16,11 +16,9 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
-import { PlanMonthField } from "@/components/plan-month-field";
 import { ProgressBar } from "@/components/progress-bar";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { familyApi } from "@/lib/family-api";
-import { aqtobeMonthKey, shiftMonthKey } from "@/lib/school-month";
 import type { StudentHomeMonthlyPlan } from "@/types/api";
 import type { FamilyChild, FamilyNewsPost, FamilySchoolSummary } from "@/types/family";
 
@@ -190,45 +188,35 @@ const planItemStatus = {
   planned: { label: "Запланировано", icon: Circle, className: "text-stone-500" },
   in_progress: { label: "В работе", icon: CircleDot, className: "text-amber-800" },
   completed: { label: "Выполнено", icon: CheckCircle2, className: "text-emerald-700" },
-  moved: { label: "Перенесено", icon: Circle, className: "text-stone-400" },
+  moved: { label: "Заменена", icon: Circle, className: "text-stone-400" },
 } as const;
 
-const monthNamesGenitive = [
-  "января", "февраля", "марта", "апреля", "мая", "июня",
-  "июля", "августа", "сентября", "октября", "ноября", "декабря",
-];
-
-function monthFromTitle(month: string) {
-  return monthNamesGenitive[Number(month.slice(5, 7)) - 1] ?? "предыдущего месяца";
-}
-
 function MonthlyPlans({ studentId }: { studentId: string }) {
-  const [month, setMonth] = useState(aqtobeMonthKey());
-  const resource = useApiResource(() => familyApi.childMonthlyPlans(studentId, month), [studentId, month]);
+  const resource = useApiResource(() => familyApi.childMonthlyPlans(studentId), [studentId]);
   const plans = resource.data?.plans ?? [];
   const aggregate = resource.data?.aggregateProgress;
+  const title = plans.length === 1 && plans[0]?.sequence ? `Сектор ${plans[0].sequence}` : "Текущий сектор";
 
   return (
     <section className="border-t-2 border-stone-300 bg-paper p-5 shadow-soft sm:p-7">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <Target className="text-gold-ink" />
-          <p className="mt-5 text-xs font-bold uppercase tracking-[0.17em] text-gold-ink">{formatMonth(month)}</p>
-          <h2 className="font-display mt-2 text-3xl">Учебный план</h2>
+          <p className="mt-5 text-xs font-bold uppercase tracking-[0.17em] text-gold-ink">Учебный маршрут</p>
+          <h2 className="font-display mt-2 text-3xl">{title}</h2>
         </div>
-        <div className="w-full sm:w-[260px]"><PlanMonthField value={month} onChange={setMonth} /></div>
       </div>
 
       {resource.loading ? (
-        <div className="mt-5"><LoadingState label="Загружаем учебный план" /></div>
+        <div className="mt-5"><LoadingState label="Загружаем сектор" /></div>
       ) : resource.error ? (
         <div className="mt-5"><ErrorState message={resource.error} retry={resource.reload} /></div>
       ) : !plans.length ? (
-        <p className="mt-5 text-sm leading-6 text-stone-500">План на выбранный месяц ещё не опубликован.</p>
+        <p className="mt-5 text-sm leading-6 text-stone-500">Преподаватель ещё не открыл сектор.</p>
       ) : (
         <>
           <div className="mt-5 flex items-end justify-between gap-3">
-            <p className="text-sm font-bold text-stone-600">Завершено тем: {aggregate?.completed ?? 0} из {aggregate?.total ?? 0}</p>
+            <p className="text-sm font-bold text-stone-600">Закрыто тем: {aggregate?.completed ?? 0} из {aggregate?.total ?? 0}</p>
             <span className="font-display text-3xl text-gold-ink">{aggregate?.percent ?? 0}%</span>
           </div>
           <div className="mt-3"><ProgressBar value={aggregate?.percent ?? 0} /></div>
@@ -245,7 +233,7 @@ function FamilyPlanDetails({ plan }: { plan: StudentHomeMonthlyPlan }) {
   return (
     <article className="rounded-2xl border border-stone-200 bg-white p-4">
       <p className="text-[10px] font-black uppercase tracking-[0.14em] text-stone-400">
-        {plan.scope === "group" ? "Групповой план" : "Индивидуальный план"}
+        {plan.sequence ? `Сектор ${plan.sequence}` : "Сектор"}{plan.scope === "group" ? " · группа" : ""}
         {plan.direction?.title ? ` · ${plan.direction.title}` : ""}
       </p>
       <h3 className="font-display mt-2 text-2xl leading-tight">{plan.goal}</h3>
@@ -259,15 +247,10 @@ function FamilyPlanDetails({ plan }: { plan: StudentHomeMonthlyPlan }) {
             <div key={item.id} className={`flex items-start gap-3 py-3 ${transferred ? "opacity-60" : ""}`}>
               <Icon size={17} className={`mt-0.5 shrink-0 ${status.className}`} aria-hidden="true" />
               <div className="min-w-0 flex-1">
-                {item.continuedFromMonth ? (
-                  <p className="mb-1 text-[9px] font-black uppercase tracking-[0.1em] text-amber-700">
-                    Продолжение с {monthFromTitle(item.continuedFromMonth)}
-                  </p>
-                ) : null}
                 <p className="break-words text-sm font-bold leading-5">{item.title}</p>
               </div>
               <span className={`max-w-[120px] shrink-0 text-right text-[11px] font-bold ${status.className}`}>
-                {transferred ? `Перенесено в ${formatMonth(shiftMonthKey(plan.month, 1))}` : status.label}
+                {transferred ? "Заменена" : status.label}
               </span>
             </div>
           );

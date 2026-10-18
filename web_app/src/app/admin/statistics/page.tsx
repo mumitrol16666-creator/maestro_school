@@ -25,7 +25,7 @@ const sectionLabels: Record<string, string> = {
   dashboard: "Главная",
   learning: "Обучение",
   homework: "Домашние задания",
-  monthly_plan: "План месяца",
+  monthly_plan: "Сектор",
   courses: "Курсы",
   tests: "Тесты",
   schedule: "Расписание",

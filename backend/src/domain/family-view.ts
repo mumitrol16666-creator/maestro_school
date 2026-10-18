@@ -10,7 +10,6 @@ type FamilySummarySource = {
     accountBalanceKzt?: number;
   };
   upcomingLessons: Array<Record<string, unknown>>;
-  monthlyPlan: Record<string, unknown> | null;
 };
 
 type FamilyVisibility = {
@@ -60,6 +59,5 @@ export function buildFamilyOfflineSummary(source: unknown, visibility: FamilyVis
     upcomingLessons: visibility.showSchedule
       ? summary.upcomingLessons.map(withoutMaterials)
       : [],
-    monthlyPlan: visibility.showPlanProgress ? summary.monthlyPlan : null,
   };
 }

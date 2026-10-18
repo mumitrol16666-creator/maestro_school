@@ -107,7 +107,7 @@ export default function AdminStudentDetailPage() {
 const visibilityLabels: Array<{ key: keyof ParentVisibility; label: string; description: string }> = [
   { key: "showSchedule", label: "Расписание", description: "Ближайшие занятия ученика" },
   { key: "showBalance", label: "Баланс", description: "Текущая сумма оплаты или задолженности" },
-  { key: "showPlanProgress", label: "План месяца", description: "Цель и процент выполнения" },
+  { key: "showPlanProgress", label: "Сектор", description: "Цель и процент закрытых тем" },
   { key: "showAchievements", label: "Достижения", description: "Полученные медали ученика" },
 ];
 

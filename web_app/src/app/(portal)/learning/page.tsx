@@ -38,15 +38,15 @@ export default function LearningWorkspacePage() {
   const hasPlans = Boolean(plans?.plans.length);
   const planItems = plans?.plans.flatMap((plan) => plan.items) ?? [];
   const activeTopics = planItems.filter((item) => (!item.state || item.state === "active") && item.status !== "completed");
-  const planTitle = !plans ? "Не удалось загрузить план"
-    : !hasPlans ? "Учебный план пока не опубликован"
-    : activeTopics.length ? "Ваш учебный план"
-    : planItems.length ? "Все текущие темы завершены" : "Темы плана готовятся";
+  const planTitle = !plans ? "Не удалось загрузить сектор"
+    : !hasPlans ? "Сектор ещё не открыт"
+    : activeTopics.length ? "Ваш сектор"
+    : planItems.length ? "Все текущие темы завершены" : "Темы сектора готовятся";
   const planDescription = !plans ? "Не можем проверить темы. Попробуйте обновить данные."
-    : !hasPlans ? "Темы появятся после публикации преподавателем."
-    : activeTopics.length ? "Темы, критерии и прогресс — во вкладке «План»."
-    : planItems.length ? "Результаты сохранены во вкладке «План»."
-    : "В опубликованном плане пока нет тем.";
+    : !hasPlans ? "Темы появятся, когда преподаватель откроет сектор."
+    : activeTopics.length ? "Темы, критерии и прогресс — во вкладке «Сектор»."
+    : planItems.length ? "Результаты сохранены во вкладке «Сектор»."
+    : "В открытом секторе пока нет тем.";
 
   return (
     <div className="mx-auto max-w-6xl" data-testid="learning-overview">

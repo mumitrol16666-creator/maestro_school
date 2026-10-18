@@ -174,6 +174,7 @@ test("student lesson history maps a factual +250 plan completion to the closing 
     [{
       id: learningPlanId,
       month: "2026-09",
+      sequence: 3,
       completedAt,
       publishedVersionNumber: 2,
       versions: [{
@@ -189,6 +190,7 @@ test("student lesson history maps a factual +250 plan completion to the closing 
   assert.deepEqual(results.get("QA-CLASS"), [{
     planId: learningPlanId,
     month: "2026-09",
+    sequence: 3,
     completedAt: completedAt.toISOString(),
     pointsAwarded: 250,
   }]);

@@ -24,8 +24,6 @@ import {
   BookOpen,
   CalendarDays,
   ChevronDown,
-  Download,
-  FileSpreadsheet,
   GraduationCap,
   History,
   MapPin,
@@ -49,13 +47,11 @@ import {
   type SchoolAlertCounts,
 } from "@/lib/student-school-alerts";
 import type { SchoolOfflineLesson } from "@/types/school-offline";
-import { MonthlyReportModal } from "@/components/monthly-report-modal";
 import { StudentLessonCalendar } from "@/components/student-lesson-calendar";
 import {
   schoolDateLabel,
   studentLessonTitle,
 } from "@/lib/student-lesson-display";
-import { downloadMonthlyReportExcel } from "@/lib/monthly-report-excel";
 
 /* ─── label maps ────────────────────────────────────────────────────── */
 
@@ -323,10 +319,10 @@ function LessonCard({
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <div className="min-w-0">
                           <p className="text-xs font-bold uppercase tracking-wider text-amber-800">
-                            Учебный план · {formatMonthTitle(item.month)}
+                            Сектор{item.sequence ? ` ${item.sequence}` : ""}
                           </p>
                           <p className="mt-1 text-sm font-bold text-amber-950">
-                            План месяца завершён
+                            Сектор закрыт
                           </p>
                         </div>
                         <span className="shrink-0 self-start rounded-lg bg-gold/25 px-2.5 py-1 text-xs font-black text-amber-950 sm:self-auto">
@@ -522,8 +518,6 @@ function SchoolSchedule() {
         ? requestedFormat
         : "all",
     );
-  const [reportMonth, setReportMonth] = useState(currentAqtobeMonth);
-  const [reportModalOpen, setReportModalOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
@@ -568,7 +562,6 @@ function SchoolSchedule() {
       ? lessonHistory
           .find((lesson) => lesson.crmClassId === requestedLessonId)
           ?.date.slice(0, 7) ||
-        reportMonth ||
         (availableMonths[0]?.monthKey ?? currentAqtobeMonth())
       : historyFilterMonth;
 
@@ -633,14 +626,6 @@ function SchoolSchedule() {
       setRefreshError("Не удалось обновить данные школы");
     } finally {
       setRefreshing(false);
-    }
-  }
-
-  /* ── CSV download ──────────────────── */
-
-  function downloadMonthlyReport() {
-    if (data) {
-      downloadMonthlyReportExcel(data, reportMonth);
     }
   }
 
@@ -777,11 +762,7 @@ function SchoolSchedule() {
               <select
                 aria-label="Месяц истории"
                 value={activeMonth}
-                onChange={(event) => {
-                  setHistoryFilterMonth(event.target.value);
-                  if (event.target.value !== "all")
-                    setReportMonth(event.target.value);
-                }}
+                onChange={(event) => setHistoryFilterMonth(event.target.value)}
                 className="min-h-11 max-w-full rounded-xl border border-stone-200 bg-white px-3 text-sm focus-visible:ring-2 focus-visible:ring-gold"
               >
                 <option value="all">
@@ -801,41 +782,6 @@ function SchoolSchedule() {
                 ))}
               </select>
             </div>
-            <details className="mb-4 rounded-2xl border border-stone-200 bg-white px-4">
-              <summary className="cursor-pointer py-3 text-sm font-semibold">
-                Отчёт за месяц
-              </summary>
-              <div className="flex flex-wrap items-end gap-2 pb-4">
-                <label className="grid min-w-0 max-w-full gap-1 text-xs text-stone-500">
-                  Месяц отчёта
-                  <input
-                    type="month"
-                    value={reportMonth}
-                    onChange={(event) => setReportMonth(event.target.value)}
-                    className="min-h-11 min-w-0 max-w-full rounded-lg border border-stone-200 bg-white px-3 text-sm text-ink"
-                  />
-                </label>
-                <button
-                  type="button"
-                  disabled={!reportMonth}
-                  onClick={() => setReportModalOpen(true)}
-                  className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-ink px-3 text-sm font-semibold text-white disabled:opacity-50"
-                >
-                  <FileSpreadsheet size={15} />
-                  Открыть отчёт
-                </button>
-                <button
-                  type="button"
-                  disabled={!reportMonth}
-                  onClick={downloadMonthlyReport}
-                  className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-stone-200 px-3 text-sm font-semibold disabled:opacity-50"
-                >
-                  <Download size={15} />
-                  Скачать Excel
-                </button>
-              </div>
-            </details>
-
             {displayHistory.length === 0 ? (
               <p className="rounded-2xl border border-stone-200 bg-white p-4 text-sm text-stone-500">
                 {activeMonth === "all"
@@ -852,14 +798,6 @@ function SchoolSchedule() {
         </>
       )}
 
-      {data && (
-        <MonthlyReportModal
-          open={reportModalOpen}
-          onClose={() => setReportModalOpen(false)}
-          summary={data}
-          initialMonth={reportMonth}
-        />
-      )}
     </>
   );
 }

@@ -1,25 +1,20 @@
 "use client";
 
-import { CheckCircle2, LoaderCircle, Plus, Save, Send, Trash2, Target, Flag } from "lucide-react";
+import { CheckCircle2, LoaderCircle, Plus, Save, Send, Trash2, Target, Flag, History, Lightbulb, ClipboardCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { ApiError } from "@/lib/api-client";
 import { teacherStudentsApi } from "@/lib/teacher-students-api";
-import { currentAqtobeMonth } from "@/lib/aqtobe-month";
 import { normalizeCrmDirectionTitle } from "@/lib/crm-direction-title";
 import { LearningTopicProgressEditor } from "@/components/learning-topic-progress-editor";
 import { LearningHomeworkAssignmentComposer } from "@/components/learning-homework-assignment-composer";
-import {
-  formatLearningPlanMonth,
-  LearningPlanCarryoverPanel,
-} from "@/components/learning-plan-carryover-panel";
-import { PlanMonthField } from "@/components/plan-month-field";
+import { SectorHistoryList, SectorProposalsPanel, SectorTemplatePicker, SectorTestField } from "@/components/sector-editor-parts";
 import { ProgressBar } from "@/components/progress-bar";
 import { learningHomeworkApi } from "@/lib/learning-homework-api";
 import type {
   LearningPlanMode,
-  LearningPlanCarryoverPreview,
   MonthlyPlanItemStatus,
+  SectorTemplate,
   StudentMonthlyPlan,
   TeacherCrmDirection,
 } from "@/types/teacher-students";
@@ -30,9 +25,8 @@ const itemStatuses: Array<{ value: MonthlyPlanItemStatus; label: string }> = [
   { value: "completed", label: "Освоено" },
 ];
 
-function emptyPlan(month: string): StudentMonthlyPlan {
+function emptyPlan(): StudentMonthlyPlan {
   return {
-    month,
     goal: "",
     expectedResult: "",
     skills: "",
@@ -42,6 +36,25 @@ function emptyPlan(month: string): StudentMonthlyPlan {
       { id: crypto.randomUUID(), title: "", status: "planned" },
       { id: crypto.randomUUID(), title: "", status: "planned" },
     ],
+  };
+}
+
+/** A sector opened from a step template: its topics become the draft items. */
+function planFromTemplate(template: SectorTemplate): StudentMonthlyPlan {
+  return {
+    goal: template.title,
+    expectedResult: template.summary,
+    skills: "",
+    checkpoint: "",
+    note: "",
+    templateStepIdInput: template.id,
+    preparedTestId: template.preparedTest?.id ?? null,
+    items: template.topics.map((topic) => ({
+      id: crypto.randomUUID(),
+      title: topic.title,
+      status: "planned" as const,
+      masteryCriteria: topic.masteryCriteria,
+    })),
   };
 }
 
@@ -98,40 +111,27 @@ function StudentMonthlyPlanEditorContent({
   mode: LearningPlanMode;
   directions: TeacherCrmDirection[];
 }) {
-  const [month, setMonth] = useState(() => currentAqtobeMonth());
+  const sectors = mode.mode === "v2";
   const [crmDirectionId, setCrmDirectionId] = useState(() => directions[0]?.crmDirectionId ?? "");
   const resource = useApiResource(
-    () => teacherStudentsApi.monthlyPlan(crmStudentId, month, crmDirectionId || undefined),
-    [crmStudentId, month, crmDirectionId],
-  );
-  const carryoverResource = useApiResource<LearningPlanCarryoverPreview | null>(
-    () => mode.mode === "v2" && crmDirectionId
-      ? teacherStudentsApi.monthlyPlanCarryover(crmStudentId, month, crmDirectionId)
-      : Promise.resolve(null),
-    [mode.mode, crmStudentId, month, crmDirectionId],
+    () => teacherStudentsApi.monthlyPlan(crmStudentId, crmDirectionId || undefined),
+    [crmStudentId, crmDirectionId],
   );
   const homeworkFlowResource = useApiResource(() => learningHomeworkApi.teacherAvailability(), []);
-  const [draft, setDraft] = useState<StudentMonthlyPlan>(() => emptyPlan(month));
+  const [draft, setDraft] = useState<StudentMonthlyPlan>(() => emptyPlan());
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [staleDraft, setStaleDraft] = useState(false);
-  const [selectedCarryoverTopicIds, setSelectedCarryoverTopicIds] = useState<string[]>([]);
-  const [transferring, setTransferring] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
 
   useEffect(() => {
     if (resource.data) {
-      setDraft(resource.data.plan ?? emptyPlan(month));
+      setDraft(resource.data.plan ?? emptyPlan());
       setSaved(Boolean(resource.data.plan));
     }
-  }, [resource.data, month]);
-
-  useEffect(() => {
-    setSelectedCarryoverTopicIds(
-      carryoverResource.data?.candidates.map((topic) => topic.topicId) ?? [],
-    );
-  }, [carryoverResource.data]);
+  }, [resource.data]);
 
   function setField<K extends keyof StudentMonthlyPlan>(
     key: K,
@@ -142,45 +142,16 @@ function StudentMonthlyPlanEditorContent({
     setStaleDraft(false);
   }
 
-  function addItem() {
+  function addItem(title = "", masteryCriteria = "") {
     setDraft((current) => ({
       ...current,
       items: [
         ...current.items,
-        { id: crypto.randomUUID(), title: "", status: "planned" },
+        { id: crypto.randomUUID(), title, status: "planned", masteryCriteria },
       ],
     }));
     setSaved(false);
     setStaleDraft(false);
-  }
-
-  async function carryOverSelectedTopics() {
-    if (!crmDirectionId || !selectedCarryoverTopicIds.length || transferring) return;
-    setTransferring(true);
-    setError(null);
-    setStaleDraft(false);
-    try {
-      const result = await teacherStudentsApi.carryOverMonthlyPlanTopics(crmStudentId, {
-        month,
-        crmDirectionId,
-        topicIds: selectedCarryoverTopicIds,
-        expectedTargetVersion: draft.version ?? 0,
-      });
-      setDraft(result.plan);
-      setSaved(true);
-      await Promise.all([resource.reload(), carryoverResource.reload()]);
-    } catch (reason) {
-      if (reason instanceof ApiError && reason.code === "MONTHLY_PLAN_STALE_DRAFT") {
-        setError("План уже изменился. Обновите данные и повторите перенос.");
-        setStaleDraft(true);
-      } else if (reason instanceof ApiError) {
-        setError(reason.message);
-      } else {
-        setError("Не удалось перенести темы. Повторите попытку.");
-      }
-    } finally {
-      setTransferring(false);
-    }
   }
 
   async function save() {
@@ -190,26 +161,26 @@ function StudentMonthlyPlanEditorContent({
     try {
       const plan = await teacherStudentsApi.saveMonthlyPlan(crmStudentId, {
         ...draft,
-        month,
-        expectedVersion: mode.mode === "v2" ? draft.version ?? 0 : undefined,
+        templateStepId: draft.templateStepIdInput ?? undefined,
+        expectedVersion: sectors ? draft.version ?? 0 : undefined,
         items: draft.items
           .filter((item) => item.title.trim())
           .map((item) => item.state && item.state !== "active"
             ? { ...item, status: "planned" as const }
             : item),
-      }, crmDirectionId || undefined);
+      } as StudentMonthlyPlan & { templateStepId?: string }, crmDirectionId || undefined);
       setDraft(plan);
       setSaved(true);
       await resource.reload();
       return plan;
     } catch (reason) {
       if (reason instanceof ApiError && reason.code === "MONTHLY_PLAN_STALE_DRAFT") {
-        setError("План уже изменился. Обновите данные перед сохранением.");
+        setError("Сектор уже изменился. Обновите данные перед сохранением.");
         setStaleDraft(true);
       } else if (reason instanceof ApiError) {
         setError(reason.message);
       } else {
-        setError("Не удалось сохранить план. Проверьте интернет и повторите.");
+        setError("Не удалось сохранить сектор. Проверьте интернет и повторите.");
       }
       return null;
     } finally {
@@ -219,7 +190,7 @@ function StudentMonthlyPlanEditorContent({
 
   async function publish() {
     if (saving || publishing) return;
-    if (!draft.publication?.isPublished && !window.confirm("Ученик увидит цель и все пункты плана. Опубликовать?")) {
+    if (!draft.publication?.isPublished && !window.confirm("Ученик увидит цель и все темы сектора. Опубликовать?")) {
       return;
     }
     setPublishing(true);
@@ -230,7 +201,6 @@ function StudentMonthlyPlanEditorContent({
       if (!savedPlan) return;
       const plan = await teacherStudentsApi.publishMonthlyPlan(
         crmStudentId,
-        month,
         savedPlan.version ?? savedPlan.publication?.draftRevision,
         crmDirectionId || undefined,
       );
@@ -239,12 +209,12 @@ function StudentMonthlyPlanEditorContent({
       await resource.reload();
     } catch (reason) {
       if (reason instanceof ApiError && reason.code === "MONTHLY_PLAN_STALE_DRAFT") {
-        setError("План уже изменился в другой вкладке. Обновите данные перед публикацией.");
+        setError("Сектор уже изменился в другой вкладке. Обновите данные перед публикацией.");
         setStaleDraft(true);
       } else if (reason instanceof ApiError) {
         setError(reason.message);
       } else {
-        setError("Не удалось опубликовать план ученику. Проверьте цель и темы.");
+        setError("Не удалось опубликовать сектор ученику. Проверьте цель и темы.");
       }
     } finally {
       setPublishing(false);
@@ -252,9 +222,12 @@ function StudentMonthlyPlanEditorContent({
   }
 
   if (resource.loading) {
-    return <p className="py-6 text-sm text-stone-500">Загружаем учебный план…</p>;
+    return <p className="py-6 text-sm text-stone-500">Загружаем сектор…</p>;
   }
 
+  const isNewSector = sectors && !resource.data?.plan;
+  const sequence = draft.sequence ?? resource.data?.nextSequence ?? 1;
+  const history = resource.data?.history ?? [];
   const activeItems = draft.items.filter((item) => (
     item.title.trim() && (!item.state || item.state === "active")
   ));
@@ -275,7 +248,18 @@ function StudentMonthlyPlanEditorContent({
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-800">Учебная программа</p>
-            <h3 className="mt-0.5 font-display text-2xl text-ink">План на месяц</h3>
+            <h3 className="mt-0.5 font-display text-2xl text-ink">
+              {sectors ? (isNewSector ? `Открываем сектор ${sequence}` : `Сектор ${sequence}`) : "План на месяц"}
+            </h3>
+            {sectors && history.length ? (
+              <button
+                type="button"
+                onClick={() => setShowHistory((value) => !value)}
+                className="mt-1 inline-flex items-center gap-1 text-xs font-bold text-stone-500 hover:text-ink"
+              >
+                <History size={13} /> Закрыто секторов: {history.length}
+              </button>
+            ) : null}
           </div>
           <span className={`max-w-full self-start rounded-full px-3 py-1.5 text-[11px] font-black leading-5 ${
             draft.publication?.isPublished && !hasUnpublishedChanges
@@ -288,12 +272,8 @@ function StudentMonthlyPlanEditorContent({
           </span>
         </div>
 
-        <div className={`mt-4 grid min-w-0 gap-3 ${
-          mode.mode === "v2"
-            ? "sm:grid-cols-2"
-            : "sm:ml-auto sm:max-w-[260px]"
-        }`}>
-          {mode.mode === "v2" ? (
+        {sectors ? (
+          <div className="mt-4 grid min-w-0 gap-3 sm:grid-cols-2">
             <label className="block min-w-0 text-[10px] font-black uppercase tracking-wider text-stone-500">
               Направление
               <select
@@ -306,23 +286,46 @@ function StudentMonthlyPlanEditorContent({
                 ))}
               </select>
             </label>
-          ) : null}
-          <PlanMonthField value={month} onChange={setMonth} />
-        </div>
+            <SectorTestField
+              value={draft.preparedTestId === undefined ? draft.preparedTest?.id ?? null : draft.preparedTestId}
+              passedAt={draft.preparedTest?.passedAt ?? null}
+              onChange={(preparedTestId) => setField("preparedTestId", preparedTestId)}
+            />
+          </div>
+        ) : null}
       </div>
+
+      {showHistory && history.length ? <SectorHistoryList history={history} /> : null}
 
       {resource.error ? (
         <p className="mt-4 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700">{resource.error}</p>
       ) : null}
 
-      {/* 1. Главная цель на месяц */}
+      {isNewSector ? (
+        <SectorTemplatePicker
+          crmDirectionId={crmDirectionId}
+          onPick={(template) => {
+            setDraft(planFromTemplate(template));
+            setSaved(false);
+          }}
+        />
+      ) : null}
+
+      {sectors && crmDirectionId ? (
+        <SectorProposalsPanel
+          crmStudentId={crmStudentId}
+          onAddTopic={(title) => addItem(title)}
+        />
+      ) : null}
+
+      {/* 1. Цель сектора */}
       <div className="mt-5">
         <label className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-amber-950">
           <Target size={15} className="text-gold-ink" />
-          1. Главная цель на месяц
+          1. Цель сектора
         </label>
         <p className="mt-1 text-[11px] text-amber-900/70">
-          Какую ключевую задачу ставим перед учеником в этом месяце?
+          Что ученик будет уметь, когда сектор закроется?
         </p>
         <textarea
           value={draft.goal}
@@ -333,26 +336,6 @@ function StudentMonthlyPlanEditorContent({
         />
       </div>
 
-      {mode.mode === "v2" ? (
-        <LearningPlanCarryoverPanel
-          preview={carryoverResource.data}
-          loading={carryoverResource.loading}
-          transferring={transferring}
-          selectedTopicIds={selectedCarryoverTopicIds}
-          onToggle={(topicId) => setSelectedCarryoverTopicIds((current) => (
-            current.includes(topicId)
-              ? current.filter((id) => id !== topicId)
-              : [...current, topicId]
-          ))}
-          onSelectAll={() => {
-            const candidates = carryoverResource.data?.candidates ?? [];
-            const allSelected = candidates.every((topic) => selectedCarryoverTopicIds.includes(topic.topicId));
-            setSelectedCarryoverTopicIds(allSelected ? [] : candidates.map((topic) => topic.topicId));
-          }}
-          onTransfer={() => void carryOverSelectedTopics()}
-        />
-      ) : null}
-
       {/* 2. Темы и произведения по порядку */}
       <div className="mt-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -360,11 +343,11 @@ function StudentMonthlyPlanEditorContent({
             <p className="text-xs font-black uppercase tracking-wider text-stone-800">
               2. Темы и произведения по порядку
             </p>
-            <p className="text-[11px] text-stone-500">Конкретные шаги и песни к достижению цели</p>
+            <p className="text-[11px] text-stone-500">Сектор закрывается, когда каждая тема на 100 %{draft.preparedTest ? " и сдан тест сектора" : ""}</p>
           </div>
           <button
             type="button"
-            onClick={addItem}
+            onClick={() => addItem()}
             className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-white px-3.5 py-1.5 text-xs font-bold text-ink shadow-xs transition hover:bg-amber-50"
           >
             <Plus size={14} />
@@ -375,16 +358,11 @@ function StudentMonthlyPlanEditorContent({
         <div className="mt-3 space-y-2.5">
           {draft.items.map((item, index) => {
             const transferred = Boolean(item.state && item.state !== "active");
-            const continued = carryoverResource.data?.continuedTopics.some((topic) => topic.topicId === item.id);
             return (
             <div key={item.id} className={`grid gap-2 rounded-2xl border p-3 shadow-xs sm:grid-cols-[minmax(0,1fr)_180px_40px] ${transferred ? "border-stone-200 bg-stone-50" : "border-stone-200 bg-white"}`}>
               <div className="min-w-0 space-y-2">
                 {transferred ? (
-                  <p className="text-[10px] font-black uppercase tracking-wider text-stone-500">Перенесено в следующий месяц</p>
-                ) : continued && carryoverResource.data ? (
-                  <p className="text-[10px] font-black uppercase tracking-wider text-amber-800">
-                    Продолжение с {formatLearningPlanMonth(carryoverResource.data.sourceMonth)}
-                  </p>
+                  <p className="text-[10px] font-black uppercase tracking-wider text-stone-500">Заменена другой темой</p>
                 ) : null}
                 <input
                   disabled={transferred}
@@ -401,7 +379,7 @@ function StudentMonthlyPlanEditorContent({
                   placeholder="Песня или навык (напр. Кукла колдуна)"
                   className="h-10 w-full rounded-xl bg-stone-50 px-3 text-sm font-semibold outline-none focus:ring-2 focus:ring-amber-200"
                 />
-                {mode.mode === "v2" ? (
+                {sectors ? (
                   <input
                     disabled={transferred}
                     value={item.masteryCriteria ?? ""}
@@ -419,7 +397,7 @@ function StudentMonthlyPlanEditorContent({
                   />
                 ) : null}
               </div>
-              {mode.mode === "v2" && !transferred ? (
+              {sectors && !transferred ? (
                 <LearningTopicProgressEditor
                   topicId={item.id}
                   progressPercent={item.progressPercent}
@@ -431,7 +409,7 @@ function StudentMonthlyPlanEditorContent({
                     void resource.reload();
                   }}
                 />
-              ) : mode.mode !== "v2" ? (
+              ) : !sectors ? (
                 <select
                   value={item.status}
                   onChange={(event) => {
@@ -472,7 +450,7 @@ function StudentMonthlyPlanEditorContent({
               >
                 <Trash2 size={16} />
               </button> : <span />}
-              {mode.mode === "v2" && !transferred && homeworkFlowResource.data && item.progressPercent !== undefined && item.title.trim() ? (
+              {sectors && !transferred && homeworkFlowResource.data && item.progressPercent !== undefined && item.title.trim() ? (
                 <div className="min-w-0 sm:col-span-3">
                   <LearningHomeworkAssignmentComposer topicId={item.id} topicTitle={item.title} />
                 </div>
@@ -481,7 +459,7 @@ function StudentMonthlyPlanEditorContent({
           );})}
           {!draft.items.length ? (
             <p className="rounded-xl border border-dashed border-stone-300 p-4 text-center text-xs text-stone-500">
-              Нажмите «+ Добавить тему», чтобы указать песни или техники на этот месяц.
+              Нажмите «+ Добавить тему» или выберите ступень программы выше.
             </p>
           ) : null}
         </div>
@@ -489,10 +467,16 @@ function StudentMonthlyPlanEditorContent({
 
       <div className="mt-5 border-y border-amber-200/60 py-4">
         <div className="flex items-center justify-between gap-3 text-sm font-bold text-stone-700">
-          <span>Выполнено {completedItems} из {activeItems.length}</span>
+          <span>Закрыто тем: {completedItems} из {activeItems.length}</span>
           <strong className="text-amber-900">{progressPercent}%</strong>
         </div>
         <div className="mt-3"><ProgressBar value={progressPercent} /></div>
+        {draft.preparedTest ? (
+          <p className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-stone-600">
+            <ClipboardCheck size={14} className={draft.preparedTest.passedAt ? "text-emerald-600" : "text-amber-700"} />
+            Тест сектора «{draft.preparedTest.title}»: {draft.preparedTest.passedAt ? "сдан" : "ещё не сдан"}
+          </p>
+        ) : null}
       </div>
 
       {/* 3. Teacher-only checkpoint */}
@@ -502,7 +486,7 @@ function StudentMonthlyPlanEditorContent({
           3. Контрольная точка (скрыта от ученика)
         </label>
         <p className="mt-1 text-[11px] text-stone-500">
-          Как поймём в конце месяца, что цель достигнута?
+          Как поймём, что сектор действительно закрыт?
         </p>
         <textarea
           value={draft.checkpoint}
@@ -555,15 +539,20 @@ function StudentMonthlyPlanEditorContent({
           className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-ink px-6 text-sm font-bold text-white shadow-soft transition hover:bg-stone-800 disabled:opacity-50 sm:w-auto"
         >
           {publishing ? <LoaderCircle size={16} className="animate-spin" /> : <Send size={16} />}
-          {publishing ? "Публикуем…" : draft.publication?.isPublished ? "Обновить план ученику" : "Опубликовать ученику"}
+          {publishing ? "Публикуем…" : draft.publication?.isPublished ? "Обновить сектор ученику" : "Опубликовать ученику"}
         </button>
       </div>
 
       {draft.publication?.isPublished ? (
         <p className="mt-3 text-xs font-semibold text-emerald-700">
-          План опубликован и доступен ученику{hasUnpublishedChanges ? ", но последние правки ещё не опубликованы" : ""}.
+          Сектор опубликован и доступен ученику{hasUnpublishedChanges ? ", но последние правки ещё не опубликованы" : ""}.
         </p>
       ) : null}
+      {!sectors ? null : (
+        <p className="mt-2 inline-flex items-center gap-1.5 text-[11px] text-stone-500">
+          <Lightbulb size={13} /> Следующий сектор откроется, когда этот закроется: все темы на 100 % и сдан тест.
+        </p>
+      )}
     </section>
   );
 }

@@ -55,6 +55,7 @@ export type SchoolOfflineLesson = {
   learningPlanCompletionResults?: Array<{
     planId: string;
     month: string;
+    sequence?: number | null;
     completedAt: string;
     pointsAwarded: number;
   }>;
@@ -108,22 +109,4 @@ export type StudentOfflineSummary = {
   };
   upcomingLessons: SchoolOfflineLesson[];
   lessonHistory: SchoolOfflineLesson[];
-  monthlyPlan: {
-    id: string;
-    month: string;
-    goal: string;
-    expectedResult: string;
-    skills: string;
-    checkpoint: string;
-    teacherName: string;
-    items: Array<{
-      id: string;
-      title: string;
-      status: "planned" | "in_progress" | "completed" | "moved";
-    }>;
-    completedCount: number;
-    inProgressCount: number;
-    plannedCount: number;
-    progressPercent: number;
-  } | null;
 };

@@ -300,7 +300,7 @@ export function LearningLessonV2Panel({
               className="inline-flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-900 transition hover:bg-amber-100"
             >
               <Plus size={14} className="text-amber-700" />
-              {showAddForm ? "Скрыть форму" : "+ Добавить тему в план"}
+              {showAddForm ? "Скрыть форму" : "+ Добавить тему в сектор"}
             </button>
           ) : null}
         </div>
@@ -310,11 +310,11 @@ export function LearningLessonV2Panel({
             <div className="flex items-center gap-2">
               <Sparkles size={16} className="text-amber-700" />
               <p className="text-xs font-bold uppercase tracking-wider text-amber-900">
-                Новая тема в учебный план месяца
+                Новая тема в сектор
               </p>
             </div>
             <p className="mt-1 text-xs text-amber-900/70">
-              Тема сразу добавится в опубликованный план ученика/группы и появится для выбора на этом уроке.
+              Тема сразу добавится в открытый сектор ученика/группы и появится для выбора на этом уроке.
             </p>
             <div className="mt-3 space-y-2.5">
               <input

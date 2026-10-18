@@ -74,7 +74,7 @@ export function pathMatchesAny(pathname: string, prefixes: readonly string[]) {
 
 const learningPrimaryLinks = [
   { href: "/learning", label: "Сейчас", icon: GraduationCap },
-  { href: "/monthly-plan", label: "План", icon: Target },
+  { href: "/monthly-plan", label: "Сектор", icon: Target },
   { href: "/tasks", label: "Задания", icon: ListTodo },
 ] as const;
 

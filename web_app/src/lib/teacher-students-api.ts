@@ -3,10 +3,11 @@ import { ApiError } from "@/lib/api-client";
 import type {
   GroupMonthlyPlan,
   GroupMonthlyPlanResponse,
-  LearningPlanCarryoverPreview,
-  LearningPlanCarryoverResult,
   LearningPlanMode,
   LearningTopicDetail,
+  PreparedTestOption,
+  SectorProposal,
+  SectorTemplate,
   StudentMonthlyPlan,
   StudentMonthlyPlanResponse,
   TeacherCrmDirection,
@@ -32,10 +33,9 @@ export const teacherStudentsApi = {
       throw reason;
     }
   },
-  monthlyPlan: (crmStudentId: string, month: string, crmDirectionId?: string) =>
+  monthlyPlan: (crmStudentId: string, crmDirectionId?: string) =>
     apiRequest<StudentMonthlyPlanResponse>(
       `/teachers/me/students/${encodeURIComponent(crmStudentId)}/monthly-plan?${new URLSearchParams({
-        month,
         ...(crmDirectionId ? { crmDirectionId } : {}),
       }).toString()}`,
     ),
@@ -46,33 +46,17 @@ export const teacherStudentsApi = {
     ),
   publishMonthlyPlan: (
     crmStudentId: string,
-    month: string,
     expectedDraftRevision?: number,
     crmDirectionId?: string,
   ) =>
     apiRequest<StudentMonthlyPlan>(
       `/teachers/me/students/${encodeURIComponent(crmStudentId)}/monthly-plan/publish`,
-      { method: "POST", body: JSON.stringify({ month, expectedDraftRevision, crmDirectionId }) },
+      { method: "POST", body: JSON.stringify({ expectedDraftRevision, crmDirectionId }) },
     ),
-  monthlyPlanCarryover: (crmStudentId: string, month: string, crmDirectionId: string) =>
-    apiRequest<LearningPlanCarryoverPreview>(
-      `/teachers/me/students/${encodeURIComponent(crmStudentId)}/monthly-plan/carryover?${new URLSearchParams({
-        month,
-        crmDirectionId,
-      }).toString()}`,
-    ),
-  carryOverMonthlyPlanTopics: (
-    crmStudentId: string,
-    body: { month: string; crmDirectionId: string; topicIds: string[]; expectedTargetVersion: number },
-  ) => apiRequest<LearningPlanCarryoverResult>(
-    `/teachers/me/students/${encodeURIComponent(crmStudentId)}/monthly-plan/carryover`,
-    { method: "POST", body: JSON.stringify(body) },
-  ),
   groups: () => apiRequest<TeacherGroupsResponse>("/teachers/me/groups"),
-  groupMonthlyPlan: (crmGroupId: string, month: string, crmDirectionId?: string) =>
+  groupMonthlyPlan: (crmGroupId: string, crmDirectionId?: string) =>
     apiRequest<GroupMonthlyPlanResponse>(
       `/teachers/me/groups/${encodeURIComponent(crmGroupId)}/monthly-plan?${new URLSearchParams({
-        month,
         ...(crmDirectionId ? { crmDirectionId } : {}),
       }).toString()}`,
     ),
@@ -83,28 +67,29 @@ export const teacherStudentsApi = {
     ),
   publishGroupMonthlyPlan: (
     crmGroupId: string,
-    month: string,
     expectedDraftRevision?: number,
     crmDirectionId?: string,
   ) =>
     apiRequest<GroupMonthlyPlan>(
       `/teachers/me/groups/${encodeURIComponent(crmGroupId)}/monthly-plan/publish`,
-      { method: "POST", body: JSON.stringify({ month, expectedDraftRevision, crmDirectionId }) },
+      { method: "POST", body: JSON.stringify({ expectedDraftRevision, crmDirectionId }) },
     ),
-  groupMonthlyPlanCarryover: (crmGroupId: string, month: string, crmDirectionId: string) =>
-    apiRequest<LearningPlanCarryoverPreview>(
-      `/teachers/me/groups/${encodeURIComponent(crmGroupId)}/monthly-plan/carryover?${new URLSearchParams({
-        month,
-        crmDirectionId,
-      }).toString()}`,
+  sectorTemplates: (crmDirectionId?: string) =>
+    apiRequest<SectorTemplate[]>(
+      `/teachers/me/sector-templates${crmDirectionId ? `?crmDirectionId=${encodeURIComponent(crmDirectionId)}` : ""}`,
     ),
-  carryOverGroupMonthlyPlanTopics: (
-    crmGroupId: string,
-    body: { month: string; crmDirectionId: string; topicIds: string[]; expectedTargetVersion: number },
-  ) => apiRequest<LearningPlanCarryoverResult<GroupMonthlyPlan>>(
-    `/teachers/me/groups/${encodeURIComponent(crmGroupId)}/monthly-plan/carryover`,
-    { method: "POST", body: JSON.stringify(body) },
-  ),
+  preparedTests: () => apiRequest<PreparedTestOption[]>("/teachers/me/prepared-tests"),
+  sectorProposals: (filter: { status?: "new" | "accepted" | "declined"; crmStudentId?: string } = {}) =>
+    apiRequest<SectorProposal[]>(
+      `/teachers/me/sector-proposals?${new URLSearchParams(
+        Object.fromEntries(Object.entries(filter).filter(([, value]) => Boolean(value))) as Record<string, string>,
+      ).toString()}`,
+    ),
+  decideSectorProposal: (id: string, body: { decision: "accepted" | "declined"; reply?: string | null; acceptedTopicId?: string | null }) =>
+    apiRequest<SectorProposal>(`/teachers/me/sector-proposals/${encodeURIComponent(id)}/decision`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   learningTopic: (topicId: string) =>
     apiRequest<LearningTopicDetail>(`/teachers/me/learning-topics/${encodeURIComponent(topicId)}`),
   updateLearningTopicProgress: (

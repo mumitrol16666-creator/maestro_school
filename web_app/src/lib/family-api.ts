@@ -15,9 +15,9 @@ export const familyApi = {
     apiRequest<FamilyChildOverview>(
       `/parents/me/children/${encodeURIComponent(studentId)}/offline-summary`,
     ),
-  childMonthlyPlans: (studentId: string, month: string) =>
+  childMonthlyPlans: (studentId: string) =>
     apiRequest<StudentMonthlyPlansResponse>(
-      `/parents/me/children/${encodeURIComponent(studentId)}/monthly-plans?month=${encodeURIComponent(month)}`,
+      `/parents/me/children/${encodeURIComponent(studentId)}/monthly-plans`,
     ),
   news: (limit = 5) => apiRequest<FamilyNewsPost[]>(`/parents/me/news?limit=${limit}`),
   myVisibility: () => apiRequest<ParentVisibilityWorkspace>("/students/me/parent-visibility"),

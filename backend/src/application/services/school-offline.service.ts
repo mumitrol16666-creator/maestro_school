@@ -3,7 +3,6 @@ import { prisma } from "../../infrastructure/database/prisma.js";
 import { BadRequestError } from "../../domain/errors.js";
 import { linkOfflineHomeworkResults } from "../../domain/offline-homework-progress.js";
 import { readStudentOfflineSummary } from "../../infrastructure/crm/crm-client.js";
-import { aqtobeMonthKey } from "../../lib/aqtobe-month.js";
 
 type OfflineSummaryLesson = {
   crmClassId?: string;
@@ -74,6 +73,7 @@ type OfflineLearningPlanCompletionReward = OfflineLearningTopicReward & {
 type OfflineCompletedLearningPlan = {
   id: string;
   month: string;
+  sequence?: number | null;
   completedAt: Date | null;
   publishedVersionNumber: number | null;
   versions: Array<{
@@ -96,6 +96,7 @@ export type OfflineLearningTopicResult = {
 export type OfflineLearningPlanCompletionResult = {
   planId: string;
   month: string;
+  sequence: number | null;
   completedAt: string;
   pointsAwarded: number;
 };
@@ -206,6 +207,7 @@ export function learningPlanCompletionResultsByClassId(
     const result: OfflineLearningPlanCompletionResult = {
       planId,
       month: plan.month,
+      sequence: plan.sequence ?? null,
       completedAt: plan.completedAt.toISOString(),
       pointsAwarded: reward.amount,
     };
@@ -242,8 +244,7 @@ export async function getStudentSchoolOfflineSummary(
   const classIds = [...new Set(lessonHistory
     .map((lesson) => lesson.crmClassId)
     .filter((value): value is string => Boolean(value)))];
-  const month = aqtobeMonthKey();
-  const [checks, monthlyPlan, learningTopicProgress, planCompletionRewards] = await Promise.all([
+  const [checks, learningTopicProgress, planCompletionRewards] = await Promise.all([
     classIds.length
       ? prisma.offlineLessonStudentCheck.findMany({
           where: {
@@ -252,15 +253,6 @@ export async function getStudentSchoolOfflineSummary(
           },
         })
       : Promise.resolve([]),
-    prisma.studentMonthlyPlan.findFirst({
-      where: { crmStudentId: user.crmStudentId, month },
-      include: {
-        teacherUser: {
-          select: { firstName: true, lastName: true },
-        },
-      },
-      orderBy: { updatedAt: "desc" },
-    }),
     classIds.length
       ? prisma.learningTopicProgress.findMany({
           where: {
@@ -320,6 +312,7 @@ export async function getStudentSchoolOfflineSummary(
         select: {
           id: true,
           month: true,
+          sequence: true,
           completedAt: true,
           publishedVersionNumber: true,
           versions: {
@@ -426,13 +419,6 @@ export async function getStudentSchoolOfflineSummary(
       })),
     };
   });
-  const planItems = monthlyPlan && Array.isArray(monthlyPlan.items)
-    ? monthlyPlan.items as OfflinePlanItem[]
-    : [];
-  const activePlanItems = planItems.filter((item) => item.status !== "moved");
-  const completedCount = activePlanItems.filter((item) => item.status === "completed").length;
-  const inProgressCount = activePlanItems.filter((item) => item.status === "in_progress").length;
-
   return {
     ...summary,
     crmSnapshotAt: crmRead.fetchedAt.toISOString(),
@@ -444,26 +430,6 @@ export async function getStudentSchoolOfflineSummary(
         return resolution ? { decision: resolution.decision, comment: resolution.comment, updatedAt: resolution.updatedAt } : null;
       })(),
     })),
-    monthlyPlan: monthlyPlan
-      ? {
-          id: monthlyPlan.id,
-          month: monthlyPlan.month,
-          goal: monthlyPlan.goal,
-          expectedResult: monthlyPlan.expectedResult,
-          skills: monthlyPlan.skills,
-          checkpoint: monthlyPlan.checkpoint,
-          items: planItems,
-          teacherName: [monthlyPlan.teacherUser.firstName, monthlyPlan.teacherUser.lastName]
-            .filter(Boolean)
-            .join(" "),
-          completedCount,
-          inProgressCount,
-          plannedCount: activePlanItems.length - completedCount - inProgressCount,
-          progressPercent: activePlanItems.length
-            ? Math.round((completedCount / activePlanItems.length) * 100)
-            : 0,
-        }
-      : null,
     linkStatus: user.externalLinkStatus ?? "linked",
   };
 }

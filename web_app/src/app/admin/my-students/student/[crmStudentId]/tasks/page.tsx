@@ -44,7 +44,7 @@ export default function TeacherStudentTasksPage() {
         {data && <p className="mt-2 break-words text-base font-semibold text-stone-700">{data.student.name}</p>}
         <p className="mt-1 text-sm leading-6 text-stone-500">Назначения, ответы и результаты — в одном месте.</p>
       </div>
-      {data?.planHref && <Link href={data.planHref} className={`${control} border border-stone-200 bg-white`}>Учебный план →</Link>}
+      {data?.planHref && <Link href={data.planHref} className={`${control} border border-stone-200 bg-white`}>Сектор →</Link>}
     </header>
     {message && <p role="status" className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">{message}</p>}
     {resource.loading ? <p role="status" className="py-5 text-sm text-stone-600">Загружаем задания…</p> : resource.error ? <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-4">

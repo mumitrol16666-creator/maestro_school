@@ -35,11 +35,6 @@ import type { SchoolOfflineLesson } from "@/types/school-offline";
 import type { StudentHomeHomework, StudentHomeMonthlyPlan, StudentMonthlyPlansResponse } from "@/types/api";
 import type { UnifiedTask } from "@/types/unified-tasks";
 
-const monthNames = [
-  "январь", "февраль", "март", "апрель", "май", "июнь",
-  "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь",
-];
-
 function formatLessonDate(value: string) {
   const date = new Date(value);
   const today = new Date();
@@ -50,11 +45,6 @@ function formatLessonDate(value: string) {
   if (sameDay(date, today)) return "Сегодня";
   if (sameDay(date, tomorrow)) return "Завтра";
   return new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" }).format(date);
-}
-
-function monthTitle(month: string) {
-  const index = Number(month.slice(5, 7)) - 1;
-  return monthNames[index] ?? "месяца";
 }
 
 function homeworkStatus(homework: StudentHomeHomework) {
@@ -204,7 +194,7 @@ export default function DashboardPage() {
           <Sparkles className="mx-auto text-gold-ink" />
           <h2 className="font-display mt-4 text-3xl">Учебный маршрут готовится</h2>
           <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-stone-500">
-            После назначения расписания, домашнего задания или плана месяца здесь появятся следующие действия.
+            После назначения расписания, домашнего задания или открытия сектора здесь появятся следующие действия.
           </p>
         </section>
       ) : null}
@@ -564,15 +554,15 @@ function MonthlyPlanCard({
       </div>
 
       <p className="mt-5 text-xs font-black uppercase tracking-[0.2em] text-gold-ink">
-        План на {monthTitle(first.month)}
+        {plans.length === 1 && first.sequence ? `Сектор ${first.sequence}` : "Текущий сектор"}
       </p>
       <h2 className="font-display mt-2 text-3xl leading-tight text-ink sm:text-4xl">
-        {plans.length === 1 ? first.goal : `${plans.length} учебных плана`}
+        {plans.length === 1 ? first.goal : `${plans.length} открытых сектора`}
       </h2>
       <div className="mt-5">
         <ProgressBar value={aggregateProgress.percent} />
         <p className="mt-2.5 text-xs font-semibold text-stone-500">
-          {aggregateProgress.completed} из {aggregateProgress.total} тем выполнено
+          {aggregateProgress.completed} из {aggregateProgress.total} тем закрыто
         </p>
       </div>
 
@@ -580,13 +570,13 @@ function MonthlyPlanCard({
         <div className="mt-5 border-y border-stone-100 py-4">
           <p className="text-[11px] font-black uppercase tracking-wider text-stone-400">Сейчас в фокусе</p>
           <p className="mt-2 text-sm font-bold leading-6 text-stone-800">
-            {nextItem?.title ?? "Все пункты текущего плана выполнены"}
+            {nextItem?.title ?? "Все темы сектора закрыты"}
           </p>
         </div>
       ) : null}
 
       <Link href="/monthly-plan" className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl bg-ink px-4 text-sm font-bold text-white">
-        Открыть {plans.length === 1 ? "план" : "планы"} <ArrowRight size={16} />
+        Открыть сектор <ArrowRight size={16} />
       </Link>
     </section>
   );

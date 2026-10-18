@@ -263,14 +263,14 @@ export default function TeacherStudentsPage() {
       {tab === "students" ? (
         <section className="mb-7 grid grid-cols-3 gap-2 sm:gap-3">
           <Summary icon={Users} label="Мои ученики" value={allStudents.length} />
-          <Summary icon={GraduationCap} label="С планом" value={studentsWithPlan} />
+          <Summary icon={GraduationCap} label="С сектором" value={studentsWithPlan} />
           <Summary icon={AlertTriangle} label="Внимание" value={studentsRequiringAttention.length} />
         </section>
       ) : (
         <section className="mb-7 grid grid-cols-3 gap-2 sm:gap-3">
           <Summary icon={Users} label="Ваши группы" value={allGroups.length} />
           <Summary icon={UserRound} label="Участников" value={groupMembers} />
-          <Summary icon={BookOpen} label="С планом" value={groupsWithPlan} />
+          <Summary icon={BookOpen} label="С сектором" value={groupsWithPlan} />
         </section>
       )}
 
@@ -472,7 +472,7 @@ function StudentCard({ student, homework }: { student: TeacherStudent; homework:
         </div>
         <div className="mt-3 grid grid-cols-3 gap-2">
           <LearningMetric label="Посещаемость" value={student.learningSummary.attendanceRate} />
-          <LearningMetric label="План месяца" value={student.learningSummary.planCompletionRate} />
+          <SectorMetric sector={student.learningSummary.sector} />
           <HomeworkLearningMetric metrics={homework} />
         </div>
         {homework ? (
@@ -777,6 +777,15 @@ function LearningMetric({ label, value }: { label: string; value: number | null 
     <div className="rounded-xl bg-stone-50 px-2 py-3 text-center">
       <p className="text-lg font-black text-ink">{value == null ? "—" : `${value}%`}</p>
       <p className="mt-1 text-[10px] font-bold text-stone-500">{label}</p>
+    </div>
+  );
+}
+
+function SectorMetric({ sector }: { sector: { sequence: number; completed: number; total: number } | null }) {
+  return (
+    <div className="rounded-xl bg-stone-50 px-2 py-3 text-center">
+      <p className="text-lg font-black text-ink">{sector ? `${sector.completed}/${sector.total}` : "—"}</p>
+      <p className="mt-1 text-[10px] font-bold text-stone-500">{sector ? `Сектор ${sector.sequence} · тем` : "Сектор не открыт"}</p>
     </div>
   );
 }

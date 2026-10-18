@@ -2,7 +2,6 @@ import { prisma } from "../../infrastructure/database/prisma.js";
 import { productFeatureConfig } from "../../config/product-features.js";
 import { BadRequestError } from "../../domain/errors.js";
 import { fetchTeacherStudents } from "../../infrastructure/crm/crm-client.js";
-import { aqtobeMonthKey } from "../../lib/aqtobe-month.js";
 
 export async function requireCrmTeacherId(appUserId: string) {
   const user = await prisma.user.findFirst({
@@ -142,17 +141,11 @@ export async function listTeacherStudents(appTeacherId: string) {
   const appUserIds = students
     .map((student) => student.appUserId)
     .filter((userId): userId is string => Boolean(userId));
-  const month = aqtobeMonthKey();
-  const [checks, legacyPlans, v2Plans, latestActivity, latestLogin, parentLinks] = await Promise.all([
+  const [checks, v2Plans, latestActivity, latestLogin, parentLinks] = await Promise.all([
     crmStudentIds.length
       ? prisma.offlineLessonStudentCheck.findMany({
           where: { teacherUserId: appTeacherId, crmStudentId: { in: crmStudentIds } },
           orderBy: { markedAt: "desc" },
-        })
-      : [],
-    crmStudentIds.length
-      ? prisma.studentMonthlyPlan.findMany({
-          where: { crmStudentId: { in: crmStudentIds }, month },
         })
       : [],
     crmStudentIds.length
@@ -222,7 +215,6 @@ export async function listTeacherStudents(appTeacherId: string) {
     list.push(check);
     checksByStudent.set(check.crmStudentId, list);
   }
-  const legacyPlansByStudent = new Map(legacyPlans.map((plan) => [plan.crmStudentId, plan]));
   const v2PlansByStudent = new Map<string, typeof v2Plans>();
   for (const plan of v2Plans) {
     if (!plan.crmStudentId) continue;
@@ -252,34 +244,20 @@ export async function listTeacherStudents(appTeacherId: string) {
     students: students.map((student) => {
       const studentChecks = student.crmStudentId ? checksByStudent.get(student.crmStudentId) ?? [] : [];
       const studentV2Plans = student.crmStudentId ? v2PlansByStudent.get(student.crmStudentId) ?? [] : [];
-      const legacyPlan = student.crmStudentId ? legacyPlansByStudent.get(student.crmStudentId) : null;
-      let hasPlan = false;
-      let planCompletionRate: number | null = null;
-
-      if (studentV2Plans.length > 0) {
-        hasPlan = true;
-        let totalActiveTopics = 0;
-        let completedTopics = 0;
-        for (const plan of studentV2Plans) {
-          const activeVersionNumber = plan.publishedVersionNumber ?? plan.currentVersionNumber;
-          const version = plan.versions.find((v) => v.version === activeVersionNumber);
-          const activeTopics = (version?.topics ?? []).filter((t) => t.state === "active");
-          totalActiveTopics += activeTopics.length;
-          completedTopics += activeTopics.filter((t) => t.topic.progressPercent === 100).length;
-        }
-        planCompletionRate = totalActiveTopics
-          ? Math.round((completedTopics / totalActiveTopics) * 100)
-          : 0;
-      } else if (legacyPlan) {
-        hasPlan = true;
-        const planItems = Array.isArray(legacyPlan.items)
-          ? (legacyPlan.items as Array<{ status?: string }>)
-          : [];
-        const completedPlanItems = planItems.filter((item) => item.status === "completed").length;
-        planCompletionRate = planItems.length
-          ? Math.round((completedPlanItems / planItems.length) * 100)
-          : null;
+      // Ровно один открытый сектор на направление; учителю показываем первый.
+      const sector = studentV2Plans[0] ?? null;
+      let sectorSummary: { sequence: number; completed: number; total: number } | null = null;
+      if (sector) {
+        const activeVersionNumber = sector.publishedVersionNumber ?? sector.currentVersionNumber;
+        const version = sector.versions.find((v) => v.version === activeVersionNumber);
+        const activeTopics = (version?.topics ?? []).filter((t) => t.state === "active");
+        sectorSummary = {
+          sequence: sector.sequence,
+          completed: activeTopics.filter((t) => t.topic.progressPercent === 100).length,
+          total: activeTopics.length,
+        };
       }
+      const hasPlan = Boolean(sector);
 
       const recentAttendance = student.attendanceHistory.slice(0, 8);
       const attendedCount = recentAttendance.filter((item) => ["present", "late"].includes(item.attendanceStatus)).length;
@@ -332,8 +310,7 @@ export async function listTeacherStudents(appTeacherId: string) {
           homeworkCompletionRate: reviewedHomework.length
             ? Math.round((completedHomework / reviewedHomework.length) * 100)
             : null,
-          planCompletionRate,
-          currentMonth: month,
+          sector: sectorSummary,
         },
         attentionSignals: signals,
       };

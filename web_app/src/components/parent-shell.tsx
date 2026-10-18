@@ -75,7 +75,7 @@ export function ParentShell({ children }: { children: React.ReactNode }) {
         <div className="mt-auto rounded-[22px] border border-white/10 bg-white/[0.045] p-4">
           <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gold-ink">Доступ родителя</p>
           <p className="mt-2 text-xs leading-5 text-white/50">
-            Расписание, баланс, учебный план и достижения в пределах доступа ученика.
+            Расписание, баланс, учебный сектор и достижения в пределах доступа ученика.
           </p>
         </div>
       </aside>

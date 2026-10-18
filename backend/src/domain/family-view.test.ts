@@ -17,7 +17,6 @@ test("family summary exposes only the configured parent skeleton", () => {
       title: "Гитара",
       materials: [{ url: "https://private.example/material.pdf" }],
     }],
-    monthlyPlan: null,
   });
 
   assert.deepEqual(result.profile, {
@@ -42,7 +41,6 @@ test("family summary removes modules disabled for all linked parents", () => {
     profile: { name: "Ученик", groups: [] },
     balanceSnapshot: { debtAmountKzt: 0, accountBalanceKzt: 12000 },
     upcomingLessons: [{ crmClassId: "class-1", materials: [] }],
-    monthlyPlan: { id: "plan-1" },
   }, {
     showSchedule: false,
     showBalance: false,
@@ -51,7 +49,6 @@ test("family summary removes modules disabled for all linked parents", () => {
 
   assert.equal(result.financialBalance, null);
   assert.deepEqual(result.upcomingLessons, []);
-  assert.equal(result.monthlyPlan, null);
 });
 
 test("family balance shows the CRM amount due even when the account balance is not negative", () => {
@@ -59,7 +56,6 @@ test("family balance shows the CRM amount due even when the account balance is n
     profile: { name: "Ученик", groups: [] },
     balanceSnapshot: { debtAmountKzt: 0, amountDueKzt: 9000, accountBalanceKzt: 1500 },
     upcomingLessons: [],
-    monthlyPlan: null,
   });
   assert.deepEqual(result.financialBalance, { signedAmountKzt: -9000, status: "debt", source: "crm" });
 });
@@ -69,7 +65,6 @@ test("family balance falls back to the balance-only debt for an older CRM payloa
     profile: { name: "Ученик", groups: [] },
     balanceSnapshot: { debtAmountKzt: 0, accountBalanceKzt: 2500 },
     upcomingLessons: [],
-    monthlyPlan: null,
   });
   assert.deepEqual(result.financialBalance, { signedAmountKzt: 2500, status: "credit", source: "crm" });
 });

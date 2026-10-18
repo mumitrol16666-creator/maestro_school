@@ -19,7 +19,7 @@ test("student dashboard keeps one task state and desktop league in the top row",
   await signInAsStudent(request, context);
   await page.goto("/dashboard");
 
-  const focus = page.getByText("Сейчас · план месяца", { exact: true });
+  const focus = page.getByText(/^Сейчас · /).first();
   const league = page.getByRole("heading", { name: "Лидеры недели" });
   const tasks = page.getByText(/Сейчас всё сделано|Нужно сделать/).first();
   await expect(focus).toBeVisible();
@@ -53,7 +53,7 @@ test("student dashboard shows the task state before league on a phone", async ({
   await signInAsStudent(request, context);
   await page.goto("/dashboard");
 
-  const focus = page.getByText("Сейчас · план месяца", { exact: true });
+  const focus = page.getByText(/^Сейчас · /).first();
   const tasks = page.getByText(/Сейчас всё сделано|Нужно сделать/).first();
   const league = page.getByRole("heading", { name: "Лидеры недели" });
   await expect(focus).toBeVisible();
@@ -96,10 +96,10 @@ test("monthly plan opens from the dashboard on desktop and phone", async ({ page
   ]) {
     await page.setViewportSize(viewport);
     await page.goto("/dashboard");
-    await page.getByRole("link", { name: "Открыть план", exact: true }).click();
+    await page.getByRole("link", { name: "Открыть сектор", exact: true }).click();
 
     await expect(page).toHaveURL(/\/monthly-plan$/);
-    await expect(page.getByRole("heading", { name: /План на/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /^(Сектор \d+|Мой сектор)$/ })).toBeVisible();
     await expect(page.getByRole("article")).not.toHaveCount(0);
     await expect(page.getByText("Application error", { exact: false })).toHaveCount(0);
     const overflow = await page.evaluate(() => (

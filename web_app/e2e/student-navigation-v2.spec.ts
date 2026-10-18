@@ -27,7 +27,7 @@ test("student has exactly five first-level sections and profile stays in the ava
   await expect(navigation.getByRole("link", { name: /Расписание/ })).toBeVisible();
   await expect(navigation.getByRole("link", { name: /Сообщения/ })).toBeVisible();
   await expect(navigation.getByRole("link", { name: /Магазин/ })).toBeVisible();
-  await expect(navigation.getByRole("link", { name: /Профиль|Задания|План месяца|Недельная лига|Курсы|Тесты/ })).toHaveCount(0);
+  await expect(navigation.getByRole("link", { name: /Профиль|Задания|Сектор|Недельная лига|Курсы|Тесты/ })).toHaveCount(0);
 
   await page.locator("header button[aria-haspopup='menu']").click();
   await expect(page.getByRole("menuitem", { name: "Профиль и настройки" })).toBeVisible();
@@ -63,7 +63,7 @@ test("learning and shop expose compact secondary navigation", async ({ page, req
   await expect(page.getByRole("heading", { name: "Сейчас", exact: true })).toBeVisible();
   const learningNavigation = page.getByTestId("student-learning-navigation");
   await expect(learningNavigation.getByRole("link", { name: "Сейчас" })).toHaveAttribute("aria-current", "page");
-  await expect(learningNavigation.getByRole("link", { name: "План" })).toBeVisible();
+  await expect(learningNavigation.getByRole("link", { name: "Сектор" })).toBeVisible();
   await expect(learningNavigation.getByRole("link", { name: "Задания" })).toBeVisible();
   await learningNavigation.getByRole("button", { name: "Ещё" }).click();
   await expect(learningNavigation.getByRole("menuitem", { name: "История обучения" })).toBeVisible();

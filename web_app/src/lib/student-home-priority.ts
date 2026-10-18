@@ -6,7 +6,7 @@ const MINUTE = 60_000;
 const SCHOOL_TIME_ZONE_OFFSET = "+05:00";
 
 export type StudentHomeHero = {
-  kind: "task" | "school_lesson" | "online_lesson" | "plan" | "course";
+  kind: "task" | "school_lesson" | "online_lesson" | "plan" | "sector_test" | "course";
   id: string;
   eyebrow: string;
   title: string;
@@ -172,6 +172,24 @@ export function selectStudentHomeHero({
     .sort((left, right) => timeValue(left.timing.dueAt) - timeValue(right.timing.dueAt))[0];
   if (exactDue) return taskHero(exactDue);
 
+  const readyTest = plans.find((plan) => (
+    plan.preparedTest && !plan.preparedTest.passedAt && plan.progress.total > 0
+    && plan.progress.completed === plan.progress.total
+  ));
+  if (readyTest?.preparedTest) {
+    return {
+      kind: "sector_test",
+      id: readyTest.preparedTest.id,
+      eyebrow: `Сейчас · тест сектора${readyTest.sequence ? ` ${readyTest.sequence}` : ""}`,
+      title: readyTest.preparedTest.title,
+      subtitle: readyTest.goal,
+      detail: "Все темы закрыты. Сдай тест — сектор закроется и принесёт 250 баллов.",
+      badge: { label: "+20 XP", tone: "success" },
+      href: `/tests/${encodeURIComponent(readyTest.preparedTest.id)}`,
+      actionLabel: "Сдать тест",
+    };
+  }
+
   const planItems = plans.flatMap((plan) => plan.items.map((item) => ({ plan, item })));
   const planItem = planItems.find(({ item }) => item.status === "in_progress")
     ?? planItems.find(({ item }) => item.status === "planned");
@@ -179,15 +197,15 @@ export function selectStudentHomeHero({
     return {
       kind: "plan",
       id: planItem.item.id,
-      eyebrow: "Сейчас · план месяца",
+      eyebrow: `Сейчас · сектор${planItem.plan.sequence ? ` ${planItem.plan.sequence}` : ""}`,
       title: planItem.item.title,
       subtitle: planItem.plan.goal,
-      detail: `${planItem.plan.progress.completed} из ${planItem.plan.progress.total} пунктов выполнено`,
+      detail: `${planItem.plan.progress.completed} из ${planItem.plan.progress.total} тем закрыто`,
       badge: planItem.item.status === "in_progress"
         ? { label: "В работе", tone: "warning" }
         : null,
       href: "/monthly-plan",
-      actionLabel: "Открыть план",
+      actionLabel: "Открыть сектор",
     };
   }
 

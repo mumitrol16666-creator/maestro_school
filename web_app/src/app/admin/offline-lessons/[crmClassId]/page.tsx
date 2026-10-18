@@ -1732,7 +1732,7 @@ export default function AdminOfflineLessonDetailPage() {
                   <div className="mt-5 rounded-2xl border border-amber-100 bg-amber-50/60 p-3.5">
                     <p className="flex items-center gap-1.5 text-xs font-bold text-amber-900">
                       <Sparkles size={14} className="text-amber-600" />
-                      Быстрый выбор темы из плана месяца:
+                      Быстрый выбор темы из сектора:
                     </p>
                     <div className="mt-2.5 flex flex-wrap gap-1.5">
                       {availablePlanTopics.map((item) => (
@@ -3050,7 +3050,7 @@ function StudentRoster({
         {canManageAttendance
           ? compactGroup
             ? "Общее задание проверяется по каждому присутствующему ученику."
-            : "Отметьте посещаемость, проверку прошлого ДЗ и освоенные темы из плана месяца."
+            : "Отметьте посещаемость, проверку прошлого ДЗ и освоенные темы из сектора."
           : "Отметки доступны во время урока и сохраняются в его истории."}
       </p>
 
@@ -3601,7 +3601,7 @@ function StudentLearningResultFields({
       });
       student.monthlyPlan = {
         id: saved.id || crypto.randomUUID(),
-        month: saved.month,
+        month: saved.month ?? month,
         goal: saved.goal,
         items: saved.items.map((item) => ({
           id: item.id,
@@ -3968,7 +3968,7 @@ function StudentLessonCheckCard({
         <fieldset className="mt-4 border-t border-stone-100 pt-4">
           <legend className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.14em] text-amber-700">
             <Target size={15} />
-            План месяца и учебные баллы
+            Сектор и учебные баллы
           </legend>
           <div className="mt-3">
             <StudentLearningResultFields

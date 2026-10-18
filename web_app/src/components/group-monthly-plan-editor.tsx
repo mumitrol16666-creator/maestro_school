@@ -12,29 +12,23 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { LearningTopicProgressEditor } from "@/components/learning-topic-progress-editor";
-import { PlanMonthField } from "@/components/plan-month-field";
 import { LearningHomeworkAssignmentComposer } from "@/components/learning-homework-assignment-composer";
-import {
-  formatLearningPlanMonth,
-  LearningPlanCarryoverPanel,
-} from "@/components/learning-plan-carryover-panel";
+import { SectorHistoryList, SectorTemplatePicker, SectorTestField } from "@/components/sector-editor-parts";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { ApiError } from "@/lib/api-client";
 import { learningHomeworkApi } from "@/lib/learning-homework-api";
 import { teacherStudentsApi } from "@/lib/teacher-students-api";
-import { currentAqtobeMonth } from "@/lib/aqtobe-month";
 import { crmDirectionTitlesMatch } from "@/lib/crm-direction-title";
 import type {
   GroupMonthlyPlan,
-  LearningPlanCarryoverPreview,
+  SectorTemplate,
   LearningPlanMode,
   MonthlyPlanItemStatus,
   TeacherCrmDirection,
 } from "@/types/teacher-students";
 
-function emptyPlan(month: string): GroupMonthlyPlan {
+function emptyPlan(): GroupMonthlyPlan {
   return {
-    month,
     goal: "",
     expectedResult: "",
     skills: "",
@@ -101,40 +95,26 @@ function GroupMonthlyPlanEditorContent({
   mode: LearningPlanMode;
   directions: TeacherCrmDirection[];
 }) {
-  const [month, setMonth] = useState(currentAqtobeMonth);
   const [crmDirectionId, setCrmDirectionId] = useState(() => directions[0]?.crmDirectionId ?? "");
   const resource = useApiResource(
-    () => teacherStudentsApi.groupMonthlyPlan(crmGroupId, month, crmDirectionId || undefined),
-    [crmGroupId, month, crmDirectionId],
-  );
-  const carryoverResource = useApiResource<LearningPlanCarryoverPreview | null>(
-    () => mode.mode === "v2" && crmDirectionId
-      ? teacherStudentsApi.groupMonthlyPlanCarryover(crmGroupId, month, crmDirectionId)
-      : Promise.resolve(null),
-    [mode.mode, crmGroupId, month, crmDirectionId],
+    () => teacherStudentsApi.groupMonthlyPlan(crmGroupId, crmDirectionId || undefined),
+    [crmGroupId, crmDirectionId],
   );
   const homeworkFlowResource = useApiResource(() => learningHomeworkApi.teacherAvailability(), []);
-  const [draft, setDraft] = useState<GroupMonthlyPlan>(() => emptyPlan(month));
+  const [draft, setDraft] = useState<GroupMonthlyPlan>(() => emptyPlan());
+  const [showHistory, setShowHistory] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [staleDraft, setStaleDraft] = useState(false);
-  const [selectedCarryoverTopicIds, setSelectedCarryoverTopicIds] = useState<string[]>([]);
-  const [transferring, setTransferring] = useState(false);
 
   useEffect(() => {
-    setDraft(resource.data?.plan ?? emptyPlan(month));
-    setSaved(false);
+    setDraft(resource.data?.plan ?? emptyPlan());
+    setSaved(Boolean(resource.data?.plan));
     setError(null);
     setStaleDraft(false);
-  }, [month, resource.data]);
-
-  useEffect(() => {
-    setSelectedCarryoverTopicIds(
-      carryoverResource.data?.candidates.map((topic) => topic.topicId) ?? [],
-    );
-  }, [carryoverResource.data]);
+  }, [resource.data]);
 
   function setField(field: keyof GroupMonthlyPlan, value: string) {
     setDraft((current) => ({ ...current, [field]: value }));
@@ -160,35 +140,6 @@ function GroupMonthlyPlanEditorContent({
     setSaved(false);
   }
 
-  async function carryOverSelectedTopics() {
-    if (!crmDirectionId || !selectedCarryoverTopicIds.length || transferring) return;
-    setTransferring(true);
-    setError(null);
-    setStaleDraft(false);
-    try {
-      const result = await teacherStudentsApi.carryOverGroupMonthlyPlanTopics(crmGroupId, {
-        month,
-        crmDirectionId,
-        topicIds: selectedCarryoverTopicIds,
-        expectedTargetVersion: draft.version ?? 0,
-      });
-      setDraft(result.plan);
-      setSaved(true);
-      await Promise.all([resource.reload(), carryoverResource.reload()]);
-    } catch (reason) {
-      if (reason instanceof ApiError && reason.code === "MONTHLY_PLAN_STALE_DRAFT") {
-        setError("План группы уже изменился. Обновите данные и повторите перенос.");
-        setStaleDraft(true);
-      } else if (reason instanceof ApiError) {
-        setError(reason.message);
-      } else {
-        setError("Не удалось перенести темы группы. Повторите попытку.");
-      }
-    } finally {
-      setTransferring(false);
-    }
-  }
-
   async function save() {
     const hasInvalidMaterialUrl = draft.materials.some((material) => (
       material.url.trim() && !materialHref(material.url)
@@ -203,7 +154,7 @@ function GroupMonthlyPlanEditorContent({
     try {
       const plan = await teacherStudentsApi.saveGroupMonthlyPlan(crmGroupId, {
         ...draft,
-        month,
+        templateStepId: draft.templateStepIdInput ?? undefined,
         expectedVersion: mode.mode === "v2" ? draft.version ?? 0 : undefined,
         items: draft.items
           .filter((item) => item.title.trim())
@@ -213,19 +164,19 @@ function GroupMonthlyPlanEditorContent({
         materials: draft.materials.filter((material) => (
           material.title.trim() || material.url.trim() || material.note.trim()
         )),
-      }, crmDirectionId || undefined);
+      } as GroupMonthlyPlan & { templateStepId?: string }, crmDirectionId || undefined);
       setDraft(plan);
       setSaved(true);
       await resource.reload();
       return plan;
     } catch (reason) {
       if (reason instanceof ApiError && reason.code === "MONTHLY_PLAN_STALE_DRAFT") {
-        setError("План группы уже изменился. Обновите данные перед сохранением.");
+        setError("Сектор группы уже изменился. Обновите данные перед сохранением.");
         setStaleDraft(true);
       } else if (reason instanceof ApiError) {
         setError(reason.message);
       } else {
-        setError("Не удалось сохранить план группы. Проверьте интернет и повторите.");
+        setError("Не удалось сохранить сектор группы. Проверьте интернет и повторите.");
       }
       return null;
     } finally {
@@ -242,7 +193,6 @@ function GroupMonthlyPlanEditorContent({
       if (!savedPlan) return;
       const plan = await teacherStudentsApi.publishGroupMonthlyPlan(
         crmGroupId,
-        month,
         savedPlan.version ?? savedPlan.publication?.draftRevision,
         crmDirectionId || undefined,
       );
@@ -251,12 +201,12 @@ function GroupMonthlyPlanEditorContent({
       await resource.reload();
     } catch (reason) {
       if (reason instanceof ApiError && reason.code === "MONTHLY_PLAN_STALE_DRAFT") {
-        setError("План группы уже изменился. Обновите данные перед публикацией.");
+        setError("Сектор группы уже изменился. Обновите данные перед публикацией.");
         setStaleDraft(true);
       } else if (reason instanceof ApiError) {
         setError(reason.message);
       } else {
-        setError("Не удалось опубликовать план группы. Проверьте фокус и темы.");
+        setError("Не удалось опубликовать сектор группы. Проверьте цель и темы.");
       }
     } finally {
       setPublishing(false);
@@ -264,7 +214,7 @@ function GroupMonthlyPlanEditorContent({
   }
 
   if (resource.loading) {
-    return <p className="py-6 text-sm text-stone-500">Загружаем план группы…</p>;
+    return <p className="py-6 text-sm text-stone-500">Загружаем сектор группы…</p>;
   }
 
   return (
@@ -274,7 +224,11 @@ function GroupMonthlyPlanEditorContent({
           <p className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-800">
             Учебный маршрут группы
           </p>
-          <h3 className="mt-1 font-display text-xl">План и материалы</h3>
+          <h3 className="mt-1 font-display text-xl">
+            {mode.mode === "v2"
+              ? (resource.data?.plan ? `Сектор ${draft.sequence ?? resource.data.plan.sequence ?? 1}` : `Открываем сектор ${resource.data?.nextSequence ?? 1}`)
+              : "План и материалы"}
+          </h3>
         </div>
         <div className={`mt-4 grid min-w-0 gap-3 ${
           mode.mode === "v2"
@@ -295,7 +249,13 @@ function GroupMonthlyPlanEditorContent({
               </select>
             </label>
           ) : null}
-          <PlanMonthField value={month} onChange={setMonth} />
+          {mode.mode === "v2" ? (
+            <SectorTestField
+              value={draft.preparedTestId === undefined ? draft.preparedTest?.id ?? null : draft.preparedTestId}
+              passedAt={draft.preparedTest?.passedAt ?? null}
+              onChange={(preparedTestId) => setField("preparedTestId", preparedTestId as never)}
+            />
+          ) : null}
         </div>
       </div>
 
@@ -306,29 +266,28 @@ function GroupMonthlyPlanEditorContent({
       ) : null}
 
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
-        <PlanField label="Фокус месяца" value={draft.goal} onChange={(value) => setField("goal", value)} />
+        <PlanField label="Цель сектора" value={draft.goal} onChange={(value) => setField("goal", value)} />
         <PlanField label="Ожидаемый результат" value={draft.expectedResult} onChange={(value) => setField("expectedResult", value)} />
         <PlanField label="Навыки для закрепления" value={draft.skills} onChange={(value) => setField("skills", value)} />
         <PlanField label="Контрольная точка" value={draft.checkpoint} onChange={(value) => setField("checkpoint", value)} />
       </div>
 
-      {mode.mode === "v2" ? (
-        <LearningPlanCarryoverPanel
-          preview={carryoverResource.data}
-          loading={carryoverResource.loading}
-          transferring={transferring}
-          selectedTopicIds={selectedCarryoverTopicIds}
-          onToggle={(topicId) => setSelectedCarryoverTopicIds((current) => (
-            current.includes(topicId)
-              ? current.filter((id) => id !== topicId)
-              : [...current, topicId]
-          ))}
-          onSelectAll={() => {
-            const candidates = carryoverResource.data?.candidates ?? [];
-            const allSelected = candidates.every((topic) => selectedCarryoverTopicIds.includes(topic.topicId));
-            setSelectedCarryoverTopicIds(allSelected ? [] : candidates.map((topic) => topic.topicId));
+      {showHistory && resource.data?.history?.length ? <SectorHistoryList history={resource.data.history} /> : null}
+
+      {mode.mode === "v2" && !resource.data?.plan ? (
+        <SectorTemplatePicker
+          crmDirectionId={crmDirectionId}
+          onPick={(template: SectorTemplate) => {
+            setDraft((current) => ({
+              ...current,
+              goal: template.title,
+              expectedResult: template.summary,
+              templateStepIdInput: template.id,
+              preparedTestId: template.preparedTest?.id ?? null,
+              items: template.topics.map((topic) => ({ id: crypto.randomUUID(), title: topic.title, status: "planned" as const, masteryCriteria: topic.masteryCriteria })),
+            }));
+            setSaved(false);
           }}
-          onTransfer={() => void carryOverSelectedTopics()}
         />
       ) : null}
 
@@ -347,16 +306,11 @@ function GroupMonthlyPlanEditorContent({
         <div className="mt-3 space-y-2">
           {draft.items.map((item, index) => {
             const transferred = Boolean(item.state && item.state !== "active");
-            const continued = carryoverResource.data?.continuedTopics.some((topic) => topic.topicId === item.id);
             return (
             <div key={item.id} className={`grid gap-2 rounded-2xl border border-stone-200 p-3 sm:grid-cols-[minmax(0,1fr)_180px_40px] ${transferred ? "bg-stone-50" : "bg-white"}`}>
               <div className="min-w-0 space-y-2">
                 {transferred ? (
-                  <p className="text-[10px] font-black uppercase tracking-wider text-stone-500">Перенесено в следующий месяц</p>
-                ) : continued && carryoverResource.data ? (
-                  <p className="text-[10px] font-black uppercase tracking-wider text-amber-800">
-                    Продолжение с {formatLearningPlanMonth(carryoverResource.data.sourceMonth)}
-                  </p>
+                  <p className="text-[10px] font-black uppercase tracking-wider text-stone-500">Заменена другой темой</p>
                 ) : null}
                 <input
                   disabled={transferred}
@@ -451,7 +405,7 @@ function GroupMonthlyPlanEditorContent({
             </div>
           );})}
           {!draft.items.length ? (
-            <p className="text-sm text-stone-500">Добавьте темы, которые квартет или группа пройдут в этом месяце.</p>
+            <p className="text-sm text-stone-500">Добавьте темы, которые квартет или группа пройдут в этом секторе.</p>
           ) : null}
         </div>
       </div>

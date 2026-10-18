@@ -60,8 +60,7 @@ export type TeacherStudent = {
   learningSummary: {
     attendanceRate: number | null;
     homeworkCompletionRate: number | null;
-    planCompletionRate: number | null;
-    currentMonth: string;
+    sector: { sequence: number; completed: number; total: number } | null;
   };
   attentionSignals: Array<{
     code: string;
@@ -141,10 +140,34 @@ export type LearningPlanMode = {
   directions: TeacherCrmDirection[];
 };
 
+export type SectorPreparedTest = { id: string; title: string; passedAt: string | null };
+
+export type SectorHistoryEntry = {
+  id: string;
+  sequence: number;
+  goal: string;
+  closedAt: string | null;
+  closeReason: string | null;
+  completedAt: string | null;
+  topicsTotal: number;
+  topicsCompleted: number;
+};
+
 export type StudentMonthlyPlan = {
   id?: string;
   model?: "learning_topics_v2";
-  month: string;
+  /** Month the sector was opened in; informational only. */
+  month?: string;
+  sequence?: number;
+  status?: "active" | "closed";
+  closedAt?: string | null;
+  closeReason?: string | null;
+  templateStepId?: string | null;
+  preparedTest?: SectorPreparedTest | null;
+  /** Write-only: template to open the next sector from. */
+  templateStepIdInput?: string | null;
+  /** Write-only: `undefined` keeps the sector test, `null` removes it. */
+  preparedTestId?: string | null;
   direction?: {
     id: string;
     crmDirectionId: string | null;
@@ -189,8 +212,10 @@ export type StudentMonthlyPlan = {
 export type StudentMonthlyPlanResponse = {
   student: { crmStudentId: string; name: string };
   direction?: { crmDirectionId: string; title: string };
-  month: string;
+  month?: string;
+  nextSequence?: number;
   plan: StudentMonthlyPlan | null;
+  history?: SectorHistoryEntry[];
 };
 
 export type GroupPlanMaterial = {
@@ -207,37 +232,12 @@ export type GroupMonthlyPlan = StudentMonthlyPlan & {
 export type GroupMonthlyPlanResponse = {
   group: { crmGroupId: string; name: string };
   direction?: { crmDirectionId: string; title: string };
-  month: string;
+  month?: string;
+  nextSequence?: number;
   plan: GroupMonthlyPlan | null;
+  history?: SectorHistoryEntry[];
 };
 
-export type LearningPlanCarryoverCandidate = {
-  topicId: string;
-  sourceMonth: string;
-  title: string;
-  masteryCriteria: string;
-  progressPercent: number;
-  status: Exclude<MonthlyPlanItemStatus, "moved">;
-};
-
-export type LearningPlanCarryoverPreview = {
-  sourceMonth: string;
-  targetMonth: string;
-  sourcePlanId: string | null;
-  sourceHasUnpublishedChanges: boolean;
-  targetPlanId: string | null;
-  targetVersion: number;
-  candidates: LearningPlanCarryoverCandidate[];
-  continuedTopics: LearningPlanCarryoverCandidate[];
-};
-
-export type LearningPlanCarryoverResult<TPlan extends StudentMonthlyPlan = StudentMonthlyPlan> = {
-  sourceMonth: string;
-  targetMonth: string;
-  addedTopicIds: string[];
-  idempotent: boolean;
-  plan: TPlan;
-};
 
 export type LearningTopicDetail = {
   id: string;
@@ -260,4 +260,42 @@ export type LearningTopicDetail = {
     occurredAt: string;
   }>;
   idempotent?: boolean;
+};
+
+export type SectorTemplateTopic = {
+  id: string;
+  line: "melody" | "chords" | "theory" | "song" | "other";
+  title: string;
+  masteryCriteria: string;
+  materials: Array<{ title: string; url: string; note?: string }>;
+};
+
+export type SectorTemplate = {
+  id: string;
+  number: number;
+  title: string;
+  summary: string;
+  isPublished: boolean;
+  direction: { crmDirectionId: string | null; title: string } | null;
+  preparedTest: { id: string; title: string; known: boolean } | null;
+  topics: SectorTemplateTopic[];
+  updatedAt: string;
+};
+
+export type PreparedTestOption = { id: string; title: string; description: string };
+
+export type SectorProposal = {
+  id: string;
+  kind: "topic" | "song" | "goal";
+  text: string;
+  link: string | null;
+  status: "new" | "accepted" | "declined";
+  teacherReply: string | null;
+  acceptedTopicId: string | null;
+  direction: { crmDirectionId: string | null; title: string };
+  sector: { id: string; sequence: number; status: string } | null;
+  student: { id: string; name: string; crmStudentId: string };
+  decidedBy: { id: string; name: string } | null;
+  decidedAt: string | null;
+  createdAt: string;
 };

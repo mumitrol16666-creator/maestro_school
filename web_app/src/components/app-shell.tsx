@@ -31,7 +31,7 @@ type ShellNavigationItem = {
 const navigation: ShellNavigationItem[] = [
   { href: "/dashboard", label: "Главная", icon: House },
   { href: "/tasks", label: "Задания", icon: ListTodo, studentOnly: true },
-  { href: "/monthly-plan", label: "План месяца", icon: CalendarRange, studentOnly: true },
+  { href: "/monthly-plan", label: "Сектор", icon: CalendarRange, studentOnly: true },
   { href: "/courses", label: "Курсы", icon: BookMarked },
   { href: "/league", label: "Недельная лига", icon: Trophy, studentOnly: true },
   { href: "/school-lessons", label: "Уроки", icon: School, studentOnly: true },
@@ -45,7 +45,7 @@ const navigation: ShellNavigationItem[] = [
 const studentMobileNavigation: ShellNavigationItem[] = [
   { href: "/dashboard", label: "Главная", icon: House },
   { href: "/tasks", label: "Задания", icon: ListTodo },
-  { href: "/monthly-plan", label: "План", icon: CalendarRange },
+  { href: "/monthly-plan", label: "Сектор", icon: CalendarRange },
   { href: "/school-lessons", label: "Уроки", icon: School },
   { href: "/settings", label: "Профиль", icon: CircleUserRound },
 ];

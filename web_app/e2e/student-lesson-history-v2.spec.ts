@@ -42,7 +42,7 @@ function lesson(
     groupName: null,
     teacherName: "Преподаватель Maestro",
     roomName: "Кабинет 1",
-    topic: null,
+    topic: title,
     lessonGoals: null,
     lessonSummary: null,
     homework: null,
@@ -59,6 +59,17 @@ test("история показывает V2-прогресс темы и тол
   context,
 }) => {
   await installStudentSession(context);
+  // Everything the shell polls besides the mocked endpoints answers empty, so a fake token never logs the session out.
+  await page.route("**/api/v1/**", (route) => route.fulfill({
+    json: {
+      data: {
+        data: { items: [], counts: { actionRequired: 0, waitingReview: 0, completed: 0 } },
+        counts: { actionRequired: 0, waitingReview: 0, completed: 0 },
+        items: [], notifications: [], count: 0, unreadCount: 0, ready: false,
+        plans: [], aggregateProgress: { completed: 0, total: 0, percent: 0 },
+      },
+    },
+  }));
   await page.route("**/api/v1/students/me/offline-summary", (route) => route.fulfill({
     status: 200,
     contentType: "application/json",
@@ -77,7 +88,6 @@ test("история показывает V2-прогресс темы и тол
           memberships: [],
         },
         upcomingLessons: [],
-        monthlyPlan: null,
         lessonHistory: [
           lesson(
             "LESSON-MASTERED",
@@ -95,6 +105,7 @@ test("история показывает V2-прогресс темы и тол
             [{
               planId: "plan-september",
               month: "2026-09",
+              sequence: 1,
               completedAt: "2026-09-05T08:00:00.000Z",
               pointsAwarded: 250,
             }],
@@ -120,8 +131,8 @@ test("история показывает V2-прогресс темы и тол
   }));
 
   await page.goto("/school-lessons?tab=history");
-  await page.getByRole("heading", { name: "Урок с освоенной темой" }).click();
-  await page.getByRole("heading", { name: "Урок с темой в работе" }).click();
+  await page.getByRole("button", { name: "Открыть подробности: Урок с освоенной темой" }).click();
+  await page.getByRole("button", { name: "Открыть подробности: Урок с темой в работе" }).click();
 
   const mastered = page.getByTestId("learning-topic-result").filter({
     hasText: "Чистые переходы аккордов",
@@ -132,8 +143,8 @@ test("история показывает V2-прогресс темы и тол
   await expect(mastered).toContainText("Переходы сыграны без остановок.");
 
   const completedPlan = page.getByTestId("learning-plan-completion-result");
-  await expect(completedPlan).toContainText("Учебный план · Сентябрь 2026");
-  await expect(completedPlan).toContainText("План месяца завершён");
+  await expect(completedPlan).toContainText("Сектор 1");
+  await expect(completedPlan).toContainText("Сектор закрыт");
   await expect(completedPlan).toContainText("+250 учебных баллов");
 
   const inProgress = page.getByTestId("learning-topic-result").filter({

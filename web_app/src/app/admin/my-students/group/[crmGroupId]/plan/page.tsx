@@ -15,7 +15,7 @@ export default function GroupPlanPage() {
   const groupsResource = useApiResource(() => teacherStudentsApi.groups(), []);
 
   if (groupsResource.loading) {
-    return <LoadingState label="Открываем план группы" />;
+    return <LoadingState label="Открываем сектор группы" />;
   }
 
   if (groupsResource.error) {
@@ -43,9 +43,9 @@ export default function GroupPlanPage() {
       </Link>
 
       <PageHeader
-        eyebrow="Учебный план группы"
+        eyebrow="Сектор группы"
         title={group.name}
-        description="Общая цель, темы, прогресс и материалы для всех участников группы."
+        description="Цель сектора, темы, прогресс и материалы для всех участников группы."
       />
 
       <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm font-semibold text-stone-500">

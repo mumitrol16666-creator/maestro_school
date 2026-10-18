@@ -218,7 +218,7 @@ export default function SettingsPage() {
 const parentVisibilityOptions: Array<{ key: keyof ParentVisibility; label: string }> = [
   { key: "showSchedule", label: "Расписание" },
   { key: "showBalance", label: "Баланс" },
-  { key: "showPlanProgress", label: "План месяца" },
+  { key: "showPlanProgress", label: "Сектор" },
   { key: "showAchievements", label: "Достижения" },
 ];
 

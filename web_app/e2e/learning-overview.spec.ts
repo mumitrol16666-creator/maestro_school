@@ -40,7 +40,7 @@ async function setup(page: Page, options: { tasks?: UnifiedTask[]; partial?: boo
       const items = options.tasks ?? Array.from({ length: 5 }, (_, index) => task({ id: `offline:${index}`, ...(index ? { title: `Задание ${index + 1}` } : {}) }));
       return route.fulfill(options.failTasks ? failed : { json: { data: { items, counts: { actionRequired: options.count ?? items.filter(x=>x.actionRequired).length, totalActive: items.length, waitingReview: items.filter(x=>x.status === "waiting_review").length, needsRevision: items.filter(x=>x.status === "needs_revision").length, completed: 0, bySource: { offline: items.length, online: 0, course: 0 } } }, meta: { partial: !!options.partial, truncated: false, sources: { offline: { status: options.partial ? "unavailable" : "ok" }, course: { status: "ok" }, online: { status: "ok" } } } } });
     }
-    if (path === "/students/me/offline-summary") return route.fulfill(options.failSchool ? failed : { json: { data: { upcomingLessons: options.lessons ?? [lesson()], lessonHistory: [], monthlyPlan: null, profile: { name: "Айару", groups: [] }, balanceSnapshot: { memberships: [], currentMembership: null, accountBalanceKzt: 32000, classesRemainingTotal: 8, debtAmountKzt: 0, totalPaidAmountKzt: 32000 } } } });
+    if (path === "/students/me/offline-summary") return route.fulfill(options.failSchool ? failed : { json: { data: { upcomingLessons: options.lessons ?? [lesson()], lessonHistory: [], profile: { name: "Айару", groups: [] }, balanceSnapshot: { memberships: [], currentMembership: null, accountBalanceKzt: 32000, classesRemainingTotal: 8, debtAmountKzt: 0, totalPaidAmountKzt: 32000 } } } });
     return route.fulfill({ json: { data: { items: [], notifications: [], count: 0, unreadCount: 0, ready: false } } });
   });
   await page.goto("/learning");
@@ -63,7 +63,7 @@ test("one task source, compact plan, neutral historical homework, no zero statis
   await expect(overview.getByRole("link", { name: "Расписание", exact: true })).toHaveAttribute("href", "/school-lessons");
   expect(requests.some(path=>path.includes("homework-statistics"))).toBe(false);
   expect(errors).toEqual([]);
-  const height = await overview.getByRole("region", { name: "Учебный план пока не опубликован" }).evaluate(el=>el.getBoundingClientRect().height);
+  const height = await overview.getByRole("region", { name: "Сектор ещё не открыт" }).evaluate(el=>el.getBoundingClientRect().height);
   expect(height).toBeLessThan(230);
 });
 
@@ -78,9 +78,9 @@ test("CRM failure leaves task and plan visible without inventing an empty schedu
 test("unknown tasks and plan are not zero or completed", async ({ page }) => {
   await setup(page, { failTasks: true, failPlans: true });
   await expect(page.getByRole("heading", { name: "Проверим ваши задания" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Не удалось загрузить план" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Не удалось загрузить сектор" })).toBeVisible();
   await expect(page.getByTestId("learning-task-count")).toHaveCount(0);
-  await expect(page.getByText("Учебный план пока не опубликован", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Сектор ещё не открыт", { exact: true })).toHaveCount(0);
   await expect(page.getByText("Незавершённых заданий нет", { exact: true })).toHaveCount(0);
 });
 
@@ -141,7 +141,7 @@ test("all tasks opens the owning screen with the same source and count", async (
 
 test("published empty plan is not called completed", async ({ page }) => {
   await setup(page, { plans: [{ id: "empty", items: [] }] });
-  await expect(page.getByRole("heading", { name: "Темы плана готовятся" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Темы сектора готовятся" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Все текущие темы завершены" })).toHaveCount(0);
 });
 

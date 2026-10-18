@@ -93,7 +93,6 @@ function summary(): StudentOfflineSummary {
         ],
       }),
     ],
-    monthlyPlan: null,
   };
 }
 
@@ -150,7 +149,7 @@ async function expectCurrentStudentNavigation(
   );
   await expect(
     navigation.getByRole("link", {
-      name: /Профиль|План месяца|Курсы|Тесты|Недельная лига/,
+      name: /Профиль|Сектор|Курсы|Тесты|Недельная лига/,
     }),
   ).toHaveCount(0);
 }
@@ -483,7 +482,7 @@ test("абонементы доступны в профиле и сохраня�
   expect(errors).toEqual([]);
 });
 
-test("ссылка на старый отчёт выбирает его месяц, а календарь сохраняется при возврате", async ({ page }) => {
+test("ссылка на старый урок выбирает его месяц в истории", async ({ page }) => {
   const data = summary();
   data.lessonHistory.push(lesson("august", "2026-08-21", {
     status: "completed", topic: "Августовский урок", lessonSummary: "Разобрали ритм",
@@ -494,13 +493,7 @@ test("ссылка на старый отчёт выбирает его меся
   await expect(page.getByText("Разобрали ритм", { exact: true })).toBeVisible();
   await page.getByRole("combobox", { name: "Месяц истории" }).selectOption("2026-09");
   await expect(page.getByText("Разобрали ритм", { exact: true })).toHaveCount(0);
-  await page.getByText("Отчёт за месяц", { exact: true }).click();
-  await expect(page.getByLabel("Месяц отчёта")).toHaveValue("2026-09");
-  const download = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Скачать Excel", exact: true }).click();
-  expect((await download).suggestedFilename()).toContain("2026-09");
-  await page.getByRole("button", { name: "Открыть отчёт", exact: true }).click();
-  await expect(page.getByRole("dialog")).toBeVisible();
+  await expect(page.getByText("Отчёт за месяц")).toHaveCount(0);
 });
 
 test("школьная дата не зависит от часового пояса устройства; отменённый урок не выбирается ближайшим", async ({
