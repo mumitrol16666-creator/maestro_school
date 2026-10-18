@@ -8,6 +8,7 @@ if (!process.env.TEST_DATABASE_URL) {
   const url = new URL(process.env.TEST_DATABASE_URL);
   assert.ok(["127.0.0.1", "localhost"].includes(url.hostname) && /test|qa/.test(url.pathname));
   Object.assign(process.env, { DATABASE_URL: process.env.TEST_DATABASE_URL, NODE_ENV: "test",
+    CRM_SESSION_CACHE_TTL_MS: "0", CRM_SESSION_STALE_MAX_AGE_MS: "0",
     JWT_SECRET: "platform-session-test-secret", INTEGRATION_SERVICE_SECRET: "platform-integration-test-secret",
     INTEGRATION_SSO_SECRET: "platform-bridge-test-secret", CRM_API_URL: "http://127.0.0.1:9" });
   const { default: Fastify } = await import("fastify");

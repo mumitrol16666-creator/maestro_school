@@ -248,7 +248,8 @@ async function notifyParentsAboutApprovedLesson(params: {
       }).catch(() => null)
     : null;
   try {
-    summary = await getStudentSchoolOfflineSummary(params.student.id) as ParentOfflineSummary;
+    // The approval just changed the balance and history; bypass the summary cache.
+    summary = await getStudentSchoolOfflineSummary(params.student.id, { fresh: true }) as ParentOfflineSummary;
   } catch {
     // The CRM event may arrive before the enriched summary is available. The
     // core lesson notification still goes out with safe fallback copy.

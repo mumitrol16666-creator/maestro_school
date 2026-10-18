@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import { prisma, notDeleted } from "../../infrastructure/database/prisma.js";
 import {
+  AppError,
   BadRequestError,
   ConflictError,
   ForbiddenError,
@@ -369,14 +370,34 @@ export async function getParentChildOfflineSummary(
 ) {
   const link = await assertParentChildLink(parentUserId, studentUserId);
   const visibility = await getParentVisibility(studentUserId);
-  const [offlineSummary, achievements] = await Promise.all([
-    getStudentSchoolOfflineSummary(studentUserId),
+  const [offlineRead, achievements] = await Promise.all([
+    getStudentSchoolOfflineSummary(studentUserId)
+      .then((value) => ({ value, error: null as AppError | null }))
+      .catch((error: unknown) => {
+        // CRM unreachable or the child is not linked yet: the parent still gets
+        // the Platform-owned blocks instead of an empty screen.
+        if (error instanceof AppError && (error.statusCode >= 500 || error.code === "CRM_NOT_LINKED")) {
+          return { value: null, error };
+        }
+        throw error;
+      }),
     visibility.showAchievements
       ? getStudentAchievementsOverview(studentUserId)
       : Promise.resolve([]),
   ]);
   const summary = {
-    ...buildFamilyOfflineSummary(offlineSummary, visibility),
+    ...(offlineRead.value
+      ? buildFamilyOfflineSummary(offlineRead.value, visibility)
+      : buildFamilyOfflineSummary({
+          profile: { name: formatFio(link.student), groups: [] },
+          balanceSnapshot: {},
+          upcomingLessons: [],
+          monthlyPlan: null,
+        }, { ...visibility, showBalance: false, showSchedule: false })),
+    crmUnavailable: !offlineRead.value,
+    crmError: offlineRead.error?.code ?? null,
+    crmSnapshotAt: (offlineRead.value as { crmSnapshotAt?: string } | null)?.crmSnapshotAt ?? null,
+    crmStale: Boolean((offlineRead.value as { crmStale?: boolean } | null)?.crmStale),
     achievements: achievements.filter((item) => item.earned),
   };
   return {

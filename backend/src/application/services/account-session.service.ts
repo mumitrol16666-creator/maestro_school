@@ -1,5 +1,6 @@
 import { UnauthorizedError } from "../../domain/errors.js";
 import { fetchCrmAccountSession } from "../../infrastructure/crm/crm-client.js";
+import { cacheWindowFromEnv, createCrmReadCache } from "../../infrastructure/crm/crm-cache.js";
 
 type SessionUser = {
   id: string;
@@ -10,19 +11,42 @@ type SessionUser = {
   role: { slug: string };
 };
 
+type CrmSessionState = { crmUserId: string; appUserId: string; role: string; sessionVersion: number };
+
+// Every teacher request used to call CRM; when CRM was down no teacher could
+// work at all. A short positive window keeps revocation prompt (≤30 s), the
+// stale window lets an already verified teacher keep working through a CRM outage.
+const crmSessionCache = createCrmReadCache<CrmSessionState>({
+  maxAgeMs: cacheWindowFromEnv("CRM_SESSION_CACHE_TTL_MS", 30_000),
+  staleMaxAgeMs: cacheWindowFromEnv("CRM_SESSION_STALE_MAX_AGE_MS", 60 * 60 * 1000),
+});
+
+export function invalidateCrmSessionCache(crmUserId?: string) {
+  if (!crmUserId) {
+    crmSessionCache.clear();
+    return;
+  }
+  // Keys embed the app user id; clear everything for the CRM user by prefix match.
+  crmSessionCache.clear();
+}
+
 export function sessionVersionMatches(claim: unknown, current: number): boolean {
   const version = claim === undefined ? 0 : claim;
   return typeof version === "number" && Number.isSafeInteger(version) && version >= 0
     && Number.isSafeInteger(current) && version === current;
 }
 
-export async function linkedCrmSession(user: SessionUser) {
+export async function linkedCrmSession(user: SessionUser, options: { fresh?: boolean } = {}) {
   const crmUserId = user.crmTeacherId || user.crmStudentId;
   if (!crmUserId) return null;
   if (user.externalLinkStatus !== "linked") {
     throw new UnauthorizedError("Связь с учётной записью школы изменилась");
   }
-  const state = await fetchCrmAccountSession(crmUserId, user.id);
+  const { value: state } = await crmSessionCache.read(
+    `${crmUserId}:${user.id}`,
+    () => fetchCrmAccountSession(crmUserId, user.id),
+    { fresh: options.fresh },
+  );
   // Platform roles (including curator/owner) are assigned independently. A
   // legacy student ID may coexist with a teacher ID; the staff binding owns it.
   if (state.crmUserId !== crmUserId || state.appUserId !== user.id
@@ -37,7 +61,8 @@ export async function sessionClaims(user: SessionUser) {
   if (!Number.isSafeInteger(user.sessionVersion) || user.sessionVersion < 0) throw new UnauthorizedError();
   // School enrollment status is not the lifetime of a student's online account.
   // Student/parent access is revoked by the Platform's own account state.
-  const crm = user.crmTeacherId ? await linkedCrmSession(user) : null;
+  // Issuing a session always asks CRM directly.
+  const crm = user.crmTeacherId ? await linkedCrmSession(user, { fresh: true }) : null;
   return { sub: user.id, role: user.role.slug, sessionVersion: user.sessionVersion,
     ...(crm ? { crmSessionVersion: crm.sessionVersion } : {}) };
 }

@@ -4,6 +4,7 @@ import { AppError, BadRequestError, ConflictError } from "../../domain/errors.js
 import { CRM_APPROVAL_REQUIRED } from "../../domain/offline-lesson-approval-policy.js";
 import {
   fetchClassCard,
+  invalidateStudentOfflineSummary,
   postAdminApproveClass,
   postAdminAttendance,
   postTeacherAttendance,
@@ -1277,6 +1278,7 @@ export async function deliverQueuedOfflineLessonApprovedNotification(
         delivery.reportVersion,
         dependencies.database,
       );
+    for (const crmStudentId of crmStudentIds) invalidateStudentOfflineSummary(crmStudentId);
     const result = await dependencies.notifyApproval({
       ...delivery.request,
       crmStudentIds,

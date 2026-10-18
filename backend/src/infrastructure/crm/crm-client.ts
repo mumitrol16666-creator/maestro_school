@@ -747,3 +747,27 @@ export async function completeTeacherStaffTask(crmTeacherId: string, crmTaskId: 
     { crmAssigneeId: crmTeacherId },
   );
 }
+
+// ---------------------------------------------------------------------------
+// Cached student summary: the dashboard asks for it several times per open and
+// the parent screen, reminders and notifications read it too. A short window
+// removes the duplicate calls; the stale window keeps the school screens alive
+// while CRM is unreachable (the value is marked so the UI can say so).
+import { cacheWindowFromEnv, createCrmReadCache } from "./crm-cache.js";
+
+const studentOfflineSummaryCache = createCrmReadCache<Record<string, unknown>>({
+  maxAgeMs: cacheWindowFromEnv("CRM_SUMMARY_CACHE_TTL_MS", 60_000),
+  staleMaxAgeMs: cacheWindowFromEnv("CRM_SUMMARY_STALE_MAX_AGE_MS", 24 * 60 * 60 * 1000),
+});
+
+export function readStudentOfflineSummary(crmStudentId: string, options: { fresh?: boolean } = {}) {
+  return studentOfflineSummaryCache.read(
+    crmStudentId,
+    () => fetchStudentOfflineSummary(crmStudentId),
+    options,
+  );
+}
+
+export function invalidateStudentOfflineSummary(crmStudentId: string) {
+  studentOfflineSummaryCache.invalidate(crmStudentId);
+}

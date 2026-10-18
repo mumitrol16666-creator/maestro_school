@@ -2,7 +2,7 @@ import { LearningTopicProgressSource } from "@prisma/client";
 import { prisma } from "../../infrastructure/database/prisma.js";
 import { BadRequestError } from "../../domain/errors.js";
 import { linkOfflineHomeworkResults } from "../../domain/offline-homework-progress.js";
-import { fetchStudentOfflineSummary } from "../../infrastructure/crm/crm-client.js";
+import { readStudentOfflineSummary } from "../../infrastructure/crm/crm-client.js";
 import { aqtobeMonthKey } from "../../lib/aqtobe-month.js";
 
 type OfflineSummaryLesson = {
@@ -217,7 +217,10 @@ export function learningPlanCompletionResultsByClassId(
   return resultsByClassId;
 }
 
-export async function getStudentSchoolOfflineSummary(appUserId: string) {
+export async function getStudentSchoolOfflineSummary(
+  appUserId: string,
+  options: { fresh?: boolean } = {},
+) {
   const user = await prisma.user.findFirst({
     where: { id: appUserId },
     select: { crmStudentId: true, externalLinkStatus: true },
@@ -230,7 +233,8 @@ export async function getStudentSchoolOfflineSummary(appUserId: string) {
     );
   }
 
-  const summary = await fetchStudentOfflineSummary(user.crmStudentId);
+  const crmRead = await readStudentOfflineSummary(user.crmStudentId, options);
+  const summary = crmRead.value;
   const legacyResolutions = await prisma.legacyHomeworkResolution.findMany({ where: { crmStudentId: user.crmStudentId } });
   const lessonHistory = Array.isArray(summary.lessonHistory)
     ? summary.lessonHistory as OfflineSummaryLesson[]
@@ -431,6 +435,8 @@ export async function getStudentSchoolOfflineSummary(appUserId: string) {
 
   return {
     ...summary,
+    crmSnapshotAt: crmRead.fetchedAt.toISOString(),
+    crmStale: crmRead.stale,
     lessonHistory: mergedLessonHistory.map(lesson => ({
       ...lesson,
       legacyResolution: (() => {
