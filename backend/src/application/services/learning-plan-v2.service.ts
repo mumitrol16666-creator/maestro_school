@@ -22,6 +22,8 @@ import {
   TOPIC_COMPLETION_POINTS,
 } from "../../domain/product-economy-v2.js";
 import { awardSystemPoints } from "./points.service.js";
+import { aqtobeMonthKey } from "../../lib/aqtobe-month.js";
+import { listPreparedTestTemplates } from "../../domain/prepared-tests.js";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -45,11 +47,10 @@ export type LearningPlanV2Input = {
   items: LearningPlanV2ItemInput[];
   materials?: Array<{ id: string; title: string; url: string; note: string }>;
   expectedVersion?: number;
-};
-
-export type LearningPlanCarryoverInput = {
-  topicIds: string[];
-  expectedTargetVersion?: number;
+  /** Only when a new sector is opened: the step template it was started from. */
+  templateStepId?: string | null;
+  /** Test the sector requires before it can close; `undefined` leaves it unchanged. */
+  preparedTestId?: string | null;
 };
 
 type ResolvedScope = {
@@ -191,10 +192,26 @@ function versionDto(plan: PlanWithVersions, versionNumber = plan.currentVersionN
     ? plan.versions.find((item) => item.version === plan.publishedVersionNumber)
     : null;
 
+  const preparedTest = plan.preparedTestId
+    ? listPreparedTestTemplates().find((item) => item.id === plan.preparedTestId) ?? null
+    : null;
+
   return {
     id: plan.id,
     model: "learning_topics_v2" as const,
     month: plan.month,
+    sequence: plan.sequence,
+    status: plan.status,
+    closedAt: plan.closedAt,
+    closeReason: plan.closeReason,
+    templateStepId: plan.templateStepId,
+    preparedTest: plan.preparedTestId
+      ? {
+          id: plan.preparedTestId,
+          title: preparedTest?.title ?? plan.preparedTestId,
+          passedAt: plan.testPassedAt,
+        }
+      : null,
     direction: {
       id: plan.direction.id,
       crmDirectionId: plan.direction.crmDirectionId,
@@ -234,18 +251,6 @@ function versionDto(plan: PlanWithVersions, versionNumber = plan.currentVersionN
   };
 }
 
-export function previousLearningPlanMonth(month: string) {
-  const match = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(month);
-  if (!match) {
-    throw new BadRequestError("Некорректный месяц учебного плана", "MONTHLY_PLAN_MONTH_INVALID");
-  }
-  const year = Number(match[1]);
-  const monthNumber = Number(match[2]);
-  const previousYear = monthNumber === 1 ? year - 1 : year;
-  const previousMonth = monthNumber === 1 ? 12 : monthNumber - 1;
-  return `${previousYear}-${String(previousMonth).padStart(2, "0")}`;
-}
-
 async function loadPlan(planId: string) {
   const plan = await prisma.learningPlan.findUnique({
     where: { id: planId },
@@ -255,255 +260,50 @@ async function loadPlan(planId: string) {
   return plan;
 }
 
-async function findPlan(scope: ResolvedScope, month: string) {
+/** The one open sector of this owner in this direction. */
+async function findActiveSector(scope: ResolvedScope) {
   return prisma.learningPlan.findFirst({
     where: {
       directionId: scope.direction.id,
-      month,
+      status: "active",
       ...ownerWhere(scope.owner),
     },
     include: planInclude,
   });
 }
 
-function carryoverCandidateDto(
-  sourceMonth: string,
-  link: PlanWithVersions["versions"][number]["topics"][number],
-) {
-  return {
-    topicId: link.topic.id,
-    sourceMonth,
-    title: link.titleSnapshot,
-    masteryCriteria: link.masteryCriteriaSnapshot,
-    progressPercent: link.topic.progressPercent ?? 0,
-    status: learningTopicStatus(link.topic.progressPercent),
-  };
+async function listClosedSectors(scope: ResolvedScope) {
+  const plans = await prisma.learningPlan.findMany({
+    where: {
+      directionId: scope.direction.id,
+      status: "closed",
+      ...ownerWhere(scope.owner),
+    },
+    include: planInclude,
+    orderBy: { sequence: "desc" },
+    take: 12,
+  });
+  return plans.map((plan) => {
+    const dto = versionDto(plan, plan.publishedVersionNumber ?? plan.currentVersionNumber);
+    return {
+      id: plan.id,
+      sequence: plan.sequence,
+      goal: dto.goal,
+      closedAt: plan.closedAt,
+      closeReason: plan.closeReason,
+      completedAt: plan.completedAt,
+      topicsTotal: dto.progress.total,
+      topicsCompleted: dto.progress.completed,
+    };
+  });
 }
 
-async function getCarryoverPreview(scope: ResolvedScope, targetMonth: string) {
-  const sourceMonth = previousLearningPlanMonth(targetMonth);
-  const [sourcePlan, targetPlan] = await Promise.all([
-    findPlan(scope, sourceMonth),
-    findPlan(scope, targetMonth),
-  ]);
-  const sourceVersion = sourcePlan?.publishedVersionNumber
-    ? sourcePlan.versions.find((version) => version.version === sourcePlan.publishedVersionNumber)
-    : null;
-  const targetVersion = targetPlan?.versions.find(
-    (version) => version.version === targetPlan.currentVersionNumber,
-  );
-  const targetTopicIds = new Set(targetVersion?.topics.map((link) => link.topicId) ?? []);
-  const sourceIncompleteLinks = (sourceVersion?.topics ?? [])
-    .filter((link) => (
-      !link.topic.archivedAt
-      && (link.topic.progressPercent ?? 0) < 100
-    ));
-  const candidates = sourceIncompleteLinks
-    .filter((link) => link.state === LearningPlanTopicState.active)
-    .filter((link) => !targetTopicIds.has(link.topicId))
-    .map((link) => carryoverCandidateDto(sourceMonth, link));
-  const continuedTopics = sourceIncompleteLinks
-    .filter((link) => targetTopicIds.has(link.topicId))
-    .map((link) => carryoverCandidateDto(sourceMonth, link));
-
-  return {
-    sourceMonth,
-    targetMonth,
-    sourcePlanId: sourcePlan?.id ?? null,
-    sourceHasUnpublishedChanges: Boolean(
-      sourcePlan
-      && sourcePlan.currentVersionNumber !== sourcePlan.publishedVersionNumber,
-    ),
-    targetPlanId: targetPlan?.id ?? null,
-    targetVersion: targetPlan?.currentVersionNumber ?? 0,
-    candidates,
-    continuedTopics,
-  };
-}
-
-async function carryOverTopics(
-  teacherUserId: string,
-  scope: ResolvedScope,
-  targetMonth: string,
-  input: LearningPlanCarryoverInput,
-) {
-  const topicIds = [...new Set(input.topicIds.map((topicId) => topicId.trim()))];
-  if (!topicIds.length) {
-    throw new BadRequestError(
-      "Выберите хотя бы одну незавершённую тему",
-      "MONTHLY_PLAN_CARRYOVER_TOPICS_REQUIRED",
-    );
-  }
-  if (topicIds.some((topicId) => !UUID_PATTERN.test(topicId))) {
-    throw new BadRequestError(
-      "Некорректный идентификатор темы",
-      "MONTHLY_PLAN_CARRYOVER_TOPIC_INVALID",
-    );
-  }
-
-  const sourceMonth = previousLearningPlanMonth(targetMonth);
-  let result: { planId: string; addedTopicIds: string[]; idempotent: boolean };
-  try {
-    result = await prisma.$transaction(async (tx) => {
-      const sourcePlan = await tx.learningPlan.findFirst({
-        where: {
-          directionId: scope.direction.id,
-          month: sourceMonth,
-          publishedVersionNumber: { not: null },
-          ...ownerWhere(scope.owner),
-        },
-        include: planInclude,
-      });
-      if (!sourcePlan?.publishedVersionNumber) {
-        throw new BadRequestError(
-          `Опубликованный план за ${sourceMonth} не найден`,
-          "MONTHLY_PLAN_CARRYOVER_SOURCE_NOT_FOUND",
-        );
-      }
-      if (sourcePlan.currentVersionNumber !== sourcePlan.publishedVersionNumber) {
-        throw new ConflictError(
-          `В плане за ${sourceMonth} есть неопубликованные изменения. Опубликуйте или отмените их перед переносом.`,
-          "MONTHLY_PLAN_SOURCE_HAS_UNPUBLISHED_CHANGES",
-        );
-      }
-      const sourceVersion = sourcePlan.versions.find(
-        (version) => version.version === sourcePlan.publishedVersionNumber,
-      );
-      if (!sourceVersion) {
-        throw new ConflictError(
-          "Опубликованная версия прошлого плана не найдена",
-          "MONTHLY_PLAN_VERSION_MISSING",
-        );
-      }
-
-      let targetPlan = await tx.learningPlan.findFirst({
-        where: {
-          directionId: scope.direction.id,
-          month: targetMonth,
-          ...ownerWhere(scope.owner),
-        },
-        include: planInclude,
-      });
-      const currentTargetVersion = targetPlan?.versions.find(
-        (version) => version.version === targetPlan?.currentVersionNumber,
-      ) ?? null;
-      assertExpectedLearningPlanVersion(
-        targetPlan?.currentVersionNumber ?? 0,
-        input.expectedTargetVersion,
-      );
-      if (targetPlan?.lockedAt) {
-        throw new ConflictError(
-          "Завершённый план заблокирован для изменения состава",
-          "MONTHLY_PLAN_LOCKED",
-        );
-      }
-
-      const existingTopicIds = new Set(
-        currentTargetVersion?.topics.map((link) => link.topicId) ?? [],
-      );
-      const sourceLinks = new Map(
-        sourceVersion.topics
-          .filter((link) => (
-            link.state === LearningPlanTopicState.active
-            && !link.topic.archivedAt
-            && (link.topic.progressPercent ?? 0) < 100
-          ))
-          .map((link) => [link.topicId, link]),
-      );
-      const invalidTopicIds = topicIds.filter(
-        (topicId) => !existingTopicIds.has(topicId) && !sourceLinks.has(topicId),
-      );
-      if (invalidTopicIds.length) {
-        throw new BadRequestError(
-          "Одна из выбранных тем уже завершена или отсутствует в прошлом плане",
-          "MONTHLY_PLAN_CARRYOVER_TOPIC_UNAVAILABLE",
-        );
-      }
-      const addedTopicIds = topicIds.filter((topicId) => !existingTopicIds.has(topicId));
-      if (!addedTopicIds.length && targetPlan) {
-        return { planId: targetPlan.id, addedTopicIds: [], idempotent: true };
-      }
-
-      if (!targetPlan) {
-        targetPlan = await tx.learningPlan.create({
-          data: {
-            id: randomUUID(),
-            directionId: scope.direction.id,
-            month: targetMonth,
-            createdById: teacherUserId,
-            ...ownerWhere(scope.owner),
-          },
-          include: planInclude,
-        });
-      }
-
-      const carriedTopics = addedTopicIds.map((topicId, sortOrder) => {
-        const link = sourceLinks.get(topicId)!;
-        return {
-          topicId,
-          titleSnapshot: link.titleSnapshot,
-          masteryCriteriaSnapshot: link.masteryCriteriaSnapshot,
-          state: LearningPlanTopicState.active,
-          sortOrder,
-        };
-      });
-      const existingTopics = (currentTargetVersion?.topics ?? []).map((link, index) => ({
-        topicId: link.topicId,
-        titleSnapshot: link.titleSnapshot,
-        masteryCriteriaSnapshot: link.masteryCriteriaSnapshot,
-        state: link.state,
-        replacementTopicId: link.replacementTopicId,
-        sortOrder: carriedTopics.length + index,
-      }));
-      const nextVersion = targetPlan.currentVersionNumber + 1;
-      await tx.learningPlanVersion.create({
-        data: {
-          planId: targetPlan.id,
-          version: nextVersion,
-          goal: currentTargetVersion?.goal ?? "",
-          expectedResult: currentTargetVersion?.expectedResult ?? "",
-          skills: currentTargetVersion?.skills ?? "",
-          checkpoint: currentTargetVersion?.checkpoint ?? "",
-          note: currentTargetVersion?.note ?? "",
-          materials: (currentTargetVersion?.materials ?? []) as Prisma.InputJsonValue,
-          createdById: teacherUserId,
-          sourceRevision: sourceVersion.version,
-          topics: { create: [...carriedTopics, ...existingTopics] },
-        },
-      });
-      const updated = await tx.learningPlan.updateMany({
-        where: {
-          id: targetPlan.id,
-          currentVersionNumber: targetPlan.currentVersionNumber,
-          lockedAt: null,
-        },
-        data: { currentVersionNumber: nextVersion },
-      });
-      if (updated.count !== 1) {
-        throw new ConflictError(
-          "План изменился. Обновите страницу и повторите перенос.",
-          "MONTHLY_PLAN_STALE_DRAFT",
-        );
-      }
-      return { planId: targetPlan.id, addedTopicIds, idempotent: false };
-    });
-  } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-      throw new ConflictError(
-        "План изменился во время переноса. Обновите страницу и повторите действие.",
-        "MONTHLY_PLAN_STALE_DRAFT",
-      );
-    }
-    throw error;
-  }
-
-  return {
-    sourceMonth,
-    targetMonth,
-    addedTopicIds: result.addedTopicIds,
-    idempotent: result.idempotent,
-    plan: versionDto(await loadPlan(result.planId)),
-  };
+async function nextSectorSequence(tx: Prisma.TransactionClient, scope: ResolvedScope) {
+  const last = await tx.learningPlan.aggregate({
+    where: { directionId: scope.direction.id, ...ownerWhere(scope.owner) },
+    _max: { sequence: true },
+  });
+  return (last._max.sequence ?? 0) + 1;
 }
 
 export function assertExpectedLearningPlanVersion(
@@ -531,7 +331,6 @@ function sameJson(left: unknown, right: unknown) {
 async function savePlan(
   teacherUserId: string,
   scope: ResolvedScope,
-  month: string,
   input: LearningPlanV2Input,
 ) {
   const normalized = normalizeInput(input);
@@ -539,10 +338,12 @@ async function savePlan(
   let result: { planId: string; idempotent: boolean };
   try {
     result = await prisma.$transaction(async (tx) => {
+    // Saving always targets the open sector; when the last one is closed the
+    // save opens the next sector in the sequence.
     let plan = await tx.learningPlan.findFirst({
       where: {
         directionId: scope.direction.id,
-        month,
+        status: "active",
         ...ownerWhere(scope.owner),
       },
     });
@@ -554,16 +355,34 @@ async function savePlan(
           "MONTHLY_PLAN_STALE_DRAFT",
         );
       }
+      let template: { id: string; preparedTestId: string | null } | null = null;
+      if (input.templateStepId) {
+        template = await tx.sectorTemplate.findFirst({
+          where: { id: input.templateStepId, isPublished: true },
+          select: { id: true, preparedTestId: true },
+        });
+        if (!template) throw new BadRequestError("Ступень программы не найдена", "SECTOR_TEMPLATE_NOT_FOUND");
+      }
       plan = await tx.learningPlan.create({
         data: {
           id: randomUUID(),
           directionId: scope.direction.id,
-          month,
+          month: aqtobeMonthKey(),
+          sequence: await nextSectorSequence(tx, scope),
+          status: "active",
+          templateStepId: template?.id ?? null,
+          preparedTestId: input.preparedTestId !== undefined ? input.preparedTestId : template?.preparedTestId ?? null,
           createdById: teacherUserId,
           ...ownerWhere(scope.owner),
         },
       });
     } else {
+      if (input.preparedTestId !== undefined && input.preparedTestId !== plan.preparedTestId) {
+        await tx.learningPlan.update({
+          where: { id: plan.id },
+          data: { preparedTestId: input.preparedTestId, testPassedAt: null },
+        });
+      }
       assertExpectedLearningPlanVersion(plan.currentVersionNumber, input.expectedVersion);
       if (plan.lockedAt) {
         throw new ConflictError(
@@ -745,7 +564,7 @@ async function savePlan(
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       throw new ConflictError(
-        "План на это направление и месяц уже создан. Обновите страницу.",
+        "Сектор уже открыт другим сохранением. Обновите страницу.",
         "MONTHLY_PLAN_ALREADY_EXISTS",
       );
     }
@@ -755,117 +574,16 @@ async function savePlan(
   return { ...versionDto(await loadPlan(result.planId)), idempotent: result.idempotent };
 }
 
-async function markPublishedTopicsTransferredFromPreviousMonth(
-  tx: Prisma.TransactionClient,
-  teacherUserId: string,
-  scope: ResolvedScope,
-  targetMonth: string,
-  targetTopicIds: Set<string>,
-  publishedAt: Date,
-) {
-  if (!targetTopicIds.size) return [];
-  const sourceMonth = previousLearningPlanMonth(targetMonth);
-  const sourcePlan = await tx.learningPlan.findFirst({
-    where: {
-      directionId: scope.direction.id,
-      month: sourceMonth,
-      publishedVersionNumber: { not: null },
-      ...ownerWhere(scope.owner),
-    },
-    include: planInclude,
-  });
-  if (!sourcePlan?.publishedVersionNumber) return [];
-  const sourceVersion = sourcePlan.versions.find(
-    (version) => version.version === sourcePlan.publishedVersionNumber,
-  );
-  if (!sourceVersion) {
-    throw new ConflictError(
-      "Опубликованная версия прошлого плана не найдена",
-      "MONTHLY_PLAN_VERSION_MISSING",
-    );
-  }
-  const transferredTopicIds = sourceVersion.topics
-    .filter((link) => (
-      link.state === LearningPlanTopicState.active
-      && targetTopicIds.has(link.topicId)
-      && (link.topic.progressPercent ?? 0) < 100
-    ))
-    .map((link) => link.topicId);
-  if (!transferredTopicIds.length) return [];
-  if (sourcePlan.currentVersionNumber !== sourcePlan.publishedVersionNumber) {
-    throw new ConflictError(
-      `В плане за ${sourceMonth} есть неопубликованные изменения. Опубликуйте или отмените их перед переносом.`,
-      "MONTHLY_PLAN_SOURCE_HAS_UNPUBLISHED_CHANGES",
-    );
-  }
-  if (sourcePlan.lockedAt) {
-    throw new ConflictError(
-      `План за ${sourceMonth} уже завершён и заблокирован`,
-      "MONTHLY_PLAN_CARRYOVER_SOURCE_LOCKED",
-    );
-  }
-
-  const transferredSet = new Set(transferredTopicIds);
-  const nextVersion = sourcePlan.currentVersionNumber + 1;
-  await tx.learningPlanVersion.create({
-    data: {
-      planId: sourcePlan.id,
-      version: nextVersion,
-      goal: sourceVersion.goal,
-      expectedResult: sourceVersion.expectedResult,
-      skills: sourceVersion.skills,
-      checkpoint: sourceVersion.checkpoint,
-      note: sourceVersion.note,
-      materials: sourceVersion.materials as Prisma.InputJsonValue,
-      createdById: teacherUserId,
-      sourceRevision: sourceVersion.version,
-      publishedAt,
-      topics: {
-        create: sourceVersion.topics.map((link) => ({
-          topicId: link.topicId,
-          titleSnapshot: link.titleSnapshot,
-          masteryCriteriaSnapshot: link.masteryCriteriaSnapshot,
-          state: transferredSet.has(link.topicId)
-            ? LearningPlanTopicState.transferred
-            : link.state,
-          replacementTopicId: link.replacementTopicId,
-          sortOrder: link.sortOrder,
-        })),
-      },
-    },
-  });
-  const updated = await tx.learningPlan.updateMany({
-    where: {
-      id: sourcePlan.id,
-      currentVersionNumber: sourcePlan.currentVersionNumber,
-      publishedVersionNumber: sourcePlan.publishedVersionNumber,
-      lockedAt: null,
-    },
-    data: {
-      currentVersionNumber: nextVersion,
-      publishedVersionNumber: nextVersion,
-    },
-  });
-  if (updated.count !== 1) {
-    throw new ConflictError(
-      `План за ${sourceMonth} изменился. Обновите страницу и повторите публикацию.`,
-      "MONTHLY_PLAN_STALE_DRAFT",
-    );
-  }
-  return transferredTopicIds;
-}
-
 async function publishPlan(
   teacherUserId: string,
   scope: ResolvedScope,
-  month: string,
   expectedVersion: number | undefined,
 ) {
-  const plan = await findPlan(scope, month);
-  if (!plan) throw new BadRequestError("План месяца не найден", "MONTHLY_PLAN_NOT_FOUND");
+  const plan = await findActiveSector(scope);
+  if (!plan) throw new BadRequestError("Открытый сектор не найден", "MONTHLY_PLAN_NOT_FOUND");
   assertExpectedLearningPlanVersion(plan.currentVersionNumber, expectedVersion);
   const current = versionDto(plan);
-  if (!current.goal) throw new BadRequestError("Заполните фокус месяца", "MONTHLY_PLAN_GOAL_REQUIRED");
+  if (!current.goal) throw new BadRequestError("Заполните цель сектора", "MONTHLY_PLAN_GOAL_REQUIRED");
   if (!current.items.some((item) => item.state === LearningPlanTopicState.active)) {
     throw new BadRequestError("Добавьте хотя бы одну тему", "MONTHLY_PLAN_ITEMS_REQUIRED");
   }
@@ -884,20 +602,7 @@ async function publishPlan(
   if (!currentVersion) {
     throw new ConflictError("Версия учебного плана не найдена", "MONTHLY_PLAN_VERSION_MISSING");
   }
-  const currentTopicIds = new Set(
-    currentVersion.topics
-      .filter((link) => link.state === LearningPlanTopicState.active)
-      .map((link) => link.topicId),
-  );
   await prisma.$transaction(async (tx) => {
-    await markPublishedTopicsTransferredFromPreviousMonth(
-      tx,
-      teacherUserId,
-      scope,
-      month,
-      currentTopicIds,
-      publishedAt,
-    );
     const updated = await tx.learningPlan.updateMany({
       where: {
         id: plan.id,
@@ -930,10 +635,10 @@ async function publishPlan(
         await deliverUserNotification({
           userId: studentUser.id,
           type: "offline_lesson_report_ready",
-          title: `Учебный план на ${month} готов!`,
-          body: `Цель месяца: «${current.goal}». Посмотри темы в плане месяца.`,
+          title: wasPublished ? `Сектор ${plan.sequence} обновлён` : `Сектор ${plan.sequence} открыт!`,
+          body: `Цель: «${current.goal}». Посмотри темы сектора.`,
           url: "/monthly-plan",
-          tag: `monthly-plan-v2-${scope.direction.crmDirectionId}-${month}`,
+          tag: `sector-v2-${scope.direction.crmDirectionId}-${plan.sequence}`,
           dedupeKey: `monthly-plan:${plan.id}:version:${plan.currentVersionNumber}`,
         });
       }
@@ -953,162 +658,104 @@ export async function getStudentLearningPlanV2(
   teacherUserId: string,
   crmStudentId: string,
   crmDirectionId: string,
-  month: string,
 ) {
   const scope = await resolveStudentScope(teacherUserId, crmStudentId, crmDirectionId);
-  const plan = await findPlan(scope, month);
+  const plan = await findActiveSector(scope);
+  const history = await listClosedSectors(scope);
   return {
     student: { crmStudentId, name: scope.owner.name },
     direction: {
       crmDirectionId,
       title: scope.direction.title,
     },
-    month,
+    nextSequence: plan ? plan.sequence : (history[0]?.sequence ?? 0) + 1,
     plan: plan ? versionDto(plan) : null,
+    history,
   };
-}
-
-export async function getStudentLearningPlanCarryoverV2(
-  teacherUserId: string,
-  crmStudentId: string,
-  crmDirectionId: string,
-  targetMonth: string,
-) {
-  const scope = await resolveStudentScope(teacherUserId, crmStudentId, crmDirectionId);
-  return getCarryoverPreview(scope, targetMonth);
-}
-
-export async function carryOverStudentLearningPlanTopicsV2(
-  teacherUserId: string,
-  crmStudentId: string,
-  crmDirectionId: string,
-  targetMonth: string,
-  input: LearningPlanCarryoverInput,
-) {
-  const scope = await resolveStudentScope(teacherUserId, crmStudentId, crmDirectionId);
-  return carryOverTopics(teacherUserId, scope, targetMonth, input);
 }
 
 export async function saveStudentLearningPlanV2(
   teacherUserId: string,
   crmStudentId: string,
   crmDirectionId: string,
-  month: string,
   input: LearningPlanV2Input,
 ) {
   const scope = await resolveStudentScope(teacherUserId, crmStudentId, crmDirectionId);
-  return savePlan(teacherUserId, scope, month, input);
+  return savePlan(teacherUserId, scope, input);
 }
 
 export async function publishStudentLearningPlanV2(
   teacherUserId: string,
   crmStudentId: string,
   crmDirectionId: string,
-  month: string,
   expectedVersion: number | undefined,
 ) {
   const scope = await resolveStudentScope(teacherUserId, crmStudentId, crmDirectionId);
-  return publishPlan(teacherUserId, scope, month, expectedVersion);
+  return publishPlan(teacherUserId, scope, expectedVersion);
 }
 
 export async function getGroupLearningPlanV2(
   teacherUserId: string,
   crmGroupId: string,
   crmDirectionId: string,
-  month: string,
 ) {
   const scope = await resolveGroupScope(teacherUserId, crmGroupId, crmDirectionId);
-  const plan = await findPlan(scope, month);
+  const plan = await findActiveSector(scope);
+  const history = await listClosedSectors(scope);
   return {
     group: { crmGroupId, name: scope.owner.name },
     direction: {
       crmDirectionId,
       title: scope.direction.title,
     },
-    month,
+    nextSequence: plan ? plan.sequence : (history[0]?.sequence ?? 0) + 1,
     plan: plan ? versionDto(plan) : null,
+    history,
   };
-}
-
-export async function getGroupLearningPlanCarryoverV2(
-  teacherUserId: string,
-  crmGroupId: string,
-  crmDirectionId: string,
-  targetMonth: string,
-) {
-  const scope = await resolveGroupScope(teacherUserId, crmGroupId, crmDirectionId);
-  return getCarryoverPreview(scope, targetMonth);
-}
-
-export async function carryOverGroupLearningPlanTopicsV2(
-  teacherUserId: string,
-  crmGroupId: string,
-  crmDirectionId: string,
-  targetMonth: string,
-  input: LearningPlanCarryoverInput,
-) {
-  const scope = await resolveGroupScope(teacherUserId, crmGroupId, crmDirectionId);
-  return carryOverTopics(teacherUserId, scope, targetMonth, input);
 }
 
 export async function saveGroupLearningPlanV2(
   teacherUserId: string,
   crmGroupId: string,
   crmDirectionId: string,
-  month: string,
   input: LearningPlanV2Input,
 ) {
   const scope = await resolveGroupScope(teacherUserId, crmGroupId, crmDirectionId);
-  return savePlan(teacherUserId, scope, month, input);
+  return savePlan(teacherUserId, scope, input);
 }
 
 export async function publishGroupLearningPlanV2(
   teacherUserId: string,
   crmGroupId: string,
   crmDirectionId: string,
-  month: string,
   expectedVersion: number | undefined,
 ) {
   const scope = await resolveGroupScope(teacherUserId, crmGroupId, crmDirectionId);
-  return publishPlan(teacherUserId, scope, month, expectedVersion);
+  return publishPlan(teacherUserId, scope, expectedVersion);
 }
 
+/**
+ * Sectors a student sees: the active published sector per direction (own and of
+ * the groups they are in) plus closed sectors as history.
+ */
 export async function listPublishedLearningPlansV2(
   crmStudentId: string,
   crmGroupIds: readonly string[],
-  month: string,
+  options: { includeClosed?: boolean } = {},
 ) {
-  const previousMonth = previousLearningPlanMonth(month);
   const ownerScope = [
     { crmStudentId, crmGroupId: null },
     ...(crmGroupIds.length ? [{ crmStudentId: null, crmGroupId: { in: [...crmGroupIds] } }] : []),
   ];
-  const [plans, previousPlans] = await Promise.all([
-    prisma.learningPlan.findMany({
-      where: {
-        month,
-        publishedVersionNumber: { not: null },
-        OR: ownerScope,
-      },
-      include: planInclude,
-      orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
-    }),
-    prisma.learningPlan.findMany({
-      where: {
-        month: previousMonth,
-        publishedVersionNumber: { not: null },
-        OR: ownerScope,
-      },
-      include: planInclude,
-    }),
-  ]);
-  const previousTopicKeys = new Set(previousPlans.flatMap((plan) => {
-    if (!plan.publishedVersionNumber) return [];
-    const version = plan.versions.find((item) => item.version === plan.publishedVersionNumber);
-    return (version?.topics ?? [])
-      .filter((link) => link.state === LearningPlanTopicState.transferred)
-      .map((link) => `${plan.directionId}:${link.topicId}`);
-  }));
+  const plans = await prisma.learningPlan.findMany({
+    where: {
+      publishedVersionNumber: { not: null },
+      ...(options.includeClosed ? {} : { status: "active" }),
+      OR: ownerScope,
+    },
+    include: planInclude,
+    orderBy: [{ status: "asc" }, { sequence: "desc" }, { updatedAt: "desc" }],
+  });
 
   return plans.flatMap((plan) => {
     if (!plan.publishedVersionNumber) return [];
@@ -1118,19 +765,17 @@ export async function listPublishedLearningPlansV2(
       scope: plan.crmStudentId ? "student" as const : "group" as const,
       targetId: plan.crmStudentId ?? plan.crmGroupId ?? "",
       month: plan.month,
+      sequence: plan.sequence,
+      status: plan.status,
+      closedAt: plan.closedAt,
+      preparedTest: dto.preparedTest,
       direction: dto.direction,
       teacher: dto.teacher,
       goal: dto.goal,
       expectedResult: dto.expectedResult,
       skills: dto.skills,
       materials: dto.materials,
-      items: dto.items.map((item) => ({
-        ...item,
-        continuedFromMonth: item.state === LearningPlanTopicState.active
-          && previousTopicKeys.has(`${plan.directionId}:${item.id}`)
-          ? previousMonth
-          : null,
-      })),
+      items: dto.items,
       progress: dto.progress,
       publishedAt: dto.publication.publishedAt,
     }];
@@ -1403,34 +1048,64 @@ async function applyTopicMasteryRewards(params: {
   for (const plan of plans) {
     const publishedVersion = plan.versions.find((version) => version.version === plan.publishedVersionNumber);
     if (!publishedVersion?.topics.some((link) => link.topicId === params.topic.id)) continue;
-    const activeTopics = publishedVersion?.topics.filter((link) => link.state === LearningPlanTopicState.active) ?? [];
-    if (!activeTopics.length || activeTopics.some((link) => link.topic.progressPercent !== 100)) continue;
+    await closeSectorIfComplete(plan, students, params.occurredAt);
+  }
+}
 
-    const completionSourceKey = `learning-plan-completion:${plan.id}`;
-    if (plan.completionRewardSourceKey?.includes("blocked-before-cutover")) continue;
-    if (plan.completionRewardSourceKey && plan.completionRewardSourceKey !== completionSourceKey) continue;
+type SectorForClosing = Prisma.LearningPlanGetPayload<{ include: typeof planInclude }>;
 
-    if (!plan.completionRewardSourceKey) {
-      await prisma.learningPlan.updateMany({
-        where: { id: plan.id, completionRewardSourceKey: null },
-        data: {
-          completionRewardSourceKey: completionSourceKey,
-          completedAt: params.occurredAt,
-          lockedAt: params.occurredAt,
-        },
-      });
-    }
+/**
+ * A sector closes once every active topic of its published version is at 100 %
+ * and its test (if any) is passed. Closing is what pays the 250 Points and
+ * what lets the teacher open the next sector.
+ */
+async function closeSectorIfComplete(
+  plan: SectorForClosing,
+  students: Array<{ id: string }>,
+  occurredAt: Date,
+) {
+  const publishedVersion = plan.versions.find((version) => version.version === plan.publishedVersionNumber);
+  if (!publishedVersion) return false;
+  const activeTopics = publishedVersion.topics.filter((link) => link.state === LearningPlanTopicState.active);
+  if (!activeTopics.length || activeTopics.some((link) => link.topic.progressPercent !== 100)) return false;
+  // Group sectors are not gated by a test: each member takes tests on their own.
+  if (plan.preparedTestId && plan.crmStudentId && !plan.testPassedAt) return false;
 
+  const completionSourceKey = `learning-plan-completion:${plan.id}`;
+  if (plan.completionRewardSourceKey?.includes("blocked-before-cutover")) return false;
+  if (plan.completionRewardSourceKey && plan.completionRewardSourceKey !== completionSourceKey) return false;
+
+  if (!plan.completionRewardSourceKey) {
+    await prisma.learningPlan.updateMany({
+      where: { id: plan.id, completionRewardSourceKey: null },
+      data: {
+        completionRewardSourceKey: completionSourceKey,
+        completedAt: occurredAt,
+        lockedAt: occurredAt,
+        status: "closed",
+        closedAt: occurredAt,
+        closeReason: "completed",
+      },
+    });
+  } else if (plan.status !== "closed") {
+    await prisma.learningPlan.update({
+      where: { id: plan.id },
+      data: { status: "closed", closedAt: plan.completedAt ?? occurredAt, closeReason: "completed" },
+    });
+  }
+
+  if (rewardEconomyV2AppliesToEvent(occurredAt)) {
     for (const student of students) {
       await awardSystemPoints({
         studentId: student.id,
         amount: NON_EMPTY_PLAN_COMPLETION_POINTS,
-        reason: `Завершён план на ${plan.month}`,
+        reason: `Закрыт сектор ${plan.sequence}`,
         sourceKey: `${completionSourceKey}:${student.id}`,
-        eventAt: params.occurredAt,
+        eventAt: occurredAt,
       });
     }
   }
+  return true;
 }
 
 export type LearningTopicProgressFromLessonV2Input = {
@@ -1666,4 +1341,29 @@ export function sameLearningTopicProgressRequest(
 ) {
   return existing.topicId === requested.topicId
     && existing.toPercent === requested.toPercent;
+}
+
+/**
+ * A passed prepared test unlocks the student's sectors that require it. Called
+ * from the test attempt route; closing happens only when the topics are done too.
+ */
+export async function markSectorTestPassed(studentUserId: string, preparedTestId: string, passedAt = new Date()) {
+  const student = await prisma.user.findUnique({
+    where: { id: studentUserId },
+    select: { id: true, crmStudentId: true },
+  });
+  if (!student?.crmStudentId) return [];
+  const sectors = await prisma.learningPlan.findMany({
+    where: { crmStudentId: student.crmStudentId, crmGroupId: null, status: "active", preparedTestId },
+    include: planInclude,
+  });
+  const closed: string[] = [];
+  for (const sector of sectors) {
+    if (!sector.testPassedAt) {
+      await prisma.learningPlan.update({ where: { id: sector.id }, data: { testPassedAt: passedAt } });
+    }
+    const refreshed = await prisma.learningPlan.findUniqueOrThrow({ where: { id: sector.id }, include: planInclude });
+    if (await closeSectorIfComplete(refreshed, [{ id: student.id }], passedAt)) closed.push(sector.id);
+  }
+  return closed;
 }

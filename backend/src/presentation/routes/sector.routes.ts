@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { listPreparedTestTemplates } from "../../domain/prepared-tests.js";
 import {
   authenticate,
   requireContentAdmin,
@@ -74,6 +75,11 @@ export async function sectorRoutes(app: FastifyInstance) {
     }).parse(request.body);
     return { data: await decideSectorProposal(request.user!.id, id, body) };
   });
+
+  // Готовые тесты для выбора теста сектора.
+  app.get("/teachers/me/prepared-tests", { preHandler: [authenticate, requireTeacher] }, async () => ({
+    data: listPreparedTestTemplates().map((item) => ({ id: item.id, title: item.title, description: item.description })),
+  }));
 
   // Шаблоны ступеней: преподаватель читает опубликованные, администратор ведёт.
   app.get("/teachers/me/sector-templates", { preHandler: [authenticate, requireTeacher] }, async (request) => {

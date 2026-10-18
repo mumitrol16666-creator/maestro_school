@@ -112,6 +112,7 @@ export async function getPublishedMonthlyPlansForStudent(
   options: {
     requireLinkedProfile?: boolean;
     schoolSummary?: StudentSchoolSummary | null;
+    includeClosed?: boolean;
   } = {},
 ) {
   const user = await prisma.user.findUnique({
@@ -141,7 +142,7 @@ export async function getPublishedMonthlyPlansForStudent(
       .map((group) => group.crmGroupId?.trim() ?? "")
       .filter(Boolean),
   )];
-  const plans = await listPublishedMonthlyPlansAdapted(user.crmStudentId, groupIds, month);
+  const plans = await listPublishedMonthlyPlansAdapted(user.crmStudentId, groupIds, month, { includeClosed: options.includeClosed });
   return plans.sort((left, right) => (
     left.teacher.name.localeCompare(right.teacher.name, "ru-RU")
     || left.id.localeCompare(right.id)

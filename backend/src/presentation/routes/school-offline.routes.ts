@@ -20,14 +20,15 @@ export async function schoolOfflineRoutes(app: FastifyInstance) {
     "/students/me/monthly-plans",
     { preHandler: [authenticate, requireStudent, requirePermission("progress.read")] },
     async (request) => {
-      const { month } = z.object({
+      const { month, history } = z.object({
         month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional(),
+        history: z.enum(["1", "true"]).optional(),
       }).parse(request.query ?? {});
       const requestedMonth = month ?? aqtobeMonthKey();
       const plans = await getPublishedMonthlyPlansForStudent(
         request.user!.id,
         requestedMonth,
-        { requireLinkedProfile: true },
+        { requireLinkedProfile: true, includeClosed: Boolean(history) },
       );
       return {
         data: {

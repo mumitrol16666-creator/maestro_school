@@ -36,11 +36,7 @@ import {
   saveStudentMonthlyPlanAdapted,
 } from "../../application/services/monthly-plan-adapter.service.js";
 import {
-  carryOverGroupLearningPlanTopicsV2,
-  carryOverStudentLearningPlanTopicsV2,
-  getGroupLearningPlanCarryoverV2,
   getLearningTopicV2,
-  getStudentLearningPlanCarryoverV2,
   updateLearningTopicProgressV2,
 } from "../../application/services/learning-plan-v2.service.js";
 import { listTeacherCrmDirections } from "../../application/services/crm-direction-projection.service.js";
@@ -130,7 +126,7 @@ export async function teacherOfflineRoutes(app: FastifyInstance) {
     async (request) => {
       const { crmStudentId } = z.object({ crmStudentId: z.string().min(1).max(128) }).parse(request.params);
       const { month, crmDirectionId } = z.object({
-        month: monthSchema,
+        month: monthSchema.optional(),
         crmDirectionId: z.string().min(1).max(128).optional(),
       }).parse(request.query);
       return {
@@ -150,13 +146,15 @@ export async function teacherOfflineRoutes(app: FastifyInstance) {
     async (request) => {
       const { crmStudentId } = z.object({ crmStudentId: z.string().min(1).max(128) }).parse(request.params);
       const body = z.object({
-        month: monthSchema,
+        month: monthSchema.optional(),
         goal: z.string().max(5000).default(""),
         expectedResult: z.string().max(5000).default(""),
         skills: z.string().max(5000).default(""),
         checkpoint: z.string().max(5000).default(""),
         note: z.string().max(5000).default(""),
         items: z.array(monthlyPlanItemSchema).max(50).default([]),
+        templateStepId: z.string().uuid().nullable().optional(),
+        preparedTestId: z.string().trim().max(64).nullable().optional(),
         crmDirectionId: z.string().min(1).max(128).optional(),
         expectedVersion: z.number().int().nonnegative().optional(),
       }).parse(request.body ?? {});
@@ -194,7 +192,7 @@ export async function teacherOfflineRoutes(app: FastifyInstance) {
     async (request) => {
       const { crmStudentId } = z.object({ crmStudentId: z.string().min(1).max(128) }).parse(request.params);
       const body = z.object({
-        month: monthSchema,
+        month: monthSchema.optional(),
         expectedDraftRevision: z.number().int().positive().optional(),
         crmDirectionId: z.string().min(1).max(128).optional(),
       }).parse(request.body ?? {});
@@ -244,7 +242,7 @@ export async function teacherOfflineRoutes(app: FastifyInstance) {
     async (request) => {
       const { crmGroupId } = z.object({ crmGroupId: z.string().min(1).max(128) }).parse(request.params);
       const { month, crmDirectionId } = z.object({
-        month: monthSchema,
+        month: monthSchema.optional(),
         crmDirectionId: z.string().min(1).max(128).optional(),
       }).parse(request.query);
       return {
@@ -264,13 +262,15 @@ export async function teacherOfflineRoutes(app: FastifyInstance) {
     async (request) => {
       const { crmGroupId } = z.object({ crmGroupId: z.string().min(1).max(128) }).parse(request.params);
       const body = z.object({
-        month: monthSchema,
+        month: monthSchema.optional(),
         goal: z.string().max(5000).default(""),
         expectedResult: z.string().max(5000).default(""),
         skills: z.string().max(5000).default(""),
         checkpoint: z.string().max(5000).default(""),
         note: z.string().max(5000).default(""),
         items: z.array(monthlyPlanItemSchema).max(50).default([]),
+        templateStepId: z.string().uuid().nullable().optional(),
+        preparedTestId: z.string().trim().max(64).nullable().optional(),
         materials: z.array(groupPlanMaterialSchema).max(50).default([]),
         crmDirectionId: z.string().min(1).max(128).optional(),
         expectedVersion: z.number().int().nonnegative().optional(),
@@ -309,7 +309,7 @@ export async function teacherOfflineRoutes(app: FastifyInstance) {
     async (request) => {
       const { crmGroupId } = z.object({ crmGroupId: z.string().min(1).max(128) }).parse(request.params);
       const body = z.object({
-        month: monthSchema,
+        month: monthSchema.optional(),
         expectedDraftRevision: z.number().int().positive().optional(),
         crmDirectionId: z.string().min(1).max(128).optional(),
       }).parse(request.body ?? {});
@@ -354,126 +354,6 @@ export async function teacherOfflineRoutes(app: FastifyInstance) {
       async (request) => {
         const { topicId } = z.object({ topicId: z.string().uuid() }).parse(request.params);
         return { data: await getLearningTopicV2(request.user!.id, topicId) };
-      },
-    );
-
-    app.get(
-      "/teachers/me/students/:crmStudentId/monthly-plan/carryover",
-      { preHandler: [authenticate, requireTeacher, requirePermission("offline_school.read")] },
-      async (request) => {
-        const { crmStudentId } = z.object({
-          crmStudentId: z.string().min(1).max(128),
-        }).parse(request.params);
-        const { month, crmDirectionId } = z.object({
-          month: monthSchema,
-          crmDirectionId: z.string().min(1).max(128),
-        }).parse(request.query);
-        return {
-          data: await getStudentLearningPlanCarryoverV2(
-            request.user!.id,
-            crmStudentId,
-            crmDirectionId,
-            month,
-          ),
-        };
-      },
-    );
-
-    app.post(
-      "/teachers/me/students/:crmStudentId/monthly-plan/carryover",
-      { preHandler: [authenticate, requireTeacher, requirePermission("offline_school.write")] },
-      async (request) => {
-        const { crmStudentId } = z.object({
-          crmStudentId: z.string().min(1).max(128),
-        }).parse(request.params);
-        const body = z.object({
-          month: monthSchema,
-          crmDirectionId: z.string().min(1).max(128),
-          topicIds: z.array(z.string().uuid()).min(1).max(50),
-          expectedTargetVersion: z.number().int().nonnegative(),
-        }).parse(request.body ?? {});
-        const result = await carryOverStudentLearningPlanTopicsV2(
-          request.user!.id,
-          crmStudentId,
-          body.crmDirectionId,
-          body.month,
-          body,
-        );
-        if (!result.idempotent) {
-          await writeAuditLog({
-            entityType: "student_monthly_plan",
-            entityId: result.plan.id,
-            action: "update",
-            actorId: request.user!.id,
-            payload: {
-              event: "monthly_plan_topics_carried_over",
-              sourceMonth: result.sourceMonth,
-              targetMonth: result.targetMonth,
-              topicIds: result.addedTopicIds,
-            },
-          });
-        }
-        return { data: result };
-      },
-    );
-
-    app.get(
-      "/teachers/me/groups/:crmGroupId/monthly-plan/carryover",
-      { preHandler: [authenticate, requireTeacher, requirePermission("offline_school.read")] },
-      async (request) => {
-        const { crmGroupId } = z.object({
-          crmGroupId: z.string().min(1).max(128),
-        }).parse(request.params);
-        const { month, crmDirectionId } = z.object({
-          month: monthSchema,
-          crmDirectionId: z.string().min(1).max(128),
-        }).parse(request.query);
-        return {
-          data: await getGroupLearningPlanCarryoverV2(
-            request.user!.id,
-            crmGroupId,
-            crmDirectionId,
-            month,
-          ),
-        };
-      },
-    );
-
-    app.post(
-      "/teachers/me/groups/:crmGroupId/monthly-plan/carryover",
-      { preHandler: [authenticate, requireTeacher, requirePermission("offline_school.write")] },
-      async (request) => {
-        const { crmGroupId } = z.object({
-          crmGroupId: z.string().min(1).max(128),
-        }).parse(request.params);
-        const body = z.object({
-          month: monthSchema,
-          crmDirectionId: z.string().min(1).max(128),
-          topicIds: z.array(z.string().uuid()).min(1).max(50),
-          expectedTargetVersion: z.number().int().nonnegative(),
-        }).parse(request.body ?? {});
-        const result = await carryOverGroupLearningPlanTopicsV2(
-          request.user!.id,
-          crmGroupId,
-          body.crmDirectionId,
-          body.month,
-          body,
-        );
-        if (!result.idempotent) {
-          await writeAuditLog({
-            entityType: "group_monthly_plan",
-            entityId: result.plan.id,
-            action: "update",
-            actorId: request.user!.id,
-            payload: {
-              event: "monthly_plan_topics_carried_over",
-              sourceMonth: result.sourceMonth,
-              targetMonth: result.targetMonth,
-              topicIds: result.addedTopicIds,
-            },
-          });
-        }
-        return { data: result };
       },
     );
 

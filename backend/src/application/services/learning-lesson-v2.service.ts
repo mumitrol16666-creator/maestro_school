@@ -321,11 +321,11 @@ async function resolveLessonScope(actorUserId: string, crmClassId: string): Prom
 
 async function lessonPlans(scope: LessonScope) {
   if (scope.reportOnly) return [];
-  const month = aqtobeMonthKey(scope.eventAt);
+  // One open sector per direction is what the lesson works with.
   const plans = await prisma.learningPlan.findMany({
     where: {
       publishedVersionNumber: { not: null },
-      month: { lte: month },
+      status: "active",
       ...(scope.owner.kind === "student"
         ? { crmStudentId: scope.owner.id, crmGroupId: null }
         : { crmStudentId: null, crmGroupId: scope.owner.id }),
@@ -344,7 +344,7 @@ async function lessonPlans(scope: LessonScope) {
         },
       },
     },
-    orderBy: [{ month: "desc" }, { updatedAt: "desc" }],
+    orderBy: [{ sequence: "desc" }, { updatedAt: "desc" }],
     take: 24,
   });
   const selectedByDirection = new Map<string, typeof plans[number]>();
@@ -733,13 +733,14 @@ export async function quickAddOfflineLessonTopic(
   }
 
   const result = await prisma.$transaction(async (tx) => {
+    const ownerWhere = scope.owner.kind === "student"
+      ? { crmStudentId: scope.owner.id, crmGroupId: null }
+      : { crmStudentId: null, crmGroupId: scope.owner.id };
     let plan = await tx.learningPlan.findFirst({
       where: {
         directionId: direction.id,
-        month,
-        ...(scope.owner.kind === "student"
-          ? { crmStudentId: scope.owner.id, crmGroupId: null }
-          : { crmStudentId: null, crmGroupId: scope.owner.id }),
+        status: "active",
+        ...ownerWhere,
       },
       include: {
         versions: {
@@ -787,14 +788,18 @@ export async function quickAddOfflineLessonTopic(
         },
       });
 
+      const lastSequence = await tx.learningPlan.aggregate({
+        where: { directionId: direction.id, ...ownerWhere },
+        _max: { sequence: true },
+      });
       plan = await tx.learningPlan.create({
         data: {
           id: planId,
           directionId: direction.id,
           month,
-          ...(scope.owner.kind === "student"
-            ? { crmStudentId: scope.owner.id, crmGroupId: null }
-            : { crmStudentId: null, crmGroupId: scope.owner.id }),
+          sequence: (lastSequence._max.sequence ?? 0) + 1,
+          status: "active",
+          ...ownerWhere,
           currentVersionNumber: 1,
           publishedVersionNumber: 1,
           createdById: actorUserId,

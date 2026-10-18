@@ -293,9 +293,28 @@ async function reverseTopicUpdates(
           if (row.sourceKey.includes(":reversed:") || row.sourceKey.includes(":reversal:")) continue;
           points += await reversePointsTransaction(tx, row.sourceKey, reportVersion, reason, actorUserId, at);
         }
+        // The sector reopens unless a later sector was already opened after it.
+        const sector = await tx.learningPlan.findUniqueOrThrow({
+          where: { id: plan.id },
+          select: { directionId: true, crmStudentId: true, crmGroupId: true },
+        });
+        const laterActive = await tx.learningPlan.count({
+          where: {
+            directionId: sector.directionId,
+            crmStudentId: sector.crmStudentId,
+            crmGroupId: sector.crmGroupId,
+            status: "active",
+            id: { not: plan.id },
+          },
+        });
         await tx.learningPlan.update({
           where: { id: plan.id },
-          data: { completionRewardSourceKey: null, completedAt: null, lockedAt: null },
+          data: {
+            completionRewardSourceKey: null,
+            completedAt: null,
+            lockedAt: null,
+            ...(laterActive === 0 ? { status: "active", closedAt: null, closeReason: null } : {}),
+          },
         });
         planCompletions.push({ planId: plan.id, points });
       }

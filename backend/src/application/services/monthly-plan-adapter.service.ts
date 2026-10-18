@@ -1,5 +1,6 @@
 import { productFeatureConfig } from "../../config/product-features.js";
 import { BadRequestError } from "../../domain/errors.js";
+import { aqtobeMonthKey } from "../../lib/aqtobe-month.js";
 import {
   getGroupMonthlyPlan,
   listPublishedGroupMonthlyPlans,
@@ -25,6 +26,10 @@ import {
   type LearningPlanV2Input,
 } from "./learning-plan-v2.service.js";
 
+/**
+ * Bridges the legacy month-bound JSON plans (flag off) and sectors (flag on).
+ * With sectors `month` is ignored: there is one open sector per direction.
+ */
 export function learningTopicsV2Enabled() {
   return productFeatureConfig.flags.learningTopicsV2;
 }
@@ -40,135 +45,106 @@ function requiredCrmDirectionId(crmDirectionId: string | undefined) {
   return value;
 }
 
-type AdapterPlanInput = MonthlyPlanInput & Partial<Pick<LearningPlanV2Input, "expectedVersion">> & {
-  items: Array<MonthlyPlanInput["items"][number] & { masteryCriteria?: string }>;
-};
+function legacyMonth(month: string | undefined) {
+  return month ?? aqtobeMonthKey();
+}
 
-type AdapterGroupPlanInput = GroupMonthlyPlanInput & Partial<Pick<LearningPlanV2Input, "expectedVersion">> & {
-  items: Array<GroupMonthlyPlanInput["items"][number] & { masteryCriteria?: string }>;
-};
+type AdapterPlanInput = MonthlyPlanInput
+  & Partial<Pick<LearningPlanV2Input, "expectedVersion" | "templateStepId" | "preparedTestId">>
+  & { items: Array<MonthlyPlanInput["items"][number] & { masteryCriteria?: string }> };
+
+type AdapterGroupPlanInput = GroupMonthlyPlanInput
+  & Partial<Pick<LearningPlanV2Input, "expectedVersion" | "templateStepId" | "preparedTestId">>
+  & { items: Array<GroupMonthlyPlanInput["items"][number] & { masteryCriteria?: string }> };
 
 export async function getStudentMonthlyPlanAdapted(
   teacherUserId: string,
   crmStudentId: string,
-  month: string,
+  month: string | undefined,
   crmDirectionId?: string,
 ) {
   if (!learningTopicsV2Enabled()) {
-    return getStudentMonthlyPlan(teacherUserId, crmStudentId, month);
+    return getStudentMonthlyPlan(teacherUserId, crmStudentId, legacyMonth(month));
   }
-  return getStudentLearningPlanV2(
-    teacherUserId,
-    crmStudentId,
-    requiredCrmDirectionId(crmDirectionId),
-    month,
-  );
+  return getStudentLearningPlanV2(teacherUserId, crmStudentId, requiredCrmDirectionId(crmDirectionId));
 }
 
 export async function saveStudentMonthlyPlanAdapted(
   teacherUserId: string,
   crmStudentId: string,
-  month: string,
+  month: string | undefined,
   input: AdapterPlanInput,
   crmDirectionId?: string,
 ) {
   if (!learningTopicsV2Enabled()) {
-    return saveStudentMonthlyPlan(teacherUserId, crmStudentId, month, input);
+    return saveStudentMonthlyPlan(teacherUserId, crmStudentId, legacyMonth(month), input);
   }
-  return saveStudentLearningPlanV2(
-    teacherUserId,
-    crmStudentId,
-    requiredCrmDirectionId(crmDirectionId),
-    month,
-    input,
-  );
+  return saveStudentLearningPlanV2(teacherUserId, crmStudentId, requiredCrmDirectionId(crmDirectionId), input);
 }
 
 export async function publishStudentMonthlyPlanAdapted(
   teacherUserId: string,
   crmStudentId: string,
-  month: string,
+  month: string | undefined,
   expectedVersion?: number,
   crmDirectionId?: string,
 ) {
   if (!learningTopicsV2Enabled()) {
-    return publishStudentMonthlyPlan(teacherUserId, crmStudentId, month, expectedVersion);
+    return publishStudentMonthlyPlan(teacherUserId, crmStudentId, legacyMonth(month), expectedVersion);
   }
-  return publishStudentLearningPlanV2(
-    teacherUserId,
-    crmStudentId,
-    requiredCrmDirectionId(crmDirectionId),
-    month,
-    expectedVersion,
-  );
+  return publishStudentLearningPlanV2(teacherUserId, crmStudentId, requiredCrmDirectionId(crmDirectionId), expectedVersion);
 }
 
 export async function getGroupMonthlyPlanAdapted(
   teacherUserId: string,
   crmGroupId: string,
-  month: string,
+  month: string | undefined,
   crmDirectionId?: string,
 ) {
   if (!learningTopicsV2Enabled()) {
-    return getGroupMonthlyPlan(teacherUserId, crmGroupId, month);
+    return getGroupMonthlyPlan(teacherUserId, crmGroupId, legacyMonth(month));
   }
-  return getGroupLearningPlanV2(
-    teacherUserId,
-    crmGroupId,
-    requiredCrmDirectionId(crmDirectionId),
-    month,
-  );
+  return getGroupLearningPlanV2(teacherUserId, crmGroupId, requiredCrmDirectionId(crmDirectionId));
 }
 
 export async function saveGroupMonthlyPlanAdapted(
   teacherUserId: string,
   crmGroupId: string,
-  month: string,
+  month: string | undefined,
   input: AdapterGroupPlanInput,
   crmDirectionId?: string,
 ) {
   if (!learningTopicsV2Enabled()) {
-    return saveGroupMonthlyPlan(teacherUserId, crmGroupId, month, input);
+    return saveGroupMonthlyPlan(teacherUserId, crmGroupId, legacyMonth(month), input);
   }
-  return saveGroupLearningPlanV2(
-    teacherUserId,
-    crmGroupId,
-    requiredCrmDirectionId(crmDirectionId),
-    month,
-    input,
-  );
+  return saveGroupLearningPlanV2(teacherUserId, crmGroupId, requiredCrmDirectionId(crmDirectionId), input);
 }
 
 export async function publishGroupMonthlyPlanAdapted(
   teacherUserId: string,
   crmGroupId: string,
-  month: string,
+  month: string | undefined,
   expectedVersion?: number,
   crmDirectionId?: string,
 ) {
   if (!learningTopicsV2Enabled()) {
-    return publishGroupMonthlyPlan(teacherUserId, crmGroupId, month, expectedVersion);
+    return publishGroupMonthlyPlan(teacherUserId, crmGroupId, legacyMonth(month), expectedVersion);
   }
-  return publishGroupLearningPlanV2(
-    teacherUserId,
-    crmGroupId,
-    requiredCrmDirectionId(crmDirectionId),
-    month,
-    expectedVersion,
-  );
+  return publishGroupLearningPlanV2(teacherUserId, crmGroupId, requiredCrmDirectionId(crmDirectionId), expectedVersion);
 }
 
 export async function listPublishedMonthlyPlansAdapted(
   crmStudentId: string,
   crmGroupIds: readonly string[],
-  month: string,
+  month: string | undefined,
+  options: { includeClosed?: boolean } = {},
 ) {
   if (learningTopicsV2Enabled()) {
-    return listPublishedLearningPlansV2(crmStudentId, crmGroupIds, month);
+    return listPublishedLearningPlansV2(crmStudentId, crmGroupIds, options);
   }
   const [studentPlans, groupPlans] = await Promise.all([
-    listPublishedStudentMonthlyPlans(crmStudentId, month),
-    listPublishedGroupMonthlyPlans([...crmGroupIds], month),
+    listPublishedStudentMonthlyPlans(crmStudentId, legacyMonth(month)),
+    listPublishedGroupMonthlyPlans([...crmGroupIds], legacyMonth(month)),
   ]);
   return [...studentPlans, ...groupPlans];
 }

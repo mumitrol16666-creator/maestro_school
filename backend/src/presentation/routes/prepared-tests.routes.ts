@@ -29,6 +29,7 @@ import {
 } from "../../domain/prepared-test-progress.js";
 import { getPreparedTestTheory } from "../../domain/prepared-test-theory.js";
 import { listPreparedTestTemplates } from "../../domain/prepared-tests.js";
+import { markSectorTestPassed } from "../../application/services/learning-plan-v2.service.js";
 import { prisma } from "../../infrastructure/database/prisma.js";
 import {
   authenticate,
@@ -329,6 +330,8 @@ export async function preparedTestsRoutes(app: FastifyInstance) {
           eventAt: attempt.createdAt,
         });
         await evaluateAchievements(studentId);
+        // A sector that waits for this test may now close.
+        await markSectorTestPassed(studentId, testId, attempt.createdAt).catch(() => []);
       }
       const attemptsAfterSubmission = [attempt, ...attempts];
       const daily = preparedTestDailyState(attemptsAfterSubmission, testId, attempt.createdAt);

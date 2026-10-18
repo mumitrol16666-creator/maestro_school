@@ -157,7 +157,7 @@ export async function listTeacherStudents(appTeacherId: string) {
       : [],
     crmStudentIds.length
       ? prisma.learningPlan.findMany({
-          where: { crmStudentId: { in: crmStudentIds }, month },
+          where: { crmStudentId: { in: crmStudentIds }, status: "active" },
           include: {
             versions: {
               include: {
@@ -294,8 +294,8 @@ export async function listTeacherStudents(appTeacherId: string) {
       if (student.crmStudentId && !hasPlan) {
         signals.push({
           code: "monthly_plan_missing",
-          title: "Нет учебного плана на текущий месяц",
-          action: "Составьте месячный план",
+          title: "Нет открытого сектора",
+          action: "Откройте сектор ученику",
           tone: "warning",
         });
       }
