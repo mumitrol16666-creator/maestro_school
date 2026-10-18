@@ -251,6 +251,7 @@ async function applyOfflineLessonAttendanceRewards(
         sourceKey: `offline-lesson:${crmClassId}:${check.crmStudentId}`,
         description: "Посещение урока с преподавателем",
         awardedById: check.teacherUserId ?? approvedBy,
+        eventAt,
       });
       awardedXp = xpResult.awarded ? 20 : 0;
       if (completedPlanId) {
@@ -262,6 +263,7 @@ async function applyOfflineLessonAttendanceRewards(
             sourceKey: `monthly-plan-topic:${completedPlanId}:${topic.id}`,
             description: `Освоена тема плана «${topic.title}»`,
             awardedById: check.teacherUserId ?? approvedBy,
+            eventAt,
           });
         }
       }
@@ -271,6 +273,7 @@ async function applyOfflineLessonAttendanceRewards(
         reason: "Урок с преподавателем",
         awardedBy: check.teacherUserId ?? approvedBy,
         idempotencyKey: `offline-lesson-points:${crmClassId}:${check.crmStudentId}`,
+        eventAt,
       });
       awardedPoints = pointsResult.awarded ? check.lessonPoints : 0;
 
@@ -282,6 +285,7 @@ async function applyOfflineLessonAttendanceRewards(
         sourceId: check.id,
         sourceKey: `offline-lesson:${crmClassId}:${check.crmStudentId}`,
         createdBy: approvedBy,
+        eventAt,
       });
       awardedCoins = coinResult.awarded ? 1 : 0;
       await evaluateAchievements(student.id);

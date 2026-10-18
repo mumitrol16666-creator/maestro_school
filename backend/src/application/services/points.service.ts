@@ -251,11 +251,14 @@ export async function awardManualPoints(params: {
   reason: string;
   awardedBy: string;
   idempotencyKey?: string;
+  /** Business time of the action; a lesson held before the cutover stays legacy. */
+  eventAt?: Date;
 }): Promise<{ awarded: boolean; transactionId?: string }> {
   if (params.amount <= 0) {
     return { awarded: false };
   }
-  if (rewardEconomyV2AppliesToEvent(new Date())) {
+  const eventAt = params.eventAt ?? new Date();
+  if (rewardEconomyV2AppliesToEvent(eventAt)) {
     throw new ConflictError(
       "Ручные Points отключены в новой экономике",
       "LEGACY_MANUAL_POINTS_DISABLED",
@@ -285,6 +288,7 @@ export async function awardManualPoints(params: {
       amount: params.amount,
       reason,
       awardedBy: params.awardedBy,
+      createdAt: eventAt,
     },
   });
 
