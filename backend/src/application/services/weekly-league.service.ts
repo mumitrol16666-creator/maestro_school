@@ -1795,13 +1795,50 @@ export async function finalizePreviousWeeklyLeague(now = new Date()) {
   return { week: week.key, participants: ranking.length, status: "finalized" as const, finalizesAt };
 }
 
+/**
+ * Finalizes every past week of the active epoch that still has no snapshot,
+ * oldest first so streaks are processed in order. A worker that was down for
+ * more than a week used to skip those weeks forever (only offset 1 was checked).
+ */
+export async function finalizeOverdueWeeklyLeagues(now = new Date(), maxWeeks = 52) {
+  if (!rewardEconomyV2AppliesToEvent(now)) {
+    return [await finalizePreviousWeeklyLeague(now)];
+  }
+  const economicEpoch = await requireActiveEconomicEpochForEvent(now);
+  const pending: AqtobeWeekRange[] = [];
+  for (let offset = 1; offset <= maxWeeks; offset += 1) {
+    const week = getAqtobeWeekRange(now, offset);
+    if (week.end <= economicEpoch.startsAt) break;
+    if (now < weeklyLeagueFinalizesAt(week)) continue;
+    const existing = await prisma.weeklyLeagueSnapshot.findUnique({
+      where: {
+        economicEpochId_weekStart: { economicEpochId: economicEpoch.id, weekStart: week.start },
+      },
+      select: { id: true },
+    });
+    // Older weeks were finalized before this snapshot was written.
+    if (existing) break;
+    pending.push(week);
+  }
+  const results = [];
+  for (const week of pending.reverse()) {
+    const result = await finalizeWeeklyLeagueSnapshot({
+      week,
+      economicEpochId: economicEpoch.id,
+      finalizedAt: now,
+    });
+    results.push({ ...result, status: "finalized" as const, finalizesAt: weeklyLeagueFinalizesAt(week) });
+  }
+  return results;
+}
+
 export function startWeeklyLeagueFinalizerJob() {
   let running = false;
   const run = async () => {
     if (running) return;
     running = true;
     try {
-      await finalizePreviousWeeklyLeague();
+      await finalizeOverdueWeeklyLeagues();
     } catch (error) {
       console.error("[weekly-league-finalizer]", error);
     } finally {

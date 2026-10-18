@@ -2,6 +2,7 @@ import { EconomicEpochStatus, type Prisma, type PrismaClient } from "@prisma/cli
 import { ConflictError } from "../../domain/errors.js";
 import { prisma } from "../../infrastructure/database/prisma.js";
 import { getAqtobeWeekRange } from "./weekly-league-policy.js";
+import { lockStudentCoinWallet } from "./coin-wallet.service.js";
 
 export const ECONOMY_V2_EPOCH_CODE = "economy-v2-2026-09-01";
 export const ECONOMY_V2_EPOCH_NAME = "Maestro Economy V2";
@@ -379,11 +380,10 @@ export async function ensureActiveEconomicEpochParticipant(
       },
       select: { id: true, openingPoints: true },
     });
-    await tx.studentCoinBalance.upsert({
-      where: { studentId },
-      update: { balance: epoch.openingCoins, economicEpochId: epoch.id },
-      create: { studentId, balance: epoch.openingCoins, economicEpochId: epoch.id },
-    });
+    // A late joiner may already hold coins earned in this epoch (lesson awards
+    // arrive before the first read): add the opening balance, never overwrite.
+    const wallet = await lockStudentCoinWallet(tx, studentId, epoch.id);
+    const balanceAfter = wallet.balance + epoch.openingCoins;
     await tx.maestroCoinTransaction.create({
       data: {
         economicEpochId: epoch.id,
@@ -394,10 +394,14 @@ export async function ensureActiveEconomicEpochParticipant(
         sourceType: "economic_epoch",
         sourceKey: openingCoinsSourceKey(epoch.code, studentId),
         createdById: null,
-        balanceBefore: 0,
-        balanceAfter: epoch.openingCoins,
+        balanceBefore: wallet.balance,
+        balanceAfter,
         createdAt: activatedAt,
       },
+    });
+    await tx.studentCoinBalance.update({
+      where: { studentId },
+      data: { balance: balanceAfter },
     });
     await tx.auditLog.create({
       data: {

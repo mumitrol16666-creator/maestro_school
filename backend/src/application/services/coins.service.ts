@@ -3,10 +3,13 @@ import { prisma } from "../../infrastructure/database/prisma.js";
 import { BadRequestError, ConflictError } from "../../domain/errors.js";
 import { rewardEconomyV2AppliesToEvent } from "../../config/product-features.js";
 import { deliverUserNotification } from "./notification.service.js";
+import { lockStudentCoinWallet } from "./coin-wallet.service.js";
 import {
   ensureActiveEconomicEpochParticipant,
   requireActiveEconomicEpochForEvent,
 } from "./economic-epoch.service.js";
+
+export { lockStudentCoinWallet };
 
 export async function creditMaestroCoinsInTransaction(
   tx: Prisma.TransactionClient,
@@ -34,21 +37,7 @@ export async function creditMaestroCoinsInTransaction(
     };
   }
 
-  const balanceRow = await tx.studentCoinBalance.upsert({
-    where: { studentId: params.studentId },
-    create: {
-      studentId: params.studentId,
-      balance: 0,
-      economicEpochId: params.economicEpochId,
-    },
-    update: {},
-  });
-  if (params.economicEpochId && balanceRow.economicEpochId !== params.economicEpochId) {
-    throw new ConflictError(
-      "Баланс Coins не открыт в активной экономической эпохе",
-      "ECONOMIC_EPOCH_BALANCE_MISSING",
-    );
-  }
+  const balanceRow = await lockStudentCoinWallet(tx, params.studentId, params.economicEpochId);
 
   const balanceBefore = balanceRow.balance;
   const balanceAfter = balanceBefore + params.amount;
@@ -136,21 +125,7 @@ export async function addMaestroCoins(params: {
   let result: { awarded: true; balance: number; transactionId: string };
   try {
     result = await prisma.$transaction(async (tx) => {
-      const balanceRow = await tx.studentCoinBalance.upsert({
-        where: { studentId: params.studentId },
-        create: {
-          studentId: params.studentId,
-          balance: 0,
-          economicEpochId: economicEpoch?.id ?? null,
-        },
-        update: {},
-      });
-      if (economicEpoch && balanceRow.economicEpochId !== economicEpoch.id) {
-        throw new ConflictError(
-          "Баланс Coins не открыт в активной экономической эпохе",
-          "ECONOMIC_EPOCH_BALANCE_MISSING",
-        );
-      }
+      const balanceRow = await lockStudentCoinWallet(tx, params.studentId, economicEpoch?.id ?? null);
 
       const balanceBefore = balanceRow.balance;
       const balanceAfter = balanceBefore + params.amount;
