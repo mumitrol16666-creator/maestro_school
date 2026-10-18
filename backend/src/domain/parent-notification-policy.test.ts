@@ -40,3 +40,20 @@ test("balance alert prioritizes debt and warns at one remaining class", () => {
   );
   assert.equal(parentBalanceAlert({}), null);
 });
+
+test("balance alert uses the CRM amount due, which includes unpaid membership remainder", () => {
+  assert.deepEqual(
+    parentBalanceAlert({ classesRemainingTotal: 5, debtAmountKzt: 0, amountDueKzt: 12000 }),
+    {
+      kind: "debt",
+      value: 12000,
+      title: "Есть сумма к оплате",
+      body: `К оплате: ${(12000).toLocaleString("ru-RU")} ₸.`,
+    },
+  );
+});
+
+test("a rate-card student without package memberships gets no low-classes alert", () => {
+  assert.equal(parentBalanceAlert({ classesRemainingTotal: null, debtAmountKzt: 0, amountDueKzt: 0 }), null);
+  assert.equal(parentBalanceAlert({ classesRemainingTotal: undefined, debtAmountKzt: 0 }), null);
+});

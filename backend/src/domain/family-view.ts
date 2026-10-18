@@ -5,6 +5,8 @@ type FamilySummarySource = {
   };
   balanceSnapshot: {
     debtAmountKzt?: number;
+    /** CRM: negative balance plus the unpaid part of active memberships. */
+    amountDueKzt?: number | null;
     accountBalanceKzt?: number;
   };
   upcomingLessons: Array<Record<string, unknown>>;
@@ -17,6 +19,20 @@ type FamilyVisibility = {
   showPlanProgress: boolean;
 };
 
+/**
+ * The one amount a parent owes: CRM's `amountDueKzt` (negative balance plus
+ * unpaid membership remainder) when it is present, otherwise the older
+ * balance-only debt.
+ */
+export function parentAmountDueKzt(snapshot: {
+  debtAmountKzt?: number | null;
+  amountDueKzt?: number | null;
+}) {
+  const due = snapshot.amountDueKzt ?? snapshot.debtAmountKzt ?? 0;
+  const amount = Number(due);
+  return Number.isFinite(amount) ? Math.max(0, amount) : 0;
+}
+
 function withoutMaterials(lesson: Record<string, unknown>) {
   const { materials: _materials, ...safeLesson } = lesson;
   return safeLesson;
@@ -28,7 +44,7 @@ export function buildFamilyOfflineSummary(source: unknown, visibility: FamilyVis
   showPlanProgress: true,
 }) {
   const summary = source as FamilySummarySource;
-  const debt = Math.max(0, Number(summary.balanceSnapshot.debtAmountKzt ?? 0));
+  const debt = parentAmountDueKzt(summary.balanceSnapshot);
   const accountBalance = Number(summary.balanceSnapshot.accountBalanceKzt ?? 0);
   const signedAmountKzt = debt > 0 ? -debt : accountBalance;
   return {

@@ -1,3 +1,4 @@
+import { parentAmountDueKzt } from "./family-view.js";
 export type ParentOfflineEvent =
   | "approved"
   | "returned"
@@ -26,9 +27,13 @@ export function parentOfflineEventType(
 export function parentBalanceAlert(snapshot: {
   classesRemainingTotal?: number | null;
   debtAmountKzt?: number | null;
+  amountDueKzt?: number | null;
 }) {
-  const debt = Number(snapshot.debtAmountKzt);
-  const classesRemaining = Number(snapshot.classesRemainingTotal);
+  const debt = parentAmountDueKzt(snapshot);
+  // null means the student has no package membership (rate card), not "0 left".
+  const classesRemaining = snapshot.classesRemainingTotal == null
+    ? Number.NaN
+    : Number(snapshot.classesRemainingTotal);
   if (Number.isFinite(debt) && debt > 0) {
     return {
       kind: "debt" as const,

@@ -53,3 +53,23 @@ test("family summary removes modules disabled for all linked parents", () => {
   assert.deepEqual(result.upcomingLessons, []);
   assert.equal(result.monthlyPlan, null);
 });
+
+test("family balance shows the CRM amount due even when the account balance is not negative", () => {
+  const result = buildFamilyOfflineSummary({
+    profile: { name: "Ученик", groups: [] },
+    balanceSnapshot: { debtAmountKzt: 0, amountDueKzt: 9000, accountBalanceKzt: 1500 },
+    upcomingLessons: [],
+    monthlyPlan: null,
+  });
+  assert.deepEqual(result.financialBalance, { signedAmountKzt: -9000, status: "debt", source: "crm" });
+});
+
+test("family balance falls back to the balance-only debt for an older CRM payload", () => {
+  const result = buildFamilyOfflineSummary({
+    profile: { name: "Ученик", groups: [] },
+    balanceSnapshot: { debtAmountKzt: 0, accountBalanceKzt: 2500 },
+    upcomingLessons: [],
+    monthlyPlan: null,
+  });
+  assert.deepEqual(result.financialBalance, { signedAmountKzt: 2500, status: "credit", source: "crm" });
+});

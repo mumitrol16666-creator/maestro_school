@@ -10,6 +10,7 @@ import {
   type ReminderRule,
 } from "./lesson-reminder.logic.js";
 import { deliverUserNotification } from "./notification.service.js";
+import { getParentVisibility } from "./parent-visibility.service.js";
 
 const CHECK_INTERVAL_MS = 5 * 60 * 1000;
 const DEDUPE_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
@@ -204,7 +205,10 @@ async function sendStudentOfflineReminders(now: Date) {
           lessonId: crmClassId,
           startsAt,
         });
-        await Promise.allSettled(student.parentLinksAsStudent.map((link) => deliverLessonReminder({
+        const parentLinks = (await getParentVisibility(student.id)).showSchedule
+          ? student.parentLinksAsStudent
+          : [];
+        await Promise.allSettled(parentLinks.map((link) => deliverLessonReminder({
           userId: link.parentUserId,
           type: "parent_lesson_reminder",
           rule,

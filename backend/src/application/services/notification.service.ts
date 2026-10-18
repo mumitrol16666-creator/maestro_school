@@ -11,6 +11,7 @@ import {
 import { findUserByCrmStudentId, findUserByCrmTeacherId } from "../repositories/user-link.repository.js";
 import { sendPushToUser } from "./push-notification.service.js";
 import { getStudentSchoolOfflineSummary } from "./school-offline.service.js";
+import { getParentVisibility } from "./parent-visibility.service.js";
 
 export async function createUserNotification(params: {
   userId: string;
@@ -317,7 +318,10 @@ async function notifyParentsAboutApprovedLesson(params: {
     })));
   }
 
-  const balanceAlert = summary?.balanceSnapshot
+  // The balance module can be hidden from parents by the child's policy;
+  // a hidden module must not leak through notifications either.
+  const visibility = await getParentVisibility(params.student.id);
+  const balanceAlert = summary?.balanceSnapshot && visibility.showBalance
     ? parentBalanceAlert(summary.balanceSnapshot)
     : null;
   if (balanceAlert) {
@@ -478,6 +482,9 @@ export async function notifyOfflineLessonEvent(params: {
 
       const type = parentOfflineEventType(params.event);
       if (!type) return;
+      // Schedule changes are a parent-visible module; respect the child's policy.
+      const visibility = await getParentVisibility(student.id);
+      if (!visibility.showSchedule) return;
       const childName = formatFio(student) || "ученика";
       const copy = params.event === "cancelled"
         ? {
