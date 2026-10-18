@@ -69,6 +69,14 @@ const before = {
   parent: listOf(await appRequest(parentToken, 'GET', '/students/me/notifications?limit=50')),
 };
 
+const economy = async () => {
+  const profile = (await appRequest(studentToken, 'GET', '/students/me/economy-profile')).data;
+  const league = (await appRequest(studentToken, 'GET', '/students/me/weekly-league')).data;
+  const me = findAll(league, (o) => typeof o.xp === 'number' && (o.isMe === true || o.isCurrentStudent === true || o.self === true))[0]
+    ?? findAll(league, (o) => typeof o.xp === 'number' && typeof o.position === 'number')[0];
+  return { points: profile.points, coins: profile.coins?.balance ?? profile.coins, xp: me?.xp ?? null, leagueKeys: Object.keys(league) };
+const economyBefore = await economy();
+
 const created = await controller('POST', '/lessons', {
   scenarioId: `CB-${suffix}`,
   classType: 'individual',
@@ -129,12 +137,6 @@ await waitFor('platform report confirmed', async () => {
 console.log(`✓ отчёт на платформе confirmed через ${Date.now() - approveStartedAt} мс`);
 
 // ---------- 0.2: reopen → return → resubmit → re-approve ----------
-const economy = async () => {
-  const profile = (await appRequest(studentToken, 'GET', '/students/me/economy-profile')).data;
-  const league = (await appRequest(studentToken, 'GET', '/students/me/weekly-league')).data;
-  const me = findAll(league, (o) => typeof o.xp === 'number' && (o.isMe === true || o.isCurrentStudent === true || o.self === true))[0]
-    ?? findAll(league, (o) => typeof o.xp === 'number' && typeof o.position === 'number')[0];
-  return { points: profile.points, coins: profile.coins?.balance ?? profile.coins, xp: me?.xp ?? null, leagueKeys: Object.keys(league) };
 };
 const afterApprove = await economy();
 console.log('экономика после approve:', afterApprove);
@@ -162,7 +164,8 @@ await waitFor('platform report editing', async () => {
 }, 20, 500);
 const afterReturn = await economy();
 console.log('экономика после возврата:', afterReturn);
-if (afterReturn.points >= afterApprove.points && afterApprove.points > 0) throw new Error('points were not reversed');
+// Points are only due when this lesson closed a topic (seed topics may already be mastered by earlier runs).
+if (afterApprove.points > economyBefore.points && afterReturn.points >= afterApprove.points) throw new Error('points were not reversed');
 if (afterReturn.coins !== afterApprove.coins - 50) throw new Error(`coins were not reversed: ${afterReturn.coins} vs ${afterApprove.coins}`);
 console.log('✓ после возврата отчёт editing, Points/Coins откатились');
 

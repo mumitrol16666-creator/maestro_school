@@ -35,6 +35,25 @@ function reversedKey(sourceKey: string, reportVersion: number) {
   return `${sourceKey}:reversed:v${reportVersion}`;
 }
 
+/**
+ * The renamed key of a reversed row must stay unique. Keys that are not bound to
+ * a lesson (homework recipient, topic mastery, plan completion) can be awarded
+ * again by a later lesson and reversed again under the same report version, so
+ * the rename takes the first free suffix: `:reversed:v1`, then `:reversed:v1-2`…
+ */
+async function freeReversedKey(
+  exists: (candidate: string) => Promise<boolean>,
+  sourceKey: string,
+  reportVersion: number,
+) {
+  const base = reversedKey(sourceKey, reportVersion);
+  let candidate = base;
+  for (let attempt = 2; await exists(candidate); attempt += 1) {
+    candidate = `${base}-${attempt}`;
+  }
+  return candidate;
+}
+
 function reversalKey(sourceKey: string, reportVersion: number) {
   return `${sourceKey}:reversal:v${reportVersion}`;
 }
@@ -47,7 +66,11 @@ async function reverseXpEvent(tx: Tx, sourceKey: string, reportVersion: number, 
     data: {
       reversedAt: at,
       reversalReason: reason.slice(0, 500),
-      sourceKey: reversedKey(sourceKey, reportVersion),
+      sourceKey: await freeReversedKey(
+        async (candidate) => Boolean(await tx.leagueXpEvent.findUnique({ where: { sourceKey: candidate }, select: { id: true } })),
+        sourceKey,
+        reportVersion,
+      ),
     },
   });
   return event.amount;
@@ -60,7 +83,14 @@ async function reverseActivity(tx: Tx, sourceKeySuffix: string, reportVersion: n
   for (const event of events) {
     await tx.weeklyLeagueActivityEvent.update({
       where: { id: event.id },
-      data: { reversedAt: at, sourceKey: reversedKey(event.sourceKey, reportVersion) },
+      data: {
+        reversedAt: at,
+        sourceKey: await freeReversedKey(
+          async (candidate) => Boolean(await tx.weeklyLeagueActivityEvent.findUnique({ where: { sourceKey: candidate }, select: { id: true } })),
+          event.sourceKey,
+          reportVersion,
+        ),
+      },
     });
   }
 }
@@ -86,7 +116,13 @@ async function reverseCoinTransaction(
   const balanceAfter = balanceBefore - original.amount;
   await tx.maestroCoinTransaction.update({
     where: { id: original.id },
-    data: { sourceKey: reversedKey(sourceKey, reportVersion) },
+    data: {
+      sourceKey: await freeReversedKey(
+        async (candidate) => Boolean(await tx.maestroCoinTransaction.findUnique({ where: { sourceKey: candidate }, select: { id: true } })),
+        sourceKey,
+        reportVersion,
+      ),
+    },
   });
   await tx.maestroCoinTransaction.create({
     data: {
@@ -126,7 +162,13 @@ async function reversePointsTransaction(
   if (existing) return 0;
   await tx.pointsTransaction.update({
     where: { id: original.id },
-    data: { sourceKey: reversedKey(sourceKey, reportVersion) },
+    data: {
+      sourceKey: await freeReversedKey(
+        async (candidate) => Boolean(await tx.pointsTransaction.findUnique({ where: { sourceKey: candidate }, select: { id: true } })),
+        sourceKey,
+        reportVersion,
+      ),
+    },
   });
   await tx.pointsTransaction.create({
     data: {
@@ -215,6 +257,19 @@ async function reverseHomeworkDecisions(
         rewardSourceKey: null,
       },
     });
+    // The reviewed attempt goes back to the queue as well, otherwise the next
+    // lesson sees a pending homework without an answer it may decide on.
+    const reviewedAttempt = await tx.learningHomeworkAttempt.findFirst({
+      where: { recipientId: recipient.id, cycleNumber: decision.cycleNumber, status: { not: "superseded" } },
+      orderBy: [{ versionInCycle: "desc" }, { attemptNumber: "desc" }],
+      select: { id: true, status: true },
+    });
+    if (reviewedAttempt && reviewedAttempt.status !== "waiting_review") {
+      await tx.learningHomeworkAttempt.update({
+        where: { id: reviewedAttempt.id },
+        data: { status: "waiting_review" },
+      });
+    }
     results.push({ recipientId: decision.recipientId, xp });
   }
   return results;

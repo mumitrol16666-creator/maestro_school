@@ -127,7 +127,7 @@ async function createRewardedLessonFixture() {
     data: { rewardSourceKey: `learning-homework:${recipient.id}` },
   });
   const attempt = await prisma.learningHomeworkAttempt.create({
-    data: { recipientId: recipient.id, attemptNumber: 1, cycleNumber: 1, versionInCycle: 1, submissionMode: "ready_for_lesson", idempotencyKey: `reversal-attempt:${suffix}` },
+    data: { recipientId: recipient.id, attemptNumber: 1, cycleNumber: 1, versionInCycle: 1, submissionMode: "ready_for_lesson", status: "accepted", idempotencyKey: `reversal-attempt:${suffix}` },
   });
   await prisma.learningHomeworkReview.create({
     data: { recipientId: recipient.id, attemptId: attempt.id, cycleNumber: 1, decision: "accepted", idempotencyKey: `offline-lesson:${crmClassId}:homework:${recipient.id}:1` },
@@ -226,6 +226,10 @@ integrationTest("reversal undoes every reward of the confirmed version and keeps
   assert.equal(activity.length, 2);
   assert.ok(activity.every((event) => event.reversedAt));
 
+  const reopenedRecipient = await prisma.learningHomeworkRecipient.findUniqueOrThrow({ where: { id: fixture.recipient.id }, include: { attempts: true } });
+  assert.equal(reopenedRecipient.state, "waiting_review");
+  assert.deepEqual(reopenedRecipient.attempts.map((attempt) => attempt.status), ["waiting_review"], "the reviewed answer waits for the next lesson again");
+
   const balance = await prisma.studentCoinBalance.findUniqueOrThrow({ where: { studentId: fixture.student.id } });
   assert.equal(balance.balance, 200);
   const coins = await prisma.maestroCoinTransaction.findMany({ where: { studentId: fixture.student.id } });
@@ -261,6 +265,44 @@ integrationTest("reversal undoes every reward of the confirmed version and keeps
   assert.deepEqual(again.attendance, []);
   assert.equal((await prisma.pointsTransaction.findMany({ where: { studentId: fixture.student.id } })).length, 4);
   assert.equal((await prisma.studentCoinBalance.findUniqueOrThrow({ where: { studentId: fixture.student.id } })).balance, 200);
+});
+
+integrationTest("reversal survives keys already taken by an earlier reversal of the same homework", async t => {
+  const fixture = await createRewardedLessonFixture();
+  t.after(() => removeRewardedLessonFixture(fixture));
+  // An earlier lesson already accepted and then returned this homework under its own v1.
+  const homeworkKey = `learning-homework:${fixture.recipient.id}`;
+  await prisma.leagueXpEvent.create({
+    data: {
+      economicEpochId: fixture.epoch.id, studentId: fixture.student.id, amount: 15, sourceType: "learning_homework",
+      sourceKey: `${homeworkKey}:reversed:v1`, description: "ДЗ (старый урок)", createdAt: new Date("2026-10-10T07:00:00.000Z"),
+      reversedAt: new Date("2026-10-11T07:00:00.000Z"),
+    },
+  });
+  await prisma.weeklyLeagueActivityEvent.create({
+    data: {
+      economicEpochId: fixture.epoch.id, studentId: fixture.student.id, activityType: "homework_accepted",
+      sourceKey: `weekly-activity:${fixture.epoch.id}:${homeworkKey}:reversed:v1`,
+      occurredAt: new Date("2026-10-10T07:00:00.000Z"), reversedAt: new Date("2026-10-11T07:00:00.000Z"),
+    },
+  });
+
+  const summary = await reverseOfflineLessonApproval({
+    crmClassId: fixture.crmClassId,
+    reason: "Урок возвращён преподавателю из CRM",
+    now: new Date("2026-10-17T09:00:00.000Z"),
+  });
+  assert.equal(summary.reversed, true);
+  assert.deepEqual(summary.homework, [{ recipientId: fixture.recipient.id, xp: 15 }]);
+
+  const xpKeys = (await prisma.leagueXpEvent.findMany({ where: { studentId: fixture.student.id, sourceKey: { startsWith: homeworkKey } } }))
+    .map((event) => event.sourceKey).sort();
+  assert.deepEqual(xpKeys, [`${homeworkKey}:reversed:v1`, `${homeworkKey}:reversed:v1-2`]);
+  const activity = await prisma.weeklyLeagueActivityEvent.findMany({
+    where: { studentId: fixture.student.id, sourceKey: { contains: homeworkKey } },
+  });
+  assert.equal(activity.length, 2);
+  assert.ok(activity.every((event) => event.reversedAt));
 });
 
 integrationTest("a CRM return of a confirmed lesson reverses rewards and makes the report editable again", async t => {
