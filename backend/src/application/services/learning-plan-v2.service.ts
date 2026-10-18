@@ -8,7 +8,6 @@ import {
 } from "../../domain/monthly-plan.js";
 import { prisma } from "../../infrastructure/database/prisma.js";
 import {
-  fetchClassStudents,
   fetchTeacherGroups,
   fetchTeacherStudents,
 } from "../../infrastructure/crm/crm-client.js";
@@ -1331,38 +1330,31 @@ async function requireLessonTopicScope(actorUserId: string, topicId: string) {
   return topic;
 }
 
+/**
+ * Who receives the 100 Points for a topic closed in a lesson.
+ * A group topic is paid only to the students present in the immutable attendance
+ * snapshot of the approved report version; without a snapshot nobody is paid,
+ * because the live CRM roster also lists students who missed the lesson.
+ */
 export function topicRewardCrmStudentIds(
   topic: { crmStudentId: string | null; crmGroupId: string | null },
-  currentGroupCrmStudentIds: readonly string[],
   immutableRecipientCrmStudentIds?: readonly string[],
 ) {
-  const candidates = immutableRecipientCrmStudentIds ?? (
-    topic.crmStudentId ? [topic.crmStudentId] : currentGroupCrmStudentIds
-  );
-  const uniqueCandidates = [...new Set(candidates.map((id) => id.trim()).filter(Boolean))];
   if (topic.crmStudentId) {
-    return uniqueCandidates.includes(topic.crmStudentId) ? [topic.crmStudentId] : [];
+    if (immutableRecipientCrmStudentIds === undefined) return [topic.crmStudentId];
+    const present = new Set(immutableRecipientCrmStudentIds.map((id) => id.trim()).filter(Boolean));
+    return present.has(topic.crmStudentId) ? [topic.crmStudentId] : [];
   }
-  return topic.crmGroupId ? uniqueCandidates : [];
+  if (!topic.crmGroupId || immutableRecipientCrmStudentIds === undefined) return [];
+  return [...new Set(immutableRecipientCrmStudentIds.map((id) => id.trim()).filter(Boolean))];
 }
 
 async function resolveTopicRewardStudents(
   topic: { crmStudentId: string | null; crmGroupId: string | null },
-  crmClassId: string,
+  _crmClassId: string,
   immutableRecipientCrmStudentIds?: readonly string[],
 ) {
-  const currentGroupCrmStudentIds = topic.crmGroupId && immutableRecipientCrmStudentIds === undefined
-    ? ((await fetchClassStudents(crmClassId)) as {
-        students?: Array<{ crmStudentId: string; groupStatus?: string }>;
-      }).students
-        ?.filter((student) => !["inactive", "archived", "left"].includes(student.groupStatus ?? "active"))
-        .map((student) => student.crmStudentId) ?? []
-    : [];
-  const crmStudentIds = topicRewardCrmStudentIds(
-    topic,
-    currentGroupCrmStudentIds,
-    immutableRecipientCrmStudentIds,
-  );
+  const crmStudentIds = topicRewardCrmStudentIds(topic, immutableRecipientCrmStudentIds);
 
   return prisma.user.findMany({
     where: {

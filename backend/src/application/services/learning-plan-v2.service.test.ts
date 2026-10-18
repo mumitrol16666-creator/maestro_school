@@ -84,33 +84,31 @@ test("outside a lesson a teacher can set only 0-99 percent", () => {
 
 test("group topic rewards exclude students absent from the immutable approval snapshot", () => {
   const topic = { crmStudentId: null, crmGroupId: "group-1" };
-  const currentRoster = ["student-present", "student-late", "student-absent"];
 
   assert.deepEqual(
-    topicRewardCrmStudentIds(
-      topic,
-      currentRoster,
-      ["student-present", "student-late"],
-    ),
+    topicRewardCrmStudentIds(topic, ["student-present", "student-late"]),
     ["student-present", "student-late"],
   );
 });
 
-test("group topic reward recipients remain stable when the current roster changes before retry", () => {
+test("group topic reward recipients are deduplicated and trimmed from the snapshot", () => {
   const topic = { crmStudentId: null, crmGroupId: "group-1" };
   const submittedRecipients = [" student-present ", "student-late", "student-present"];
 
-  const firstAttempt = topicRewardCrmStudentIds(
-    topic,
-    ["student-present", "student-late", "student-absent"],
-    submittedRecipients,
-  );
-  const retryAfterRosterChange = topicRewardCrmStudentIds(
-    topic,
-    ["student-present", "student-new"],
-    submittedRecipients,
-  );
+  assert.deepEqual(topicRewardCrmStudentIds(topic, submittedRecipients), ["student-present", "student-late"]);
+});
 
-  assert.deepEqual(firstAttempt, ["student-present", "student-late"]);
-  assert.deepEqual(retryAfterRosterChange, firstAttempt);
+test("a group topic without an attendance snapshot pays nobody", () => {
+  const topic = { crmStudentId: null, crmGroupId: "group-1" };
+
+  assert.deepEqual(topicRewardCrmStudentIds(topic), []);
+  assert.deepEqual(topicRewardCrmStudentIds(topic, []), []);
+});
+
+test("an individual topic pays its student unless the snapshot says they were absent", () => {
+  const topic = { crmStudentId: "student-1", crmGroupId: null };
+
+  assert.deepEqual(topicRewardCrmStudentIds(topic), ["student-1"]);
+  assert.deepEqual(topicRewardCrmStudentIds(topic, ["student-1", "student-2"]), ["student-1"]);
+  assert.deepEqual(topicRewardCrmStudentIds(topic, ["student-2"]), []);
 });
