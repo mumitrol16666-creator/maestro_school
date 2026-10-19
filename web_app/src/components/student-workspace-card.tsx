@@ -112,6 +112,7 @@ export function StudentWorkspaceCard({
   const resource = useApiResource(() => teacherStudentsApi.workspace(crmStudentId, crmClassId), [crmStudentId, crmClassId]);
   const data = resource.data;
   const limited = data?.access.kind === "lesson";
+  const substitute = data?.access.kind === "substitute" ? data.access : null;
 
   function setTab(next: WorkspaceTab) {
     setTabState(next);
@@ -159,6 +160,15 @@ export function StudentWorkspaceCard({
         </div>
       </header>
 
+      {substitute ? (
+        <p data-testid="workspace-substitute" className="mt-4 rounded-xl border border-sky-200 bg-sky-50/70 px-4 py-3 text-xs font-semibold leading-5 text-sky-900">
+          <span className="mr-2 rounded-full bg-sky-600 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-white">Замена</span>
+          Вы ведёте урок{substitute.lessonDate ? ` ${formatLessonDay(substitute.lessonDate)}` : ""}
+          {substitute.originalTeacherName ? ` вместо преподавателя ${substitute.originalTeacherName}` : " вместо постоянного преподавателя"}.
+          {" "}Сектор, баллы, уровень, история и диалог открыты до утверждения урока, потом доступ и переписка закроются.
+        </p>
+      ) : null}
+
       {limited ? (
         <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3 text-xs font-semibold leading-5 text-amber-900">
           Вы заменяете преподавателя на этом уроке: видны только сектор и его темы. История, задания и диалог остаются у постоянного преподавателя.
@@ -196,6 +206,13 @@ export function StudentWorkspaceCard({
   );
 }
 
+function formatLessonDay(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? ""
+    : date.toLocaleDateString("ru-RU", { day: "numeric", month: "long", timeZone: "Asia/Aqtobe" });
+}
+
 /* ─── Сейчас ─────────────────────────────────────────────────────────── */
 
 function NowTab({
@@ -214,7 +231,7 @@ function NowTab({
   const [proposalHint, setProposalHint] = useState<string | null>(null);
 
   return (
-    <div className="grid gap-4">
+    <div className="grid min-w-0 grid-cols-1 gap-4">
       {!data.sectors.length ? (
         <EmptyState
           title="Сектор ещё не открыт"
@@ -260,7 +277,7 @@ function NowTab({
 function SectorBlock({ sector, onChanged }: { sector: StudentHomeMonthlyPlan; onChanged: () => void }) {
   const test = sector.preparedTest;
   return (
-    <section className="rounded-2xl border border-amber-200 bg-amber-50/40 p-4 sm:p-5" data-testid="workspace-sector">
+    <section className="min-w-0 rounded-2xl border border-amber-200 bg-amber-50/40 p-4 sm:p-5" data-testid="workspace-sector">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[10px] font-black uppercase tracking-[0.16em] text-amber-800">
@@ -539,7 +556,7 @@ function RecentLessons({ data }: { data: TeacherStudentWorkspace }) {
 function ActivityTab({ data }: { data: TeacherStudentWorkspace }) {
   const xp = data.weekXp;
   return (
-    <div className="grid gap-4">
+    <div className="grid min-w-0 grid-cols-1 gap-4">
       <section className="rounded-2xl border border-stone-200 bg-white p-4">
         <p className="inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-stone-600"><Sparkles size={14} /> XP этой недели</p>
         {xp ? (
@@ -604,7 +621,7 @@ function DynamicsTab({ data }: { data: TeacherStudentWorkspace }) {
   const dynamics = data.dynamics;
   if (!dynamics) return <EmptyState title="Динамика недоступна" description="Для замены на уроке история ученика скрыта." />;
   return (
-    <div className="grid gap-4">
+    <div className="grid min-w-0 grid-cols-1 gap-4">
       <section className="rounded-2xl border border-stone-200 bg-white p-4">
         <div className="flex items-end justify-between gap-3">
           <p className="inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-stone-600"><CalendarCheck size={14} /> Посещаемость</p>
@@ -686,7 +703,7 @@ function TasksTab({ data, crmStudentId }: { data: TeacherStudentWorkspace; crmSt
     ["Принято", data.homework.items.filter((item) => item.state.startsWith("accepted"))],
   ];
   return (
-    <div className="grid gap-4">
+    <div className="grid min-w-0 grid-cols-1 gap-4">
       {groups.map(([title, items]) => (
         <section key={title} className="rounded-2xl border border-stone-200 bg-white p-4">
           <p className="text-xs font-black uppercase tracking-wider text-stone-600">{title} · {items.length}</p>
@@ -724,7 +741,7 @@ function DialogTab({ data }: { data: TeacherStudentWorkspace }) {
   }
 
   return (
-    <div className="grid gap-4">
+    <div className="grid min-w-0 grid-cols-1 gap-4">
       <section className="rounded-2xl border border-stone-200 bg-white p-4">
         <p className="inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-stone-600"><MessageSquare size={14} /> Написать</p>
         {!appUserId ? <p className="mt-2 text-xs text-stone-500">Ученик ещё не подключил приложение, сообщения дойдут после первого входа.</p> : null}

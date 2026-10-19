@@ -1,12 +1,11 @@
 import { createHash } from "node:crypto";
 import { Prisma, type LearningConversationMemberRole } from "@prisma/client";
+import { fetchTeacherGroupsForAccess, fetchTeacherStudentsForAccess } from "./teacher-substitution.service.js";
 import { BadRequestError, ConflictError, NotFoundError } from "../../domain/errors.js";
 import { normalizeCrmDirectionTitle } from "../../domain/crm-direction-title.js";
 import { getLearningConversationRetention } from "../../domain/learning-dialog-policy.js";
 import {
   fetchCrmDirections,
-  fetchTeacherGroups,
-  fetchTeacherStudents,
 } from "../../infrastructure/crm/crm-client.js";
 import { prisma } from "../../infrastructure/database/prisma.js";
 import { productFeatureConfig } from "../../config/product-features.js";
@@ -515,10 +514,11 @@ export async function syncTeacherLearningDialogsFromCrm(teacherUserId: string) {
     throw new ConflictError("Новый контур диалогов выключен", "LEARNING_DIALOGS_V2_DISABLED");
   }
   const crmTeacherId = await requireCrmTeacherId(teacherUserId);
+  // Students of a lesson the teacher covers are reachable until that lesson is approved (plan 1.9).
   const [catalog, roster, groupRoster] = await Promise.all([
     fetchCrmDirections(),
-    fetchTeacherStudents(crmTeacherId),
-    fetchTeacherGroups(crmTeacherId),
+    fetchTeacherStudentsForAccess(crmTeacherId),
+    fetchTeacherGroupsForAccess(crmTeacherId),
   ]);
   if (!roster.teacher || !groupRoster.teacher) throw new NotFoundError("CRM teacher");
 

@@ -18,13 +18,15 @@ import {
  * lessons, platform activity (tests, course lessons, XP of the week) and the
  * dynamics of attendance and homework.
  *
- * Access follows LEARN-026: a teacher with a permanent CRM assignment (direct
- * or through a group) sees everything; a one-off substitute, identified by
- * the lesson they are running, sees only what that lesson needs — the sector
- * with its topics — and nothing of the student's history.
+ * Access follows LEARN-026 and plan 1.9: a teacher with a permanent CRM
+ * assignment (direct or through a group) sees everything. A substitute CRM
+ * marked on a lesson (teacherId != originalTeacherId) sees everything too, from
+ * the assignment until that lesson is approved. A lesson without that mark
+ * still opens the sector alone while it is not approved.
  */
 export type TeacherStudentWorkspaceAccess =
   | { kind: "assigned"; direct: boolean }
+  | { kind: "substitute"; crmClassId: string; lessonDate: string | null; originalTeacherName: string | null }
   | { kind: "lesson"; crmClassId: string };
 
 type OfflineSummaryLesson = {
@@ -112,8 +114,25 @@ async function resolveAccess(
 ) {
   try {
     const scope = await requireTeacherHomeworkStudent(teacherUserId, crmStudentId);
+    if (scope.substitution) {
+      const original = await prisma.user.findFirst({
+        where: { crmTeacherId: scope.substitution.originalCrmTeacherId, deletedAt: null },
+        select: { firstName: true, lastName: true },
+      });
+      const originalTeacherName = original ? [original.lastName, original.firstName].filter(Boolean).join(" ") || null : null;
+      return {
+        access: {
+          kind: "substitute" as const,
+          crmClassId: scope.substitution.crmClassId,
+          lessonDate: scope.substitution.lessonDate,
+          originalTeacherName,
+        } as TeacherStudentWorkspaceAccess,
+        student: normalizeRosterStudent(scope.student),
+        groupIds: scope.groupIds,
+      };
+    }
     return {
-      access: { kind: "assigned" as const, direct: scope.directlyAssigned },
+      access: { kind: "assigned" as const, direct: scope.directlyAssigned } as TeacherStudentWorkspaceAccess,
       student: normalizeRosterStudent(scope.student),
       groupIds: scope.groupIds,
     };
@@ -123,15 +142,18 @@ async function resolveAccess(
   // Not on the roster: the lesson itself may still give access (substitute).
   const roster = await getTeacherOfflineClassStudents(teacherUserId, crmClassId) as {
     students?: Array<{ crmStudentId?: string; name?: string; avatarUrl?: string | null; direction?: string | null }>;
-    lesson?: { group?: { crmGroupId?: string | null } | null } | null;
+    lesson?: { group?: { crmGroupId?: string | null } | null; status?: string | null } | null;
   };
   const rosterStudent = (roster.students ?? []).find((item) => item.crmStudentId === crmStudentId);
   if (!rosterStudent) {
     throw new ForbiddenError("Ученик не закреплён за вами и не участвует в этом уроке");
   }
+  if (roster.lesson?.status === "completed" || roster.lesson?.status === "cancelled") {
+    throw new ForbiddenError("Урок уже утверждён: доступ к ученику по замене закрыт");
+  }
   const crmGroupId = roster.lesson?.group?.crmGroupId ?? null;
   return {
-    access: { kind: "lesson" as const, crmClassId },
+    access: { kind: "lesson" as const, crmClassId } as TeacherStudentWorkspaceAccess,
     student: normalizeRosterStudent({
       crmStudentId,
       name: rosterStudent.name ?? "Ученик",

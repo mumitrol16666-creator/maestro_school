@@ -1,5 +1,6 @@
 import { LearningPlanTopicState, LearningTopicProgressSource } from "@prisma/client";
 import { productFeatureConfig, rewardEconomyV2AppliesToEvent } from "../../config/product-features.js";
+import { fetchTeacherGroupsForAccess, fetchTeacherStudentsForAccess } from "./teacher-substitution.service.js";
 import { isOfflineCoordinatorRole } from "../../domain/cms-access.js";
 import { AppError, BadRequestError, ForbiddenError } from "../../domain/errors.js";
 import { NON_EMPTY_PLAN_COMPLETION_POINTS } from "../../domain/product-economy-v2.js";
@@ -7,8 +8,6 @@ import { prisma } from "../../infrastructure/database/prisma.js";
 import {
   fetchClassCard,
   fetchClassStudents,
-  fetchTeacherGroups,
-  fetchTeacherStudents,
 } from "../../infrastructure/crm/crm-client.js";
 import { aqtobeMonthKey } from "../../lib/aqtobe-month.js";
 import {
@@ -316,7 +315,7 @@ async function resolveLessonScope(actorUserId: string, crmClassId: string): Prom
     throw new ForbiddenError("Этот урок назначен другому преподавателю");
   }
   if (owner.kind === "group") {
-    const groups = await fetchTeacherGroups(crmTeacherId).catch((error) => {
+    const groups = await fetchTeacherGroupsForAccess(crmTeacherId).catch((error) => {
       if (error instanceof AppError && error.statusCode >= 500) {
         return null;
       }
@@ -336,7 +335,7 @@ async function resolveLessonScope(actorUserId: string, crmClassId: string): Prom
       eventAt: offlineLessonEventAt(lesson),
     };
   }
-  const students = await fetchTeacherStudents(crmTeacherId).catch((error) => {
+  const students = await fetchTeacherStudentsForAccess(crmTeacherId).catch((error) => {
     if (error instanceof AppError && error.statusCode >= 500) {
       return null;
     }

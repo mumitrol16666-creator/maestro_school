@@ -1,8 +1,8 @@
 import type { LearningSectorProposalKind, LearningSectorProposalStatus } from "@prisma/client";
 import { prisma, notDeleted } from "../../infrastructure/database/prisma.js";
+import { fetchTeacherStudentsForAccess } from "./teacher-substitution.service.js";
 import { BadRequestError, ForbiddenError, NotFoundError } from "../../domain/errors.js";
 import { formatFio } from "../../domain/name.js";
-import { fetchTeacherStudents } from "../../infrastructure/crm/crm-client.js";
 import { requireCrmTeacherId } from "./teacher-students.service.js";
 import { deliverUserNotification } from "./notification.service.js";
 
@@ -127,7 +127,7 @@ export async function createStudentSectorProposal(studentUserId: string, input: 
 
 async function teacherStudentIds(teacherUserId: string) {
   const crmTeacherId = await requireCrmTeacherId(teacherUserId);
-  const roster = await fetchTeacherStudents(crmTeacherId);
+  const roster = await fetchTeacherStudentsForAccess(crmTeacherId);
   return new Set(roster.students.map((student) => student.crmStudentId));
 }
 

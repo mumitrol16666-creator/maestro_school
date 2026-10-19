@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { LearningPlanTopicState, LearningTopicProgressSource, Prisma } from "@prisma/client";
+import { fetchTeacherGroupsForAccess, fetchTeacherStudentsForAccess } from "./teacher-substitution.service.js";
 import { BadRequestError, ConflictError } from "../../domain/errors.js";
 import { isOfflineCoordinatorRole } from "../../domain/cms-access.js";
 import {
@@ -8,8 +9,6 @@ import {
 } from "../../domain/monthly-plan.js";
 import { prisma } from "../../infrastructure/database/prisma.js";
 import {
-  fetchTeacherGroups,
-  fetchTeacherStudents,
 } from "../../infrastructure/crm/crm-client.js";
 import { requireCrmTeacherId } from "./teacher-students.service.js";
 import {
@@ -70,7 +69,7 @@ async function resolveStudentScope(
   crmDirectionId: string,
 ): Promise<ResolvedScope> {
   const crmTeacherId = await requireCrmTeacherId(teacherUserId);
-  const roster = await fetchTeacherStudents(crmTeacherId);
+  const roster = await fetchTeacherStudentsForAccess(crmTeacherId, { need: crmStudentId });
   const student = roster.students.find((item) => item.crmStudentId === crmStudentId);
   if (!student) {
     throw new BadRequestError("Этот ученик не назначен преподавателю", "STUDENT_NOT_ASSIGNED");
@@ -89,7 +88,7 @@ async function resolveGroupScope(
   crmDirectionId: string,
 ): Promise<ResolvedScope> {
   const crmTeacherId = await requireCrmTeacherId(teacherUserId);
-  const roster = await fetchTeacherGroups(crmTeacherId);
+  const roster = await fetchTeacherGroupsForAccess(crmTeacherId, { need: crmGroupId });
   const group = roster.groups.find((item) => item.crmGroupId === crmGroupId);
   if (!group) {
     throw new BadRequestError("Эта группа не назначена преподавателю", "GROUP_NOT_ASSIGNED");

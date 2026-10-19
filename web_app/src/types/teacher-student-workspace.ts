@@ -2,6 +2,7 @@ import type { StudentHomeMonthlyPlan } from "@/types/api";
 
 export type WorkspaceAccess =
   | { kind: "assigned"; direct: boolean }
+  | { kind: "substitute"; crmClassId: string; lessonDate: string | null; originalTeacherName: string | null }
   | { kind: "lesson"; crmClassId: string };
 
 export type WorkspaceHomeworkItem = {

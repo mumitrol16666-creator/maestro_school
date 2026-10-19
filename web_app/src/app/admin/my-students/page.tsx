@@ -405,9 +405,15 @@ function StudentCard({ student, homework }: { student: TeacherStudent; homework:
                 {ageLabel}
               </span>
             ) : null}
-            <span className="rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-amber-900">
-              Закреплён за вами
-            </span>
+            {student.substitution ? (
+              <span data-testid="student-substitution-badge" className="rounded-full bg-sky-600 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-white">
+                Замена до утверждения урока
+              </span>
+            ) : (
+              <span className="rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-amber-900">
+                Закреплён за вами
+              </span>
+            )}
             {student.sources.includes("online") ? (
               <span className="rounded-full bg-sky-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-sky-800">
                 Есть онлайн-уроки

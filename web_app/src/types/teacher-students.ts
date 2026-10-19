@@ -38,6 +38,8 @@ export type TeacherStudent = {
     attendanceStatus: string;
   }>;
   sources: TeacherStudentSource[];
+  /** Present while the teacher covers this student's lesson; access ends when the lesson is approved. */
+  substitution?: { crmClassId: string; lessonDate: string | null; originalCrmTeacherId: string } | null;
   onlineLessons: Array<{
     id: string;
     status: string;

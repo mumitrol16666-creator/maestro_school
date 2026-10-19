@@ -694,6 +694,28 @@ model OfflineLessonProjection {
   @@map("offline_lesson_projections")
 }
 
+/// A teacher covering one lesson for the regular teacher (CRM teacherId != originalTeacherId).
+/// While open, the substitute works with that lesson's students as with their own; approval closes it.
+model TeacherSubstitution {
+  id                   String    @id @default(uuid()) @db.Uuid
+  crmTeacherId         String    @map("crm_teacher_id") @db.VarChar(128)
+  crmClassId           String    @map("crm_class_id") @db.VarChar(128)
+  originalCrmTeacherId String    @map("original_crm_teacher_id") @db.VarChar(128)
+  crmStudentId         String?   @map("crm_student_id") @db.VarChar(128)
+  crmGroupId           String?   @map("crm_group_id") @db.VarChar(128)
+  lessonDate           DateTime? @map("lesson_date") @db.Timestamptz(6)
+  lessonStatus         String    @map("lesson_status") @db.VarChar(64)
+  closedAt             DateTime? @map("closed_at") @db.Timestamptz(6)
+  closeReason          String?   @map("close_reason") @db.VarChar(32)
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([crmTeacherId, crmClassId])
+  @@index([crmTeacherId, closedAt])
+  @@index([crmClassId])
+  @@map("teacher_substitutions")
+}
+
 model OfflineLessonReport {
   id               String    @id @default(uuid()) @db.Uuid
   crmClassId       String    @unique @map("crm_class_id") @db.VarChar(128)

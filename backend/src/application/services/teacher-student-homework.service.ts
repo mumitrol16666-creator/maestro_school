@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
+import { fetchTeacherRosterForAccess } from "./teacher-substitution.service.js";
 import { prisma } from "../../infrastructure/database/prisma.js";
-import { fetchTeacherStudents, fetchTeacherGroups, fetchStudentOfflineSummary } from "../../infrastructure/crm/crm-client.js";
+import { fetchStudentOfflineSummary } from "../../infrastructure/crm/crm-client.js";
 import { AppError, ForbiddenError, ConflictError, NotFoundError } from "../../domain/errors.js";
 import { prepareLegacyDecision, type LegacyDecision, type LegacyDecisionEvent } from "../../domain/legacy-homework-resolution.js";
 import { requireCrmTeacherId } from "./teacher-students.service.js";
@@ -11,12 +12,20 @@ import { mapOfflineTask } from "./task-sources/offline-task.adapter.js";
 
 export async function requireTeacherHomeworkStudent(teacherId: string, crmStudentId: string) {
   const crmTeacherId = await requireCrmTeacherId(teacherId);
-  const [direct, groups] = await Promise.all([fetchTeacherStudents(crmTeacherId), fetchTeacherGroups(crmTeacherId)]);
+  const { students: direct, groups } = await fetchTeacherRosterForAccess(crmTeacherId, { needStudent: crmStudentId });
   const directStudent = direct.students.find(item => item.crmStudentId === crmStudentId);
-  const student = directStudent
-    ?? groups.groups.flatMap(group => group.students).find(item => item.crmStudentId === crmStudentId);
+  const memberOf = groups.groups.filter(group => group.students.some(item => item.crmStudentId === crmStudentId));
+  const student = directStudent ?? memberOf.flatMap(group => group.students).find(item => item.crmStudentId === crmStudentId);
   if (!student) throw new ForbiddenError("Ученик не закреплён за вами и не состоит в вашей группе");
-  return { crmTeacherId, student, directlyAssigned: Boolean(directStudent), groupIds: groups.groups.filter(group => group.students.some(item => item.crmStudentId === crmStudentId)).map(group => group.crmGroupId) };
+  // A student reached only through a lesson the teacher covers carries that lesson.
+  const substitution = directStudent?.substitution
+    ?? (memberOf.length && memberOf.every(group => group.substitution) ? memberOf[0].substitution : undefined)
+    ?? null;
+  return {
+    crmTeacherId, student, substitution,
+    directlyAssigned: Boolean(directStudent) && !directStudent?.substitution,
+    groupIds: memberOf.map(group => group.crmGroupId),
+  };
 }
 
 type LegacyLesson = Parameters<typeof mapOfflineTask>[0] & { materials?: unknown[] };

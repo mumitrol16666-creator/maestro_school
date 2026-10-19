@@ -44,6 +44,7 @@ import {
   submitOfflineLessonReportVersion,
   withdrawOfflineLessonReport,
 } from "./offline-lesson-report.service.js";
+import { syncTeacherSubstitutions } from "./teacher-substitution.service.js";
 
 function lessonSyncV2Enabled() {
   return productFeatureConfig.flags.lessonSyncV2;
@@ -143,6 +144,13 @@ export async function getTeacherOfflineAgenda(
   if (lessonSyncV2Enabled() && Array.isArray(agenda.classes)) {
     await projectOfflineAgenda(agenda.classes);
   }
+  const fromCrm = (agenda as { integration?: { source?: string } }).integration?.source !== "projection";
+  if (fromCrm && Array.isArray(agenda.classes)) {
+    await syncTeacherSubstitutions(crmTeacherId, agenda.classes, {
+      from: params?.from ?? fallback.from,
+      to: params?.to ?? fallback.to,
+    }).catch(() => undefined);
+  }
   return {
     ...agenda,
     classes: Array.isArray(agenda.classes) ? dedupeOfflineClasses(agenda.classes) : [],
@@ -161,6 +169,9 @@ export async function getTeacherOfflineClass(appUserId: string, crmClassId: stri
   };
   if (lesson.teacher?.crmTeacherId !== crmTeacherId) {
     throw new BadRequestError("Этот урок назначен другому преподавателю", "LESSON_NOT_ASSIGNED");
+  }
+  if (projected.source === "crm") {
+    await syncTeacherSubstitutions(crmTeacherId, [lesson as Record<string, unknown>]).catch(() => undefined);
   }
   return lessonSyncV2Enabled()
     ? withOfflineLessonSync(crmClassId, lesson as Record<string, unknown>, projected.source)

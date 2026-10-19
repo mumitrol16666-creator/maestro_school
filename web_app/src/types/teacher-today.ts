@@ -21,6 +21,8 @@ export type TeacherTodayLesson = {
   studentsCount: number | null;
   homeworkToCheck: number;
   reportOpen: boolean;
+  /** The teacher covers this lesson for the regular teacher. */
+  substitution?: boolean;
 };
 
 export type TeacherTodayReport = {

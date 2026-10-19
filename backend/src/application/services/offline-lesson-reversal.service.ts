@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../infrastructure/database/prisma.js";
+import { closeLessonSubstitutions, reopenLessonSubstitutions } from "./teacher-substitution.service.js";
 import { ConflictError } from "../../domain/errors.js";
 import {
   readOfflineLessonLearningResultsV2,
@@ -475,6 +476,8 @@ export async function applyCrmOfflineLessonEvent(params: {
   crmClassId: string;
   message?: string | null;
 }) {
+  if (params.event === "cancelled") await closeLessonSubstitutions(params.crmClassId, "cancelled");
+  if (params.event === "returned" || params.event === "reopened") await reopenLessonSubstitutions(params.crmClassId);
   if (params.event !== "returned") return { reportState: null, reversal: null };
   const report = await prisma.offlineLessonReport.findUnique({ where: { crmClassId: params.crmClassId } });
   if (!report || report.currentVersion === 0) return { reportState: null, reversal: null };

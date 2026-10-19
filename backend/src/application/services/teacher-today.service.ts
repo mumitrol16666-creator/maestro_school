@@ -33,6 +33,7 @@ type AgendaClass = {
   status?: string;
   classType?: string | null;
   deliveryFormat?: string | null;
+  substitution?: boolean;
   crmIndividualStudentId?: string | null;
   group?: { crmGroupId?: string; name?: string } | null;
   room?: { name?: string } | null;
@@ -135,6 +136,7 @@ export async function getTeacherToday(teacherUserId: string, options: { now?: Da
       studentsCount: ids.length || null,
       homeworkToCheck: ids.reduce((total, id) => total + (homeworkByStudent.get(id) ?? 0), 0),
       reportOpen: Boolean(openReport(lesson, now)),
+      substitution: lesson.substitution === true,
     };
   });
 

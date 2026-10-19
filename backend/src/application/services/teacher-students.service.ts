@@ -1,7 +1,7 @@
 import { prisma } from "../../infrastructure/database/prisma.js";
 import { productFeatureConfig } from "../../config/product-features.js";
+import { fetchTeacherStudentsForAccess, type SubstitutionRef } from "./teacher-substitution.service.js";
 import { BadRequestError } from "../../domain/errors.js";
-import { fetchTeacherStudents } from "../../infrastructure/crm/crm-client.js";
 
 export async function requireCrmTeacherId(appUserId: string) {
   const user = await prisma.user.findFirst({
@@ -22,7 +22,7 @@ export async function listTeacherStudents(appTeacherId: string) {
     && productFeatureConfig.flags.homeworkFlowV2;
   const crmTeacherId = await requireCrmTeacherId(appTeacherId);
   const [crmRoster, onlineRequests] = await Promise.all([
-    fetchTeacherStudents(crmTeacherId),
+    fetchTeacherStudentsForAccess(crmTeacherId),
     prisma.onlineLessonRequest.findMany({
       // Keep cancelled requests in the teacher's student history. They are not
       // active work, but removing them makes the admin/app histories disagree.
@@ -86,6 +86,8 @@ export async function listTeacherStudents(appTeacherId: string) {
       attendanceStatus: string;
     }>;
     sources: Array<"offline" | "online">;
+    /** Set while the teacher covers this student's lesson for the regular teacher. */
+    substitution: SubstitutionRef | null;
     onlineLessons: Array<{
       id: string;
       status: string;
@@ -130,6 +132,7 @@ export async function listTeacherStudents(appTeacherId: string) {
         attendanceStatus: item.attendanceStatus,
       })),
       sources: linkedOnline.length ? ["offline", "online"] : ["offline"],
+      substitution: student.substitution ?? null,
       onlineLessons: linkedOnline.map(({ student: _student, ...request }) => request),
     });
   }

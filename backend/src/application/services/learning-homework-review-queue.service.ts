@@ -3,11 +3,10 @@ import {
   type Prisma,
 } from "@prisma/client";
 import { isOfflineCoordinatorRole } from "../../domain/cms-access.js";
+import { fetchTeacherRosterForAccess } from "./teacher-substitution.service.js";
 import { ForbiddenError } from "../../domain/errors.js";
 import { prisma } from "../../infrastructure/database/prisma.js";
 import {
-  fetchTeacherGroups,
-  fetchTeacherStudents,
 } from "../../infrastructure/crm/crm-client.js";
 import { requireLearningHomeworkReviewAccess } from "./learning-homework-v2.service.js";
 import { requireCrmTeacherId } from "./teacher-students.service.js";
@@ -115,10 +114,7 @@ async function reviewerScope(reviewerUserId: string): Promise<{
   }
 
   const crmTeacherId = await requireCrmTeacherId(reviewerUserId);
-  const [studentRoster, groupRoster] = await Promise.all([
-    fetchTeacherStudents(crmTeacherId),
-    fetchTeacherGroups(crmTeacherId),
-  ]);
+  const { students: studentRoster, groups: groupRoster } = await fetchTeacherRosterForAccess(crmTeacherId);
   const topicScopes: Prisma.LearningTopicWhereInput[] = [
     ...studentRoster.students.flatMap((student) => student.directions.map((directionTitle) => ({
       crmStudentId: student.crmStudentId,

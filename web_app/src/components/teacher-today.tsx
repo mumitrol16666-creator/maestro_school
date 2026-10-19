@@ -114,8 +114,11 @@ function LessonRow({ lesson }: { lesson: TeacherTodayLesson }) {
               ? <span className="inline-flex items-center gap-1 text-sky-800"><MonitorPlay size={12} /> онлайн</span>
               : lesson.roomName ? <span>{lesson.roomName}</span> : null}
           </p>
-          {lesson.homeworkToCheck || (lesson.reportOpen && lesson.phase === "ended") ? (
+          {lesson.substitution || lesson.homeworkToCheck || (lesson.reportOpen && lesson.phase === "ended") ? (
             <p className="mt-1 flex flex-wrap gap-1.5">
+              {lesson.substitution ? (
+                <span data-testid="today-substitution" className="rounded-md bg-sky-600 px-2 py-0.5 text-[11px] font-bold text-white">Замена</span>
+              ) : null}
               {lesson.homeworkToCheck ? (
                 <span className="rounded-md bg-sky-50 px-2 py-0.5 text-[11px] font-bold text-sky-900">
                   ДЗ проверить: {lesson.homeworkToCheck}

@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../infrastructure/database/prisma.js";
+import { closeLessonSubstitutions } from "./teacher-substitution.service.js";
 import { ConflictError } from "../../domain/errors.js";
 import { fetchClassCard } from "../../infrastructure/crm/crm-client.js";
 import { awardManualPoints } from "./points.service.js";
@@ -305,6 +306,8 @@ async function executeOfflineLessonFinalization(params: {
     lesson,
     approvalSnapshot,
   );
+  // Approval ends the substitute's access to this lesson's students.
+  await closeLessonSubstitutions(params.crmClassId, "approved");
   return { attendance, learningV2 };
 }
 

@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
+import { fetchTeacherGroupsForAccess, fetchTeacherStudentsForAccess } from "./teacher-substitution.service.js";
 import {
   LearningHomeworkAttemptStatus,
   LearningHomeworkRecipientState,
@@ -28,8 +29,6 @@ import {
 import { prisma } from "../../infrastructure/database/prisma.js";
 import {
   fetchStudentTeachers,
-  fetchTeacherGroups,
-  fetchTeacherStudents,
 } from "../../infrastructure/crm/crm-client.js";
 import { requireCrmDirection } from "./crm-direction-projection.service.js";
 import { deliverUserNotification } from "./notification.service.js";
@@ -295,7 +294,7 @@ async function teacherTopicRecipients(teacherUserId: string, topic: ScopedTopic)
   const crmDirectionId = topic.direction.crmDirectionId!;
 
   if (topic.crmStudentId) {
-    const roster = await fetchTeacherStudents(crmTeacherId);
+    const roster = await fetchTeacherStudentsForAccess(crmTeacherId, { need: topic.crmStudentId });
     const student = roster.students.find((item) => item.crmStudentId === topic.crmStudentId);
     if (!student) {
       throw new ForbiddenError("Ученик не назначен этому преподавателю");
@@ -304,7 +303,7 @@ async function teacherTopicRecipients(teacherUserId: string, topic: ScopedTopic)
     return [student.crmStudentId];
   }
 
-  const roster = await fetchTeacherGroups(crmTeacherId);
+  const roster = await fetchTeacherGroupsForAccess(crmTeacherId, { need: topic.crmGroupId ?? undefined });
   const group = roster.groups.find((item) => item.crmGroupId === topic.crmGroupId);
   if (!group) {
     throw new ForbiddenError("Группа не назначена этому преподавателю");
@@ -343,8 +342,19 @@ async function currentHomeworkReviewerIds(topic: ScopedTopic, crmStudentId: stri
       && (topic.crmGroupId ? teacher.sources.includes("group") : true)
   ));
   const appIds = teacherCandidates.map((teacher) => teacher.appUserId).filter(Boolean) as string[];
-  const crmIds = teacherCandidates.map((teacher) => teacher.crmTeacherId);
-  const linkedTeachers = teacherCandidates.length
+  // A teacher covering this student's lesson reviews too until the lesson is approved.
+  const substitutes = await prisma.teacherSubstitution.findMany({
+    where: {
+      closedAt: null,
+      OR: [{ crmStudentId }, ...(topic.crmGroupId ? [{ crmGroupId: topic.crmGroupId }] : [])],
+    },
+    select: { crmTeacherId: true },
+  });
+  const crmIds = [...new Set([
+    ...teacherCandidates.map((teacher) => teacher.crmTeacherId),
+    ...substitutes.map((row) => row.crmTeacherId),
+  ])];
+  const linkedTeachers = crmIds.length
     ? await prisma.user.findMany({
         where: {
           deletedAt: null,
