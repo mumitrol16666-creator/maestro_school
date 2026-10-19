@@ -51,7 +51,7 @@ async function createStudent(suffix: string) {
 integrationTest("the finalizer closes every overdue week of the epoch, oldest first, and stays idempotent", async t => {
   const { prisma } = await import("../../infrastructure/database/prisma.js");
   const { finalizeOverdueWeeklyLeagues } = await import("./weekly-league.service.js");
-  const { getAqtobeWeekRange } = await import("./weekly-league-policy.js");
+  const { getAqtobeWeekRange, weeklyLeagueFinalizesAt } = await import("./weekly-league-policy.js");
   await withActiveEpoch(async (epoch) => {
     const suffix = randomUUID().slice(0, 8);
     const student = await createStudent(suffix);
@@ -90,7 +90,8 @@ integrationTest("the finalizer closes every overdue week of the epoch, oldest fi
     const closedNow = results.filter((row) => !row.idempotent);
     const expected = Array.from({ length: 52 }, (_, index) => index + 1)
       .map((offset) => getAqtobeWeekRange(now, offset))
-      .filter((week) => week.end > epoch.startsAt && !alreadyClosed.has(week.start.getTime()))
+      // The week just ended stays open for 12 hours (Monday morning in Aqtobe).
+      .filter((week) => week.end > epoch.startsAt && now >= weeklyLeagueFinalizesAt(week) && !alreadyClosed.has(week.start.getTime()))
       .map((week) => week.key)
       .reverse();
     assert.deepEqual(closedNow.map((row) => row.week), expected);
