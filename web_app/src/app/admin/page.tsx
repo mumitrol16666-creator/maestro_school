@@ -12,12 +12,10 @@ import {
   ClipboardCheck,
   Clock3,
   FolderOpen,
-  GraduationCap,
   Library,
   MessageCircleQuestion,
   Newspaper,
   RefreshCw,
-  Settings,
   UserCog,
   Users,
   Video,
@@ -36,6 +34,7 @@ import { useAuth } from "@/components/auth-provider";
 import { isContentAdminRole } from "@/lib/role-labels";
 import type { ManagementDayLesson } from "@/types/admin-overview";
 import { TeacherStaffTasks } from "@/components/teacher-staff-tasks";
+import { TeacherToday } from "@/components/teacher-today";
 import { LearningHomeworkReviewPreview } from "@/components/learning-homework-review-preview";
 import { AdminWorkspaceDirectory } from "@/components/admin-workspace";
 
@@ -55,66 +54,17 @@ export default function AdminPage() {
   const isContentAdmin = isContentAdminRole(user?.role);
 
   if (!isContentAdmin) {
-    const teacherSections = [
-      {
-        href: "/admin/offline-lessons",
-        title: "Мои уроки",
-        text: "Занятия в школе и онлайн, отчёты, посещаемость и статусы подтверждения.",
-        icon: CalendarDays,
-        accent: "bg-amber-50 text-amber-900",
-      },
-      {
-        href: "/admin/my-students",
-        title: "Мои ученики",
-        text: "Контакты, расписание, абонементы и история посещаемости.",
-        icon: Users,
-        accent: "bg-emerald-50 text-emerald-800",
-      },
-      {
-        href: "/admin/settings",
-        title: "Настройки",
-        text: "Профиль преподавателя, безопасность аккаунта и уведомления.",
-        icon: Settings,
-        accent: "bg-stone-100 text-stone-700",
-      },
-    ];
-
     return (
       <>
         <PageHeader
           eyebrow="Кабинет преподавателя"
-          title="Главная"
-          description="Всё необходимое для рабочего дня преподавателя — без лишних административных разделов."
+          title="Сегодня"
+          description="Уроки дня, отчёты, ДЗ к проверке и всё, что ждёт вашего ответа."
         />
-        <LearningHomeworkReviewPreview />
-        <TeacherStaffTasks />
-        <div className="mb-6 rounded-[28px] border border-amber-200 bg-gradient-to-br from-amber-50 to-white p-6 shadow-soft">
-          <div className="flex items-start gap-4">
-            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-ink text-gold-ink">
-              <GraduationCap size={22} />
-            </span>
-            <div>
-              <h2 className="font-display text-2xl">Начните с расписания на сегодня</h2>
-              <p className="mt-2 text-sm leading-6 text-stone-600">
-                После урока отметьте посещаемость, заполните отчёт и отправьте его администратору.
-              </p>
-              <Link href="/admin/offline-lessons" className="mt-4 inline-flex rounded-xl bg-ink px-4 py-2.5 text-xs font-bold text-white transition hover:bg-stone-800">
-                Открыть мои уроки
-              </Link>
-            </div>
-          </div>
-        </div>
-        <div className="grid gap-5 md:grid-cols-2">
-          {teacherSections.map(({ href, title, text, icon: Icon, accent }) => (
-            <Link key={href} href={href} className="card-hover rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft">
-              <span className={`grid h-12 w-12 place-items-center rounded-2xl ${accent}`}>
-                <Icon size={20} />
-              </span>
-              <h2 className="font-display mt-6 text-3xl">{title}</h2>
-              <p className="mt-3 text-sm leading-6 text-stone-500">{text}</p>
-              <span className="mt-5 inline-flex text-xs font-black uppercase tracking-wide text-gold-ink">Открыть →</span>
-            </Link>
-          ))}
+        <TeacherToday />
+        <div className="mt-6">
+          <TeacherStaffTasks />
+          <LearningHomeworkReviewPreview />
         </div>
       </>
     );

@@ -15,6 +15,7 @@ import {
 import { listTeacherStudents } from "../../application/services/teacher-students.service.js";
 import { getTeacherStudentHomework, resolveLegacyHomework } from "../../application/services/teacher-student-homework.service.js";
 import { getTeacherStudentWorkspace } from "../../application/services/teacher-student-workspace.service.js";
+import { getTeacherToday } from "../../application/services/teacher-today.service.js";
 import { openTeacherStudentDialog } from "../../application/services/learning-dialog-membership.service.js";
 import { listTeacherGroups } from "../../application/services/teacher-groups.service.js";
 import {
@@ -65,6 +66,11 @@ export async function teacherOfflineRoutes(app: FastifyInstance) {
   // The student card: the open sector, proposals, homework, last lessons,
   // platform activity and dynamics in one read. A substitute passes the
   // lesson they run and gets the sector only (LEARN-026).
+  // «Сегодня»: the teacher's working day on one screen (read only).
+  app.get("/teachers/me/today", {
+    preHandler: [authenticate, requireTeacher, requirePermission("offline_school.read")],
+  }, async request => ({ data: await getTeacherToday(request.user!.id) }));
+
   app.get("/teachers/me/students/:crmStudentId/workspace", {
     preHandler: [authenticate, requireTeacher, requirePermission("offline_school.read")],
   }, async request => {
