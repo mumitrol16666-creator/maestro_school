@@ -440,11 +440,23 @@ export async function applyCrmLessonEventToSectorExams(input: {
   crmTeacherId?: string | null;
 }) {
   if (input.event !== "cancelled" && input.event !== "rescheduled") return null;
-  const exam = await prisma.sectorExam.findFirst({
+  // One exam lesson may hold several students' exams.
+  const exams = await prisma.sectorExam.findMany({
     where: { crmClassId: input.crmClassId, status: "scheduled" },
     include: examInclude,
   });
-  if (!exam) return null;
+  const results = [];
+  for (const exam of exams) results.push(await applyLessonEventToExam(exam, input));
+  return results.length ? results : null;
+}
+
+async function applyLessonEventToExam(exam: ExamRow, input: {
+  event: "returned" | "reopened" | "cancelled" | "rescheduled";
+  crmClassId: string;
+  date?: string | null;
+  startTime?: string | null;
+  crmTeacherId?: string | null;
+}) {
   if (input.event === "cancelled") {
     await prisma.sectorExam.update({
       where: { id: exam.id },

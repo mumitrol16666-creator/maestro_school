@@ -255,7 +255,7 @@ export type LearningLessonV2Homework = {
 export type LearningLessonV2Context = {
   enabled: true;
   available: boolean;
-  reason: "trial_lesson" | "one_time_replacement" | null;
+  reason: "trial_lesson" | "sector_exam" | "one_time_replacement" | null;
   owner: { kind: "student" | "group"; id: string };
   eventAt?: string;
   rewardsEnabled: boolean;

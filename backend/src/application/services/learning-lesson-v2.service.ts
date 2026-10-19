@@ -285,10 +285,12 @@ async function resolveLessonScope(actorUserId: string, crmClassId: string): Prom
   const groupId = lesson.group?.crmGroupId;
   const individualStudentId = lesson.crmIndividualStudentId
     ?? (roster.students.length === 1 ? roster.students[0].crmStudentId : null);
+  // Plan 1.11: an exam lesson may hold several students without a group; it works with no topics.
+  const examStudentId = lesson.classType === "exam" ? roster.students[0]?.crmStudentId ?? null : null;
   const owner = groupId
     ? { kind: "group" as const, id: groupId }
-    : individualStudentId
-      ? { kind: "student" as const, id: individualStudentId }
+    : individualStudentId ?? examStudentId
+      ? { kind: "student" as const, id: (individualStudentId ?? examStudentId)! }
       : null;
   if (!owner) {
     throw new BadRequestError(
@@ -432,11 +434,12 @@ async function lessonPlans(scope: LessonScope) {
 export async function getLearningLessonV2Context(actorUserId: string, crmClassId: string) {
   if (!learningLessonV2Enabled()) return null;
   const scope = await resolveLessonScope(actorUserId, crmClassId);
-  if (isTrialLesson(scope.lesson)) {
+  if (isTrialLesson(scope.lesson) || scope.lesson.classType === "exam") {
     return {
       enabled: true,
       available: false,
-      reason: "trial_lesson" as const,
+      // The exam itself is marked in the student card; the exam lesson changes no topics.
+      reason: scope.lesson.classType === "exam" ? "sector_exam" as const : "trial_lesson" as const,
       owner: scope.owner,
       rewardsEnabled: false,
       canApply: false,

@@ -1530,19 +1530,21 @@ export default function AdminOfflineLessonDetailPage() {
         <div className="mb-4 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm leading-6 text-sky-950" data-testid="lesson-sector-exam">
           <p className="font-bold">Экзамен сектора</p>
           <p>
-            Бесплатный урок без списания. Отметки «сделано / не сделано» ставятся в карточке ученика, в блоке экзамена.
-            {lesson.crmIndividualStudentId ? (
-              <>
-                {" "}
+            Бесплатный урок без списания. Отметки «сделано / не сделано» ставятся в карточке каждого ученика, в блоке экзамена.
+          </p>
+          {students.length ? (
+            <p className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+              {students.map((student) => (
                 <Link
-                  href={`/admin/my-students/student/${encodeURIComponent(lesson.crmIndividualStudentId)}`}
+                  key={student.crmStudentId}
+                  href={`/admin/my-students/student/${encodeURIComponent(student.crmStudentId)}`}
                   className="font-bold underline"
                 >
-                  Открыть экзамен
+                  {student.name}: открыть экзамен
                 </Link>
-              </>
-            ) : null}
-          </p>
+              ))}
+            </p>
+          ) : null}
         </div>
       ) : null}
 

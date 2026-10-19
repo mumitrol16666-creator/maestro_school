@@ -205,7 +205,7 @@ integrationTest("a cancelled exam lesson in CRM puts the exam back in the queue;
   const moved = await exams.applyCrmLessonEventToSectorExams({
     event: "rescheduled", crmClassId: `exam-${f.suffix}`, date: "12.01.2099", startTime: "15:30",
   });
-  assert.equal(moved?.status, "scheduled");
+  assert.equal(moved?.[0]?.status, "scheduled");
   const afterMove = await f.prisma.sectorExam.findUniqueOrThrow({ where: { id: exam.id } });
   assert.equal(afterMove.scheduledAt?.toISOString(), "2099-01-12T10:30:00.000Z");
 
