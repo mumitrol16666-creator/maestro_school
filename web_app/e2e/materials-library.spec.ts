@@ -81,7 +81,7 @@ test("a teacher sends a course lesson and the student watches the bare lesson", 
   const lesson = studentPage.getByTestId("shared-lesson");
   await expect(lesson.getByRole("heading", { name: "Постановка правой руки" })).toBeVisible();
   await expect(lesson).toContainText("Посмотри перед уроком");
-  await expect(lesson.locator("iframe")).toHaveAttribute("src", /youtube/);
+  await expect(lesson.locator("iframe").first()).toHaveAttribute("src", /youtube/);
   await expect(lesson).toContainText("сдавать ничего не нужно");
   if (uploadedUrl) expect((await studentPage.request.get(uploadedUrl)).status()).toBe(200);
 });
@@ -99,4 +99,18 @@ test("the library and a sent lesson fit a 375px phone", async ({ page, context }
       return !element.closest("[aria-label='Тип материала']");
     }).length);
   expect(await clipped()).toBe(0);
+});
+
+test("a file link opened before signing in leads to the login page and back to the file", async ({ page }) => {
+  // Fresh context: nobody is signed in.
+  const response = await page.goto("/api/v1/media/pdf/does-not-matter.pdf");
+  expect(response?.status()).toBeLessThan(400);
+  await expect(page).toHaveURL(/\/login\?next=%2Fapi%2Fv1%2Fmedia%2Fpdf%2Fdoes-not-matter\.pdf/);
+  await page.getByRole("button", { name: "Сотрудник" }).click();
+  await page.getByPlaceholder("Логин сотрудника").fill("qa_teacher_1");
+  await page.locator('input[type="password"]').fill(PASSWORD);
+  await page.locator('input[type="password"]').press("Enter");
+  // The file does not exist, so the API answers 404 now instead of asking to sign in.
+  await page.waitForURL(/\/api\/v1\/media\/pdf\/does-not-matter\.pdf/);
+  await expect(page.locator("body")).toContainText(/NOT_FOUND|Media file|not found/i);
 });

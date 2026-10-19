@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
+import { isSupportedMaterialLink } from "../../domain/group-material.js";
 import {
   createCourse, createDirection, createHomework, createLesson, createMaterial, createModule, createNews,
   deleteMaterial, getAdminCourse, getAdminCourseTree, getAdminLesson, listAdminCourses, listAdminDirections, listAdminNews, listHomeworks, listLessons,
@@ -21,6 +22,8 @@ const pageQuery = z.object({
   search: z.string().trim().optional(),
 });
 const nullableUrl = z.string().url().max(1024).nullable().optional();
+// Lesson materials: an http(s) link or a file of the school's media library (a same-site path since plan 1.12).
+const materialUrl = z.string().trim().max(1024).refine(isSupportedMaterialLink, "Ссылка должна начинаться с http(s):// или вести на файл медиатеки");
 const publishBody = z.object({ isPublished: z.boolean() });
 const difficulty = z.enum(["beginner", "intermediate", "advanced", "all_levels"]);
 const completionCoinsReward = z.coerce.number().int().min(0).max(1_000_000);
@@ -228,11 +231,11 @@ export async function cmsRoutes(app: FastifyInstance) {
     const { id } = idParams.parse(request.params); return { data: await listMaterialUsages(id) };
   });
   app.post("/admin/materials", { preHandler: catalogGuards() }, async (request, reply) => {
-    const body = z.object({ lessonId: z.string().uuid(), type: materialType, title: z.string().min(1).max(255), url: z.string().url().max(1024), sortOrder: z.number().int().min(0).default(0) }).parse(request.body);
+    const body = z.object({ lessonId: z.string().uuid(), type: materialType, title: z.string().min(1).max(255), url: materialUrl, sortOrder: z.number().int().min(0).default(0) }).parse(request.body);
     const item = await createMaterial(body); await audit(request, "lesson_material", item.id, "create"); return reply.status(201).send({ data: item });
   });
   app.patch("/admin/materials/:id", { preHandler: catalogGuards() }, async (request) => {
-    const { id } = idParams.parse(request.params); const body = z.object({ lessonId: z.string().uuid().optional(), type: materialType.optional(), title: z.string().min(1).max(255).optional(), url: z.string().url().max(1024).optional(), sortOrder: z.number().int().min(0).optional() }).parse(request.body);
+    const { id } = idParams.parse(request.params); const body = z.object({ lessonId: z.string().uuid().optional(), type: materialType.optional(), title: z.string().min(1).max(255).optional(), url: materialUrl.optional(), sortOrder: z.number().int().min(0).optional() }).parse(request.body);
     const item = await updateMaterial(id, body); await audit(request, "lesson_material", id, "update"); return { data: item };
   });
   app.delete("/admin/materials/:id", { preHandler: catalogGuards() }, async (request) => {

@@ -416,10 +416,10 @@ function HomeworkAssignForm({
         dueAt: dueAt ? new Date(`${dueAt}T18:00:00+05:00`).toISOString() : null,
         sourceLessonId: crmClassId,
         idempotencyKey: crypto.randomUUID(),
-        // Plan 1.12: materials picked from the school library; uploaded files go with the school's address.
+        // Plan 1.12: materials picked from the school library; uploaded files stay same-site paths.
         materials: materials.map((item) => ({
           type: item.kind === "video" || item.kind === "audio" || item.kind === "link" ? item.kind : "file",
-          url: item.url.startsWith("/") ? `${window.location.origin}${item.url}` : item.url,
+          url: item.url,
           title: item.title,
           ...(item.mimeType ? { mimeType: item.mimeType } : {}),
         })),

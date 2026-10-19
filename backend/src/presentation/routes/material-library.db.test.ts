@@ -102,6 +102,10 @@ if (!process.env.TEST_DATABASE_URL) {
 
     const anonymous = await app.inject({ method: "GET", url: `/api/v1/media/pdf/sheet-${suffix}.pdf` });
     assert.equal(anonymous.statusCode, 401);
+    // A person opening the link in a browser is sent to sign in and comes back to the file.
+    const browser = await app.inject({ method: "GET", url: `/api/v1/media/pdf/sheet-${suffix}.pdf`, headers: { "sec-fetch-dest": "document", accept: "text/html" } });
+    assert.equal(browser.statusCode, 302);
+    assert.equal(browser.headers.location, `/login?next=${encodeURIComponent(`/api/v1/media/pdf/sheet-${suffix}.pdf`)}`);
 
     const { token, cookie } = await login(user);
     assert.match(cookie, /maestro_media=[^;]+; Path=\/api\/v1\/media; HttpOnly; SameSite=Lax/);

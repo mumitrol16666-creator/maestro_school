@@ -4,7 +4,7 @@ import { createReadStream } from "node:fs";
 import { mkdir, readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
-import { BadRequestError, NotFoundError } from "../../domain/errors.js";
+import { BadRequestError, NotFoundError, UnauthorizedError } from "../../domain/errors.js";
 import { listMaterialUsagesByUrlSuffix } from "../../application/repositories/cms.repository.js";
 import {
   deleteMediaFile,
@@ -94,7 +94,19 @@ export async function mediaRoutes(app: FastifyInstance) {
     }).parse(request.params);
     const query = z.object({ download: z.enum(["1", "true"]).optional() }).parse(request.query);
     if (filename.endsWith(".meta.json")) throw new NotFoundError("Media file");
-    const access = await authorizeMediaRequest(request, folder, filename);
+    let access: Awaited<ReturnType<typeof authorizeMediaRequest>>;
+    try {
+      access = await authorizeMediaRequest(request, folder, filename);
+    } catch (error) {
+      // A person opening the link itself (from CRM or a chat) is sent to sign in and comes back to the file.
+      const navigation = request.headers["sec-fetch-dest"] === "document"
+        || String(request.headers.accept ?? "").includes("text/html");
+      if (error instanceof UnauthorizedError && navigation) {
+        const next = `/api/v1/media/${folder}/${filename}${query.download ? "?download=1" : ""}`;
+        return reply.redirect(`/login?next=${encodeURIComponent(next)}`, 302);
+      }
+      throw error;
+    }
     const filePath = mediaFilePath(folder, filename);
     let size: number;
     try {

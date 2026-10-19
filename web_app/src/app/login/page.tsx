@@ -22,6 +22,10 @@ function safeNextPath(next: string | null, role?: string | null) {
   if (!next || !next.startsWith("/") || next.startsWith("//")) {
     return homePathForRole(role);
   }
+  // A file of the media library opened before signing in (plan 1.12): any signed-in role may see it.
+  if (/^\/api\/v1\/media\/(images|pdf|files)\/[A-Za-z0-9._-]+(\?download=1)?$/.test(next)) {
+    return next;
+  }
   if (isStaffRole(role) && !next.startsWith("/admin")) {
     return homePathForRole(role);
   }
@@ -94,7 +98,8 @@ export default function LoginPage() {
         const loggedInUser = await loginWithSso(ssoToken!);
         if (cancelled) return;
         const target = safeNextPath(params.get("next"), loggedInUser.role);
-        router.replace(target);
+        if (target.startsWith("/api/")) window.location.assign(target);
+        else router.replace(target);
       } catch (reason) {
         if (!cancelled) {
           setError(reason instanceof ApiError ? reason.message : "Не удалось войти по ссылке из личного кабинета");
@@ -116,7 +121,10 @@ export default function LoginPage() {
     setError(null);
     try {
       const loggedInUser = await login(phone, password, profile);
-      router.replace(homePathForRole(loggedInUser.role));
+      const target = safeNextPath(new URLSearchParams(window.location.search).get("next"), loggedInUser.role);
+      // A file of the media library is not a page of the app: the browser has to load it itself.
+      if (target.startsWith("/api/")) window.location.assign(target);
+      else router.replace(target);
     } catch (reason) {
       setError(reason instanceof ApiError ? reason.message : "Не удалось войти в кабинет");
     } finally {

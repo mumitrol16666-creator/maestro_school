@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { isSupportedMaterialLink } from "../../domain/group-material.js";
 import {
   createLearningHomeworkAssignment,
   learningHomeworkV2Enabled,
@@ -17,10 +18,7 @@ import {
 
 const materialSchema = z.object({
   type: z.enum(["link", "audio", "video", "file"]),
-  url: z.string().url().max(2048).refine((value) => {
-    const protocol = new URL(value).protocol;
-    return protocol === "http:" || protocol === "https:";
-  }, "Материал должен использовать http или https"),
+  url: z.string().trim().max(2048).refine(isSupportedMaterialLink, "Материал должен использовать http(s) или быть файлом медиатеки"),
   title: z.string().trim().max(255).optional(),
 });
 

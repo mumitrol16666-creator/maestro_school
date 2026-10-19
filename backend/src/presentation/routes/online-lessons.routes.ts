@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { isSupportedMaterialLink } from "../../domain/group-material.js";
 import {
   assignOnlineLessonRequest,
   cancelOnlineLessonRequest,
@@ -36,7 +37,7 @@ const legacyOnlineRequestCreationEnabled =
 const materialSchema = z.object({
   type: z.enum(["youtube", "link", "text", "pdf", "image", "file"]),
   title: z.string().trim().min(1).max(255),
-  url: z.string().url().max(1024).nullable().optional(),
+  url: z.string().trim().max(1024).refine(isSupportedMaterialLink, "Ссылка должна начинаться с http(s):// или вести на файл медиатеки").nullable().optional(),
   content: z.string().max(10000).nullable().optional(),
   sortOrder: z.number().int().min(0).optional(),
 });
