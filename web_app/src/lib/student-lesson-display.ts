@@ -8,6 +8,7 @@ export function studentLessonTitle(lesson: SchoolOfflineLesson) {
     group: "Групповой урок",
     theory: "Теория",
     trial: "Пробный урок",
+    exam: "Экзамен сектора",
   };
   return (
     formats[lesson.classType || ""] ||

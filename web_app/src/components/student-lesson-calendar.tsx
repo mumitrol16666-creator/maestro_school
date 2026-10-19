@@ -58,6 +58,7 @@ function lessonLabel(lesson: SchoolOfflineLesson) {
       group: "Групповой урок",
       theory: "Теория",
       trial: "Пробный урок",
+      exam: "Экзамен сектора",
     }[lesson.classType || ""] ??
       "Урок музыки")
   );

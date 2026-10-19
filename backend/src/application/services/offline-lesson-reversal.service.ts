@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../infrastructure/database/prisma.js";
 import { closeLessonSubstitutions, reopenLessonSubstitutions } from "./teacher-substitution.service.js";
+import { applyCrmLessonEventToSectorExams } from "./sector-exam.service.js";
 import { ConflictError } from "../../domain/errors.js";
 import {
   readOfflineLessonLearningResultsV2,
@@ -475,7 +476,11 @@ export async function applyCrmOfflineLessonEvent(params: {
   event: "returned" | "reopened" | "cancelled" | "rescheduled";
   crmClassId: string;
   message?: string | null;
+  date?: string | null;
+  startTime?: string | null;
+  crmTeacherId?: string | null;
 }) {
+  await applyCrmLessonEventToSectorExams(params).catch(() => null);
   if (params.event === "cancelled") await closeLessonSubstitutions(params.crmClassId, "cancelled");
   if (params.event === "returned" || params.event === "reopened") await reopenLessonSubstitutions(params.crmClassId);
   if (params.event !== "returned") return { reportState: null, reversal: null };

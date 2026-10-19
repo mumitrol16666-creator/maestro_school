@@ -194,3 +194,24 @@ integrationTest("an early close cancels the exam prepared for the sector", async
     rejectsWith("SECTOR_ALREADY_CLOSED"),
   );
 });
+
+integrationTest("a cancelled exam lesson in CRM puts the exam back in the queue; a moved one moves its date", async t => {
+  const f = await createFixture(t);
+  const exams = await import("./sector-exam.service.js");
+  const template = await exams.sectorExamTemplate(f.planId);
+  const exam = await exams.createSectorExam(f.teacher.id, { planId: f.planId, items: template.items, send: true });
+  await exams.scheduleSectorExamFromCrm(exam.id, { crmClassId: `exam-${f.suffix}`, lessonAt: new Date("2099-01-10T07:00:00.000Z") });
+
+  const moved = await exams.applyCrmLessonEventToSectorExams({
+    event: "rescheduled", crmClassId: `exam-${f.suffix}`, date: "12.01.2099", startTime: "15:30",
+  });
+  assert.equal(moved?.status, "scheduled");
+  const afterMove = await f.prisma.sectorExam.findUniqueOrThrow({ where: { id: exam.id } });
+  assert.equal(afterMove.scheduledAt?.toISOString(), "2099-01-12T10:30:00.000Z");
+
+  await exams.applyCrmLessonEventToSectorExams({ event: "cancelled", crmClassId: `exam-${f.suffix}` });
+  const back = await f.prisma.sectorExam.findUniqueOrThrow({ where: { id: exam.id } });
+  assert.equal(back.status, "awaiting_schedule");
+  assert.equal(back.crmClassId, null);
+  assert.ok((await exams.listSectorExamsAwaitingSchedule()).some((item) => item.examId === exam.id));
+});

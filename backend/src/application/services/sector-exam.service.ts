@@ -418,6 +418,54 @@ export async function scheduleSectorExamFromCrm(examId: string, input: {
   return examDto(await loadExam(examId));
 }
 
+/** CRM sends dates as dd.mm.yyyy (or ISO) and a local Aqtobe time. */
+function crmLessonInstant(date: string | null | undefined, startTime: string | null | undefined) {
+  if (!date || !startTime || !/^\d{1,2}:\d{2}$/.test(startTime)) return null;
+  const ru = date.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  const iso = ru ? `${ru[3]}-${ru[2]}-${ru[1]}` : date.slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return null;
+  const value = new Date(`${iso}T${startTime.padStart(5, "0")}:00+05:00`);
+  return Number.isNaN(value.getTime()) ? null : value;
+}
+
+/**
+ * Plan 1.11: the exam lesson changes in CRM. A cancelled lesson puts the exam back in the
+ * CRM queue; a moved lesson moves the exam date. An exam already started is left alone.
+ */
+export async function applyCrmLessonEventToSectorExams(input: {
+  event: "returned" | "reopened" | "cancelled" | "rescheduled";
+  crmClassId: string;
+  date?: string | null;
+  startTime?: string | null;
+  crmTeacherId?: string | null;
+}) {
+  if (input.event !== "cancelled" && input.event !== "rescheduled") return null;
+  const exam = await prisma.sectorExam.findFirst({
+    where: { crmClassId: input.crmClassId, status: "scheduled" },
+    include: examInclude,
+  });
+  if (!exam) return null;
+  if (input.event === "cancelled") {
+    await prisma.sectorExam.update({
+      where: { id: exam.id },
+      data: { status: "awaiting_schedule", crmClassId: null, scheduledAt: null, crmTeacherId: null, sentForScheduleAt: new Date() },
+    });
+    await notifyStudentAndParents(exam.crmStudentId, {
+      title: "Урок экзамена отменён",
+      body: `${exam.direction.title}: школа назначит новую дату экзамена.`,
+      dedupeKey: `sector-exam:${exam.id}:cancelled:${input.crmClassId}`,
+    });
+    return { examId: exam.id, status: "awaiting_schedule" as const };
+  }
+  const lessonAt = crmLessonInstant(input.date, input.startTime);
+  if (!lessonAt) return null;
+  return scheduleSectorExamFromCrm(exam.id, {
+    crmClassId: input.crmClassId,
+    lessonAt,
+    crmTeacherId: input.crmTeacherId ?? exam.crmTeacherId,
+  });
+}
+
 /* ─── Teacher ───────────────────────────────────────────────────────── */
 
 async function requireTeacherStudent(teacherUserId: string, crmStudentId: string) {

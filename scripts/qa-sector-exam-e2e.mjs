@@ -1,5 +1,5 @@
 // Сквозная проверка 1.10: экзамен сектора. Проходит вживую в школе; платформа хранит список, дату и отметки.
-// Админ готовит экзамен → CRM видит очередь и назначает урок (имитация 1.11 через интеграционный маршрут)
+// Админ готовит экзамен → CRM видит очередь и назначает бесплатный урок «exam» в свободное время (1.11)
 // → урок доводит темы до 100 % (сектор не закрывается сам) → частичная сдача и пересдача → сдача, сектор закрыт, сертификат.
 // RATE_CARD_ID — абонемент с расценкой для approve. После прогона QA-STUDENT-1 без открытого сектора: перезапустить qa-seed.
 const CRM_URL = 'http://127.0.0.1:5002';
@@ -93,17 +93,32 @@ const exam = (await appRequest(adminToken, 'POST', '/admin/sector-exams', {
 })).data;
 check('админ подготовил экзамен из тем сектора и своего пункта', exam.status === 'awaiting_schedule' && exam.items.length === template.items.length + 1, `${exam.items.length} пунктов`);
 
-// 2. CRM sees the queue and books the exam lesson.
-const queue = await integration('GET', '/sector-exams/awaiting-schedule');
-check('CRM видит экзамен в очереди', queue.json?.data?.exams?.some((item) => item.examId === exam.id), `HTTP ${queue.status}`);
-const examLesson = await controller('POST', '/lessons', {
-  scenarioId: `EXAM-${runId}`, classType: 'individual', studentId: 'QA-STUDENT-1', teacherId: 'QA-TEACHER-1',
-  date: dateWithOffset(1), startTime: '12:00', endTime: '13:00', title: `Экзамен сектора ${runId}`,
-});
-const examClassId = examLesson.data.class.crmClassId;
-const lessonAt = new Date(`${dateWithOffset(1)}T07:00:00.000Z`).toISOString();
-const booked = await integration('POST', `/sector-exams/${exam.id}/schedule`, { crmClassId: examClassId, lessonAt, crmTeacherId: 'QA-TEACHER-1' });
-check('CRM назначил урок экзамена', booked.json?.data?.status === 'scheduled', `HTTP ${booked.status}`);
+// 2. CRM shows the queue; the admin books the exam as a free lesson in a free slot.
+const crmQueue = await crmRequest(crmToken, 'GET', '/api/sector-exams/pending');
+check('CRM видит экзамен в очереди', crmQueue.exams?.some((item) => item.examId === exam.id), `${crmQueue.count ?? 0} в очереди`);
+// The QA teacher's day is busy; book the first free early slot in the past week (CRM refuses overlaps).
+async function bookExam(examId) {
+  for (let offset = 2; offset <= 9; offset += 1) {
+    for (const [startTime, endTime] of [['08:00', '08:45'], ['08:45', '09:30']]) {
+      const date = dateWithOffset(-offset);
+      const result = await http(`${CRM_URL}/api/sector-exams/${examId}/schedule`, {
+        method: 'POST', headers: { Authorization: `Bearer ${crmToken}` },
+        body: { date, startTime, endTime, teacherId: 'QA-TEACHER-1', roomId: 'QA-ROOM-1' },
+      });
+      if (result.status === 201) return { ...result.json, date, startTime };
+      if (result.json?.code !== 'CLASS_SCHEDULE_CONFLICT') throw new Error(`CRM schedule → ${result.status} ${JSON.stringify(result.json)}`);
+    }
+  }
+  throw new Error('Нет свободного слота для экзамена');
+}
+const booking = await bookExam(exam.id);
+const examClassId = booking.class.id;
+const [bookedHours, bookedMinutes] = booking.startTime.split(':').map(Number);
+const lessonAt = new Date(`${booking.date}T${String(bookedHours - 5).padStart(2, '0')}:${String(bookedMinutes).padStart(2, '0')}:00.000Z`).toISOString();
+check('CRM создал бесплатный урок экзамена', booking.class.classType === 'exam' && booking.class.price === 0 && booking.platformConfirmed === true);
+const examState = (await appRequest(adminToken, 'GET', '/admin/sector-exams')).data.sectors.find((item) => item.planId === row.planId)?.exam;
+check('платформа получила урок и время', examState?.status === 'scheduled' && examState?.crmClassId === examClassId && examState?.scheduledAt === lessonAt,
+  `${examState?.status} ${examState?.scheduledAt}`);
 
 // 3. Not before every topic is at 100 %.
 let teacherView = (await appRequest(teacherToken, 'GET', '/teachers/me/students/QA-STUDENT-1/sector-exams')).data;
@@ -165,7 +180,8 @@ check('ученик видит пересдачу в очереди, секто�
   `${studentSector?.status} попытка ${studentSector?.exam?.attempt}`);
 
 // 6. Retake: CRM books it again, every point done → close the sector.
-await integration('POST', `/sector-exams/${retake.retakeExamId}/schedule`, { crmClassId: `${examClassId}-R`, lessonAt, crmTeacherId: 'QA-TEACHER-1' });
+const retakeBooking = await bookExam(retake.retakeExamId);
+check('пересдача назначена в CRM отдельным уроком', retakeBooking.class.title.includes('пересдача'), retakeBooking.class.title);
 started = (await appRequest(teacherToken, 'POST', `/teachers/me/sector-exams/${retake.retakeExamId}/start`, {})).data;
 for (const item of started.items) {
   await appRequest(teacherToken, 'PUT', `/teachers/me/sector-exams/${retake.retakeExamId}/items/${item.id}`, { done: true });
@@ -186,4 +202,27 @@ const family = (await appRequest(parentToken, 'GET', `/parents/me/children/${chi
 check('родитель видит результат экзамена', family.recentExams?.some((item) => item.id === row.planId && item.exam?.certificate));
 const notes = sql(`select count(*) from user_notifications n join users u on u.id = n.user_id where u.login = 'qa_student_1' and n.type = 'sector_exam_updated' and n.created_at > now() - interval '15 minutes'`);
 check('ученику пришли уведомления об экзамене', Number(notes) >= 3, notes);
+
+// 7. The exam lesson itself is reported and approved in CRM without any charge.
+await appRequest(teacherToken, 'POST', `/teachers/me/offline-lessons/${examClassId}/start`, {});
+await appRequest(teacherToken, 'POST', `/teachers/me/offline-lessons/${examClassId}/attendance`, {
+  studentId: 'QA-STUDENT-1', attended: true, attendanceStatus: 'present', teacherNote: 'экзамен', lessonPoints: 0,
+  homeworkReview: { status: 'completed', completionPercent: 100 },
+});
+await appRequest(teacherToken, 'POST', `/teachers/me/offline-lessons/${examClassId}/submit`, {
+  topic: 'Экзамен сектора', lessonSummary: 'Экзамен проведён, отметки в платформе.', homeworkDraft: '',
+  teacherOutcomeHint: 'held', learningResultsV2: { homeworkDecisions: [], topicUpdates: [] },
+});
+await waitFor('exam lesson on review', async () => {
+  const card = await crmRequest(crmToken, 'GET', `/api/classes/${examClassId}`);
+  return (card.data?.status ?? card.status ?? card.class?.status) === 'pending_admin_review' ? card : null;
+});
+const balanceBefore = sql(`select 1`) && Number(execFileSync('psql', ['-h', 'localhost', '-U', 'vladislav', '-d', 'maestro_crm_regression', '-At', '-c', `select "accountBalance" from "Student" where id = 'QA-STUDENT-1'`]).toString().trim());
+const approvedExam = await http(`${CRM_URL}/api/classes/${examClassId}/approve`, {
+  method: 'POST', headers: { Authorization: `Bearer ${crmToken}` },
+  body: { topic: 'Экзамен сектора', lessonSummary: 'Экзамен проведён', billingDecisions: [{ studentId: 'QA-STUDENT-1', attendanceStatus: 'present' }] },
+});
+const balanceAfter = Number(execFileSync('psql', ['-h', 'localhost', '-U', 'vladislav', '-d', 'maestro_crm_regression', '-At', '-c', `select "accountBalance" from "Student" where id = 'QA-STUDENT-1'`]).toString().trim());
+check('урок экзамена утверждён без списания', approvedExam.status === 200 && balanceAfter === balanceBefore, `HTTP ${approvedExam.status}, баланс ${balanceBefore} → ${balanceAfter}`);
+
 console.log(`\nСектор ${row.planId} закрыт экзаменом. Чтобы вернуть QA-данные, перезапустите qa-seed.`);

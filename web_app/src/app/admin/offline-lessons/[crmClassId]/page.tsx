@@ -1526,6 +1526,26 @@ export default function AdminOfflineLessonDetailPage() {
         }
       />
 
+      {lesson.classType === "exam" ? (
+        <div className="mb-4 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm leading-6 text-sky-950" data-testid="lesson-sector-exam">
+          <p className="font-bold">Экзамен сектора</p>
+          <p>
+            Бесплатный урок без списания. Отметки «сделано / не сделано» ставятся в карточке ученика, в блоке экзамена.
+            {lesson.crmIndividualStudentId ? (
+              <>
+                {" "}
+                <Link
+                  href={`/admin/my-students/student/${encodeURIComponent(lesson.crmIndividualStudentId)}`}
+                  className="font-bold underline"
+                >
+                  Открыть экзамен
+                </Link>
+              </>
+            ) : null}
+          </p>
+        </div>
+      ) : null}
+
       <div className="mb-6 flex flex-wrap gap-3">
         <span className="rounded-full bg-stone-100 px-4 py-2 text-xs font-bold text-stone-700">
           {isSubmittedAbsence ? "Отсутствие отмечено" : (statusLabels[effectiveLessonStatus ?? lesson.status] ?? effectiveLessonStatus ?? lesson.status)}
