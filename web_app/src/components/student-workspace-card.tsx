@@ -54,11 +54,12 @@ const xpSourceLabels: Record<string, string> = {
 };
 
 const homeworkStateLabels: Record<string, string> = {
-  assigned: "Нужно сделать",
-  waiting_review: "Ждёт проверки",
+  assigned: "Проверить на уроке",
+  waiting_review: "Проверить на уроке",
   revision: "На доработке",
-  accepted: "Принято",
-  accepted_with_comment: "Принято с замечанием",
+  accepted: "Выполнено",
+  accepted_with_comment: "Выполнено с замечанием",
+  not_completed: "Не выполнено",
 };
 
 const attendanceLabels: Record<string, { label: string; className: string }> = {
@@ -652,7 +653,7 @@ function DynamicsTab({ data }: { data: TeacherStudentWorkspace }) {
 
 function HomeworkRow({ item }: { item: WorkspaceHomeworkItem }) {
   const tone = item.state === "waiting_review" ? "bg-sky-50 text-sky-900"
-    : item.state === "revision" ? "bg-red-50 text-red-700"
+    : item.state === "revision" || item.state === "not_completed" ? "bg-red-50 text-red-700"
     : item.state.startsWith("accepted") ? "bg-emerald-50 text-emerald-800"
     : "bg-stone-100 text-stone-600";
   return (

@@ -107,6 +107,7 @@ const homework: StudentLearningHomeworkResponse = {
       state: "assigned",
       currentCycle: 1,
       acceptedAt: null,
+      completionPercent: null,
       topic: {
         id: "topic",
         title: "Аккорды Am–E",
@@ -341,7 +342,7 @@ test("расписание компактно и не дублирует зад�
   expect(errors).toEqual([]);
 });
 
-test("старые ссылки открывают единственную страницу задания в обучении; ответ отправляется", async ({
+test("старые ссылки открывают единственную страницу задания в обучении; проверка на уроке", async ({
   page,
 }, testInfo) => {
   await setup(page);
@@ -361,29 +362,9 @@ test("старые ссылки открывают единственную ст
     path: testInfo.outputPath("task-detail.png"),
     fullPage: true,
   });
-  let payload: unknown;
-  const waiting = {
-    ...homework.assignments[0],
-    state: "waiting_review" as const,
-  };
-  await page.route(
-    "**/api/v1/homeworks/assignment/submissions",
-    async (route) => {
-      payload = route.request().postDataJSON();
-      await route.fulfill({ json: { data: waiting } });
-    },
-  );
-  await page.getByRole("button", { name: "Я подготовил", exact: true }).click();
-  await page.route("**/api/v1/students/me/homework-assignments", (route) =>
-    route.fulfill({ json: { data: { ...homework, assignments: [waiting] } } }),
-  );
-  await page
-    .getByRole("button", { name: "Отправить преподавателю", exact: true })
-    .click();
-  await expect(
-    page.getByText("Ожидает проверки", { exact: true }),
-  ).toBeVisible();
-  expect(payload).toMatchObject({ submissionMode: "ready_for_lesson" });
+  // Nothing is sent from the app any more: the teacher checks at the lesson.
+  await expect(page.getByTestId("homework-lesson-check-note")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Я подготовил" })).toHaveCount(0);
   await page.goto("/school-lessons?tab=homework");
   await expect(page).toHaveURL(/\/tasks\?source=offline$/);
   await expect(page.getByTestId("task-results")).toBeVisible();

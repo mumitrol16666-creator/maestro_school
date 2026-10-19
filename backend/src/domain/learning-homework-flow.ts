@@ -5,7 +5,37 @@ export type LearningHomeworkRecipientStateValue =
   | "waiting_review"
   | "revision"
   | "accepted"
-  | "accepted_with_comment";
+  | "accepted_with_comment"
+  | "not_completed";
+
+export type LearningHomeworkReviewDecisionValue =
+  | "revision"
+  | "accepted"
+  | "accepted_with_comment"
+  | "not_completed";
+
+/**
+ * The teacher checks homework at the lesson and writes down how much of it
+ * was done. 0 closes the homework as «не выполнено» (no retake), anything
+ * above 0 accepts it; a comment is welcome but never required.
+ */
+export function learningHomeworkDecisionForPercent(percent: number): LearningHomeworkReviewDecisionValue {
+  if (!Number.isInteger(percent) || percent < 0 || percent > 100) {
+    throw new BadRequestError(
+      "Процент выполнения домашнего задания должен быть целым числом от 0 до 100",
+      "HOMEWORK_COMPLETION_PERCENT_INVALID",
+    );
+  }
+  return percent === 0 ? "not_completed" : "accepted";
+}
+
+/** Tone of a completion percent for the interface: green from 80, orange from 50, red below. */
+export function homeworkCompletionTone(percent: number) {
+  if (percent >= 80) return "green" as const;
+  if (percent >= 50) return "orange" as const;
+  if (percent > 0) return "dark_orange" as const;
+  return "red" as const;
+}
 
 export type LearningHomeworkSubmissionModeValue = "materials" | "ready_for_lesson";
 
@@ -36,9 +66,9 @@ export function nextLearningHomeworkAttempt(input: {
   latestAttempt: LatestHomeworkAttempt | null;
   previousAttemptId?: string | null;
 }) {
-  if (["accepted", "accepted_with_comment"].includes(input.state)) {
+  if (["accepted", "accepted_with_comment", "not_completed"].includes(input.state)) {
     throw new ConflictError(
-      "Домашнее задание уже принято",
+      "Домашнее задание уже проверено преподавателем",
       "HOMEWORK_ALREADY_ACCEPTED",
     );
   }
@@ -79,12 +109,19 @@ export function nextLearningHomeworkAttempt(input: {
 export function learningHomeworkReviewTransition(input: {
   state: LearningHomeworkRecipientStateValue;
   currentCycle: number;
-  decision: "revision" | "accepted" | "accepted_with_comment";
+  decision: LearningHomeworkReviewDecisionValue;
   comment?: string | null;
+  /** A check at the lesson needs no submitted answer: any open homework may be decided. */
+  checkedAtLesson?: boolean;
 }) {
-  if (input.state !== "waiting_review") {
+  const openStates: LearningHomeworkRecipientStateValue[] = input.checkedAtLesson
+    ? ["assigned", "waiting_review", "revision"]
+    : ["waiting_review"];
+  if (!openStates.includes(input.state)) {
     throw new ConflictError(
-      "У задания нет ответа, ожидающего проверки",
+      input.checkedAtLesson && ["accepted", "accepted_with_comment", "not_completed"].includes(input.state)
+        ? "Домашнее задание уже проверено"
+        : "У задания нет ответа, ожидающего проверки",
       "HOMEWORK_NOT_WAITING_REVIEW",
     );
   }
@@ -99,7 +136,9 @@ export function learningHomeworkReviewTransition(input: {
     recipientState: input.decision,
     attemptStatus: input.decision,
     currentCycle: input.decision === "revision" ? input.currentCycle + 1 : input.currentCycle,
-    accepted: input.decision !== "revision",
+    // «Не выполнено» closes the homework as well, but without XP.
+    accepted: input.decision === "accepted" || input.decision === "accepted_with_comment",
+    closed: input.decision !== "revision",
     comment: comment || null,
   } as const;
 }

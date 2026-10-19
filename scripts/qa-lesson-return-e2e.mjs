@@ -75,6 +75,7 @@ const economy = async () => {
   const me = findAll(league, (o) => typeof o.xp === 'number' && (o.isMe === true || o.isCurrentStudent === true || o.self === true))[0]
     ?? findAll(league, (o) => typeof o.xp === 'number' && typeof o.position === 'number')[0];
   return { points: profile.points, coins: profile.coins?.balance ?? profile.coins, xp: me?.xp ?? null, leagueKeys: Object.keys(league) };
+};
 const economyBefore = await economy();
 
 const created = await controller('POST', '/lessons', {
@@ -137,7 +138,6 @@ await waitFor('platform report confirmed', async () => {
 console.log(`✓ отчёт на платформе confirmed через ${Date.now() - approveStartedAt} мс`);
 
 // ---------- 0.2: reopen → return → resubmit → re-approve ----------
-};
 const afterApprove = await economy();
 console.log('экономика после approve:', afterApprove);
 const teacherBefore = listOf(await appRequest(teacherToken, 'GET', '/students/me/notifications?limit=50'));

@@ -12,7 +12,8 @@ export type LearningHomeworkRecipientState =
   | "waiting_review"
   | "revision"
   | "accepted"
-  | "accepted_with_comment";
+  | "accepted_with_comment"
+  | "not_completed";
 
 export type LearningHomeworkAttempt = {
   id: string;
@@ -22,12 +23,14 @@ export type LearningHomeworkAttempt = {
   submissionMode: "materials" | "ready_for_lesson";
   text: string | null;
   materials: LearningHomeworkMaterial[];
-  status: "waiting_review" | "superseded" | "revision" | "accepted" | "accepted_with_comment";
+  status: "waiting_review" | "superseded" | "revision" | "accepted" | "accepted_with_comment" | "not_completed";
   previousAttemptId: string | null;
   submittedAt: string;
   review: {
     id: string;
-    decision: "revision" | "accepted" | "accepted_with_comment";
+    decision: "revision" | "accepted" | "accepted_with_comment" | "not_completed";
+    /** How much of the homework was done, checked at the lesson; null for a review of a sent answer. */
+    completionPercent: number | null;
     comment: string | null;
     reviewedAt: string;
     reviewerName: string;
@@ -41,6 +44,8 @@ export type StudentLearningHomeworkAssignment = {
   state: LearningHomeworkRecipientState;
   currentCycle: number;
   acceptedAt: string | null;
+  /** Set when the teacher checked the homework at the lesson: 0 = not completed. */
+  completionPercent: number | null;
   topic: {
     id: string;
     title: string;

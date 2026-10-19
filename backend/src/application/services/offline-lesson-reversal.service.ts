@@ -223,7 +223,7 @@ async function reverseHomeworkDecisions(
   tx: Tx,
   crmClassId: string,
   reportVersion: number,
-  decisions: Array<{ recipientId: string; cycleNumber: number; decision: string }>,
+  decisions: Array<{ recipientId: string; cycleNumber: number; decision?: string; completionPercent?: number | null }>,
   reason: string,
   at: Date,
 ) {
@@ -253,6 +253,7 @@ async function reverseHomeworkDecisions(
         state: "waiting_review",
         currentCycle: decision.cycleNumber,
         acceptedAt: null,
+        completionPercent: null,
         finalReviewerId: null,
         rewardSourceKey: null,
       },

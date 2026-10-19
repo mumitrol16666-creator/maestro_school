@@ -244,9 +244,12 @@ export type LearningLessonV2Homework = {
   topicTitle: string;
   directionTitle: string;
   instructions: string;
-  submissionMode: "materials" | "ready_for_lesson";
+  state: "assigned" | "waiting_review" | "revision" | string;
+  assignedAt: string;
+  /** Present only when the student sent an answer in the app. */
+  submissionMode: "materials" | "ready_for_lesson" | null;
   studentComment: string | null;
-  submittedAt: string;
+  submittedAt: string | null;
 };
 
 export type LearningLessonV2Context = {
@@ -308,7 +311,10 @@ export type LearningLessonV2ResultsInput = {
   homeworkDecisions: Array<{
     recipientId: string;
     cycleNumber: number;
-    decision: "revision" | "accepted" | "accepted_with_comment";
+    /** Checked at the lesson: 0 = not completed, 1–100 = done this much. */
+    completionPercent?: number | null;
+    /** Legacy decision of a submitted answer from reports saved before the percent flow. */
+    decision?: "revision" | "accepted" | "accepted_with_comment";
     comment?: string | null;
   }>;
   topicUpdates: Array<{

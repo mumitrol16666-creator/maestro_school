@@ -390,7 +390,8 @@ function learningResultsV2Draft(
     homeworkDecisions: Object.fromEntries(results.homeworkDecisions.map((decision) => [
       decision.recipientId,
       {
-        decision: decision.decision,
+        completionPercent: decision.completionPercent
+          ?? (decision.decision === "accepted" || decision.decision === "accepted_with_comment" ? 100 : null),
         comment: decision.comment ?? "",
       },
     ])),
@@ -670,7 +671,7 @@ export default function AdminOfflineLessonDetailPage() {
       return total;
     }
     return total + learningStudent.pendingHomework.filter(
-      (homework) => !learningV2Draft.homeworkDecisions[homework.recipientId]?.decision,
+      (homework) => learningV2Draft.homeworkDecisions[homework.recipientId]?.completionPercent == null,
     ).length;
   }, 0) ?? 0;
   const allStudentsAbsent = students.length > 0 && students.every((student) => (
@@ -1198,14 +1199,6 @@ export default function AdminOfflineLessonDetailPage() {
       return `Проверьте ожидающие домашние задания присутствующих учеников. Осталось: ${pendingLearningDecisions}.`;
     }
     if (isLearningLessonV2) {
-      for (const decision of Object.values(learningV2Draft.homeworkDecisions)) {
-        if (
-          ["revision", "accepted_with_comment"].includes(decision.decision ?? "")
-          && !decision.comment.trim()
-        ) {
-          return "Добавьте комментарий к решению по домашнему заданию.";
-        }
-      }
       if (homework.trim() && hasLearningPlanTopics && !hasValidLearningHomeworkTopic) {
         return "Выберите тему, к которой относится новое домашнее задание.";
       }
@@ -1327,11 +1320,11 @@ export default function AdminOfflineLessonDetailPage() {
           return [];
         }
         const decision = learningV2Draft.homeworkDecisions[homework.recipientId];
-        return decision?.decision
+        return decision?.completionPercent != null
           ? [{
               recipientId: homework.recipientId,
               cycleNumber: homework.cycleNumber,
-              decision: decision.decision,
+              completionPercent: decision.completionPercent,
               comment: decision.comment.trim() || null,
             }]
           : [];
@@ -1468,11 +1461,12 @@ export default function AdminOfflineLessonDetailPage() {
   }));
   const homeworkDecisionSummary = Object.values(learningV2Draft.homeworkDecisions).reduce(
     (summary, decision) => {
-      if (decision.decision === "revision") summary.revision += 1;
-      else if (decision.decision) summary.accepted += 1;
+      if (decision.completionPercent == null) return summary;
+      if (decision.completionPercent === 0) summary.notCompleted += 1;
+      else summary.accepted += 1;
       return summary;
     },
-    { accepted: 0, revision: 0 },
+    { accepted: 0, notCompleted: 0 },
   );
   // The report is filled in five short steps (02 §3.4) when the teacher edits a
   // learning lesson; admins, trial lessons and absence-only reports keep one page.
@@ -2326,7 +2320,7 @@ export default function AdminOfflineLessonDetailPage() {
         learning={isLearningLessonV2 ? {
           pendingHomework: pendingLearningHomework,
           acceptedHomework: homeworkDecisionSummary.accepted,
-          revisionHomework: homeworkDecisionSummary.revision,
+          notCompletedHomework: homeworkDecisionSummary.notCompleted,
           topicUpdates: learningTopicUpdates,
           homeworkAssignment: homework.trim() && hasValidLearningHomeworkTopic
             ? {
@@ -2479,7 +2473,7 @@ function SubmitLessonConfirmation({
   learning: {
     pendingHomework: number;
     acceptedHomework: number;
-    revisionHomework: number;
+    notCompletedHomework: number;
     topicUpdates: Array<{
       topicId: string;
       title: string;
@@ -2651,9 +2645,9 @@ function SubmitLessonConfirmation({
             <div className="border-t border-stone-200 pt-3">
               <p className="text-xs font-black uppercase text-stone-500">Проверка ДЗ</p>
               <p className="mt-1 text-sm font-bold text-stone-700">
-                Принять: {learning.acceptedHomework} · На доработку: {learning.revisionHomework}
+                Выполнено: {learning.acceptedHomework} · Не выполнено: {learning.notCompletedHomework}
               </p>
-              {learning.pendingHomework > learning.acceptedHomework + learning.revisionHomework ? (
+              {learning.pendingHomework > learning.acceptedHomework + learning.notCompletedHomework ? (
                 <p className="mt-1 text-xs text-stone-500">
                   Без решения останутся работы отсутствующих учеников.
                 </p>

@@ -1,5 +1,5 @@
 export type HomeworkStatisticsFact = {
-  state: "assigned" | "waiting_review" | "revision" | "accepted" | "accepted_with_comment";
+  state: "assigned" | "waiting_review" | "revision" | "accepted" | "accepted_with_comment" | "not_completed";
   currentCycle: number;
   attemptCount: number;
 };

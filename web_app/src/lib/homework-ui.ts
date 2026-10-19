@@ -43,3 +43,25 @@ export function attemptStatusLabel(status: string, isTest: boolean) {
   if (isTest && status === "approved") return "Пройден";
   return submissionStatusLabels[status] ?? "Неизвестный статус";
 }
+
+/** States of a homework given from a lesson (learning_homework_v2), as the teacher and student see them. */
+export const learningHomeworkStateLabels: Record<string, string> = {
+  assigned: "Нужно сделать",
+  waiting_review: "Ждёт проверки на уроке",
+  revision: "На доработке",
+  accepted: "Выполнено",
+  accepted_with_comment: "Выполнено с замечанием",
+  not_completed: "Не выполнено",
+};
+
+/**
+ * Colour of a completion percent the teacher set at the lesson:
+ * 80–100 green, 50–79 orange, 1–49 dark orange, 0 red.
+ */
+export function homeworkPercentTone(percent: number | null | undefined) {
+  if (percent == null) return { label: "Не проверено", className: "bg-stone-100 text-stone-600", bar: "bg-stone-300" };
+  if (percent >= 80) return { label: `${percent}%`, className: "bg-emerald-50 text-emerald-800", bar: "bg-emerald-500" };
+  if (percent >= 50) return { label: `${percent}%`, className: "bg-amber-50 text-amber-800", bar: "bg-amber-400" };
+  if (percent > 0) return { label: `${percent}%`, className: "bg-orange-100 text-orange-900", bar: "bg-orange-600" };
+  return { label: "Не выполнено", className: "bg-red-50 text-red-700", bar: "bg-red-500" };
+}

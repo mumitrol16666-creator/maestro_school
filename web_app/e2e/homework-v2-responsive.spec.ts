@@ -34,12 +34,10 @@ test("новое ДЗ не ломает телефонные размеры", as
   const closeDialog = page.getByRole("button", { name: "Закрыть" });
   if (await closeDialog.isVisible().catch(() => false)) await closeDialog.click();
 
+  // The student sends nothing: the teacher checks the homework at the next lesson.
   const assignmentCard = page.locator("article", { hasText: FORM_INSTRUCTIONS });
-  await expect(assignmentCard.getByRole("button", { name: "Я подготовил", exact: true })).toBeVisible();
-  await assignmentCard.getByRole("button", { name: "Я подготовил", exact: true }).click();
-  await expect(assignmentCard.getByPlaceholder("Сопроводительный комментарий")).toBeVisible();
-  await expect(assignmentCard.getByLabel("Прикрепить файлы")).toBeAttached();
-  await expect(assignmentCard.getByRole("button", { name: "Отправить преподавателю" })).toBeVisible();
+  await expect(assignmentCard.getByTestId("homework-lesson-check-note")).toBeVisible();
+  await expect(assignmentCard.getByRole("button", { name: "Я подготовил" })).toHaveCount(0);
 
   for (const width of [320, 375, 430, 768]) {
     await page.setViewportSize({ width, height: 900 });

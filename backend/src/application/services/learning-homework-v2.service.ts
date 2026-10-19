@@ -20,6 +20,7 @@ import {
   ForbiddenError,
 } from "../../domain/errors.js";
 import {
+  learningHomeworkDecisionForPercent,
   learningHomeworkReviewTransition,
   nextLearningHomeworkAttempt,
   validateLearningHomeworkSubmission,
@@ -66,10 +67,21 @@ export type SubmitLearningHomeworkAttemptInput = {
 export type ReviewLearningHomeworkInput = {
   recipientId: string;
   reviewerUserId: string;
-  decision: "revision" | "accepted" | "accepted_with_comment";
+  /** Legacy decision of a submitted answer; ignored when `completionPercent` is given. */
+  decision?: "revision" | "accepted" | "accepted_with_comment";
+  /** Set at the lesson: 0 = not completed, 1–100 = accepted with this much done. */
+  completionPercent?: number | null;
   comment?: string | null;
   idempotencyKey: string;
+  /** True when the teacher decides at the lesson: no submitted answer is required. */
+  checkedAtLesson?: boolean;
 };
+
+/** Only an accepted answer earns XP; «не выполнено» and «на доработку» do not. */
+function acceptedDecision(decision: LearningHomeworkReviewDecision) {
+  return decision === LearningHomeworkReviewDecision.accepted
+    || decision === LearningHomeworkReviewDecision.accepted_with_comment;
+}
 
 export function sameLearningHomeworkReviewRequest(
   review: {
@@ -432,6 +444,7 @@ function attemptDto(attempt: StudentRecipient["attempts"][number]) {
       ? {
           id: review.id,
           decision: review.decision,
+          completionPercent: review.completionPercent,
           comment: review.comment,
           reviewedAt: review.reviewedAt,
           reviewerName: fullName(review.reviewer),
@@ -449,6 +462,7 @@ function studentAssignmentDto(recipient: StudentRecipient) {
     state: recipient.state,
     currentCycle: recipient.currentCycle,
     acceptedAt: recipient.acceptedAt,
+    completionPercent: recipient.completionPercent,
     topic: {
       id: recipient.assignment.topic.id,
       title: recipient.assignment.topic.title,
@@ -907,11 +921,17 @@ export async function reviewLearningHomework(input: ReviewLearningHomeworkInput)
   }
   await requireLearningHomeworkReviewAccess(input.reviewerUserId, recipient.assignment.topic);
 
-  const decision = input.decision === "revision"
+  const completionPercent = input.completionPercent ?? null;
+  const decisionValue = completionPercent !== null
+    ? learningHomeworkDecisionForPercent(completionPercent)
+    : input.decision ?? "accepted";
+  const decision = decisionValue === "revision"
     ? LearningHomeworkReviewDecision.revision
-    : input.decision === "accepted_with_comment"
+    : decisionValue === "accepted_with_comment"
       ? LearningHomeworkReviewDecision.accepted_with_comment
-      : LearningHomeworkReviewDecision.accepted;
+      : decisionValue === "not_completed"
+        ? LearningHomeworkReviewDecision.not_completed
+        : LearningHomeworkReviewDecision.accepted;
   const normalizedComment = input.comment?.trim() || null;
 
   const duplicate = await prisma.learningHomeworkReview.findUnique({
@@ -930,7 +950,7 @@ export async function reviewLearningHomework(input: ReviewLearningHomeworkInput)
         "HOMEWORK_IDEMPOTENCY_CONFLICT",
       );
     }
-    if (duplicate.decision !== LearningHomeworkReviewDecision.revision) {
+    if (acceptedDecision(duplicate.decision)) {
       await applyAcceptedLearningHomeworkXp({
         recipientId: recipient.id,
         studentUserId: recipient.studentUserId,
@@ -944,8 +964,11 @@ export async function reviewLearningHomework(input: ReviewLearningHomeworkInput)
     return { review: duplicate, idempotent: true };
   }
 
-  const attempt = recipient.attempts[0];
-  if (!attempt || attempt.status !== LearningHomeworkAttemptStatus.waiting_review) {
+  const latestAttempt = recipient.attempts[0] ?? null;
+  const waitingAttempt = latestAttempt?.status === LearningHomeworkAttemptStatus.waiting_review
+    ? latestAttempt
+    : null;
+  if (!waitingAttempt && !input.checkedAtLesson) {
     throw new ConflictError(
       "У задания нет ответа, ожидающего проверки",
       "HOMEWORK_NOT_WAITING_REVIEW",
@@ -954,11 +977,31 @@ export async function reviewLearningHomework(input: ReviewLearningHomeworkInput)
   const transition = learningHomeworkReviewTransition({
     state: recipient.state,
     currentCycle: recipient.currentCycle,
-    decision: input.decision,
+    decision: decisionValue,
     comment: input.comment,
+    checkedAtLesson: input.checkedAtLesson,
   });
   try {
     const review = await prisma.$transaction(async (tx) => {
+      // Checked at the lesson without an answer from the student: the check
+      // itself becomes the attempt, so the review keeps its history shape.
+      const attempt = waitingAttempt ?? await tx.learningHomeworkAttempt.create({
+        data: {
+          id: randomUUID(),
+          recipientId: recipient.id,
+          attemptNumber: (latestAttempt?.attemptNumber ?? 0) + 1,
+          cycleNumber: recipient.currentCycle,
+          versionInCycle: latestAttempt?.cycleNumber === recipient.currentCycle
+            ? latestAttempt.versionInCycle + 1
+            : 1,
+          submissionMode: LearningHomeworkSubmissionMode.ready_for_lesson,
+          text: null,
+          materials: [],
+          status: LearningHomeworkAttemptStatus.waiting_review,
+          submittedById: null,
+          idempotencyKey: `${input.idempotencyKey}:lesson-check`,
+        },
+      });
       const created = await tx.learningHomeworkReview.create({
         data: {
           id: randomUUID(),
@@ -966,6 +1009,7 @@ export async function reviewLearningHomework(input: ReviewLearningHomeworkInput)
           attemptId: attempt.id,
           cycleNumber: attempt.cycleNumber,
           decision,
+          completionPercent,
           comment: transition.comment,
           reviewerId: input.reviewerUserId,
           idempotencyKey: input.idempotencyKey,
@@ -980,8 +1024,9 @@ export async function reviewLearningHomework(input: ReviewLearningHomeworkInput)
         data: {
           state: transition.recipientState,
           currentCycle: transition.currentCycle,
-          acceptedAt: transition.accepted ? new Date() : null,
-          finalReviewerId: transition.accepted ? input.reviewerUserId : null,
+          acceptedAt: transition.closed ? new Date() : null,
+          completionPercent: transition.closed ? completionPercent : null,
+          finalReviewerId: transition.closed ? input.reviewerUserId : null,
         },
       });
       return created;
@@ -989,9 +1034,13 @@ export async function reviewLearningHomework(input: ReviewLearningHomeworkInput)
     if (recipient.studentUserId) {
       const body = decision === LearningHomeworkReviewDecision.revision
         ? "Преподаватель вернул домашнее задание на доработку"
-        : decision === LearningHomeworkReviewDecision.accepted_with_comment
-          ? "Домашнее задание принято с замечанием преподавателя"
-          : "Домашнее задание принято";
+        : decision === LearningHomeworkReviewDecision.not_completed
+          ? "Преподаватель отметил на уроке: домашнее задание не выполнено"
+          : completionPercent !== null
+            ? `Преподаватель проверил домашнее задание на уроке: выполнено на ${completionPercent}%`
+            : decision === LearningHomeworkReviewDecision.accepted_with_comment
+              ? "Домашнее задание принято с замечанием преподавателя"
+              : "Домашнее задание принято";
       await deliverUserNotification({
         userId: recipient.studentUserId,
         type: "homework_reviewed",
@@ -1002,7 +1051,7 @@ export async function reviewLearningHomework(input: ReviewLearningHomeworkInput)
         dedupeKey: `learning-hw:reviewed:${recipient.id}:${review.id}:${recipient.studentUserId}`,
       }).catch(() => undefined);
     }
-    if (decision !== LearningHomeworkReviewDecision.revision) {
+    if (acceptedDecision(decision)) {
       await applyAcceptedLearningHomeworkXp({
         recipientId: recipient.id,
         studentUserId: recipient.studentUserId,
@@ -1025,7 +1074,7 @@ export async function reviewLearningHomework(input: ReviewLearningHomeworkInput)
         decision,
         comment: normalizedComment,
       })) {
-        if (duplicateAfterRace.decision !== LearningHomeworkReviewDecision.revision) {
+        if (acceptedDecision(duplicateAfterRace.decision)) {
           await applyAcceptedLearningHomeworkXp({
             recipientId: recipient.id,
             studentUserId: recipient.studentUserId,

@@ -19,12 +19,12 @@ const decisions: Array<{ key: LegacyDecision; label: string }> = [
 ];
 const labels: Record<string, string> = {
   assigned: "Нужно сделать", waiting_review: "На проверке", revision: "Доработать", needs_revision: "Доработать",
-  accepted: "Принято", accepted_with_comment: "Принято с замечанием", continue: "Продолжить работу",
+  accepted: "Выполнено", accepted_with_comment: "Выполнено с замечанием", not_completed: "Не выполнено", continue: "Продолжить работу",
   obsolete: "Неактуально", clarify: "Результат не отмечен",
 };
 const control = "min-h-11 rounded-lg px-4 py-2 text-sm font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-700";
 function tabFor(item: TeacherHomeworkItem): Tab {
-  if (["accepted", "accepted_with_comment", "obsolete"].includes(item.state)) return "history";
+  if (["accepted", "accepted_with_comment", "not_completed", "obsolete"].includes(item.state)) return "history";
   if (item.state === "waiting_review") return "review";
   if (item.state === "clarify") return "clarify";
   return "current";

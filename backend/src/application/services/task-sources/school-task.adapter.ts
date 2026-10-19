@@ -6,7 +6,7 @@ type Assignment = Awaited<ReturnType<typeof listStudentLearningHomeworkAssignmen
 export type SchoolTaskBatch = { tasks: UnifiedTask[]; unavailableCode?: string };
 const statuses: Record<Assignment["state"], UnifiedTaskStatus> = {
   assigned: "todo", waiting_review: "waiting_review", revision: "needs_revision",
-  accepted: "completed", accepted_with_comment: "completed",
+  accepted: "completed", accepted_with_comment: "completed", not_completed: "completed",
 };
 
 export function mapLearningHomeworkTask(assignment: Assignment, now = new Date()): UnifiedTask {
@@ -19,8 +19,9 @@ export function mapLearningHomeworkTask(assignment: Assignment, now = new Date()
     context: { primary: assignment.topic.direction.title, secondary: null, teacherName: assignment.teacherName || null },
     timing: { assignedAt: assignment.assignedAt.toISOString(), dueAt: assignment.dueAt?.toISOString() ?? null,
       dueKind: assignment.dueAt ? "exact" : null, overdue: false },
-    // Acceptance of homework is not a topic mastery percentage or proof of a reward.
-    result: { completionPercent: null, scorePercent: null, reviewComment: attempt?.review?.comment ?? null, points: null, coins: null },
+    // The percent is how much of the homework the teacher saw done at the lesson,
+    // not topic mastery and not proof of a reward.
+    result: { completionPercent: assignment.completionPercent ?? null, scorePercent: null, reviewComment: attempt?.review?.comment ?? null, points: null, coins: null },
     target: { href: `/tasks/school/${encodeURIComponent(assignment.id)}`, actionLabel: "Открыть" },
     updatedAt: (attempt?.review?.reviewedAt ?? attempt?.submittedAt ?? assignment.assignedAt).toISOString(),
   }, now);

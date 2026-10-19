@@ -51,11 +51,22 @@ export const learningLessonResultsSchema = z.object({
   homeworkDecisions: z.array(z.object({
     recipientId: z.string().uuid(),
     cycleNumber: z.number().int().min(1),
-    decision: z.enum(["revision", "accepted", "accepted_with_comment"]),
+    // Checked at the lesson: 0 = not completed, 1–100 = done this much.
+    completionPercent: z.number().int().min(0).max(100).nullable().optional(),
+    // Legacy decision of a submitted answer, still accepted from older drafts.
+    decision: z.enum(["revision", "accepted", "accepted_with_comment"]).optional(),
     comment: z.string().max(5000).nullable().optional(),
   }).superRefine((decision, context) => {
+    if (decision.completionPercent == null && !decision.decision) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["completionPercent"],
+        message: "Укажите процент выполнения домашнего задания",
+      });
+    }
     if (
-      ["revision", "accepted_with_comment"].includes(decision.decision)
+      decision.completionPercent == null
+      && ["revision", "accepted_with_comment"].includes(decision.decision ?? "")
       && !decision.comment?.trim()
     ) {
       context.addIssue({

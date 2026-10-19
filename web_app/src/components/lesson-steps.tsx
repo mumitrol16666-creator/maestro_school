@@ -119,7 +119,7 @@ export function LessonReportPreview({
   homework: string;
   homeworkTopicTitle: string | null;
   topicUpdates: Array<{ topicId: string; title: string; fromPercent: number | null; toPercent: number }>;
-  homeworkDecisions: { accepted: number; revision: number; pending: number };
+  homeworkDecisions: { accepted: number; notCompleted: number; pending: number };
   xp: { willAward: number; limited: number } | null;
   issue: string | null;
 }) {
@@ -150,10 +150,10 @@ export function LessonReportPreview({
         <div className={row}>
           <dt className="font-bold text-stone-700">Проверка ДЗ</dt>
           <dd className="text-stone-600">
-            {homeworkDecisions.accepted + homeworkDecisions.revision
-              ? `принято ${homeworkDecisions.accepted}, на доработку ${homeworkDecisions.revision}`
-              : "решений нет"}
-            {homeworkDecisions.pending ? <span className="ml-2 font-bold text-amber-800">· без решения: {homeworkDecisions.pending}</span> : null}
+            {homeworkDecisions.accepted + homeworkDecisions.notCompleted
+              ? `выполнено ${homeworkDecisions.accepted}, не выполнено ${homeworkDecisions.notCompleted}`
+              : "отметок нет"}
+            {homeworkDecisions.pending ? <span className="ml-2 font-bold text-amber-800">· без отметки: {homeworkDecisions.pending}</span> : null}
           </dd>
         </div>
         <div className={row}>

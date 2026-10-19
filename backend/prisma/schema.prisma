@@ -74,6 +74,7 @@ enum LearningHomeworkRecipientState {
   revision
   accepted
   accepted_with_comment
+  not_completed
 }
 
 enum LearningHomeworkSubmissionMode {
@@ -87,12 +88,14 @@ enum LearningHomeworkAttemptStatus {
   revision
   accepted
   accepted_with_comment
+  not_completed
 }
 
 enum LearningHomeworkReviewDecision {
   revision
   accepted
   accepted_with_comment
+  not_completed
 }
 
 enum OnlineLessonRequestStatus {
@@ -1134,17 +1137,19 @@ model LearningHomeworkAssignment {
 }
 
 model LearningHomeworkRecipient {
-  id              String                         @id @default(uuid()) @db.Uuid
-  assignmentId    String                         @map("assignment_id") @db.Uuid
-  crmStudentId    String                         @map("crm_student_id") @db.VarChar(128)
-  studentUserId   String?                        @map("student_user_id") @db.Uuid
-  state           LearningHomeworkRecipientState @default(assigned)
-  currentCycle    Int                            @default(1) @map("current_cycle")
-  acceptedAt      DateTime?                      @map("accepted_at") @db.Timestamptz(6)
-  finalReviewerId String?                        @map("final_reviewer_id") @db.Uuid
-  rewardSourceKey String?                        @unique @map("reward_source_key") @db.VarChar(191)
-  createdAt       DateTime                       @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime                       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id                String                         @id @default(uuid()) @db.Uuid
+  assignmentId      String                         @map("assignment_id") @db.Uuid
+  crmStudentId      String                         @map("crm_student_id") @db.VarChar(128)
+  studentUserId     String?                        @map("student_user_id") @db.Uuid
+  state             LearningHomeworkRecipientState @default(assigned)
+  currentCycle      Int                            @default(1) @map("current_cycle")
+  acceptedAt        DateTime?                      @map("accepted_at") @db.Timestamptz(6)
+  /// How much of the homework the teacher saw done at the lesson, 0–100; null until checked.
+  completionPercent Int?                           @map("completion_percent")
+  finalReviewerId   String?                        @map("final_reviewer_id") @db.Uuid
+  rewardSourceKey   String?                        @unique @map("reward_source_key") @db.VarChar(191)
+  createdAt         DateTime                       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime                       @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   assignment    LearningHomeworkAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
   student       User?                      @relation("LearningHomeworkRecipientStudent", fields: [studentUserId], references: [id], onDelete: SetNull)
@@ -1190,16 +1195,18 @@ model LearningHomeworkAttempt {
 }
 
 model LearningHomeworkReview {
-  id             String                         @id @default(uuid()) @db.Uuid
-  recipientId    String                         @map("recipient_id") @db.Uuid
-  attemptId      String                         @map("attempt_id") @db.Uuid
-  cycleNumber    Int                            @map("cycle_number")
-  decision       LearningHomeworkReviewDecision
-  comment        String?                        @db.Text
-  reviewerId     String?                        @map("reviewer_id") @db.Uuid
-  idempotencyKey String                         @unique @map("idempotency_key") @db.VarChar(191)
-  reviewedAt     DateTime                       @default(now()) @map("reviewed_at") @db.Timestamptz(6)
-  createdAt      DateTime                       @default(now()) @map("created_at") @db.Timestamptz(6)
+  id                String                         @id @default(uuid()) @db.Uuid
+  recipientId       String                         @map("recipient_id") @db.Uuid
+  attemptId         String                         @map("attempt_id") @db.Uuid
+  cycleNumber       Int                            @map("cycle_number")
+  decision          LearningHomeworkReviewDecision
+  /// Completion percent set at the lesson; null for reviews of a submitted answer.
+  completionPercent Int?                           @map("completion_percent")
+  comment           String?                        @db.Text
+  reviewerId        String?                        @map("reviewer_id") @db.Uuid
+  idempotencyKey    String                         @unique @map("idempotency_key") @db.VarChar(191)
+  reviewedAt        DateTime                       @default(now()) @map("reviewed_at") @db.Timestamptz(6)
+  createdAt         DateTime                       @default(now()) @map("created_at") @db.Timestamptz(6)
 
   recipient LearningHomeworkRecipient @relation(fields: [recipientId], references: [id], onDelete: Cascade)
   attempt   LearningHomeworkAttempt   @relation(fields: [attemptId], references: [id], onDelete: Restrict)

@@ -1,12 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { homeworkPercentTone } from "@/lib/homework-ui";
 
 import {
-  Check,
-  CircleDot,
   ClipboardCheck,
-  RotateCcw,
   Target,
   Plus,
   LoaderCircle,
@@ -18,7 +16,8 @@ import type {
 } from "@/types/teacher-offline";
 
 export type LearningLessonHomeworkDecisionDraft = {
-  decision: "revision" | "accepted" | "accepted_with_comment" | null;
+  /** How much of the homework the teacher saw done: 0 = not completed, null = not decided yet. */
+  completionPercent: number | null;
   comment: string;
 };
 
@@ -58,11 +57,21 @@ export function normalizeLearningLessonV2Draft(value: unknown): LearningLessonV2
       ? candidate.homeworkTopicId
       : null
     : topicId;
-  const homeworkDecisions = candidate.homeworkDecisions
+  const rawHomeworkDecisions = candidate.homeworkDecisions
     && typeof candidate.homeworkDecisions === "object"
     && !Array.isArray(candidate.homeworkDecisions)
-    ? candidate.homeworkDecisions as Record<string, LearningLessonHomeworkDecisionDraft>
+    ? candidate.homeworkDecisions as Record<string, Partial<LearningLessonHomeworkDecisionDraft> & { decision?: string | null }>
     : {};
+  // Drafts saved before the percent flow carried a decision word: an accepted
+  // answer counts as fully done, a revision has to be decided again.
+  const homeworkDecisions: Record<string, LearningLessonHomeworkDecisionDraft> = Object.fromEntries(
+    Object.entries(rawHomeworkDecisions).map(([recipientId, value]) => [recipientId, {
+      completionPercent: Number.isInteger(value?.completionPercent)
+        ? Number(value!.completionPercent)
+        : value?.decision === "accepted" || value?.decision === "accepted_with_comment" ? 100 : null,
+      comment: typeof value?.comment === "string" ? value.comment : "",
+    }]),
+  );
   const rawTopicProgress = candidate.topicProgress
     && typeof candidate.topicProgress === "object"
     && !Array.isArray(candidate.topicProgress)
@@ -100,6 +109,13 @@ export function pendingLearningHomeworkCount(context?: LearningLessonV2Context |
   ) ?? 0;
 }
 
+const percentPresets = [
+  { value: 0, label: "Не выполнено" },
+  { value: 50, label: "50%" },
+  { value: 70, label: "70%" },
+  { value: 100, label: "100%" },
+];
+
 function HomeworkDecisionRow({
   homework,
   studentName,
@@ -113,13 +129,14 @@ function HomeworkDecisionRow({
   disabled: boolean;
   onChange: (value: LearningLessonHomeworkDecisionDraft) => void;
 }) {
-  const options = [
-    { value: "accepted" as const, label: "Принять", icon: Check },
-    { value: "accepted_with_comment" as const, label: "С замечанием", icon: CircleDot },
-    { value: "revision" as const, label: "На доработку", icon: RotateCcw },
-  ];
+  const tone = homeworkPercentTone(value.completionPercent);
+  const [custom, setCustom] = useState<string>(
+    value.completionPercent != null && !percentPresets.some((preset) => preset.value === value.completionPercent)
+      ? String(value.completionPercent)
+      : "",
+  );
   return (
-    <div className="border-t border-stone-200 py-4 first:border-t-0 first:pt-0 last:pb-0">
+    <div className="border-t border-stone-200 py-4 first:border-t-0 first:pt-0 last:pb-0" data-testid="homework-check-row">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <p className="text-sm font-black text-ink">{studentName}</p>
@@ -128,54 +145,76 @@ function HomeworkDecisionRow({
             {homework.instructions}
           </p>
           <p className="mt-2 text-xs font-semibold text-stone-500">
-            {homework.submissionMode === "ready_for_lesson"
-              ? "Ученик отметил: проверить на уроке"
-              : homework.studentComment || "Ответ отправлен материалами"}
+            {homework.submittedAt
+              ? homework.submissionMode === "materials"
+                ? `Ученик прислал ответ в приложении${homework.studentComment ? `: ${homework.studentComment}` : ""}`
+                : "Ученик отметил в приложении: готов показать на уроке"
+              : "Ответа в приложении нет: проверьте на уроке"}
           </p>
         </div>
-        <div className="grid shrink-0 grid-cols-1 gap-2 sm:grid-cols-3">
-          {options.map((option) => {
-            const Icon = option.icon;
-            const selected = value.decision === option.value;
-            return (
-              <button
-                key={option.value}
-                type="button"
+        <div className="shrink-0">
+          <div className="flex flex-wrap gap-2">
+            {percentPresets.map((preset) => {
+              const selected = value.completionPercent === preset.value;
+              const presetTone = homeworkPercentTone(preset.value);
+              return (
+                <button
+                  key={preset.value}
+                  type="button"
+                  disabled={disabled}
+                  aria-pressed={selected}
+                  onClick={() => {
+                    setCustom("");
+                    onChange({ ...value, completionPercent: selected ? null : preset.value });
+                  }}
+                  className={`inline-flex min-h-10 items-center justify-center rounded-lg border px-3 text-xs font-bold transition disabled:opacity-50 ${
+                    selected ? `${presetTone.className} border-current` : "border-stone-200 bg-white text-stone-700 hover:border-stone-400"
+                  }`}
+                >
+                  {preset.label}
+                </button>
+              );
+            })}
+            <label className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-stone-200 bg-white px-2 text-xs font-bold text-stone-700">
+              <input
+                type="number"
+                min={0}
+                max={100}
+                inputMode="numeric"
                 disabled={disabled}
-                onClick={() => onChange({
-                  decision: selected ? null : option.value,
-                  comment: selected ? "" : value.comment,
-                })}
-                className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border px-3 text-xs font-bold transition disabled:opacity-50 ${
-                  selected
-                    ? option.value === "revision"
-                      ? "border-red-700 bg-red-700 text-white"
-                      : "border-emerald-700 bg-emerald-700 text-white"
-                    : "border-stone-200 bg-white text-stone-700 hover:border-stone-400"
-                }`}
-              >
-                <Icon size={14} />
-                {option.label}
-              </button>
-            );
-          })}
+                value={custom}
+                placeholder="свой %"
+                aria-label={`Процент выполнения ДЗ: ${studentName}`}
+                onChange={(event) => {
+                  const raw = event.target.value;
+                  setCustom(raw);
+                  if (raw === "") return;
+                  const parsed = Math.max(0, Math.min(100, Math.round(Number(raw))));
+                  if (Number.isFinite(parsed)) onChange({ ...value, completionPercent: parsed });
+                }}
+                className="w-16 bg-transparent text-right outline-none"
+              />
+              %
+            </label>
+          </div>
+          <p className="mt-2 text-right">
+            <span className={`inline-flex rounded-md px-2 py-0.5 text-[11px] font-black ${tone.className}`}>
+              {value.completionPercent == null ? "Нужна отметка" : tone.label}
+            </span>
+          </p>
         </div>
       </div>
-      {value.decision === "revision" || value.decision === "accepted_with_comment" ? (
-        <label className="mt-3 block text-xs font-bold text-stone-600">
-          Комментарий преподавателя
-          <textarea
-            value={value.comment}
-            disabled={disabled}
-            rows={2}
-            onChange={(event) => onChange({ ...value, comment: event.target.value })}
-            placeholder={value.decision === "revision"
-              ? "Что нужно исправить или доучить?"
-              : "Что важно учесть дальше?"}
-            className="mt-1.5 min-h-16 w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-normal text-ink outline-none focus:border-amber-500"
-          />
-        </label>
-      ) : null}
+      <label className="mt-3 block text-xs font-bold text-stone-600">
+        Комментарий (необязательно)
+        <textarea
+          value={value.comment}
+          disabled={disabled}
+          rows={1}
+          onChange={(event) => onChange({ ...value, comment: event.target.value })}
+          placeholder="Что доучить или на что обратить внимание"
+          className="mt-1.5 min-h-10 w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-normal text-ink outline-none focus:border-amber-400"
+        />
+      </label>
     </div>
   );
 }
@@ -489,7 +528,10 @@ export function LearningLessonV2Panel({
       <div className="mt-6 border-t border-stone-200 pt-5">
         <p className="flex items-center gap-2 text-sm font-black text-ink">
           <ClipboardCheck size={17} className="text-amber-700" />
-          Решение по ожидающему ДЗ
+          Проверка прошлого ДЗ
+        </p>
+        <p className="mt-1 text-xs text-stone-500">
+          Отметьте, насколько выполнено домашнее задание каждого присутствующего. 0 закрывает задание как невыполненное, любой процент выше даёт XP.
         </p>
         {pendingCount ? (
           <div className="mt-4">
@@ -501,7 +543,7 @@ export function LearningLessonV2Panel({
                   studentName={student.name}
                   disabled={disabled}
                   value={draft.homeworkDecisions[homework.recipientId] ?? {
-                    decision: null,
+                    completionPercent: null,
                     comment: "",
                   }}
                   onChange={(value) => onChange({
@@ -517,7 +559,7 @@ export function LearningLessonV2Panel({
           </div>
         ) : (
           <p className="mt-2 text-sm text-stone-500">
-            Нет работ, которые ожидают проверки. Старые ДЗ без отправленной попытки здесь не закрываются.
+            Открытых домашних заданий у учеников этого урока нет.
           </p>
         )}
       </div>

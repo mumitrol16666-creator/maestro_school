@@ -30,6 +30,7 @@ function statusLabel(status: string) {
       waiting_review: "На проверке",
       accepted: "Принято",
       accepted_with_comment: "Принято с замечанием",
+      not_completed: "Не выполнено",
       revision: "Доработка",
       pending: "Ожидает",
     }[status] ?? status

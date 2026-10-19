@@ -11,7 +11,6 @@ import {
   fetchTeacherStudents,
 } from "../../infrastructure/crm/crm-client.js";
 import { aqtobeMonthKey } from "../../lib/aqtobe-month.js";
-import { listLearningHomeworkReviewQueue } from "./learning-homework-review-queue.service.js";
 import {
   createLearningHomeworkAssignmentForRecipients,
   reviewLearningHomework,
@@ -60,7 +59,10 @@ type LessonScope = {
 export type LearningLessonHomeworkDecision = {
   recipientId: string;
   cycleNumber: number;
-  decision: "revision" | "accepted" | "accepted_with_comment";
+  /** Legacy decision of a submitted answer; reports saved before the percent flow. */
+  decision?: "revision" | "accepted" | "accepted_with_comment";
+  /** How much of the homework was done, checked at the lesson: 0 = not completed. */
+  completionPercent?: number | null;
   comment?: string | null;
 };
 
@@ -156,6 +158,42 @@ export function withInferredTopicHomeworkAssignment(
 }
 
 type LearningLessonV2Context = NonNullable<Awaited<ReturnType<typeof getLearningLessonV2Context>>>;
+
+/** Open homework (no final decision yet) of these students on these topics, oldest first. */
+async function listOpenHomeworkForLesson(crmStudentIds: readonly string[], topicIds: readonly string[]) {
+  if (!crmStudentIds.length || !topicIds.length) return [];
+  const recipients = await prisma.learningHomeworkRecipient.findMany({
+    where: {
+      crmStudentId: { in: [...crmStudentIds] },
+      state: { in: ["assigned", "waiting_review", "revision"] },
+      assignment: { archivedAt: null, topicId: { in: [...topicIds] } },
+    },
+    include: {
+      assignment: { include: { topic: { include: { direction: true } } } },
+      attempts: { orderBy: [{ cycleNumber: "desc" }, { versionInCycle: "desc" }], take: 1 },
+    },
+    orderBy: { assignment: { assignedAt: "asc" } },
+  });
+  return recipients.map((recipient) => {
+    const attempt = recipient.attempts[0] ?? null;
+    return {
+      crmStudentId: recipient.crmStudentId,
+      recipientId: recipient.id,
+      assignmentId: recipient.assignmentId,
+      cycleNumber: recipient.currentCycle,
+      versionInCycle: attempt?.cycleNumber === recipient.currentCycle ? attempt.versionInCycle : 0,
+      topicId: recipient.assignment.topicId,
+      topicTitle: recipient.assignment.topic.title,
+      directionTitle: recipient.assignment.topic.direction.title,
+      instructions: recipient.assignment.instructions,
+      state: recipient.state,
+      assignedAt: recipient.assignment.assignedAt,
+      submissionMode: attempt?.status === "waiting_review" ? attempt.submissionMode : null,
+      studentComment: attempt?.status === "waiting_review" ? attempt.text : null,
+      submittedAt: attempt?.status === "waiting_review" ? attempt.submittedAt : null,
+    };
+  });
+}
 
 export function missingLearningHomeworkDecisions(
   students: Array<{
@@ -408,18 +446,14 @@ export async function getLearningLessonV2Context(actorUserId: string, crmClassId
   }
   const plans = await lessonPlans(scope);
   const topicIds = new Set(plans.flatMap((plan) => plan.topics.map((topic) => topic.id)));
-  const queue = scope.reportOnly
-    ? { items: [] }
-    : await listLearningHomeworkReviewQueue({
-        reviewerUserId: actorUserId,
-        status: "submitted",
-        page: 1,
-        limit: 100,
-      });
-  const pending = queue.items.filter((item) => (
-    item.ownerId === scope.owner.id
-    && topicIds.has(item.topicId ?? "")
-  ));
+  // Every open homework of the roster on the lesson's topics waits for the
+  // teacher's check at the lesson, whether or not the student sent an answer.
+  const pending = scope.reportOnly
+    ? []
+    : await listOpenHomeworkForLesson(
+        scope.roster.students.map((student) => student.crmStudentId),
+        [...topicIds],
+      );
   const rewardsEnabled = productFeatureConfig.flags.rewardEconomyV2
     && rewardEconomyV2AppliesToEvent(scope.eventAt);
   const rewardPreview = await previewOfflineLessonAttendanceXp({
@@ -444,15 +478,17 @@ export async function getLearningLessonV2Context(actorUserId: string, crmClassId
       pendingHomework: pending
         .filter((item) => item.crmStudentId === student.crmStudentId)
         .map((item) => ({
-          recipientId: item.recipientId!,
-          assignmentId: item.assignmentId!,
-          cycleNumber: item.cycleNumber!,
-          versionInCycle: item.versionInCycle!,
-          topicId: item.topicId!,
-          topicTitle: item.moduleTitle,
-          directionTitle: item.courseTitle,
-          instructions: item.homeworkDescription,
-          submissionMode: item.submissionMode!,
+          recipientId: item.recipientId,
+          assignmentId: item.assignmentId,
+          cycleNumber: item.cycleNumber,
+          versionInCycle: item.versionInCycle,
+          topicId: item.topicId,
+          topicTitle: item.topicTitle,
+          directionTitle: item.directionTitle,
+          instructions: item.instructions,
+          state: item.state,
+          assignedAt: item.assignedAt,
+          submissionMode: item.submissionMode,
           studentComment: item.studentComment,
           submittedAt: item.submittedAt,
         })),
@@ -615,8 +651,10 @@ async function applyValidatedLearningLessonV2Results(
       recipientId: decision.recipientId,
       reviewerUserId: actorUserId,
       decision: decision.decision,
+      completionPercent: decision.completionPercent ?? null,
       comment: decision.comment,
       idempotencyKey: `offline-lesson:${crmClassId}:homework:${decision.recipientId}:${decision.cycleNumber}`,
+      checkedAtLesson: true,
     }));
   }
   const topicResults = await updateLearningTopicProgressBatchFromLessonV2(
