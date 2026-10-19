@@ -490,8 +490,6 @@ model User {
   maestroCoinsAwarded                MaestroCoinTransaction[]               @relation("CoinAwarder")
   notifications                      UserNotification[]
   offlineLessonStudentChecks         OfflineLessonStudentCheck[]
-  studentMonthlyPlans                StudentMonthlyPlan[]
-  groupMonthlyPlans                  GroupMonthlyPlan[]
   messageConversationsAsStudent      TeacherConversation[]                  @relation("TeacherConversationStudent")
   messageConversationsAsTeacher      TeacherConversation[]                  @relation("TeacherConversationTeacher")
   directMessages                     TeacherMessage[]                       @relation("TeacherMessageSender")
@@ -805,61 +803,6 @@ model CrmSyncConflict {
   @@map("crm_sync_conflicts")
 }
 
-model StudentMonthlyPlan {
-  id                String    @id @default(uuid()) @db.Uuid
-  crmStudentId      String    @map("crm_student_id") @db.VarChar(128)
-  teacherUserId     String    @map("teacher_user_id") @db.Uuid
-  month             String    @db.VarChar(7)
-  goal              String    @default("") @db.Text
-  expectedResult    String    @default("") @map("expected_result") @db.Text
-  skills            String    @default("") @db.Text
-  checkpoint        String    @default("") @db.Text
-  note              String    @default("") @db.Text
-  items             Json      @default("[]") @db.JsonB
-  publishedSnapshot Json?     @map("published_snapshot") @db.JsonB
-  publishedAt       DateTime? @map("published_at") @db.Timestamptz(6)
-  draftRevision     Int       @default(1) @map("draft_revision")
-  publishedRevision Int       @default(0) @map("published_revision")
-  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  teacherUser  User          @relation(fields: [teacherUserId], references: [id], onDelete: Cascade)
-  learningPlan LearningPlan? @relation("LegacyStudentMonthlyPlan")
-
-  @@unique([crmStudentId, teacherUserId, month])
-  @@index([teacherUserId, month])
-  @@index([crmStudentId, month])
-  @@map("student_monthly_plans")
-}
-
-model GroupMonthlyPlan {
-  id                String    @id @default(uuid()) @db.Uuid
-  crmGroupId        String    @map("crm_group_id") @db.VarChar(128)
-  teacherUserId     String    @map("teacher_user_id") @db.Uuid
-  month             String    @db.VarChar(7)
-  goal              String    @default("") @db.Text
-  expectedResult    String    @default("") @map("expected_result") @db.Text
-  skills            String    @default("") @db.Text
-  checkpoint        String    @default("") @db.Text
-  note              String    @default("") @db.Text
-  items             Json      @default("[]") @db.JsonB
-  materials         Json      @default("[]") @db.JsonB
-  publishedSnapshot Json?     @map("published_snapshot") @db.JsonB
-  publishedAt       DateTime? @map("published_at") @db.Timestamptz(6)
-  draftRevision     Int       @default(1) @map("draft_revision")
-  publishedRevision Int       @default(0) @map("published_revision")
-  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  teacherUser  User          @relation(fields: [teacherUserId], references: [id], onDelete: Cascade)
-  learningPlan LearningPlan? @relation("LegacyGroupMonthlyPlan")
-
-  @@unique([crmGroupId, teacherUserId, month])
-  @@index([teacherUserId, month])
-  @@index([crmGroupId, month])
-  @@map("group_monthly_plans")
-}
-
 // Normalized learning core. Legacy JSON plans remain compatibility sources
 // until DEV-01B completes migration and route cutover.
 model LearningTopic {
@@ -934,6 +877,7 @@ model LearningPlan {
   currentVersionNumber      Int                  @default(0) @map("current_version_number")
   publishedVersionNumber    Int?                 @map("published_version_number")
   createdById               String?              @map("created_by_id") @db.Uuid
+  /// Id of the monthly plan this sector was migrated from; the table now lives in legacy_archive.
   legacyStudentPlanId       String?              @unique @map("legacy_student_plan_id") @db.Uuid
   legacyGroupPlanId         String?              @unique @map("legacy_group_plan_id") @db.Uuid
   completionRewardSourceKey String?              @unique @map("completion_reward_source_key") @db.VarChar(255)
@@ -942,13 +886,11 @@ model LearningPlan {
   createdAt                 DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                 DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  direction         Direction                @relation(fields: [directionId], references: [id], onDelete: Restrict)
-  createdBy         User?                    @relation("LearningPlanCreator", fields: [createdById], references: [id], onDelete: SetNull)
-  legacyStudentPlan StudentMonthlyPlan?      @relation("LegacyStudentMonthlyPlan", fields: [legacyStudentPlanId], references: [id], onDelete: SetNull)
-  legacyGroupPlan   GroupMonthlyPlan?        @relation("LegacyGroupMonthlyPlan", fields: [legacyGroupPlanId], references: [id], onDelete: SetNull)
-  templateStep      SectorTemplate?          @relation(fields: [templateStepId], references: [id], onDelete: SetNull)
-  versions          LearningPlanVersion[]
-  proposals         LearningSectorProposal[]
+  direction    Direction                @relation(fields: [directionId], references: [id], onDelete: Restrict)
+  createdBy    User?                    @relation("LearningPlanCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  templateStep SectorTemplate?          @relation(fields: [templateStepId], references: [id], onDelete: SetNull)
+  versions     LearningPlanVersion[]
+  proposals    LearningSectorProposal[]
 
   @@index([directionId, month])
   @@index([crmStudentId, month])

@@ -235,7 +235,10 @@ function NowTab({
 
           <div className="grid gap-4 lg:grid-cols-2">
             <HomeworkAssignForm sectors={data.sectors} crmClassId={crmClassId} available={data.homework.available} onDone={onChanged} />
-            <BonusXpForm appUserId={data.student.appUserId} />
+            <BonusXpForm
+              appUserId={data.student.appUserId}
+              givenThisWeek={Boolean(data.weekXp?.bySource.some((row) => row.sourceType === "teacher_bonus"))}
+            />
           </div>
 
           {waiting.length ? (
@@ -446,7 +449,7 @@ function HomeworkAssignForm({
   );
 }
 
-function BonusXpForm({ appUserId }: { appUserId: string | null }) {
+function BonusXpForm({ appUserId, givenThisWeek }: { appUserId: string | null; givenThisWeek: boolean }) {
   const [open, setOpen] = useState(false);
   const [amount, setAmount] = useState(3);
   const [reason, setReason] = useState("");
@@ -472,11 +475,12 @@ function BonusXpForm({ appUserId }: { appUserId: string | null }) {
     <section className="rounded-2xl border border-stone-200 bg-white p-4">
       <div className="flex items-center justify-between gap-2">
         <p className="inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-stone-600"><Bolt size={14} /> Бонус XP в лиге</p>
-        <button type="button" onClick={() => setOpen((current) => !current)} disabled={!appUserId} className={`${control} min-h-8 border border-stone-200 px-2 text-stone-700`}>
+        <button type="button" onClick={() => setOpen((current) => !current)} disabled={!appUserId || givenThisWeek} className={`${control} min-h-8 border border-stone-200 px-2 text-stone-700`}>
           {open ? "Скрыть" : "Дать бонус"}
         </button>
       </div>
       {!appUserId ? <p className="mt-2 text-xs text-stone-500">Ученик ещё не вошёл в приложение, бонус начислить некому.</p> : null}
+      {appUserId && givenThisWeek ? <p className="mt-2 text-xs text-stone-500" data-testid="bonus-week-limit">Бонус на этой неделе уже дан. Следующий можно дать с понедельника.</p> : null}
       {feedback ? <p className="mt-2 text-xs font-semibold text-amber-900">{feedback}</p> : null}
       {open ? (
         <div className="mt-3 grid gap-2">

@@ -38,7 +38,9 @@ import {
   saveStudentMonthlyPlanAdapted,
 } from "../../application/services/monthly-plan-adapter.service.js";
 import {
+  closeStudentSectorEarlyV2,
   getLearningTopicV2,
+  SECTOR_EARLY_CLOSE_MAX_POINTS,
   updateLearningTopicProgressV2,
 } from "../../application/services/learning-plan-v2.service.js";
 import { listTeacherCrmDirections } from "../../application/services/crm-direction-projection.service.js";
@@ -201,6 +203,39 @@ export async function teacherOfflineRoutes(app: FastifyInstance) {
       return {
         data: plan,
       };
+    },
+  );
+
+  // Decision 19.10: close the open sector early for 0–250 Points written by the teacher.
+  app.post(
+    "/teachers/me/students/:crmStudentId/monthly-plan/close",
+    { preHandler: [authenticate, requireTeacher, requirePermission("offline_school.write")] },
+    async (request) => {
+      const { crmStudentId } = z.object({ crmStudentId: z.string().min(1).max(128) }).parse(request.params);
+      const body = z.object({
+        crmDirectionId: z.string().min(1).max(128),
+        points: z.number().int().min(0).max(SECTOR_EARLY_CLOSE_MAX_POINTS),
+        comment: z.string().trim().max(1000).nullable().optional(),
+      }).parse(request.body ?? {});
+      const plan = await closeStudentSectorEarlyV2(request.user!.id, crmStudentId, body.crmDirectionId, {
+        points: body.points,
+        comment: body.comment,
+      });
+      await writeAuditLog({
+        entityType: "student_monthly_plan",
+        entityId: plan.id,
+        action: "update",
+        actorId: request.user!.id,
+        payload: {
+          event: "sector_closed_early",
+          sequence: plan.sequence,
+          points: body.points,
+          awardedPoints: plan.awardedPoints,
+          comment: body.comment?.trim() || null,
+          progressPercent: plan.progress.percent,
+        },
+      });
+      return { data: plan };
     },
   );
 

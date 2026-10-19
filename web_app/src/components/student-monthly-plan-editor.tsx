@@ -10,6 +10,7 @@ import { LearningTopicProgressEditor } from "@/components/learning-topic-progres
 import { LearningHomeworkAssignmentComposer } from "@/components/learning-homework-assignment-composer";
 import { SectorHistoryList, SectorProposalsPanel, SectorTemplatePicker, SectorTestField } from "@/components/sector-editor-parts";
 import { ProgressBar } from "@/components/progress-bar";
+import { SectorEarlyClose } from "@/components/sector-early-close";
 import { learningHomeworkApi } from "@/lib/learning-homework-api";
 import type {
   LearningPlanMode,
@@ -542,6 +543,20 @@ function StudentMonthlyPlanEditorContent({
           {publishing ? "Публикуем…" : draft.publication?.isPublished ? "Обновить сектор ученику" : "Опубликовать ученику"}
         </button>
       </div>
+
+      {sectors && crmDirectionId && draft.publication?.isPublished && draft.status !== "closed" ? (
+        <SectorEarlyClose
+          crmStudentId={crmStudentId}
+          crmDirectionId={crmDirectionId}
+          sequence={draft.sequence ?? resource.data?.plan?.sequence ?? 1}
+          completed={draft.items.filter((item) => item.status === "completed").length}
+          total={draft.items.filter((item) => item.title.trim() && item.status !== "moved").length}
+          onClosed={(awarded) => {
+            window.alert(awarded ? `Сектор закрыт, начислено ${awarded} баллов.` : "Сектор закрыт без баллов.");
+            void resource.reload();
+          }}
+        />
+      ) : null}
 
       {draft.publication?.isPublished ? (
         <p className="mt-3 text-xs font-semibold text-emerald-700">

@@ -19,7 +19,6 @@
     "db:prepare-production": "tsx scripts/prepare-production.ts",
     "release:preflight": "tsx scripts/release-preflight.ts",
     "release:dependencies": "tsx scripts/release-dependencies-preflight.ts",
-    "topics-v2:migrate": "tsx scripts/learning-topics-v2-migration.ts",
     "product:inventory": "tsx scripts/product-baseline.ts",
     "economy:v2:cutover:dry-run": "tsx scripts/economy-v2-cutover.ts --dry-run",
     "economy:v2:cutover:apply": "tsx scripts/economy-v2-cutover.ts --apply",

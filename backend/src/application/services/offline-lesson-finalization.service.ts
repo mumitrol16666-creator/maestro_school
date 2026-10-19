@@ -193,47 +193,9 @@ async function applyOfflineLessonAttendanceRewards(
     let completedPlanId: string | null = null;
     const completedPlanTopics: Array<{ id: string; title: string }> = [];
 
-    if (check.monthlyPlanId && updates.length) {
-      const plan = await prisma.studentMonthlyPlan.findFirst({
-        where: {
-          id: check.monthlyPlanId,
-          crmStudentId: check.crmStudentId,
-        },
-      });
-      if (plan) {
-        completedPlanId = plan.id;
-        const byId = new Map(updates.map((item) => [item.itemId, item.status]));
-        const items = (Array.isArray(plan.items) ? plan.items : []) as StoredMonthlyPlanItem[];
-        const nextItems = items.map((item) => {
-          const nextStatus = byId.get(item.id);
-          if (!nextStatus || item.status === "moved") return item;
-          appliedPlanTopics += 1;
-          if (nextStatus === "completed" && item.status !== "completed") {
-            completedPlanTopics.push({ id: item.id, title: item.title });
-          }
-          return {
-            ...item,
-            status: item.status === "completed" ? "completed" : nextStatus,
-          };
-        });
-        const nextRevision = plan.draftRevision + 1;
-        const publishedSnapshot = plan.publishedAt && plan.publishedSnapshot
-          ? buildMonthlyPlanSnapshot({ ...plan, items: nextItems })
-          : null;
-        await prisma.studentMonthlyPlan.update({
-          where: { id: plan.id },
-          data: {
-            items: nextItems as Prisma.InputJsonValue,
-            draftRevision: nextRevision,
-            ...(publishedSnapshot ? {
-              publishedSnapshot: publishedSnapshot as unknown as Prisma.InputJsonValue,
-              publishedRevision: nextRevision,
-              publishedAt: new Date(),
-            } : {}),
-          },
-        });
-      }
-    }
+    // Plan topic updates of the archived monthly plans (before 19.10) are no
+    // longer applied: those plans live in legacy_archive and are read-only.
+    void updates;
 
     const student = await prisma.user.findUnique({
       where: { crmStudentId: check.crmStudentId },

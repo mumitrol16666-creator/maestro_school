@@ -6,12 +6,6 @@ export type OfflinePlanTopicUpdate = {
   status: "in_progress" | "completed";
 };
 
-type MonthlyPlanItem = {
-  id: string;
-  title: string;
-  status: "planned" | "in_progress" | "completed" | "moved";
-};
-
 export type OfflineHomeworkStatus =
   | "not_checked"
   | "completed"
@@ -110,29 +104,18 @@ export async function mergeOfflineLessonStudentChecks<T extends {
 
   if (!studentIds.length) return roster;
 
-  const [checks, plans] = await Promise.all([
-    prisma.offlineLessonStudentCheck.findMany({
-      where: { crmClassId, crmStudentId: { in: studentIds } },
-    }),
-    context?.teacherUserId && context.month
-      ? prisma.studentMonthlyPlan.findMany({
-          where: {
-            teacherUserId: context.teacherUserId,
-            month: context.month,
-            crmStudentId: { in: studentIds },
-          },
-        })
-      : Promise.resolve([]),
-  ]);
+  // The month-bound plan shown here before 19.10 is archived; the lesson's
+  // learning context comes from the sector panel instead.
+  const checks = await prisma.offlineLessonStudentCheck.findMany({
+    where: { crmClassId, crmStudentId: { in: studentIds } },
+  });
   const byStudentId = new Map(checks.map((check) => [check.crmStudentId, check]));
-  const planByStudentId = new Map(plans.map((plan) => [plan.crmStudentId, plan]));
 
   return {
     ...roster,
     students: roster.students.map((student) => {
       const studentId = typeof student.crmStudentId === "string" ? student.crmStudentId : "";
       const check = byStudentId.get(studentId);
-      const plan = planByStudentId.get(studentId);
 
       return {
         ...student,
@@ -163,14 +146,7 @@ export async function mergeOfflineLessonStudentChecks<T extends {
               appMarkedAt: check.markedAt.toISOString(),
             }
           : {}),
-        monthlyPlan: plan
-          ? {
-              id: plan.id,
-              month: plan.month,
-              goal: plan.goal,
-              items: plan.items as MonthlyPlanItem[],
-            }
-          : null,
+        monthlyPlan: null,
       };
     }),
   };

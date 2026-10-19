@@ -248,6 +248,17 @@ function FamilyPlanDetails({ plan }: { plan: StudentHomeMonthlyPlan }) {
               <Icon size={17} className={`mt-0.5 shrink-0 ${status.className}`} aria-hidden="true" />
               <div className="min-w-0 flex-1">
                 <p className="break-words text-sm font-bold leading-5">{item.title}</p>
+                {!transferred && typeof item.progressPercent === "number" ? (
+                  <div className="mt-2 flex items-center gap-2" data-testid="family-topic-progress">
+                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-stone-100">
+                      <div
+                        className={`h-full rounded-full ${item.progressPercent === 100 ? "bg-emerald-500" : "bg-amber-400"}`}
+                        style={{ width: `${Math.max(0, Math.min(100, item.progressPercent))}%` }}
+                      />
+                    </div>
+                    <span className="w-10 shrink-0 text-right text-[11px] font-black text-stone-700">{item.progressPercent}%</span>
+                  </div>
+                ) : null}
               </div>
               <span className={`max-w-[120px] shrink-0 text-right text-[11px] font-bold ${status.className}`}>
                 {transferred ? "Заменена" : status.label}

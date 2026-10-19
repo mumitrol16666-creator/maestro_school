@@ -17,8 +17,6 @@ const QA_IDS = {
   parent2: "10000000-0000-4000-8000-000000000032",
   school: "10000000-0000-4000-8000-000000000041",
   branch: "10000000-0000-4000-8000-000000000042",
-  studentPlan: "10000000-0000-4000-8000-000000000051",
-  groupPlan: "10000000-0000-4000-8000-000000000052",
   learningStudentPlan: "052984cc-bae2-49c3-8075-eef9fa9b1d05",
   learningGroupPlan: "3500b388-e9e1-4403-b5ec-30c2581d985f",
   learningStudentPlanVersion: "22104bdb-b18c-42e2-9ee6-05d3e52bea26",
@@ -220,23 +218,7 @@ async function main() {
     { id: "qa-ind-3", title: "Ритм восьмыми", status: "in_progress", progress: 99 },
     { id: "qa-ind-4", title: "Первый куплет песни", status: "planned", progress: 0 },
   ];
-  const groupItems = [
-    { id: "qa-group-1", title: "Единый ритм группы", status: "in_progress", progress: 70 },
-    { id: "qa-group-2", title: "Вступление ансамбля", status: "planned", progress: 0 },
-    { id: "qa-group-3", title: "Динамика исполнения", status: "planned", progress: 0 },
-    { id: "qa-group-4", title: "Финальная остановка", status: "planned", progress: 0 },
-  ];
 
-  await prisma.studentMonthlyPlan.upsert({
-    where: { crmStudentId_teacherUserId_month: { crmStudentId: CRM.student1, teacherUserId: QA_IDS.teacher1, month } },
-    update: { goal: "Сыграть песню целиком", expectedResult: "Уверенное исполнение под метроном", items: individualItems, publishedSnapshot: individualItems, publishedAt: new Date(), publishedRevision: 1 },
-    create: { id: QA_IDS.studentPlan, crmStudentId: CRM.student1, teacherUserId: QA_IDS.teacher1, month, goal: "Сыграть песню целиком", expectedResult: "Уверенное исполнение под метроном", items: individualItems, publishedSnapshot: individualItems, publishedAt: new Date(), publishedRevision: 1 },
-  });
-  await prisma.groupMonthlyPlan.upsert({
-    where: { crmGroupId_teacherUserId_month: { crmGroupId: CRM.group1, teacherUserId: QA_IDS.teacher1, month } },
-    update: { goal: "Сыграть композицию ансамблем", expectedResult: "Группа держит общий темп", items: groupItems, publishedSnapshot: groupItems, publishedAt: new Date(), publishedRevision: 1 },
-    create: { id: QA_IDS.groupPlan, crmGroupId: CRM.group1, teacherUserId: QA_IDS.teacher1, month, goal: "Сыграть композицию ансамблем", expectedResult: "Группа держит общий темп", items: groupItems, publishedSnapshot: groupItems, publishedAt: new Date(), publishedRevision: 1 },
-  });
 
   const topicPercents = [0, 70, 99, 100];
   for (const [index, percent] of topicPercents.entries()) {

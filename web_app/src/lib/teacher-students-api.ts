@@ -91,6 +91,11 @@ export const teacherStudentsApi = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  closeSectorEarly: (crmStudentId: string, body: { crmDirectionId: string; points: number; comment?: string | null }) =>
+    apiRequest<StudentMonthlyPlan & { awardedPoints: number }>(
+      `/teachers/me/students/${encodeURIComponent(crmStudentId)}/monthly-plan/close`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
   workspace: (crmStudentId: string, crmClassId?: string | null) =>
     apiRequest<TeacherStudentWorkspace>(
       `/teachers/me/students/${encodeURIComponent(crmStudentId)}/workspace${crmClassId ? `?crmClassId=${encodeURIComponent(crmClassId)}` : ""}`,

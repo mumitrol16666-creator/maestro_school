@@ -1701,6 +1701,7 @@ export default function AdminOfflineLessonDetailPage() {
             setStudentCheckDrafts((current) => ({ ...current, [studentId]: draft }));
           }}
           onOpenStudent={setOpenStudentId}
+          hidePreviousContext={useLessonSteps}
         />
       </div>
       ) : null}
@@ -3105,6 +3106,7 @@ function StudentRoster({
   onSelectTopic,
   onDraftChange,
   onOpenStudent,
+  hidePreviousContext = false,
 }: {
   students: TeacherOfflineStudent[];
   compactGroup: boolean;
@@ -3120,6 +3122,8 @@ function StudentRoster({
   onSelectTopic?: (topic: string) => void;
   onDraftChange: (studentId: string, draft: StudentLessonCheckDraft) => void;
   onOpenStudent?: (crmStudentId: string) => void;
+  /** The step flow already shows the previous lesson on step 1. */
+  hidePreviousContext?: boolean;
 }) {
   return (
     <div className="rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft">
@@ -3181,6 +3185,7 @@ function StudentRoster({
               onSelectTopic={onSelectTopic}
               onChange={(draft) => onDraftChange(student.crmStudentId, draft)}
               onOpenStudent={onOpenStudent}
+              hidePreviousContext={hidePreviousContext}
             />
           ))}
         </div>
@@ -3894,6 +3899,7 @@ function StudentLessonCheckCard({
   onSelectTopic,
   onChange,
   onOpenStudent,
+  hidePreviousContext = false,
 }: {
   student: TeacherOfflineStudent;
   canEdit: boolean;
@@ -3904,6 +3910,7 @@ function StudentLessonCheckCard({
   onSelectTopic?: (topic: string) => void;
   onChange: (draft: StudentLessonCheckDraft) => void;
   onOpenStudent?: (crmStudentId: string) => void;
+  hidePreviousContext?: boolean;
 }) {
   const { attendanceStatus, teacherNote, homeworkReview } = draft;
   const attended = ["present", "late"].includes(attendanceStatus);
@@ -3945,11 +3952,13 @@ function StudentLessonCheckCard({
         </span>
       </div>
 
-      <StudentPreviousContext
-        student={student}
-        showHomeworkStatus={showHomeworkReview}
-        onSelectTopic={onSelectTopic}
-      />
+      {hidePreviousContext ? null : (
+        <StudentPreviousContext
+          student={student}
+          showHomeworkStatus={showHomeworkReview}
+          onSelectTopic={onSelectTopic}
+        />
+      )}
 
       {/* Посещаемость */}
       <fieldset className="mt-4">

@@ -25,12 +25,6 @@ export async function listTeacherGroups(appTeacherId: string) {
     if (sector.crmGroupId && !sectorByGroup.has(sector.crmGroupId)) sectorByGroup.set(sector.crmGroupId, sector);
   }
 
-  const legacyPlans = !sectorsEnabled && groupIds.length
-    ? await prisma.groupMonthlyPlan.findMany({
-        where: { teacherUserId: appTeacherId, crmGroupId: { in: groupIds }, month },
-      })
-    : [];
-  const legacyByGroup = new Map(legacyPlans.map((plan) => [plan.crmGroupId, plan]));
 
   return {
     teacher: roster.teacher,
@@ -52,21 +46,15 @@ export async function listTeacherGroups(appTeacherId: string) {
           },
         };
       }
-      const plan = legacyByGroup.get(group.crmGroupId);
-      const items = Array.isArray(plan?.items)
-        ? plan.items as Array<{ status?: string }>
-        : [];
-      const completed = items.filter((item) => item.status === "completed").length;
-
       return {
         ...group,
         planSummary: {
           month,
           sequence: null,
-          configured: Boolean(plan),
-          itemsTotal: items.length,
-          itemsCompleted: completed,
-          completionRate: items.length ? Math.round((completed / items.length) * 100) : null,
+          configured: false,
+          itemsTotal: 0,
+          itemsCompleted: 0,
+          completionRate: null,
         },
       };
     }),

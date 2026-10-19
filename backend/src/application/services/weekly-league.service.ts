@@ -630,7 +630,8 @@ export async function awardTeacherLeagueBonus(params: {
     if (economicEpoch) {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${weeklyFinalizationLockKey(economicEpoch.id, range.key)}))`;
     }
-    const lockKey = `weekly-league-bonus:${range.key}:${params.teacherId}:${params.studentId}`;
+    // One bonus per student per Aqtobe week, whichever teacher gives it.
+    const lockKey = `weekly-league-bonus:${range.key}:${params.studentId}`;
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
 
     const duplicate = await tx.leagueXpEvent.findUnique({
@@ -651,23 +652,21 @@ export async function awardTeacherLeagueBonus(params: {
     });
     if (!eligibleStudent) return { awarded: false as const };
 
-    const alreadyAwarded = await tx.leagueXpEvent.aggregate({
+    const alreadyAwarded = await tx.leagueXpEvent.findFirst({
       where: {
-        economicEpochId: economicEpoch?.id ?? null,
         studentId: params.studentId,
-        awardedById: params.teacherId,
         sourceType: "teacher_bonus",
         createdAt: { gte: range.start, lt: range.end },
         reversedAt: null,
       },
-      _sum: { amount: true },
+      select: { amount: true, awardedById: true },
     });
-    const remainder = WEEKLY_TEACHER_BONUS_LIMIT - (alreadyAwarded._sum.amount ?? 0);
-    if (params.amount > remainder) {
+    if (alreadyAwarded) {
       throw new BadRequestError(
-        remainder > 0
-          ? `На этой неделе этому ученику можно добавить ещё ${remainder} XP`
-          : "Лимит бонусов этому ученику на неделю уже использован",
+        alreadyAwarded.awardedById === params.teacherId
+          ? `Бонус этому ученику на этой неделе уже дан: +${alreadyAwarded.amount} XP. Следующий — с понедельника.`
+          : `Бонус этому ученику на этой неделе уже дал другой преподаватель. Следующий — с понедельника.`,
+        "BONUS_WEEKLY_LIMIT",
       );
     }
 

@@ -53,18 +53,12 @@ async function getAchievementMetrics(studentId: string): Promise<AchievementMetr
         homeworkStatus: "completed",
       },
     }),
-    prisma.studentMonthlyPlan.findMany({
-      where: { crmStudentId: user.crmStudentId },
-      select: { items: true },
+    // Monthly plans were archived on 19.10; a completed sector counts instead.
+    prisma.learningPlan.count({
+      where: { crmStudentId: user.crmStudentId, status: "closed", closeReason: "completed" },
     }),
   ]);
-  const completedMonthlyPlans = plans.filter((plan) => {
-    const items = Array.isArray(plan.items)
-      ? plan.items as Array<{ status?: string }>
-      : [];
-    const activeItems = items.filter((item) => item.status !== "moved");
-    return activeItems.length > 0 && activeItems.every((item) => item.status === "completed");
-  }).length;
+  const completedMonthlyPlans = plans;
 
   return {
     points,

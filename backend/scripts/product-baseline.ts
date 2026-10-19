@@ -122,12 +122,13 @@ async function main() {
         OR: [{ completionCoinsReward: { lt: 0 } }, { completionCoinsReward: { gt: 100 } }],
       },
     }),
-    prisma.studentMonthlyPlan.findMany({
-      select: { items: true, publishedAt: true },
-    }),
-    prisma.groupMonthlyPlan.findMany({
-      select: { items: true, publishedAt: true },
-    }),
+    // Monthly plans were archived on 19.10 (schema legacy_archive); read them raw.
+    prisma.$queryRawUnsafe<Array<{ items: unknown; publishedAt: Date | null }>>(
+      'SELECT items, published_at AS "publishedAt" FROM legacy_archive.student_monthly_plans',
+    ).catch(() => []),
+    prisma.$queryRawUnsafe<Array<{ items: unknown; publishedAt: Date | null }>>(
+      'SELECT items, published_at AS "publishedAt" FROM legacy_archive.group_monthly_plans',
+    ).catch(() => []),
     prisma.rewardCatalogItem.findMany({
       select: { costCoins: true, stock: true, isActive: true },
     }),

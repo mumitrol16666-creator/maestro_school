@@ -331,19 +331,8 @@ export async function getStudentSchoolOfflineSummary(
     planCompletionRewards,
     completedLearningPlans,
   );
-  const planIds = [...new Set(
-    checks.map((check) => check.monthlyPlanId).filter((value): value is string => Boolean(value)),
-  )];
-  const plans = planIds.length
-    ? await prisma.studentMonthlyPlan.findMany({ where: { id: { in: planIds } } })
-    : [];
-  const planItemsById = new Map(
-    plans.map((plan) => [
-      plan.id,
-      new Map(((Array.isArray(plan.items) ? plan.items : []) as OfflinePlanItem[])
-        .map((item) => [item.id, item])),
-    ]),
-  );
+  // Item titles of the archived monthly plans are not read any more.
+  const planItemsById = new Map<string, Map<string, OfflinePlanItem>>();
   const checksByClassId = new Map(checks.map((check) => [check.crmClassId, check]));
   const reviewsByClassId = new Map<string, OfflineSummaryReview>();
   for (const lesson of lessonHistory) {

@@ -694,6 +694,87 @@ export async function publishStudentLearningPlanV2(
   return publishPlan(teacherUserId, scope, expectedVersion);
 }
 
+/** The most a teacher may pay for a sector closed early: the full completion reward. */
+export const SECTOR_EARLY_CLOSE_MAX_POINTS = NON_EMPTY_PLAN_COMPLETION_POINTS;
+
+/**
+ * Decision 19.10: the teacher may close the open sector before every topic is
+ * at 100 % and writes the Points it is worth, 0–250. The payment uses the same
+ * completion key as the automatic one, so a sector is never paid twice, and
+ * the next sector can be opened right after.
+ */
+export async function closeStudentSectorEarlyV2(
+  teacherUserId: string,
+  crmStudentId: string,
+  crmDirectionId: string,
+  input: { points: number; comment?: string | null; now?: Date },
+) {
+  if (!Number.isInteger(input.points) || input.points < 0 || input.points > SECTOR_EARLY_CLOSE_MAX_POINTS) {
+    throw new BadRequestError(
+      `Баллы за досрочное закрытие: целое число от 0 до ${SECTOR_EARLY_CLOSE_MAX_POINTS}`,
+      "SECTOR_EARLY_CLOSE_POINTS_INVALID",
+    );
+  }
+  const scope = await resolveStudentScope(teacherUserId, crmStudentId, crmDirectionId);
+  const plan = await findActiveSector(scope);
+  if (!plan) throw new BadRequestError("Открытый сектор не найден", "MONTHLY_PLAN_NOT_FOUND");
+  if (plan.publishedVersionNumber === null) {
+    throw new BadRequestError("Сектор ещё не опубликован ученику: закрывать нечего", "SECTOR_NOT_PUBLISHED");
+  }
+  const now = input.now ?? new Date();
+  const completionSourceKey = `learning-plan-completion:${plan.id}`;
+  const closed = await prisma.learningPlan.updateMany({
+    where: { id: plan.id, status: "active" },
+    data: {
+      status: "closed",
+      closedAt: now,
+      closeReason: "manual",
+      completedAt: plan.completedAt ?? now,
+      lockedAt: plan.lockedAt ?? now,
+      completionRewardSourceKey: plan.completionRewardSourceKey ?? completionSourceKey,
+    },
+  });
+  if (closed.count === 0) {
+    throw new ConflictError("Сектор уже закрыт. Обновите страницу.", "SECTOR_ALREADY_CLOSED");
+  }
+
+  const studentUser = await prisma.user.findFirst({
+    where: { crmStudentId, deletedAt: null, isActive: true, role: { slug: "student" } },
+    select: { id: true },
+  });
+  let awardedPoints = 0;
+  if (studentUser && input.points > 0 && !plan.completionRewardSourceKey) {
+    const award = await awardSystemPoints({
+      studentId: studentUser.id,
+      amount: input.points,
+      reason: `Сектор ${plan.sequence} закрыт досрочно`,
+      sourceKey: `${completionSourceKey}:${studentUser.id}`,
+      eventAt: now,
+    });
+    awardedPoints = award.awarded ? input.points : 0;
+  }
+  if (studentUser) {
+    try {
+      const { deliverUserNotification } = await import("./notification.service.js");
+      await deliverUserNotification({
+        userId: studentUser.id,
+        type: "offline_lesson_report_ready",
+        title: `Сектор ${plan.sequence} закрыт`,
+        body: awardedPoints
+          ? `Преподаватель закрыл сектор. Начислено ${awardedPoints} баллов.`
+          : "Преподаватель закрыл сектор. Скоро откроется следующий.",
+        url: "/monthly-plan",
+        tag: `sector-closed-${plan.id}`,
+        dedupeKey: `sector-closed:${plan.id}`,
+      });
+    } catch {
+      // Closing succeeds even if notification delivery is temporarily unavailable.
+    }
+  }
+
+  return { ...versionDto(await loadPlan(plan.id)), awardedPoints };
+}
+
 export async function getGroupLearningPlanV2(
   teacherUserId: string,
   crmGroupId: string,
