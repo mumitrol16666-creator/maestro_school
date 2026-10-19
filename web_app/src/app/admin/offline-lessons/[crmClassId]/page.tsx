@@ -41,6 +41,7 @@ import {
   type LearningLessonV2Draft,
 } from "@/components/learning-lesson-v2-panel";
 import { StudentWorkspaceDrawer } from "@/components/student-workspace-drawer";
+import { LessonReportPreview, LessonStepNav, LessonStepper, type LessonStep } from "@/components/lesson-steps";
 import { PageHeader } from "@/components/page-header";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { useDialogBehavior } from "@/hooks/use-dialog-behavior";
@@ -489,6 +490,7 @@ export default function AdminOfflineLessonDetailPage() {
   const router = useRouter();
   const crmClassId = params.crmClassId;
   const [openStudentId, setOpenStudentId] = useState<string | null>(null);
+  const [lessonStep, setLessonStep] = useState<LessonStep>(1);
   const { user } = useAuth();
   const isAdmin = isOfflineCoordinatorRole(user?.role);
   const canActForTeacher = isContentAdminRole(user?.role);
@@ -1472,6 +1474,15 @@ export default function AdminOfflineLessonDetailPage() {
     },
     { accepted: 0, revision: 0 },
   );
+  // The report is filled in five short steps (02 §3.4) when the teacher edits a
+  // learning lesson; admins, trial lessons and absence-only reports keep one page.
+  const useLessonSteps = Boolean(canEditTeacherReport && isLearningLessonV2 && !isTrialLesson && !isAbsenceOnly);
+  const showStep = (step: LessonStep) => !useLessonSteps || lessonStep === step;
+  const stepIssues: Partial<Record<LessonStep, string | null>> = {
+    2: unmarkedCount > 0 ? `Не отмечено: ${unmarkedCount}` : null,
+    3: pendingLearningDecisions > 0 ? `Без решения по ДЗ: ${pendingLearningDecisions}` : null,
+    5: teacherSubmissionIssue,
+  };
   const attendedStudentIds = new Set(
     students
       .filter((student) => ["present", "late"].includes(draftFor(student).attendanceStatus))
@@ -1622,6 +1633,59 @@ export default function AdminOfflineLessonDetailPage() {
         </p>
       ) : null}
 
+      {useLessonSteps ? (
+        <LessonStepper step={lessonStep} issues={stepIssues} onSelect={setLessonStep} />
+      ) : null}
+
+      {useLessonSteps && lessonStep === 1 ? (
+        <section className="mb-7 rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft" data-testid="lesson-context-step">
+          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-700">Шаг 1 · Контекст</p>
+          <h2 className="font-display mt-1 text-3xl">Перед уроком</h2>
+          <p className="mt-2 text-sm text-stone-500">
+            Что было на прошлом уроке и какие работы ждут проверки. Кнопка «Ученик» открывает карточку с сектором, тестами и активностью.
+          </p>
+          <div className="mt-5 space-y-4">
+            {students.map((student) => {
+              const pendingCount = learningV2?.students.find((item) => item.crmStudentId === student.crmStudentId)?.pendingHomework.length ?? 0;
+              return (
+                <div key={student.crmStudentId} className="rounded-2xl border border-stone-200 bg-white p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="font-semibold text-ink">{student.name}</p>
+                    <div className="flex items-center gap-2">
+                      {pendingCount ? (
+                        <span className="rounded-md bg-sky-50 px-2 py-0.5 text-[11px] font-bold text-sky-900">Ждёт проверки: {pendingCount}</span>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => setOpenStudentId(student.crmStudentId)}
+                        className="rounded-lg border border-stone-200 bg-white px-2.5 py-1 text-xs font-bold text-stone-600 hover:border-amber-300 hover:text-ink"
+                        aria-label={`Открыть карточку: ${student.name}`}
+                      >
+                        Ученик
+                      </button>
+                    </div>
+                  </div>
+                  <StudentPreviousContext
+                    student={student}
+                    showHomeworkStatus={!isLearningLessonV2 && Boolean(previousHomeworkLesson(student))}
+                    onSelectTopic={(selected) => {
+                      setTopic(selected);
+                      if (!lessonSummary) setLessonSummary(`Разобрали тему «${selected}»`);
+                    }}
+                  />
+                </div>
+              );
+            })}
+          </div>
+          {pendingLearningHomework ? (
+            <p className="mt-4 text-xs font-semibold text-stone-500">
+              Ожидающие работы проверяются на шаге «Темы и проверка».
+            </p>
+          ) : null}
+        </section>
+      ) : null}
+
+      {showStep(2) ? (
       <div className="mb-7">
         <StudentRoster
           students={students}
@@ -1645,9 +1709,10 @@ export default function AdminOfflineLessonDetailPage() {
           onOpenStudent={setOpenStudentId}
         />
       </div>
+      ) : null}
       <StudentWorkspaceDrawer crmStudentId={openStudentId} crmClassId={crmClassId} onClose={() => setOpenStudentId(null)} />
 
-      {learningV2 && !isTrialLesson && (!canEditReport || hydratedLessonDraftKey === lessonDraftKey) ? (
+      {showStep(3) && learningV2 && !isTrialLesson && (!canEditReport || hydratedLessonDraftKey === lessonDraftKey) ? (
         <LearningLessonV2Panel
           context={learningV2}
           draft={learningV2Draft}
@@ -1669,7 +1734,7 @@ export default function AdminOfflineLessonDetailPage() {
             return res;
           }}
         />
-      ) : learningV2 && !isTrialLesson ? (
+      ) : showStep(3) && learningV2 && !isTrialLesson ? (
         <section className="flex min-h-32 items-center justify-center gap-3 rounded-[24px] border border-stone-200 bg-white px-5 text-sm font-bold text-stone-500 shadow-sm" aria-live="polite">
           <LoaderCircle className="animate-spin text-gold-ink" size={20} />
           Восстанавливаем черновик урока
@@ -1678,7 +1743,7 @@ export default function AdminOfflineLessonDetailPage() {
 
       <div className="grid gap-7 xl:grid-cols-[1fr_420px]">
         <section className="order-last xl:order-none space-y-7">
-          <form onSubmit={handleSubmit} className="rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
+          <form onSubmit={handleSubmit} className={`rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8 ${useLessonSteps && lessonStep < 4 ? "hidden" : ""}`}>
             <h2 className="font-display text-3xl">
               {isAbsenceOnly ? "Отметка отсутствия" : "Отчёт по уроку"}
             </h2>
@@ -1721,7 +1786,7 @@ export default function AdminOfflineLessonDetailPage() {
               </div>
             ) : null}
 
-            <div className={isAbsenceOnly ? "hidden" : ""}>
+            <div className={isAbsenceOnly || !showStep(4) ? "hidden" : ""}>
             {isTrialLesson ? (
               <TrialReportEditor
                 report={trialReport}
@@ -1962,7 +2027,21 @@ export default function AdminOfflineLessonDetailPage() {
             )}
             </div>
 
-            {canEditTeacherReport ? (
+            {useLessonSteps && lessonStep === 5 ? (
+              <LessonReportPreview
+                attendance={{ ...attendanceSummary, unmarked: unmarkedCount }}
+                topic={topic}
+                lessonSummary={lessonSummary}
+                homework={homework}
+                homeworkTopicTitle={effectiveHomeworkTopicId ? currentLearningTopicById.get(effectiveHomeworkTopicId)?.title ?? null : null}
+                topicUpdates={learningTopicUpdates}
+                homeworkDecisions={{ ...homeworkDecisionSummary, pending: pendingLearningDecisions }}
+                xp={xpSummary ? { willAward: xpSummary.willAward, limited: xpSummary.limited } : null}
+                issue={teacherSubmissionIssue}
+              />
+            ) : null}
+
+            {canEditTeacherReport && showStep(5) ? (
               <div className="mt-6">
                 <button
                   type="submit"
@@ -1976,13 +2055,24 @@ export default function AdminOfflineLessonDetailPage() {
                       ? "Сдать за преподавателя"
                       : "Отправить на проверку"}
                 </button>
-                {teacherSubmissionIssue ? (
+                {teacherSubmissionIssue && !useLessonSteps ? (
                   <p className="mt-3 max-w-xl text-sm font-semibold text-amber-800">{teacherSubmissionIssue}</p>
                 ) : null}
               </div>
             ) : null}
           </form>
 
+          {useLessonSteps ? (
+            <LessonStepNav
+              step={lessonStep}
+              nextIssue={stepIssues[lessonStep] ?? null}
+              onPrev={() => setLessonStep((current) => Math.max(1, current - 1) as LessonStep)}
+              onNext={() => {
+                setLessonStep((current) => Math.min(5, current + 1) as LessonStep);
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+            />
+          ) : null}
         </section>
 
         <aside className="order-first xl:order-none space-y-4">
