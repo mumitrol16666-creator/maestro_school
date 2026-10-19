@@ -51,7 +51,7 @@ import { adminOfflineApi } from "@/lib/admin-offline-api";
 import { teacherOfflineApi } from "@/lib/teacher-offline-api";
 import { teacherStudentsApi } from "@/lib/teacher-students-api";
 import { currentAqtobeMonth } from "@/lib/aqtobe-month";
-import { MediaPicker } from "@/components/media-picker";
+import { MaterialLibraryPicker } from "@/components/material-library-picker";
 import type { CmsMedia } from "@/types/cms";
 import type {
   OfflineHomeworkReview,
@@ -524,7 +524,6 @@ export default function AdminOfflineLessonDetailPage() {
   const [nextLessonFocus, setNextLessonFocus] = useState("");
   const [materialsText, setMaterialsText] = useState("");
   const [materialEntries, setMaterialEntries] = useState<LessonMaterialDraft[]>([]);
-  const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
   const [comment, setComment] = useState("");
   const [trialReport, setTrialReport] = useState<TrialLessonReport>(() => mergeTrialReport());
   const [studentCheckDrafts, setStudentCheckDrafts] = useState<Record<string, StudentLessonCheckDraft>>({});
@@ -1379,7 +1378,9 @@ export default function AdminOfflineLessonDetailPage() {
             .split("\n")
             .map((url) => url.trim())
             .filter(Boolean)
-            .map((url) => materialEntries.find((item) => item.url === url) ?? ({ type: "link", url, title: url })),
+            .map((url) => materialEntries.find((item) => item.url === url) ?? ({ type: "link", url, title: url }))
+            // CRM opens these on its own site: uploaded files go with the school's address.
+            .map((item) => (item.url.startsWith("/api/v1/media/") ? { ...item, url: `${window.location.origin}${item.url}` } : item)),
           comment: absenceOnly ? undefined : comment.trim() || undefined,
           trialReport: isTrialLesson && !absenceOnly
             ? { ...trialReport, capturedAt: new Date().toISOString() }
@@ -2007,22 +2008,35 @@ export default function AdminOfflineLessonDetailPage() {
                           <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
                             Материалы и ссылки
                           </label>
-                          <button
-                            type="button"
-                            onClick={() => setMediaPickerOpen(true)}
-                            disabled={!canEditReport}
-                            className="rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-xs font-bold text-stone-700 transition hover:border-gold disabled:opacity-50"
-                          >
-                            Выбрать из медиатеки
-                          </button>
                         </div>
+                        <div className="mt-2">
+                          <MaterialLibraryPicker
+                            disabled={!canEditReport}
+                            label="Найти в библиотеке по названию"
+                            onPick={(item) => {
+                              setMaterialsText((current) => [...current.split("\n").map((value) => value.trim()).filter(Boolean), item.url].filter((value, index, all) => all.indexOf(value) === index).join("\n"));
+                              setMaterialEntries((current) => [...current.filter((entry) => entry.url !== item.url), {
+                                type: item.kind === "link" ? "link" : item.kind === "audio" ? "file" : item.kind,
+                                url: item.url,
+                                title: item.title,
+                              }]);
+                            }}
+                          />
+                        </div>
+                        {materialEntries.some((entry) => materialsText.includes(entry.url)) ? (
+                          <ul className="mt-2 flex flex-wrap gap-1.5" data-testid="lesson-picked-materials">
+                            {materialEntries.filter((entry) => materialsText.includes(entry.url)).map((entry) => (
+                              <li key={entry.url} className="rounded-lg bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-900">{entry.title || entry.url}</li>
+                            ))}
+                          </ul>
+                        ) : null}
                         <textarea
                           value={materialsText}
                           onChange={(event) => setMaterialsText(event.target.value)}
                           disabled={!canEditReport}
                           rows={2}
                           className="mt-2 min-h-16 w-full rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm"
-                          placeholder="Одна ссылка на строку или выберите файл из медиатеки"
+                          placeholder="Или вставьте ссылки, по одной на строку"
                         />
                       </div>
 
@@ -2445,22 +2459,6 @@ export default function AdminOfflineLessonDetailPage() {
           </div>
         </div>
       )}
-
-      <MediaPicker
-        open={mediaPickerOpen}
-        onClose={() => setMediaPickerOpen(false)}
-        readOnly
-        title="Добавить материал к итогу урока"
-        onSelect={(media: CmsMedia) => {
-          setMaterialsText((current) => [...current.split("\n").map((value) => value.trim()).filter(Boolean), media.url].filter((value, index, all) => all.indexOf(value) === index).join("\n"));
-          setMaterialEntries((current) => [...current.filter((item) => item.url !== media.url), {
-            type: media.mimeType?.startsWith("video/") ? "video" : media.mimeType?.startsWith("image/") ? "image" : media.folder === "pdf" ? "pdf" : "file",
-            url: media.url,
-            title: media.title,
-            description: media.description,
-          }]);
-        }}
-      />
 
       <SuccessModal
         open={Boolean(success)}

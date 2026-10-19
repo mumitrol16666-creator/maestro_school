@@ -2,6 +2,7 @@
 import { Download } from "lucide-react";
 import { parseVideoUrl } from "@/lib/parse-video-url";
 import { isManagedMediaUrl, triggerFileDownload } from "@/lib/file-download";
+import { sameSiteMediaUrl } from "@/lib/media-url";
 import type { SchoolOfflineLesson } from "@/types/school-offline";
 
 function MaterialPreview({
@@ -10,11 +11,13 @@ function MaterialPreview({
   material: SchoolOfflineLesson["materials"][number];
 }) {
   if (!material.url) return null;
-  const parsed = parseVideoUrl(material.url);
+  const url = sameSiteMediaUrl(material.url as string);
+  material = { ...material, url };
+  const parsed = parseVideoUrl(url);
   const directVideo =
     material.type === "video" ||
     material.mimeType?.startsWith("video/") ||
-    /\.(mp4|webm|mov|m4v|ogv)(\?|$)/i.test(material.url);
+    /\.(mp4|webm|mov|m4v|ogv)(\?|$)/i.test(url);
   if (directVideo) {
     return (
       <video
@@ -54,7 +57,7 @@ function MaterialPreview({
   if (
     material.type === "pdf" ||
     material.mimeType === "application/pdf" ||
-    /\.pdf(\?|$)/i.test(material.url)
+    /\.pdf(\?|$)/i.test(url)
   ) {
     return (
       <iframe
@@ -105,7 +108,7 @@ export function LessonMaterialItems({
                   void triggerFileDownload(material.url, title);
                   return;
                 }
-                window.open(material.url, "_blank", "noopener,noreferrer");
+                window.open(sameSiteMediaUrl(material.url as string), "_blank", "noopener,noreferrer");
               }}
               className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-stone-200 bg-white px-4 py-2 text-xs font-bold text-ink shadow-xs transition hover:border-amber-300 hover:bg-amber-50"
             >

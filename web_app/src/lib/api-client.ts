@@ -158,6 +158,9 @@ export const api = {
       body: JSON.stringify(body),
     }),
   me: () => apiRequest<ApiAuthUser>("/auth/me"),
+  /** Plan 1.12: the cookie that lets <img>, <video> and links open uploaded files. */
+  refreshMediaSession: () => apiRequest<{ ok: boolean }>("/auth/media-session", { method: "POST", body: JSON.stringify({}) }),
+  clearMediaSession: () => apiRequest<{ ok: boolean }>("/auth/media-session", { method: "DELETE" }),
   updateProfile: (body: {
     firstName?: string;
     lastName?: string;

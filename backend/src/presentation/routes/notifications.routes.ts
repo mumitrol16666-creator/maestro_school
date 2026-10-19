@@ -50,6 +50,7 @@ export async function notificationsRoutes(app: FastifyInstance) {
     "parent_homework_reviewed",
     "parent_balance_alert",
     "sector_exam_updated",
+    "material_shared",
   ]);
 
   app.get("/students/me/notifications/unread-count", { preHandler: [authenticate] }, async (request) => {

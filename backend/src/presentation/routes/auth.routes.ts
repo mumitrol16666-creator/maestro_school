@@ -1,5 +1,6 @@
 import { sessionClaims } from "../../application/services/account-session.service.js";
 import type { FastifyInstance } from "fastify";
+import { bearerToken, clearMediaCookieHeader, mediaCookieHeader } from "../guards/media-session.js";
 import { Prisma } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
@@ -127,6 +128,7 @@ export async function authRoutes(app: FastifyInstance) {
     const { token } = ssoExchangeSchema.parse(request.body);
     const { user, stats, session } = await exchangeSsoBridgeToken(token);
     const sessionToken = await reply.jwtSign(session, { expiresIn: "7d" });
+    reply.header("Set-Cookie", mediaCookieHeader(sessionToken, request));
     if (user.role.slug === "student") {
       await recordStudentLogin(user.id, "sso").catch(() => undefined);
     }
@@ -173,6 +175,7 @@ export async function authRoutes(app: FastifyInstance) {
     }
 
     const token = await reply.jwtSign(await sessionClaims(user), { expiresIn: "7d" });
+    reply.header("Set-Cookie", mediaCookieHeader(token, request));
     const stats = await studentStats(user.id, user.role.slug);
     if (user.role.slug === "student") {
       await recordStudentLogin(user.id, "password").catch(() => undefined);
@@ -260,6 +263,7 @@ export async function authRoutes(app: FastifyInstance) {
     const linkedUser = await findUserWithRoleById(user.id);
     if (!linkedUser || linkedUser.passwordHash !== user.passwordHash) throw new UnauthorizedError();
     const token = await reply.jwtSign(await sessionClaims(linkedUser), { expiresIn: "7d" });
+    reply.header("Set-Cookie", mediaCookieHeader(token, request));
 
     return reply.status(201).send({
       data: {
@@ -267,6 +271,18 @@ export async function authRoutes(app: FastifyInstance) {
         user: profile(user, { points: 0, coins: 0 }),
       },
     });
+  });
+
+  // Plan 1.12: refresh or clear the media cookie for sessions signed in before it existed.
+  app.post("/auth/media-session", { preHandler: [authenticate] }, async (request, reply) => {
+    const token = bearerToken(request);
+    if (token) reply.header("Set-Cookie", mediaCookieHeader(token, request));
+    return { data: { ok: true } };
+  });
+
+  app.delete("/auth/media-session", async (request, reply) => {
+    reply.header("Set-Cookie", clearMediaCookieHeader(request));
+    return { data: { ok: true } };
   });
 
   app.get("/auth/me", { preHandler: [authenticate] }, async (request) => {
@@ -381,6 +397,7 @@ export async function authRoutes(app: FastifyInstance) {
     const token = await reply.jwtSign({ sub: updated.id, role: user.role.slug, sessionVersion: updated.sessionVersion,
       ...(authUser.crmSessionVersion === undefined ? {} : { crmSessionVersion: authUser.crmSessionVersion }),
     }, { expiresIn: "7d" });
+    reply.header("Set-Cookie", mediaCookieHeader(token, request));
 
     return {
       data: { ok: true, token },

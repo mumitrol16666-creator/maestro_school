@@ -23,6 +23,8 @@ import { api, ApiError } from "@/lib/api-client";
 import type { StudentHomeMonthlyPlan } from "@/types/api";
 import type { SectorProposal } from "@/types/teacher-students";
 import { SectorExamSummary } from "@/components/sector-exam-summary";
+import { sameSiteMediaUrl } from "@/lib/media-url";
+import { materialsApi } from "@/lib/materials-api";
 
 const itemStatus = {
   planned: { label: "Запланировано", icon: Circle, className: "text-stone-500" },
@@ -50,6 +52,9 @@ function formatDate(value: string | null | undefined, withTime = false) {
 }
 
 function supportedMaterialUrl(value: string) {
+  // Uploaded files are same-site paths (plan 1.12); old absolute ones are turned into paths too.
+  const sameSite = sameSiteMediaUrl(value);
+  if (sameSite.startsWith("/api/v1/media/")) return sameSite;
   try {
     const url = new URL(value);
     return ["http:", "https:"].includes(url.protocol) && url.hostname ? url.toString() : null;
@@ -156,6 +161,8 @@ export default function SectorPage() {
           )}
         </section>
       ) : null}
+
+      <SharedLessonsSection />
 
       <ProposalSection
         directions={directions}
@@ -391,4 +398,33 @@ function PlanMaterial({
       {content}
     </a>
   ) : <div className={className}>{content}</div>;
+}
+
+
+/** Plan 1.12: course lessons the teacher sent, newest first. */
+function SharedLessonsSection() {
+  const shares = useApiResource(() => materialsApi.studentShares().catch(() => []), []);
+  const items = shares.data ?? [];
+  if (!items.length) return null;
+  return (
+    <section className="mt-8" data-testid="sector-shared-lessons">
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <h2 className="font-display text-2xl text-ink">Уроки от преподавателя</h2>
+        <Link href="/shared-lessons" className="text-sm font-bold text-gold-ink hover:underline">Все</Link>
+      </div>
+      <ul className="mt-3 grid gap-2">
+        {items.slice(0, 3).map((share) => (
+          <li key={share.id}>
+            <Link href={`/shared-lessons/${share.id}`} className="flex min-h-14 min-w-0 items-center gap-3 rounded-lg border border-stone-200 bg-white px-4 py-3 transition hover:border-amber-300">
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-bold text-ink">{share.lesson.title}</span>
+                <span className="block truncate text-xs text-stone-500">{share.lesson.courseTitle}</span>
+              </span>
+              {!share.viewedAt ? <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black text-amber-900">новое</span> : null}
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
 }

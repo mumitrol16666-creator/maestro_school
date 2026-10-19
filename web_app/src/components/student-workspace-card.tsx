@@ -24,6 +24,9 @@ import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
 import { ProgressBar } from "@/components/progress-bar";
 import { SectorProposalsPanel } from "@/components/sector-editor-parts";
 import { SectorExamPanel } from "@/components/sector-exam-panel";
+import { MaterialBadge, MaterialLibraryPicker } from "@/components/material-library-picker";
+import { ShareCourseLesson } from "@/components/share-course-lesson";
+import type { MaterialLibraryItem } from "@/types/materials";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { ApiError } from "@/lib/api-client";
 import { learningHomeworkApi } from "@/lib/learning-homework-api";
@@ -252,6 +255,7 @@ function NowTab({
             onAddTopic={(title) => setProposalHint(`Предложение принято. Добавьте тему «${title}» в редакторе сектора.`)}
           />
 
+          <ShareCourseLesson crmStudentId={crmStudentId} appLinked={Boolean(data.student.appUserId)} />
           <div className="grid gap-4 lg:grid-cols-2">
             <HomeworkAssignForm sectors={data.sectors} crmClassId={crmClassId} available={data.homework.available} onDone={onChanged} />
             <BonusXpForm
@@ -395,6 +399,7 @@ function HomeworkAssignForm({
   const [topicId, setTopicId] = useState(topics[0]?.id ?? "");
   const [instructions, setInstructions] = useState("");
   const [dueAt, setDueAt] = useState("");
+  const [materials, setMaterials] = useState<MaterialLibraryItem[]>([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   if (!available) return null;
@@ -411,9 +416,17 @@ function HomeworkAssignForm({
         dueAt: dueAt ? new Date(`${dueAt}T18:00:00+05:00`).toISOString() : null,
         sourceLessonId: crmClassId,
         idempotencyKey: crypto.randomUUID(),
+        // Plan 1.12: materials picked from the school library; uploaded files go with the school's address.
+        materials: materials.map((item) => ({
+          type: item.kind === "video" || item.kind === "audio" || item.kind === "link" ? item.kind : "file",
+          url: item.url.startsWith("/") ? `${window.location.origin}${item.url}` : item.url,
+          title: item.title,
+          ...(item.mimeType ? { mimeType: item.mimeType } : {}),
+        })),
       });
       setInstructions("");
       setDueAt("");
+      setMaterials([]);
       setMessage("Задание выдано, ученик получит уведомление");
       setOpen(false);
       onDone();
@@ -447,6 +460,30 @@ function HomeworkAssignForm({
             placeholder="Что сделать к следующему уроку"
             className="w-full rounded-lg border border-stone-200 bg-white p-2 text-sm"
           />
+          {materials.length < 5 ? (
+            <MaterialLibraryPicker
+              label="Материал к заданию"
+              onPick={(item) => setMaterials((current) => current.some((row) => row.id === item.id) ? current : [...current, item])}
+            />
+          ) : null}
+          {materials.length ? (
+            <ul className="flex flex-wrap gap-1.5" data-testid="homework-picked-materials">
+              {materials.map((item) => (
+                <li key={item.id} className="inline-flex max-w-full items-center gap-1.5 rounded-lg bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-900">
+                  <MaterialBadge badge={item.badge} />
+                  <span className="min-w-0 truncate">{item.title}</span>
+                  <button
+                    type="button"
+                    aria-label={`Убрать ${item.title}`}
+                    className="grid h-6 w-6 place-items-center rounded-md hover:bg-amber-100"
+                    onClick={() => setMaterials((current) => current.filter((row) => row.id !== item.id))}
+                  >
+                    ×
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
           <div className="flex flex-wrap items-center gap-2">
             <label className="text-[11px] font-bold text-stone-500">
               Срок

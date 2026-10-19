@@ -64,6 +64,11 @@ test("the teacher fills a learning lesson in five steps and sees the preview bef
   await nav.getByRole("button", { name: "Далее" }).click();
   await expect(stepper).toContainText("Шаг 3 из 5");
   await expect(page.getByText("Прогресс тем", { exact: true })).toBeVisible();
+  // The QA seed leaves homework waiting for this student; a lesson must check it before sending.
+  const pendingHomework = page.getByLabel(/Процент выполнения ДЗ/);
+  for (let index = 0; index < await pendingHomework.count(); index += 1) {
+    await pendingHomework.nth(index).fill("100");
+  }
 
   await nav.getByRole("button", { name: "Далее" }).click();
   await expect(stepper).toContainText("Шаг 4 из 5");

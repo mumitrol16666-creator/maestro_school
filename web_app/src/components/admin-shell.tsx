@@ -24,6 +24,7 @@ const cmsNavigation = [
   { href: "/admin/directions", label: "Направления", icon: FolderKanban },
   { href: "/admin/sector-templates", label: "Ступени программы", icon: Layers3 },
   { href: "/admin/sector-exams", label: "Экзамены секторов", icon: GraduationCap },
+  { href: "/admin/materials", label: "Библиотека материалов", icon: LibraryBig },
   { href: "/admin/courses", label: "Курсы", icon: BookMarked },
   { href: "/admin/tests", label: "Тесты", icon: ClipboardCheck },
   { href: "/admin/league", label: "Недельная лига", icon: Trophy },
@@ -45,6 +46,7 @@ const teacherNavigation = [
   { href: "/admin/my-students", label: "Мои ученики", icon: UsersRound },
   { href: "/admin/messages", label: "Сообщения", icon: MessagesSquare },
   ...lessonNavigation,
+  { href: "/admin/materials", label: "Материалы", icon: LibraryBig },
 ];
 
 const teachingNavigation = [
@@ -82,14 +84,21 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       : [cmsNavigation[0], ...journalNavigation, ...cmsNavigation.slice(1), ...accessNavigation, ...teachingNavigation]
     : user?.role === "teacher"
       ? teacherNavigation
-      : [...lessonNavigation, { href: "/admin/sector-exams", label: "Экзамены секторов", icon: GraduationCap }];
+      : [
+          ...lessonNavigation,
+          { href: "/admin/sector-exams", label: "Экзамены секторов", icon: GraduationCap },
+          { href: "/admin/materials", label: "Библиотека материалов", icon: LibraryBig },
+        ];
   const sidebarTitle = isContentAdmin ? "Управление школой" : "Кабинет преподавателя";
   const displayName = (user ? formatFio(user) : "")
     || user?.login
     || user?.email?.split("@")[0]
     || roleLabel(user?.role);
   const initials = user ? initialsFromName(user) : "M";
-  const teacherMobileNavigation = user?.role === "teacher" ? teacherNavigation : [];
+  // The phone bar keeps four main places; the library is in the side menu (plan 1.12).
+  const teacherMobileNavigation = user?.role === "teacher"
+    ? teacherNavigation.filter((item) => item.href !== "/admin/materials")
+    : [];
   const headerTitle = user?.role === "teacher"
     ? user.firstName || displayName
     : isContentAdmin

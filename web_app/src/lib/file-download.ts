@@ -1,3 +1,5 @@
+import { sameSiteMediaUrl } from "@/lib/media-url";
+
 /**
  * Helpers for reliable file downloading across desktop, mobile browsers and PWA/TWA.
  */
@@ -14,7 +16,7 @@ export function isManagedMediaUrl(url?: string | null): boolean {
 
 export function formatDownloadUrl(url?: string | null, _filename?: string): string {
   if (!url) return "";
-  const trimmed = url.trim();
+  const trimmed = sameSiteMediaUrl(url.trim());
   try {
     const parsed = new URL(trimmed, typeof window !== "undefined" ? window.location.origin : "https://app.maestro.com.kz");
     if (isManagedMediaUrl(trimmed)) {

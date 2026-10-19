@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, readdir } from "node:fs/promises";
+import { createReadStream } from "node:fs";
+import { mkdir, readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
 import { BadRequestError, NotFoundError } from "../../domain/errors.js";
@@ -13,12 +14,14 @@ import {
   mediaFilePath,
   mediaFolderFor,
   mediaFolders,
+  mediaPath,
   readMediaMetadata,
   type MediaFolder,
   updateMediaMetadata,
   writeMediaFile,
 } from "../../application/services/media-storage.service.js";
 import { authenticate, requireContentAdmin, requirePermission } from "../guards/auth.guards.js";
+import { authorizeMediaRequest } from "../guards/media-session.js";
 
 const mediaGuards = () => [authenticate, requireContentAdmin, requirePermission("catalog.manage")];
 const mediaReadGuards = [authenticate, requirePermission("offline_school.read")];
@@ -77,11 +80,13 @@ export async function mediaRoutes(app: FastifyInstance) {
         mimeType,
         size: bytes.length,
         createdAt: new Date(),
-        url: `${request.protocol}://${request.host}/api/v1/media/${folder}/${filename}`,
+        url: mediaPath(folder, filename),
       },
     });
   });
 
+  // Plan 1.12: files are no longer public. Signed-in users load them through the header session
+  // or the media cookie; avatars stay public for CRM. Video and audio seek with HTTP ranges.
   app.get("/media/:folder/:filename", async (request, reply) => {
     const { folder, filename } = z.object({
       folder: z.enum(mediaFolders),
@@ -89,30 +94,48 @@ export async function mediaRoutes(app: FastifyInstance) {
     }).parse(request.params);
     const query = z.object({ download: z.enum(["1", "true"]).optional() }).parse(request.query);
     if (filename.endsWith(".meta.json")) throw new NotFoundError("Media file");
+    const access = await authorizeMediaRequest(request, folder, filename);
     const filePath = mediaFilePath(folder, filename);
-    let bytes: Buffer;
+    let size: number;
     try {
-      bytes = await readFile(filePath);
+      const info = await stat(filePath);
+      if (!info.isFile()) throw new Error("not a file");
+      size = info.size;
     } catch {
       throw new NotFoundError("Media file");
     }
     const extension = path.extname(filename).toLowerCase();
     const metadata = await readMediaMetadata(folder, filename);
-    const mime = metadata?.mimeType || (extension === ".pdf" ? "application/pdf"
-      : extension === ".png" ? "image/png"
-      : extension === ".jpg" || extension === ".jpeg" ? "image/jpeg"
-      : extension === ".webp" ? "image/webp"
-      : extension === ".mp4" || extension === ".m4v" || extension === ".mov" ? "video/mp4"
-      : extension === ".webm" ? "video/webm"
-      : extension === ".ogv" ? "video/ogg"
-      : "application/octet-stream");
+    const mime = metadata?.mimeType || inferMimeType(filename, "");
     if (query.download) {
       const requestedName = metadata?.title?.trim() || metadata?.originalFilename || filename;
       const originalExtension = path.extname(metadata?.originalFilename || filename);
-      const downloadName = path.extname(requestedName) ? requestedName : `${requestedName}${originalExtension}`;
+      const downloadName = path.extname(requestedName) ? requestedName : `${requestedName}${originalExtension || extension}`;
       reply.header("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(downloadName)}`);
     }
-    return reply.type(mime).send(bytes);
+    reply.header("Cache-Control", access === "public" ? "public, max-age=3600" : "private, max-age=3600");
+    reply.header("Vary", "Cookie, Authorization");
+    reply.header("Accept-Ranges", "bytes");
+    // PDFs are previewed in a frame on the site itself.
+    reply.header("X-Frame-Options", "SAMEORIGIN");
+    reply.type(mime);
+
+    const range = /^bytes=(\d*)-(\d*)$/.exec(String(request.headers.range ?? ""));
+    if (range && size > 0) {
+      let start = range[1] ? Number(range[1]) : size - Number(range[2]);
+      let end = range[1] && range[2] ? Number(range[2]) : size - 1;
+      if (!range[1]) start = Math.max(0, start);
+      end = Math.min(end, size - 1);
+      if (!Number.isFinite(start) || start > end || start >= size) {
+        return reply.status(416).header("Content-Range", `bytes */${size}`).send();
+      }
+      reply.status(206);
+      reply.header("Content-Range", `bytes ${start}-${end}/${size}`);
+      reply.header("Content-Length", String(end - start + 1));
+      return reply.send(createReadStream(filePath, { start, end }));
+    }
+    reply.header("Content-Length", String(size));
+    return reply.send(createReadStream(filePath));
   });
 
   app.patch("/admin/media/:folder/:filename", { preHandler: mediaGuards() }, async (request) => {

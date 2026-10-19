@@ -14,6 +14,8 @@ import { useState } from "react";
 import { ApiError } from "@/lib/api-client";
 import { learningHomeworkApi } from "@/lib/learning-homework-api";
 import { homeworkPercentTone } from "@/lib/homework-ui";
+import { sameSiteMediaUrl } from "@/lib/media-url";
+import { parseVideoUrl } from "@/lib/parse-video-url";
 import type {
   LearningHomeworkMaterial,
   LearningHomeworkRecipientState,
@@ -129,13 +131,37 @@ function HomeworkMaterialAction({
   }
   return (
     <a
-      href={material.url}
+      href={sameSiteMediaUrl(material.url)}
       target="_blank"
       rel="noreferrer"
       className={className}
     >
       {content}
     </a>
+  );
+}
+
+/** Plan 1.12: YouTube and Vimeo videos from the homework play right in the card. */
+function HomeworkVideoEmbeds({ materials }: { materials: LearningHomeworkMaterial[] }) {
+  const videos = materials.flatMap((material) => {
+    const parsed = material.privateFile ? null : parseVideoUrl(material.url);
+    return parsed ? [{ material, parsed }] : [];
+  });
+  if (!videos.length) return null;
+  return (
+    <div className="mt-4 grid min-w-0 grid-cols-1 gap-3" data-testid="homework-video-embed">
+      {videos.map(({ material, parsed }) => (
+        <div key={material.url} className="relative aspect-video overflow-hidden rounded-xl bg-black">
+          <iframe
+            title={material.title || "Видео к заданию"}
+            src={parsed.embedUrl}
+            className="h-full w-full border-0"
+            allow="autoplay; encrypted-media; picture-in-picture"
+            allowFullScreen
+          />
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -243,6 +269,9 @@ export function LearningHomeworkCard({
         </div>
       ) : null}
 
+      {assignment.materials.length && (!compact || detailsOpen) ? (
+        <HomeworkVideoEmbeds materials={assignment.materials} />
+      ) : null}
       {assignment.materials.length && (!compact || detailsOpen) ? (
         <div className="mt-4 flex flex-wrap gap-2">
           {assignment.materials.map((material, index) => (

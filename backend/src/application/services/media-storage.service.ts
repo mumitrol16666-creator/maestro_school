@@ -40,8 +40,23 @@ export function materialTypeForFolder(folder: MediaFolder): "pdf" | "image" | "f
   return "file";
 }
 
-export function mediaPublicUrl(request: { protocol: string; host: string }, folder: string, filename: string) {
-  return `${request.protocol}://${request.host}/api/v1/media/${folder}/${filename}`;
+/** Same-site path of a stored file. Pages load it with the signed-in user's media cookie (plan 1.12). */
+export function mediaPath(folder: string, filename: string) {
+  return `/api/v1/media/${folder}/${filename}`;
+}
+
+/**
+ * Absolute URL, only for places outside the site (the avatar CRM shows). Behind the TLS proxy the
+ * request itself is plain http, so the forwarded scheme decides.
+ */
+export function mediaPublicUrl(
+  request: { protocol: string; host: string; headers?: Record<string, string | string[] | undefined> },
+  folder: string,
+  filename: string,
+) {
+  const forwarded = request.headers?.["x-forwarded-proto"];
+  const scheme = (Array.isArray(forwarded) ? forwarded[0] : forwarded)?.split(",")[0]?.trim() || request.protocol;
+  return `${scheme}://${request.host}${mediaPath(folder, filename)}`;
 }
 
 export function mediaDirectory(folder: MediaFolder) {
@@ -108,7 +123,7 @@ export async function getMediaInfo(folder: MediaFolder, filename: string, reques
       folder,
       size: details.size,
       createdAt: details.birthtime,
-      url: mediaPublicUrl(request, folder, filename),
+      url: mediaPath(folder, filename),
     };
   } catch {
     return null;

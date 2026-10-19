@@ -39,6 +39,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const merged = { ...cached, ...fresh };
         setUser(merged);
         storeSession(token, merged);
+        // Sessions signed in before plan 1.12 have no media cookie yet; refreshing keeps it current.
+        void api.refreshMediaSession().catch(() => undefined);
       })
       .catch(() => setUser(null))
       .finally(() => setLoading(false));
@@ -88,6 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return merged;
     },
     logout: () => {
+      void api.clearMediaSession().catch(() => undefined);
       clearSession();
       setUser(null);
       router.replace("/login");

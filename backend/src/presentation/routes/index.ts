@@ -35,6 +35,7 @@ import { homeworkStatisticsRoutes } from "./homework-statistics.routes.js";
 import { shopRoutes } from "./shop.routes.js";
 import { sectorRoutes } from "./sector.routes.js";
 import { sectorExamRoutes } from "./sector-exam.routes.js";
+import { materialLibraryRoutes } from "./material-library.routes.js";
 
 export async function registerRoutes(app: FastifyInstance) {
   await app.register(async (api) => {
@@ -63,6 +64,7 @@ export async function registerRoutes(app: FastifyInstance) {
     await api.register(weeklyLeagueRoutes);
     await api.register(sectorRoutes);
     await api.register(sectorExamRoutes);
+    await api.register(materialLibraryRoutes);
     await api.register(familyRoutes);
     await api.register(studentTasksRoutes);
     await api.register(learningHomeworkRoutes);
