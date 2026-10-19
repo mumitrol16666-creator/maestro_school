@@ -40,6 +40,7 @@ import {
   pendingLearningHomeworkCount,
   type LearningLessonV2Draft,
 } from "@/components/learning-lesson-v2-panel";
+import { StudentWorkspaceDrawer } from "@/components/student-workspace-drawer";
 import { PageHeader } from "@/components/page-header";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { useDialogBehavior } from "@/hooks/use-dialog-behavior";
@@ -487,6 +488,7 @@ export default function AdminOfflineLessonDetailPage() {
   const params = useParams<{ crmClassId: string }>();
   const router = useRouter();
   const crmClassId = params.crmClassId;
+  const [openStudentId, setOpenStudentId] = useState<string | null>(null);
   const { user } = useAuth();
   const isAdmin = isOfflineCoordinatorRole(user?.role);
   const canActForTeacher = isContentAdminRole(user?.role);
@@ -1640,8 +1642,10 @@ export default function AdminOfflineLessonDetailPage() {
           onDraftChange={(studentId, draft) => {
             setStudentCheckDrafts((current) => ({ ...current, [studentId]: draft }));
           }}
+          onOpenStudent={setOpenStudentId}
         />
       </div>
+      <StudentWorkspaceDrawer crmStudentId={openStudentId} crmClassId={crmClassId} onClose={() => setOpenStudentId(null)} />
 
       {learningV2 && !isTrialLesson && (!canEditReport || hydratedLessonDraftKey === lessonDraftKey) ? (
         <LearningLessonV2Panel
@@ -3016,6 +3020,7 @@ function StudentRoster({
   onRetryStudents,
   onSelectTopic,
   onDraftChange,
+  onOpenStudent,
 }: {
   students: TeacherOfflineStudent[];
   compactGroup: boolean;
@@ -3030,6 +3035,7 @@ function StudentRoster({
   onRetryStudents: () => void;
   onSelectTopic?: (topic: string) => void;
   onDraftChange: (studentId: string, draft: StudentLessonCheckDraft) => void;
+  onOpenStudent?: (crmStudentId: string) => void;
 }) {
   return (
     <div className="rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft">
@@ -3068,6 +3074,7 @@ function StudentRoster({
       ) : compactGroup ? (
         <GroupLessonRoster
           students={students}
+          onOpenStudent={onOpenStudent}
           canEdit={canEdit && canManageAttendance}
           canSetExcusedAbsence={canSetExcusedAbsence}
           showLearningResult={showLearningResult}
@@ -3089,6 +3096,7 @@ function StudentRoster({
               draft={drafts[student.crmStudentId] ?? studentLessonCheckDraft(student)}
               onSelectTopic={onSelectTopic}
               onChange={(draft) => onDraftChange(student.crmStudentId, draft)}
+              onOpenStudent={onOpenStudent}
             />
           ))}
         </div>
@@ -3146,6 +3154,7 @@ function draftWithHomeworkStatus(
 
 function GroupLessonRoster({
   students,
+  onOpenStudent,
   canEdit,
   canSetExcusedAbsence,
   showLearningResult,
@@ -3162,6 +3171,7 @@ function GroupLessonRoster({
   drafts: Record<string, StudentLessonCheckDraft>;
   onSelectTopic?: (topic: string) => void;
   onDraftChange: (studentId: string, draft: StudentLessonCheckDraft) => void;
+  onOpenStudent?: (crmStudentId: string) => void;
 }) {
   const attendedStudents = students.filter((student) => (
     ["present", "late"].includes(drafts[student.crmStudentId].attendanceStatus)
@@ -3290,6 +3300,7 @@ function GroupLessonRoster({
             draft={drafts[student.crmStudentId]}
             onSelectTopic={onSelectTopic}
             onChange={(draft) => onDraftChange(student.crmStudentId, draft)}
+            onOpenStudent={onOpenStudent}
           />
         ))}
       </div>
@@ -3306,6 +3317,7 @@ function GroupStudentRow({
   draft,
   onSelectTopic,
   onChange,
+  onOpenStudent,
 }: {
   student: TeacherOfflineStudent;
   canEdit: boolean;
@@ -3315,6 +3327,7 @@ function GroupStudentRow({
   draft: StudentLessonCheckDraft;
   onSelectTopic?: (topic: string) => void;
   onChange: (draft: StudentLessonCheckDraft) => void;
+  onOpenStudent?: (crmStudentId: string) => void;
 }) {
   const [learningOpen, setLearningOpen] = useState(false);
   const attended = ["present", "late"].includes(draft.attendanceStatus);
@@ -3343,7 +3356,19 @@ function GroupStudentRow({
             className="h-5 w-5 shrink-0 accent-emerald-600"
           />
           <span className="min-w-0">
-            <span className="block truncate text-sm font-black text-ink">{student.name}</span>
+            <span className="flex min-w-0 items-center gap-2">
+              <span className="block truncate text-sm font-black text-ink">{student.name}</span>
+              {onOpenStudent ? (
+                <button
+                  type="button"
+                  onClick={(event) => { event.preventDefault(); onOpenStudent(student.crmStudentId); }}
+                  className="shrink-0 rounded-md border border-stone-200 bg-white px-2 py-0.5 text-[10px] font-bold text-stone-600 hover:border-amber-300 hover:text-ink"
+                  aria-label={`Открыть карточку: ${student.name}`}
+                >
+                  Ученик
+                </button>
+              ) : null}
+            </span>
             <span className={`mt-0.5 block text-xs font-semibold ${
               draft.attendanceStatus === "unmarked" ? "text-stone-400" : "text-stone-600"
             }`}>
@@ -3784,6 +3809,7 @@ function StudentLessonCheckCard({
   draft,
   onSelectTopic,
   onChange,
+  onOpenStudent,
 }: {
   student: TeacherOfflineStudent;
   canEdit: boolean;
@@ -3793,6 +3819,7 @@ function StudentLessonCheckCard({
   draft: StudentLessonCheckDraft;
   onSelectTopic?: (topic: string) => void;
   onChange: (draft: StudentLessonCheckDraft) => void;
+  onOpenStudent?: (crmStudentId: string) => void;
 }) {
   const { attendanceStatus, teacherNote, homeworkReview } = draft;
   const attended = ["present", "late"].includes(attendanceStatus);
@@ -3809,9 +3836,21 @@ function StudentLessonCheckCard({
   return (
     <div className="rounded-2xl border border-stone-200 bg-white p-4 sm:p-5">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-100 pb-3">
-        <div>
-          <p className="font-semibold text-ink sm:text-lg">{student.name}</p>
-          {student.phone ? <p className="mt-0.5 text-xs text-stone-500">{student.phone}</p> : null}
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="min-w-0">
+            <p className="font-semibold text-ink sm:text-lg">{student.name}</p>
+            {student.phone ? <p className="mt-0.5 text-xs text-stone-500">{student.phone}</p> : null}
+          </div>
+          {onOpenStudent ? (
+            <button
+              type="button"
+              onClick={() => onOpenStudent(student.crmStudentId)}
+              className="shrink-0 rounded-lg border border-stone-200 bg-white px-2.5 py-1 text-xs font-bold text-stone-600 hover:border-amber-300 hover:text-ink"
+              aria-label={`Открыть карточку: ${student.name}`}
+            >
+              Ученик
+            </button>
+          ) : null}
         </div>
         <span
           className={`inline-flex w-fit rounded-full px-3 py-1 text-xs font-bold ${

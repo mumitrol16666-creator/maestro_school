@@ -14,6 +14,7 @@ import {
 } from "../../application/services/teacher-offline.service.js";
 import { listTeacherStudents } from "../../application/services/teacher-students.service.js";
 import { getTeacherStudentHomework, resolveLegacyHomework } from "../../application/services/teacher-student-homework.service.js";
+import { getTeacherStudentWorkspace } from "../../application/services/teacher-student-workspace.service.js";
 import { openTeacherStudentDialog } from "../../application/services/learning-dialog-membership.service.js";
 import { listTeacherGroups } from "../../application/services/teacher-groups.service.js";
 import {
@@ -59,6 +60,17 @@ export async function teacherOfflineRoutes(app: FastifyInstance) {
   }, async request => {
     const { crmStudentId } = z.object({ crmStudentId: z.string().min(1).max(128) }).parse(request.params);
     return { data: await getTeacherStudentHomework(request.user!.id, crmStudentId) };
+  });
+
+  // The student card: the open sector, proposals, homework, last lessons,
+  // platform activity and dynamics in one read. A substitute passes the
+  // lesson they run and gets the sector only (LEARN-026).
+  app.get("/teachers/me/students/:crmStudentId/workspace", {
+    preHandler: [authenticate, requireTeacher, requirePermission("offline_school.read")],
+  }, async request => {
+    const { crmStudentId } = z.object({ crmStudentId: z.string().min(1).max(128) }).parse(request.params);
+    const { crmClassId } = z.object({ crmClassId: z.string().min(1).max(128).optional() }).parse(request.query ?? {});
+    return { data: await getTeacherStudentWorkspace(request.user!.id, crmStudentId, { crmClassId }) };
   });
 
   app.post("/teachers/me/students/:crmStudentId/homework/:crmClassId/resolve", {

@@ -14,6 +14,7 @@ import type {
   TeacherGroupsResponse,
   TeacherStudentsResponse,
 } from "@/types/teacher-students";
+import type { TeacherStudentWorkspace } from "@/types/teacher-student-workspace";
 
 export const teacherStudentsApi = {
   list: () => apiRequest<TeacherStudentsResponse>("/teachers/me/students"),
@@ -90,6 +91,10 @@ export const teacherStudentsApi = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  workspace: (crmStudentId: string, crmClassId?: string | null) =>
+    apiRequest<TeacherStudentWorkspace>(
+      `/teachers/me/students/${encodeURIComponent(crmStudentId)}/workspace${crmClassId ? `?crmClassId=${encodeURIComponent(crmClassId)}` : ""}`,
+    ),
   learningTopic: (topicId: string) =>
     apiRequest<LearningTopicDetail>(`/teachers/me/learning-topics/${encodeURIComponent(topicId)}`),
   updateLearningTopicProgress: (

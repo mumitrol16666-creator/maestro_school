@@ -537,14 +537,14 @@ function StudentCard({ student, homework }: { student: TeacherStudent; homework:
       ) : null}
 
       <div className="mt-5 flex flex-wrap gap-2 border-t border-stone-200 pt-5">
-        {student.crmStudentId && <Link href={`/admin/my-students/student/${encodeURIComponent(student.crmStudentId)}/tasks`} className="inline-flex min-h-11 items-center gap-2 rounded-full bg-ink px-4 py-2 text-xs font-bold text-white"><ClipboardList size={14} />Задания</Link>}
+        {student.crmStudentId && <Link href={`/admin/my-students/student/${encodeURIComponent(student.crmStudentId)}`} className="inline-flex min-h-11 items-center gap-2 rounded-full bg-ink px-4 py-2 text-xs font-bold text-white"><ClipboardList size={14} />Карточка ученика</Link>}
         {student.crmStudentId ? (
           <Link
             href={`/admin/my-students/student/${encodeURIComponent(student.crmStudentId)}/plan`}
             className="inline-flex items-center gap-2 rounded-full bg-amber-50 px-4 py-2 text-xs font-bold text-amber-900 transition hover:bg-amber-100"
           >
             <GraduationCap size={14} />
-            Открыть план
+            Редактор сектора
           </Link>
         ) : null}
         {student.appUserId ? (
@@ -751,7 +751,7 @@ function GroupCard({ group, homework }: { group: TeacherGroup; homework: Homewor
                       Мой ученик
                     </span>
                   ) : null}
-                  <Link href={`/admin/my-students/student/${encodeURIComponent(student.crmStudentId)}/tasks`} className="inline-flex min-h-11 items-center rounded-lg px-2 text-xs font-bold text-amber-900">Задания →</Link>
+                  <Link href={`/admin/my-students/student/${encodeURIComponent(student.crmStudentId)}?tab=tasks`} className="inline-flex min-h-11 items-center rounded-lg px-2 text-xs font-bold text-amber-900">Карточка →</Link>
                 </div>
               ))}
             </div>
