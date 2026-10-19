@@ -1,3 +1,4 @@
+import type { PublicSectorExam } from "@/types/sector-exam";
 import type { LessonStatus } from "@/types";
 import type { HomeworkTestQuestion, HomeworkType } from "@/types/homework";
 import type { StudentOfflineSummary } from "@/types/school-offline";
@@ -238,7 +239,8 @@ export interface StudentHomeMonthlyPlan {
   sequence?: number;
   status?: "active" | "closed";
   closedAt?: string | null;
-  preparedTest?: { id: string; title: string; passedAt: string | null } | null;
+  /** Plan 1.10: the sector exam held at the school, once it has left the admin's draft. */
+  exam?: PublicSectorExam | null;
   direction?: {
     id: string;
     crmDirectionId: string | null;
@@ -275,6 +277,8 @@ export interface StudentHomeMonthlyPlan {
 export interface StudentMonthlyPlansResponse {
   month: string;
   plans: StudentHomeMonthlyPlan[];
+  /** Parent only: sectors an exam closed during the last month, for the result. */
+  recentExams?: StudentHomeMonthlyPlan[];
   aggregateProgress: {
     completed: number;
     total: number;

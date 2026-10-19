@@ -60,7 +60,6 @@ export default function SectorTemplatesAdminPage() {
   const [crmDirectionId, setCrmDirectionId] = useState("");
   const directions = useApiResource(() => cmsApi.directions("", 1, 100), []);
   const templates = useApiResource(() => cmsApi.sectorTemplates(crmDirectionId), [crmDirectionId]);
-  const tests = useApiResource(() => cmsApi.preparedTests().catch(() => []), []);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -94,7 +93,8 @@ export default function SectorTemplatesAdminPage() {
       number: Number(draft.number),
       title: draft.title.trim(),
       summary: draft.summary.trim(),
-      preparedTestId: draft.preparedTestId || null,
+      // Plan 1.10: a step carries no test; its sector closes with an exam at the school.
+      preparedTestId: null,
       topics: draft.topics
         .filter((topic) => topic.title.trim())
         .map((topic) => ({ line: topic.line, title: topic.title.trim(), masteryCriteria: topic.masteryCriteria.trim() })),
@@ -144,7 +144,6 @@ export default function SectorTemplatesAdminPage() {
         <TemplateForm
           draft={draft}
           directions={directionList.map((item) => ({ id: item.crmDirectionId ?? "", title: item.title }))}
-          tests={tests.data ?? []}
           saving={busy === "save"}
           onChange={setDraft}
           onCancel={() => setDraft(null)}
@@ -175,7 +174,6 @@ export default function SectorTemplatesAdminPage() {
                 {template.summary ? <p className="mt-1 text-xs text-stone-500">{template.summary}</p> : null}
                 <p className="mt-2 text-xs text-stone-600">
                   {template.topics.length} тем
-                  {template.preparedTest ? ` · тест «${template.preparedTest.title}»${template.preparedTest.known ? "" : " (не найден)"}` : " · без теста"}
                 </p>
                 <ul className="mt-2 flex flex-wrap gap-1.5">
                   {template.topics.map((topic) => (
@@ -214,7 +212,6 @@ export default function SectorTemplatesAdminPage() {
 function TemplateForm({
   draft,
   directions,
-  tests,
   saving,
   onChange,
   onCancel,
@@ -222,7 +219,6 @@ function TemplateForm({
 }: {
   draft: Draft;
   directions: Array<{ id: string; title: string }>;
-  tests: Array<{ id: string; title: string }>;
   saving: boolean;
   onChange: (draft: Draft) => void;
   onCancel: () => void;
@@ -261,13 +257,6 @@ function TemplateForm({
           <select value={draft.crmDirectionId} onChange={(event) => set("crmDirectionId", event.target.value)} className={`${inputClass} mt-1 normal-case tracking-normal`}>
             <option value="">Для всех направлений</option>
             {directions.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
-          </select>
-        </label>
-        <label className="text-[10px] font-black uppercase tracking-wider text-stone-500">
-          Тест ступени
-          <select value={draft.preparedTestId} onChange={(event) => set("preparedTestId", event.target.value)} className={`${inputClass} mt-1 normal-case tracking-normal`}>
-            <option value="">Без теста</option>
-            {tests.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
           </select>
         </label>
       </div>

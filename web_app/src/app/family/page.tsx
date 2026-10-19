@@ -21,6 +21,7 @@ import { useApiResource } from "@/hooks/use-api-resource";
 import { familyApi } from "@/lib/family-api";
 import type { StudentHomeMonthlyPlan } from "@/types/api";
 import type { FamilyChild, FamilyNewsPost, FamilySchoolSummary } from "@/types/family";
+import { SectorExamSummary } from "@/components/sector-exam-summary";
 
 const relationshipLabels: Record<string, string> = {
   mother: "Мама",
@@ -225,6 +226,19 @@ function MonthlyPlans({ studentId }: { studentId: string }) {
           </div>
         </>
       )}
+      {resource.data?.recentExams?.length ? (
+        <div className="mt-6 grid gap-3" data-testid="family-recent-exams">
+          {resource.data.recentExams.map((plan) => (
+            <article key={plan.id} className="rounded-2xl border border-stone-200 bg-white p-4">
+              <p className="text-[10px] font-black uppercase tracking-[0.14em] text-stone-400">
+                {plan.sequence ? `Сектор ${plan.sequence}` : "Сектор"} закрыт{plan.direction?.title ? ` · ${plan.direction.title}` : ""}
+              </p>
+              <h3 className="font-display mt-2 text-xl leading-tight">{plan.goal}</h3>
+              <SectorExamSummary exam={plan.exam} />
+            </article>
+          ))}
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -267,6 +281,7 @@ function FamilyPlanDetails({ plan }: { plan: StudentHomeMonthlyPlan }) {
           );
         })}
       </div>
+      <SectorExamSummary exam={plan.exam} />
     </article>
   );
 }

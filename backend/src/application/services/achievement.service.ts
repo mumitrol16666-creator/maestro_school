@@ -55,7 +55,7 @@ async function getAchievementMetrics(studentId: string): Promise<AchievementMetr
     }),
     // Monthly plans were archived on 19.10; a completed sector counts instead.
     prisma.learningPlan.count({
-      where: { crmStudentId: user.crmStudentId, status: "closed", closeReason: "completed" },
+      where: { crmStudentId: user.crmStudentId, status: "closed", closeReason: { in: ["completed", "exam"] } },
     }),
   ]);
   const completedMonthlyPlans = plans;

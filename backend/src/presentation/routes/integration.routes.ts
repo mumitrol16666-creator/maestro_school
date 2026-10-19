@@ -12,6 +12,10 @@ import {
 import { findUserWithRoleById, updateUserPassword } from "../../application/repositories/auth.repository.js";
 import { BadRequestError, ConflictError, UnauthorizedError } from "../../domain/errors.js";
 import { requireIntegrationAuth } from "../guards/integration.guards.js";
+import {
+  listSectorExamsAwaitingSchedule,
+  scheduleSectorExamFromCrm,
+} from "../../application/services/sector-exam.service.js";
 import { exchangeSsoBridgeToken } from "../../application/services/sso-bridge.service.js";
 import { provisionTeacherFromCrm } from "../../application/services/teacher-provision.service.js";
 import { provisionStudentFromCrm } from "../../application/services/student-provision.service.js";
@@ -172,6 +176,24 @@ function integrationProfile(
 
 export async function integrationRoutes(app: FastifyInstance) {
   app.addHook("preHandler", requireIntegrationAuth);
+
+  // Plan 1.10/1.11: CRM reads the exams waiting for a lesson and reports the booking back.
+  app.get("/sector-exams/awaiting-schedule", async (request) => {
+    requireCrmIntegration(request);
+    return { success: true, data: { exams: await listSectorExamsAwaitingSchedule() } };
+  });
+
+  app.post("/sector-exams/:examId/schedule", async (request) => {
+    requireCrmIntegration(request);
+    const { examId } = z.object({ examId: z.string().uuid() }).parse(request.params);
+    const body = z.object({
+      crmClassId: z.string().trim().min(1).max(128),
+      lessonAt: z.coerce.date(),
+      crmTeacherId: z.string().trim().min(1).max(128).nullable().optional(),
+    }).parse(request.body);
+    const exam = await scheduleSectorExamFromCrm(examId, body);
+    return { success: true, data: { examId: exam.id, status: exam.status, scheduledAt: exam.scheduledAt } };
+  });
 
   app.get("/users/:id/session-state", async (request) => {
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);

@@ -92,6 +92,7 @@ export const adminWorkspaceSections: AdminWorkspaceSection[] = [
       "/admin/homework-review",
       "/admin/directions",
       "/admin/sector-templates",
+      "/admin/sector-exams",
       "/admin/courses",
       "/admin/tests",
       "/admin/media",
@@ -124,9 +125,16 @@ export const adminWorkspaceSections: AdminWorkspaceSection[] = [
       {
         href: "/admin/sector-templates",
         label: "Ступени программы",
-        description: "Готовые секторы по направлениям: темы, критерии и тест, которые преподаватель открывает ученику.",
+        description: "Готовые секторы по направлениям: темы и критерии, которые преподаватель открывает ученику.",
         group: "Программы и контент",
         icon: Layers3,
+      },
+      {
+        href: "/admin/sector-exams",
+        label: "Экзамены секторов",
+        description: "Список проверки для экзамена в школе и отправка в CRM на назначение.",
+        group: "Рабочий день",
+        icon: GraduationCap,
       },
       {
         href: "/admin/courses",

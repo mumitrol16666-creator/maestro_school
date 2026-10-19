@@ -6,7 +6,7 @@ const MINUTE = 60_000;
 const SCHOOL_TIME_ZONE_OFFSET = "+05:00";
 
 export type StudentHomeHero = {
-  kind: "task" | "school_lesson" | "online_lesson" | "plan" | "sector_test" | "course";
+  kind: "task" | "school_lesson" | "online_lesson" | "plan" | "sector_exam" | "course";
   id: string;
   eyebrow: string;
   title: string;
@@ -172,21 +172,20 @@ export function selectStudentHomeHero({
     .sort((left, right) => timeValue(left.timing.dueAt) - timeValue(right.timing.dueAt))[0];
   if (exactDue) return taskHero(exactDue);
 
-  const readyTest = plans.find((plan) => (
-    plan.preparedTest && !plan.preparedTest.passedAt && plan.progress.total > 0
-    && plan.progress.completed === plan.progress.total
-  ));
-  if (readyTest?.preparedTest) {
+  // Plan 1.10: a booked sector exam is the next thing to prepare for.
+  const booked = plans.find((plan) => plan.exam?.status === "scheduled" && plan.exam.scheduledAt);
+  if (booked?.exam) {
+    const when = new Date(booked.exam.scheduledAt!);
     return {
-      kind: "sector_test",
-      id: readyTest.preparedTest.id,
-      eyebrow: `Сейчас · тест сектора${readyTest.sequence ? ` ${readyTest.sequence}` : ""}`,
-      title: readyTest.preparedTest.title,
-      subtitle: readyTest.goal,
-      detail: "Все темы закрыты. Сдай тест — сектор закроется и принесёт 250 баллов.",
-      badge: { label: "+20 XP", tone: "success" },
-      href: `/tests/${encodeURIComponent(readyTest.preparedTest.id)}`,
-      actionLabel: "Сдать тест",
+      kind: "sector_exam",
+      id: booked.exam.id,
+      eyebrow: `Скоро · экзамен сектора${booked.sequence ? ` ${booked.sequence}` : ""}`,
+      title: `Экзамен ${when.toLocaleString("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Aqtobe" })}`,
+      subtitle: booked.goal,
+      detail: "Экзамен проходит в школе. Посмотри, что проверит преподаватель.",
+      badge: null,
+      href: "/monthly-plan",
+      actionLabel: "Что проверят",
     };
   }
 

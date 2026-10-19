@@ -13,7 +13,7 @@ import {
 import { useEffect, useState } from "react";
 import { LearningTopicProgressEditor } from "@/components/learning-topic-progress-editor";
 import { LearningHomeworkAssignmentComposer } from "@/components/learning-homework-assignment-composer";
-import { SectorHistoryList, SectorTemplatePicker, SectorTestField } from "@/components/sector-editor-parts";
+import { SectorHistoryList, SectorTemplatePicker } from "@/components/sector-editor-parts";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { ApiError } from "@/lib/api-client";
 import { learningHomeworkApi } from "@/lib/learning-homework-api";
@@ -249,13 +249,6 @@ function GroupMonthlyPlanEditorContent({
               </select>
             </label>
           ) : null}
-          {mode.mode === "v2" ? (
-            <SectorTestField
-              value={draft.preparedTestId === undefined ? draft.preparedTest?.id ?? null : draft.preparedTestId}
-              passedAt={draft.preparedTest?.passedAt ?? null}
-              onChange={(preparedTestId) => setField("preparedTestId", preparedTestId as never)}
-            />
-          ) : null}
         </div>
       </div>
 
@@ -283,7 +276,6 @@ function GroupMonthlyPlanEditorContent({
               goal: template.title,
               expectedResult: template.summary,
               templateStepIdInput: template.id,
-              preparedTestId: template.preparedTest?.id ?? null,
               items: template.topics.map((topic) => ({ id: crypto.randomUUID(), title: topic.title, status: "planned" as const, masteryCriteria: topic.masteryCriteria })),
             }));
             setSaved(false);

@@ -423,6 +423,7 @@ enum UserNotificationType {
   parent_absence_alert
   parent_homework_reviewed
   parent_balance_alert
+  sector_exam_updated
 }
 
 model User {
@@ -913,6 +914,7 @@ model LearningPlan {
   templateStep SectorTemplate?          @relation(fields: [templateStepId], references: [id], onDelete: SetNull)
   versions     LearningPlanVersion[]
   proposals    LearningSectorProposal[]
+  exams        SectorExam[]
 
   @@index([directionId, month])
   @@index([crmStudentId, month])
@@ -921,6 +923,102 @@ model LearningPlan {
   @@index([crmGroupId, directionId, status])
   @@index([createdById])
   @@map("learning_plans")
+}
+
+/// Plan 1.10: the practical exam that closes an individual sector. Held live at the school;
+/// the platform keeps the checklist, the schedule from CRM and the teacher's marks.
+model SectorExam {
+  id                  String             @id @default(uuid()) @db.Uuid
+  planId              String             @map("plan_id") @db.Uuid
+  crmStudentId        String             @map("crm_student_id") @db.VarChar(128)
+  directionId         String             @map("direction_id") @db.Uuid
+  status              SectorExamStatus   @default(draft)
+  attempt             Int                @default(1)
+  previousExamId      String?            @unique @map("previous_exam_id") @db.Uuid
+  createdById         String?            @map("created_by_id") @db.Uuid
+  sentForScheduleAt   DateTime?          @map("sent_for_schedule_at") @db.Timestamptz(6)
+  crmClassId          String?            @map("crm_class_id") @db.VarChar(128)
+  crmTeacherId        String?            @map("crm_teacher_id") @db.VarChar(128)
+  scheduledAt         DateTime?          @map("scheduled_at") @db.Timestamptz(6)
+  startedAt           DateTime?          @map("started_at") @db.Timestamptz(6)
+  startedById         String?            @map("started_by_id") @db.Uuid
+  finishedAt          DateTime?          @map("finished_at") @db.Timestamptz(6)
+  finishedById        String?            @map("finished_by_id") @db.Uuid
+  outcome             SectorExamOutcome?
+  decision            String?            @db.VarChar(32)
+  comment             String?            @db.Text
+  certificateNumber   String?            @unique @map("certificate_number") @db.VarChar(32)
+  certificateIssuedAt DateTime?          @map("certificate_issued_at") @db.Timestamptz(6)
+  cancelledAt         DateTime?          @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason        String?            @map("cancel_reason") @db.VarChar(255)
+  createdAt           DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  plan         LearningPlan       @relation(fields: [planId], references: [id], onDelete: Restrict)
+  direction    Direction          @relation(fields: [directionId], references: [id], onDelete: Restrict)
+  previousExam SectorExam?        @relation("SectorExamRetake", fields: [previousExamId], references: [id], onDelete: SetNull)
+  retake       SectorExam?        @relation("SectorExamRetake")
+  items        SectorExamItem[]
+  results      SectorExamResult[]
+
+  @@index([planId, status])
+  @@index([status, sentForScheduleAt])
+  @@index([crmStudentId, status])
+  @@index([crmClassId])
+  @@map("sector_exams")
+}
+
+model SectorExamItem {
+  id       String             @id @default(uuid()) @db.Uuid
+  examId   String             @map("exam_id") @db.Uuid
+  kind     SectorExamItemKind
+  topicId  String?            @map("topic_id") @db.Uuid
+  title    String             @db.VarChar(255)
+  criteria String             @default("") @db.Text
+  position Int
+
+  exam    SectorExam         @relation(fields: [examId], references: [id], onDelete: Cascade)
+  results SectorExamResult[]
+
+  @@index([examId, position])
+  @@map("sector_exam_items")
+}
+
+model SectorExamResult {
+  id           String   @id @default(uuid()) @db.Uuid
+  examId       String   @map("exam_id") @db.Uuid
+  itemId       String   @map("item_id") @db.Uuid
+  crmStudentId String   @map("crm_student_id") @db.VarChar(128)
+  done         Boolean
+  markedById   String?  @map("marked_by_id") @db.Uuid
+  markedAt     DateTime @default(now()) @map("marked_at") @db.Timestamptz(6)
+
+  exam SectorExam     @relation(fields: [examId], references: [id], onDelete: Cascade)
+  item SectorExamItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([itemId, crmStudentId])
+  @@index([examId])
+  @@map("sector_exam_results")
+}
+
+enum SectorExamStatus {
+  draft
+  awaiting_schedule
+  scheduled
+  in_progress
+  completed
+  cancelled
+}
+
+enum SectorExamOutcome {
+  passed
+  partial
+  failed
+}
+
+enum SectorExamItemKind {
+  topic
+  custom
 }
 
 enum LearningSectorStatus {
@@ -1207,6 +1305,7 @@ model Direction {
   learningPlans        LearningPlan[]
   sectorTemplates      SectorTemplate[]
   sectorProposals      LearningSectorProposal[]
+  sectorExams          SectorExam[]
   leagueXpEvents       LeagueXpEvent[]
 
   @@index([slug])

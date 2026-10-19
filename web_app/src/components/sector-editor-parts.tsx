@@ -42,36 +42,6 @@ export function SectorHistoryList({ history }: { history: SectorHistoryEntry[] }
   );
 }
 
-/** The sector's test: one of the prepared tests or none. */
-export function SectorTestField({
-  value,
-  passedAt,
-  onChange,
-}: {
-  value: string | null;
-  passedAt: string | null;
-  onChange: (preparedTestId: string | null) => void;
-}) {
-  const tests = useApiResource(() => teacherStudentsApi.preparedTests(), []);
-  return (
-    <label className="block min-w-0 text-[10px] font-black uppercase tracking-wider text-stone-500">
-      Тест сектора
-      <select
-        value={value ?? ""}
-        disabled={Boolean(passedAt)}
-        onChange={(event) => onChange(event.target.value || null)}
-        className="mt-1 h-11 w-full rounded-xl border border-amber-200 bg-white px-3 text-sm font-bold normal-case tracking-normal text-ink shadow-xs outline-none disabled:bg-stone-50"
-      >
-        <option value="">Без теста</option>
-        {(tests.data ?? []).map((test) => (
-          <option key={test.id} value={test.id}>{test.title}</option>
-        ))}
-      </select>
-      {passedAt ? <span className="mt-1 block text-[10px] font-bold normal-case tracking-normal text-emerald-700">Сдан {shortDate(passedAt)}</span> : null}
-    </label>
-  );
-}
-
 /** Opening a new sector: pick a published step of the programme or start empty. */
 export function SectorTemplatePicker({
   crmDirectionId,
@@ -107,7 +77,6 @@ export function SectorTemplatePicker({
             <p className="text-sm font-bold text-ink">{template.number}. {template.title}</p>
             <p className="mt-1 text-[11px] text-stone-500">
               {template.topics.length} тем
-              {template.preparedTest ? ` · тест «${template.preparedTest.title}»` : ""}
             </p>
             <p className="mt-1 truncate text-[11px] text-stone-400">
               {template.topics.slice(0, 4).map((topic) => `${lineLabels[topic.line]}: ${topic.title}`).join(" · ")}

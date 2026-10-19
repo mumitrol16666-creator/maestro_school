@@ -22,7 +22,6 @@ import {
 } from "../../domain/product-economy-v2.js";
 import { awardSystemPoints } from "./points.service.js";
 import { aqtobeMonthKey } from "../../lib/aqtobe-month.js";
-import { listPreparedTestTemplates } from "../../domain/prepared-tests.js";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -48,7 +47,7 @@ export type LearningPlanV2Input = {
   expectedVersion?: number;
   /** Only when a new sector is opened: the step template it was started from. */
   templateStepId?: string | null;
-  /** Test the sector requires before it can close; `undefined` leaves it unchanged. */
+  /** Ignored since plan 1.10: a sector closes with an exam, not a test. Old clients may still send it. */
   preparedTestId?: string | null;
 };
 
@@ -191,10 +190,6 @@ function versionDto(plan: PlanWithVersions, versionNumber = plan.currentVersionN
     ? plan.versions.find((item) => item.version === plan.publishedVersionNumber)
     : null;
 
-  const preparedTest = plan.preparedTestId
-    ? listPreparedTestTemplates().find((item) => item.id === plan.preparedTestId) ?? null
-    : null;
-
   return {
     id: plan.id,
     model: "learning_topics_v2" as const,
@@ -204,13 +199,6 @@ function versionDto(plan: PlanWithVersions, versionNumber = plan.currentVersionN
     closedAt: plan.closedAt,
     closeReason: plan.closeReason,
     templateStepId: plan.templateStepId,
-    preparedTest: plan.preparedTestId
-      ? {
-          id: plan.preparedTestId,
-          title: preparedTest?.title ?? plan.preparedTestId,
-          passedAt: plan.testPassedAt,
-        }
-      : null,
     direction: {
       id: plan.direction.id,
       crmDirectionId: plan.direction.crmDirectionId,
@@ -354,11 +342,11 @@ async function savePlan(
           "MONTHLY_PLAN_STALE_DRAFT",
         );
       }
-      let template: { id: string; preparedTestId: string | null } | null = null;
+      let template: { id: string } | null = null;
       if (input.templateStepId) {
         template = await tx.sectorTemplate.findFirst({
           where: { id: input.templateStepId, isPublished: true },
-          select: { id: true, preparedTestId: true },
+          select: { id: true },
         });
         if (!template) throw new BadRequestError("Ступень программы не найдена", "SECTOR_TEMPLATE_NOT_FOUND");
       }
@@ -370,18 +358,11 @@ async function savePlan(
           sequence: await nextSectorSequence(tx, scope),
           status: "active",
           templateStepId: template?.id ?? null,
-          preparedTestId: input.preparedTestId !== undefined ? input.preparedTestId : template?.preparedTestId ?? null,
           createdById: teacherUserId,
           ...ownerWhere(scope.owner),
         },
       });
     } else {
-      if (input.preparedTestId !== undefined && input.preparedTestId !== plan.preparedTestId) {
-        await tx.learningPlan.update({
-          where: { id: plan.id },
-          data: { preparedTestId: input.preparedTestId, testPassedAt: null },
-        });
-      }
       assertExpectedLearningPlanVersion(plan.currentVersionNumber, input.expectedVersion);
       if (plan.lockedAt) {
         throw new ConflictError(
@@ -736,6 +717,11 @@ export async function closeStudentSectorEarlyV2(
   if (closed.count === 0) {
     throw new ConflictError("Сектор уже закрыт. Обновите страницу.", "SECTOR_ALREADY_CLOSED");
   }
+  // An exam prepared for this sector has nothing left to close.
+  await prisma.sectorExam.updateMany({
+    where: { planId: plan.id, status: { in: ["draft", "awaiting_schedule", "scheduled", "in_progress"] } },
+    data: { status: "cancelled", cancelledAt: now, cancelReason: "Сектор закрыт досрочно" },
+  });
 
   const studentUser = await prisma.user.findFirst({
     where: { crmStudentId, deletedAt: null, isActive: true, role: { slug: "student" } },
@@ -836,6 +822,7 @@ export async function listPublishedLearningPlansV2(
     include: planInclude,
     orderBy: [{ status: "asc" }, { sequence: "desc" }, { updatedAt: "desc" }],
   });
+  const examByPlan = await publicSectorExams(plans.map((plan) => plan.id));
 
   return plans.flatMap((plan) => {
     if (!plan.publishedVersionNumber) return [];
@@ -848,7 +835,7 @@ export async function listPublishedLearningPlansV2(
       sequence: plan.sequence,
       status: plan.status,
       closedAt: plan.closedAt,
-      preparedTest: dto.preparedTest,
+      exam: examByPlan.get(plan.id) ?? null,
       direction: dto.direction,
       teacher: dto.teacher,
       goal: dto.goal,
@@ -1148,8 +1135,9 @@ async function closeSectorIfComplete(
   if (!publishedVersion) return false;
   const activeTopics = publishedVersion.topics.filter((link) => link.state === LearningPlanTopicState.active);
   if (!activeTopics.length || activeTopics.some((link) => link.topic.progressPercent !== 100)) return false;
-  // Group sectors are not gated by a test: each member takes tests on their own.
-  if (plan.preparedTestId && plan.crmStudentId && !plan.testPassedAt) return false;
+  // Plan 1.10: an individual sector waits for its exam; the teacher closes it after the exam.
+  // Group sectors keep closing on their own until group exams arrive (plan 1.13).
+  if (plan.crmStudentId) return false;
 
   const completionSourceKey = `learning-plan-completion:${plan.id}`;
   if (plan.completionRewardSourceKey?.includes("blocked-before-cutover")) return false;
@@ -1423,27 +1411,93 @@ export function sameLearningTopicProgressRequest(
     && existing.toPercent === requested.toPercent;
 }
 
-/**
- * A passed prepared test unlocks the student's sectors that require it. Called
- * from the test attempt route; closing happens only when the topics are done too.
- */
-export async function markSectorTestPassed(studentUserId: string, preparedTestId: string, passedAt = new Date()) {
-  const student = await prisma.user.findUnique({
-    where: { id: studentUserId },
-    select: { id: true, crmStudentId: true },
+
+/** What the student and parent see of a sector's exam: the latest one that left the draft. */
+async function publicSectorExams(planIds: string[]) {
+  if (!planIds.length) return new Map<string, ReturnType<typeof publicSectorExamDto>>();
+  const exams = await prisma.sectorExam.findMany({
+    where: { planId: { in: planIds }, status: { notIn: ["draft", "cancelled"] } },
+    include: { items: { orderBy: { position: "asc" } }, results: true },
+    orderBy: [{ attempt: "desc" }, { createdAt: "desc" }],
   });
-  if (!student?.crmStudentId) return [];
-  const sectors = await prisma.learningPlan.findMany({
-    where: { crmStudentId: student.crmStudentId, crmGroupId: null, status: "active", preparedTestId },
-    include: planInclude,
-  });
-  const closed: string[] = [];
-  for (const sector of sectors) {
-    if (!sector.testPassedAt) {
-      await prisma.learningPlan.update({ where: { id: sector.id }, data: { testPassedAt: passedAt } });
-    }
-    const refreshed = await prisma.learningPlan.findUniqueOrThrow({ where: { id: sector.id }, include: planInclude });
-    if (await closeSectorIfComplete(refreshed, [{ id: student.id }], passedAt)) closed.push(sector.id);
+  const byPlan = new Map<string, ReturnType<typeof publicSectorExamDto>>();
+  for (const exam of exams) {
+    if (!byPlan.has(exam.planId)) byPlan.set(exam.planId, publicSectorExamDto(exam));
   }
-  return closed;
+  return byPlan;
+}
+
+export function publicSectorExamDto(exam: {
+  id: string;
+  status: string;
+  attempt: number;
+  scheduledAt: Date | null;
+  finishedAt: Date | null;
+  outcome: string | null;
+  certificateNumber: string | null;
+  certificateIssuedAt: Date | null;
+  items: Array<{ id: string; title: string; criteria: string }>;
+  results: Array<{ itemId: string; done: boolean }>;
+}) {
+  const completed = exam.status === "completed";
+  const doneByItem = new Map(exam.results.map((result) => [result.itemId, result.done]));
+  return {
+    id: exam.id,
+    status: exam.status as "awaiting_schedule" | "scheduled" | "in_progress" | "completed",
+    attempt: exam.attempt,
+    scheduledAt: exam.scheduledAt,
+    finishedAt: exam.finishedAt,
+    outcome: completed ? exam.outcome as "passed" | "partial" | "failed" | null : null,
+    certificate: exam.certificateNumber
+      ? { number: exam.certificateNumber, issuedAt: exam.certificateIssuedAt }
+      : null,
+    // Marks show once the exam is over, not while the teacher is still going through the list.
+    items: exam.items.map((item) => ({
+      id: item.id,
+      title: item.title,
+      criteria: item.criteria,
+      done: completed ? doneByItem.get(item.id) ?? null : null,
+    })),
+  };
+}
+
+/**
+ * Plan 1.10: the teacher closes an individual sector after its exam, whatever the outcome.
+ * Pays the 250 Points of a closed sector with the same key as every other close, so a
+ * sector is never paid twice. Returns false when the sector was already closed.
+ */
+export async function closeStudentSectorByExam(planId: string, input: { now?: Date } = {}) {
+  const now = input.now ?? new Date();
+  const plan = await prisma.learningPlan.findUnique({ where: { id: planId } });
+  if (!plan?.crmStudentId) return { closed: false, awardedPoints: 0 };
+  const completionSourceKey = `learning-plan-completion:${plan.id}`;
+  const closed = await prisma.learningPlan.updateMany({
+    where: { id: plan.id, status: "active" },
+    data: {
+      status: "closed",
+      closedAt: now,
+      closeReason: "exam",
+      completedAt: plan.completedAt ?? now,
+      lockedAt: plan.lockedAt ?? now,
+      completionRewardSourceKey: plan.completionRewardSourceKey ?? completionSourceKey,
+    },
+  });
+  if (closed.count === 0) return { closed: false, awardedPoints: 0 };
+  const studentUser = await prisma.user.findFirst({
+    where: { crmStudentId: plan.crmStudentId, deletedAt: null, isActive: true, role: { slug: "student" } },
+    select: { id: true },
+  });
+  let awardedPoints = 0;
+  // Like the early close, an exam close happens live after the economy cutover: no legacy gate.
+  if (studentUser && !plan.completionRewardSourceKey) {
+    const award = await awardSystemPoints({
+      studentId: studentUser.id,
+      amount: NON_EMPTY_PLAN_COMPLETION_POINTS,
+      reason: `Закрыт сектор ${plan.sequence}`,
+      sourceKey: `${completionSourceKey}:${studentUser.id}`,
+      eventAt: now,
+    });
+    awardedPoints = award.awarded ? NON_EMPTY_PLAN_COMPLETION_POINTS : 0;
+  }
+  return { closed: true, awardedPoints, sequence: plan.sequence, studentUserId: studentUser?.id ?? null };
 }

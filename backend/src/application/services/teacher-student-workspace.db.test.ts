@@ -119,7 +119,7 @@ integrationTest("the assigned teacher gets the whole student card in one read", 
   assert.equal(card.sectors.length, 1);
   assert.equal(card.sectors[0]?.sequence, 2);
   assert.equal(card.sectors[0]?.items[0]?.progressPercent, 40);
-  assert.equal(card.sectors[0]?.preparedTest?.id, "theory-1-1");
+  assert.equal(card.sectors[0]?.exam, null, "no exam prepared yet; a sector carries no test since plan 1.10");
 
   assert.equal(card.proposals.length, 1);
   assert.equal(card.proposals[0]?.text, "«Кукла колдуна»");

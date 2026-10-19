@@ -109,7 +109,7 @@ export type TeacherStudentWorkspace = {
       completed: number;
       total: number;
       percent: number;
-      testPassedAt: string | null;
+      exam: { status: string; scheduledAt: string | null; outcome: string | null } | null;
     }>;
   } | null;
 };

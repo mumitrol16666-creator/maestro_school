@@ -38,6 +38,7 @@ export type UserNotificationType =
   | "parent_absence_alert"
   | "parent_homework_reviewed"
   | "parent_balance_alert"
+  | "sector_exam_updated"
   | "staff_task_assigned";
 
 export interface UserNotification {

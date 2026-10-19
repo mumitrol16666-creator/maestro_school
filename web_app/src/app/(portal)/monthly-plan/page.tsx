@@ -22,6 +22,7 @@ import { useApiResource } from "@/hooks/use-api-resource";
 import { api, ApiError } from "@/lib/api-client";
 import type { StudentHomeMonthlyPlan } from "@/types/api";
 import type { SectorProposal } from "@/types/teacher-students";
+import { SectorExamSummary } from "@/components/sector-exam-summary";
 
 const itemStatus = {
   planned: { label: "Запланировано", icon: Circle, className: "text-stone-500" },
@@ -136,16 +137,19 @@ export default function SectorPage() {
           ) : (
             <div className="mt-4 grid gap-3">
               {closed.map((plan) => (
-                <article key={plan.id} className="flex items-center gap-4 rounded-lg border border-stone-200 bg-white px-4 py-3">
-                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-emerald-50 text-sm font-black text-emerald-800">{plan.sequence}</span>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-bold text-ink">{plan.goal}</p>
-                    <p className="text-xs text-stone-500">
-                      {plan.direction?.title ? `${plan.direction.title} · ` : ""}{plan.progress.completed} из {plan.progress.total} тем
-                      {plan.closedAt ? ` · закрыт ${formatDate(plan.closedAt)}` : ""}
-                    </p>
+                <article key={plan.id} className="min-w-0 rounded-lg border border-stone-200 bg-white px-4 py-3">
+                  <div className="flex items-center gap-4">
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-emerald-50 text-sm font-black text-emerald-800">{plan.sequence}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-bold text-ink">{plan.goal}</p>
+                      <p className="text-xs text-stone-500">
+                        {plan.direction?.title ? `${plan.direction.title} · ` : ""}{plan.progress.completed} из {plan.progress.total} тем
+                        {plan.closedAt ? ` · закрыт ${formatDate(plan.closedAt)}` : ""}
+                      </p>
+                    </div>
+                    <CheckCircle2 size={18} className="text-emerald-600" />
                   </div>
-                  <CheckCircle2 size={18} className="text-emerald-600" />
+                  <SectorExamSummary exam={plan.exam} />
                 </article>
               ))}
             </div>
@@ -163,7 +167,6 @@ export default function SectorPage() {
 }
 
 function SectorDetails({ plan }: { plan: StudentHomeMonthlyPlan }) {
-  const test = plan.preparedTest;
   return (
     <article className="rounded-lg border border-stone-200 bg-white p-5 shadow-soft sm:p-7">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -191,20 +194,7 @@ function SectorDetails({ plan }: { plan: StudentHomeMonthlyPlan }) {
         </p>
       </div>
 
-      {test ? (
-        <div className={`mt-5 flex flex-wrap items-center justify-between gap-3 rounded-lg px-4 py-3 ${test.passedAt ? "bg-emerald-50" : "bg-amber-50"}`}>
-          <div className="flex items-center gap-2 text-sm font-semibold text-stone-800">
-            <ClipboardCheck size={16} className={test.passedAt ? "text-emerald-700" : "text-amber-800"} />
-            Тест сектора: {test.title}
-            {test.passedAt ? <span className="text-xs text-emerald-700">· сдан {formatDate(test.passedAt)}</span> : null}
-          </div>
-          {!test.passedAt ? (
-            <Link href={`/tests/${encodeURIComponent(test.id)}`} className="inline-flex min-h-10 items-center gap-1.5 rounded-lg bg-ink px-4 text-sm font-bold text-white">
-              Сдать тест · +20 XP
-            </Link>
-          ) : null}
-        </div>
-      ) : null}
+      <SectorExamSummary exam={plan.exam} />
 
       {plan.expectedResult ? (
         <div className="mt-5 rounded-lg bg-stone-50 px-4 py-3">

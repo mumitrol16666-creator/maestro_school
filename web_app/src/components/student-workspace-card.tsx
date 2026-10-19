@@ -23,6 +23,7 @@ import { useState } from "react";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
 import { ProgressBar } from "@/components/progress-bar";
 import { SectorProposalsPanel } from "@/components/sector-editor-parts";
+import { SectorExamPanel } from "@/components/sector-exam-panel";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { ApiError } from "@/lib/api-client";
 import { learningHomeworkApi } from "@/lib/learning-homework-api";
@@ -244,6 +245,7 @@ function NowTab({
 
       {!limited ? (
         <>
+          <SectorExamPanel crmStudentId={crmStudentId} onChanged={onChanged} />
           {proposalHint ? <p className="rounded-xl bg-sky-50 px-4 py-2 text-xs font-semibold text-sky-900">{proposalHint}</p> : null}
           <SectorProposalsPanel
             crmStudentId={crmStudentId}
@@ -275,7 +277,6 @@ function NowTab({
 }
 
 function SectorBlock({ sector, onChanged }: { sector: StudentHomeMonthlyPlan; onChanged: () => void }) {
-  const test = sector.preparedTest;
   return (
     <section className="min-w-0 rounded-2xl border border-amber-200 bg-amber-50/40 p-4 sm:p-5" data-testid="workspace-sector">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -291,11 +292,6 @@ function SectorBlock({ sector, onChanged }: { sector: StudentHomeMonthlyPlan; on
         </div>
       </div>
       <div className="mt-3"><ProgressBar value={sector.progress.percent} /></div>
-      {test ? (
-        <p className={`mt-3 inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold ${test.passedAt ? "bg-emerald-50 text-emerald-800" : "bg-white text-amber-900"}`}>
-          <ClipboardCheck size={14} /> Тест «{test.title}»: {test.passedAt ? `сдан ${formatDate(test.passedAt)}` : "не сдан"}
-        </p>
-      ) : null}
       <ul className="mt-4 divide-y divide-amber-200/60 rounded-xl border border-amber-200/60 bg-white">
         {sector.items.filter((item) => !item.state || item.state === "active").map((item) => (
           <TopicRow key={item.id} item={item} editable={sector.scope === "student" || sector.scope === "group"} onChanged={onChanged} />
@@ -660,7 +656,7 @@ function DynamicsTab({ data }: { data: TeacherStudentWorkspace }) {
             {dynamics.sectors.map((sector) => (
               <li key={sector.id} className="flex items-center justify-between gap-3 py-2 text-sm">
                 <span className="font-semibold text-ink">Сектор {sector.sequence}{sector.scope === "group" ? " (группа)" : ""} · {sector.direction}</span>
-                <span className="text-xs text-stone-500">{sector.completed}/{sector.total} тем · {sector.percent}%{sector.testPassedAt ? " · тест сдан" : ""}</span>
+                <span className="text-xs text-stone-500">{sector.completed}/{sector.total} тем · {sector.percent}%{sector.exam?.status === "completed" ? " · экзамен проведён" : sector.exam?.scheduledAt ? " · экзамен назначен" : ""}</span>
               </li>
             ))}
           </ul>

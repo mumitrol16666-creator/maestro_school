@@ -393,14 +393,16 @@ async function lessonPlans(scope: LessonScope) {
   return [...selectedByDirection.values()].flatMap((plan) => {
     const version = plan.versions.find((item) => item.version === plan.publishedVersionNumber);
     if (!version) return [];
-    const completionRewardTopicId = planCompletionRewardTopicId({
+    // Plan 1.10: an individual sector pays its 250 when the teacher closes it after the exam,
+    // so its last topic no longer promises the sector reward.
+    const completionRewardTopicId = plan.crmStudentId ? null : planCompletionRewardTopicId({
       completionRewardSourceKey: plan.completionRewardSourceKey,
       topics: version.topics,
     });
     return [{
       planId: plan.id,
       month: plan.month,
-      planCompletionRewardPoints: learningPlanCompletionRewardPoints(
+      planCompletionRewardPoints: plan.crmStudentId ? 0 : learningPlanCompletionRewardPoints(
         plan.completionRewardSourceKey,
       ),
       direction: {

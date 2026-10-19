@@ -432,7 +432,7 @@ export async function getTeacherStudentWorkspace(
         completed: sector.progress.completed,
         total: sector.progress.total,
         percent: sector.progress.percent,
-        testPassedAt: sector.preparedTest?.passedAt ?? null,
+        exam: sector.exam ? { status: sector.exam.status, scheduledAt: sector.exam.scheduledAt, outcome: sector.exam.outcome } : null,
       })),
     },
   };

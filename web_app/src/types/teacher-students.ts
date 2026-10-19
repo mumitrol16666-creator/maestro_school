@@ -165,11 +165,8 @@ export type StudentMonthlyPlan = {
   closedAt?: string | null;
   closeReason?: string | null;
   templateStepId?: string | null;
-  preparedTest?: SectorPreparedTest | null;
   /** Write-only: template to open the next sector from. */
   templateStepIdInput?: string | null;
-  /** Write-only: `undefined` keeps the sector test, `null` removes it. */
-  preparedTestId?: string | null;
   direction?: {
     id: string;
     crmDirectionId: string | null;

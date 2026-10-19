@@ -424,12 +424,24 @@ export async function getParentChildMonthlyPlans(
   if (!visibility.showPlanProgress) {
     throw new ForbiddenError("Учебный план скрыт настройками семейного доступа");
   }
-  const plans = await getPublishedMonthlyPlansForStudent(studentUserId, month, {
+  const allPlans = await getPublishedMonthlyPlansForStudent(studentUserId, month, {
     requireLinkedProfile: true,
+    includeClosed: true,
+  });
+  const plans = allPlans.filter((plan) => (plan as { status?: string }).status !== "closed");
+  // Plan 1.10: a sector closed by an exam stays visible for a month so the parent sees the result.
+  const since = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const recentExams = allPlans.filter((plan) => {
+    const exam = (plan as { exam?: { status: string; finishedAt: Date | string | null } | null }).exam;
+    return (plan as { status?: string }).status === "closed"
+      && exam?.status === "completed"
+      && exam.finishedAt !== null
+      && new Date(exam.finishedAt).getTime() >= since;
   });
   return {
     month,
     plans,
+    recentExams,
     aggregateProgress: calculateAggregateMonthlyPlanProgress(plans),
   };
 }

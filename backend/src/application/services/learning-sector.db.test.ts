@@ -7,7 +7,7 @@ process.env.CRM_API_URL ??= "http://127.0.0.1:9";
 
 const integrationTest = process.env.RUN_DB_INTEGRATION_TESTS === "1" ? test : test.skip;
 
-integrationTest("sectors follow each other: save opens 1, closing needs the test, the next save opens 2", async t => {
+integrationTest("sectors follow each other: save opens 1, the exam closes it, the next save opens 2", async t => {
   const { prisma } = await import("../../infrastructure/database/prisma.js");
   const suffix = randomUUID().slice(0, 8);
   const crmStudentId = `crm-sector-${suffix}`;
@@ -30,6 +30,8 @@ integrationTest("sectors follow each other: save opens 1, closing needs the test
     },
   });
   t.after(async () => {
+    await prisma.sectorExam.deleteMany({ where: { directionId: direction.id } });
+    await prisma.pointsTransaction.deleteMany({ where: { studentId: student.id } });
     await prisma.learningPlan.deleteMany({ where: { directionId: direction.id } });
     await prisma.learningTopic.deleteMany({ where: { directionId: direction.id } });
     await prisma.userNotification.deleteMany({ where: { userId: { in: [student.id, teacher.id] } } });
@@ -47,8 +49,9 @@ integrationTest("sectors follow each other: save opens 1, closing needs the test
 
   const {
     saveStudentLearningPlanV2, publishStudentLearningPlanV2, getStudentLearningPlanV2,
-    listPublishedLearningPlansV2, markSectorTestPassed,
+    listPublishedLearningPlansV2,
   } = await import("./learning-plan-v2.service.js");
+  const exams = await import("./sector-exam.service.js");
 
   const first = await saveStudentLearningPlanV2(teacher.id, crmStudentId, crmDirectionId, {
     goal: "Первые аккорды", expectedResult: "", skills: "", checkpoint: "", note: "",
@@ -57,31 +60,34 @@ integrationTest("sectors follow each other: save opens 1, closing needs the test
   });
   assert.equal(first.sequence, 1);
   assert.equal(first.status, "active");
-  assert.equal(first.preparedTest?.id, "theory-1-1");
-  assert.equal(first.preparedTest?.passedAt, null);
+  assert.equal("preparedTest" in first, false, "an old client's test is ignored: sectors close with an exam");
 
   const published = await publishStudentLearningPlanV2(teacher.id, crmStudentId, crmDirectionId, first.version);
   assert.equal(published.publication.isPublished, true);
   const topicId = published.items[0]!.id;
 
-  // Topics done but the test not yet passed: the sector stays open.
+  // Every topic at 100 % no longer closes an individual sector: it waits for the exam.
   await prisma.learningTopic.update({ where: { id: topicId }, data: { progressPercent: 100 } });
-  assert.deepEqual(await markSectorTestPassed(student.id, "theory-9-9"), [], "another test does not touch it");
   let current = await getStudentLearningPlanV2(teacher.id, crmStudentId, crmDirectionId);
   assert.equal(current.plan?.status, "active");
 
-  const closed = await markSectorTestPassed(student.id, "theory-1-1");
-  assert.deepEqual(closed, [first.id]);
+  const template = await exams.sectorExamTemplate(first.id);
+  const exam = await exams.createSectorExam(teacher.id, { planId: first.id, items: template.items, send: true });
+  await exams.scheduleSectorExamFromCrm(exam.id, { crmClassId: `exam-class-${suffix}`, lessonAt: new Date() });
+  await exams.startSectorExam(teacher.id, exam.id);
+  await exams.markSectorExamItem(teacher.id, exam.id, exam.items[0]!.id, true);
+  await exams.finishSectorExam(teacher.id, exam.id, { decision: "close_sector" });
   current = await getStudentLearningPlanV2(teacher.id, crmStudentId, crmDirectionId);
   assert.equal(current.plan, null, "no open sector after closing");
   assert.equal(current.history[0]?.sequence, 1);
-  assert.equal(current.history[0]?.closeReason, "completed");
+  assert.equal(current.history[0]?.closeReason, "exam");
   assert.equal(current.nextSequence, 2);
 
   const visible = await listPublishedLearningPlansV2(crmStudentId, []);
   assert.equal(visible.length, 0, "a closed sector is not the student's current sector");
   const withHistory = await listPublishedLearningPlansV2(crmStudentId, [], { includeClosed: true });
   assert.deepEqual(withHistory.map((row) => [row.sequence, row.status]), [[1, "closed"]]);
+  assert.equal(withHistory[0]?.exam?.outcome, "passed");
 
   // The next save opens sector 2.
   const second = await saveStudentLearningPlanV2(teacher.id, crmStudentId, crmDirectionId, {
@@ -91,7 +97,6 @@ integrationTest("sectors follow each other: save opens 1, closing needs the test
   });
   assert.equal(second.sequence, 2);
   assert.equal(second.status, "active");
-  assert.equal(second.preparedTest, null);
   const activeCount = await prisma.learningPlan.count({ where: { crmStudentId, directionId: direction.id, status: "active" } });
   assert.equal(activeCount, 1);
 });

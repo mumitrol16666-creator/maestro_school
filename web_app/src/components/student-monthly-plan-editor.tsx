@@ -8,7 +8,7 @@ import { teacherStudentsApi } from "@/lib/teacher-students-api";
 import { normalizeCrmDirectionTitle } from "@/lib/crm-direction-title";
 import { LearningTopicProgressEditor } from "@/components/learning-topic-progress-editor";
 import { LearningHomeworkAssignmentComposer } from "@/components/learning-homework-assignment-composer";
-import { SectorHistoryList, SectorProposalsPanel, SectorTemplatePicker, SectorTestField } from "@/components/sector-editor-parts";
+import { SectorHistoryList, SectorProposalsPanel, SectorTemplatePicker } from "@/components/sector-editor-parts";
 import { ProgressBar } from "@/components/progress-bar";
 import { SectorEarlyClose } from "@/components/sector-early-close";
 import { learningHomeworkApi } from "@/lib/learning-homework-api";
@@ -49,7 +49,6 @@ function planFromTemplate(template: SectorTemplate): StudentMonthlyPlan {
     checkpoint: "",
     note: "",
     templateStepIdInput: template.id,
-    preparedTestId: template.preparedTest?.id ?? null,
     items: template.topics.map((topic) => ({
       id: crypto.randomUUID(),
       title: topic.title,
@@ -287,11 +286,6 @@ function StudentMonthlyPlanEditorContent({
                 ))}
               </select>
             </label>
-            <SectorTestField
-              value={draft.preparedTestId === undefined ? draft.preparedTest?.id ?? null : draft.preparedTestId}
-              passedAt={draft.preparedTest?.passedAt ?? null}
-              onChange={(preparedTestId) => setField("preparedTestId", preparedTestId)}
-            />
           </div>
         ) : null}
       </div>
@@ -344,7 +338,7 @@ function StudentMonthlyPlanEditorContent({
             <p className="text-xs font-black uppercase tracking-wider text-stone-800">
               2. Темы и произведения по порядку
             </p>
-            <p className="text-[11px] text-stone-500">Сектор закрывается, когда каждая тема на 100 %{draft.preparedTest ? " и сдан тест сектора" : ""}</p>
+            <p className="text-[11px] text-stone-500">Когда каждая тема на 100 %, сектор закрывается экзаменом в школе</p>
           </div>
           <button
             type="button"
@@ -472,12 +466,6 @@ function StudentMonthlyPlanEditorContent({
           <strong className="text-amber-900">{progressPercent}%</strong>
         </div>
         <div className="mt-3"><ProgressBar value={progressPercent} /></div>
-        {draft.preparedTest ? (
-          <p className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-stone-600">
-            <ClipboardCheck size={14} className={draft.preparedTest.passedAt ? "text-emerald-600" : "text-amber-700"} />
-            Тест сектора «{draft.preparedTest.title}»: {draft.preparedTest.passedAt ? "сдан" : "ещё не сдан"}
-          </p>
-        ) : null}
       </div>
 
       {/* 3. Teacher-only checkpoint */}

@@ -334,7 +334,10 @@ async function main() {
   await prisma.learningHomeworkAssignment.deleteMany({
     where: { id: { in: disposableAssignments.map((assignment) => assignment.id) } },
   });
-  // Sectors: one active per owner, so the seed clears every sector of these owners.
+  // Sectors: one active per owner, so the seed clears every sector of these owners (exams first).
+  await prisma.sectorExam.deleteMany({
+    where: { plan: { directionId: guitar.id, OR: [{ crmStudentId: CRM.student1 }, { crmGroupId: CRM.group1 }] } },
+  });
   await prisma.learningPlan.deleteMany({
     where: {
       directionId: guitar.id,

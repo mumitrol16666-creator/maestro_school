@@ -40,6 +40,8 @@ async function createFixture(t: Parameters<Parameters<typeof test>[1]>[0]) {
     await prisma.leagueXpEvent.deleteMany({ where: { studentId: student.id } });
     await prisma.pointsTransaction.deleteMany({ where: { studentId: student.id } });
     await prisma.offlineLessonStudentCheck.deleteMany({ where: { crmStudentId } });
+    await prisma.sectorExam.deleteMany({ where: { directionId: direction.id } });
+    await prisma.pointsTransaction.deleteMany({ where: { studentId: student.id } });
     await prisma.learningPlan.deleteMany({ where: { directionId: direction.id } });
     await prisma.learningTopic.deleteMany({ where: { directionId: direction.id } });
     await prisma.userNotification.deleteMany({ where: { userId: { in: [student.id, teacher.id, otherTeacher.id] } } });

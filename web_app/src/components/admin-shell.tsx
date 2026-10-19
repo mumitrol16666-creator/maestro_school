@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, BookMarked, ChevronRight, ClipboardCheck, ClipboardPenLine, FolderKanban, Gift, Layers3, LayoutDashboard, LibraryBig, ListChecks, LogOut, Megaphone, Menu, MessagesSquare, Presentation, Settings, Trophy, UserCog, UsersRound, X } from "lucide-react";
+import { ArrowRight, BookMarked, ChevronRight, ClipboardCheck, ClipboardPenLine, FolderKanban, Gift, GraduationCap, Layers3, LayoutDashboard, LibraryBig, ListChecks, LogOut, Megaphone, Menu, MessagesSquare, Presentation, Settings, Trophy, UserCog, UsersRound, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -23,6 +23,7 @@ const cmsNavigation = [
   { href: "/admin", label: "Обзор", icon: LayoutDashboard },
   { href: "/admin/directions", label: "Направления", icon: FolderKanban },
   { href: "/admin/sector-templates", label: "Ступени программы", icon: Layers3 },
+  { href: "/admin/sector-exams", label: "Экзамены секторов", icon: GraduationCap },
   { href: "/admin/courses", label: "Курсы", icon: BookMarked },
   { href: "/admin/tests", label: "Тесты", icon: ClipboardCheck },
   { href: "/admin/league", label: "Недельная лига", icon: Trophy },
@@ -81,7 +82,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       : [cmsNavigation[0], ...journalNavigation, ...cmsNavigation.slice(1), ...accessNavigation, ...teachingNavigation]
     : user?.role === "teacher"
       ? teacherNavigation
-      : lessonNavigation;
+      : [...lessonNavigation, { href: "/admin/sector-exams", label: "Экзамены секторов", icon: GraduationCap }];
   const sidebarTitle = isContentAdmin ? "Управление школой" : "Кабинет преподавателя";
   const displayName = (user ? formatFio(user) : "")
     || user?.login
