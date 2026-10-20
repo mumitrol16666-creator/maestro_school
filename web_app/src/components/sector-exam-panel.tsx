@@ -95,7 +95,7 @@ function ExamCard({ row, onChanged }: { row: TeacherSectorExamRow; onChanged: ()
       ) : null}
 
       {shown?.status === "in_progress" ? (
-        <InProgress exam={shown} busy={busy} run={run} />
+        <InProgress exam={shown} busy={busy} run={run} decisions={individualDecisions} />
       ) : null}
 
       {shown?.status === "completed" ? <PastResult exam={shown} /> : null}
@@ -104,10 +104,23 @@ function ExamCard({ row, onChanged }: { row: TeacherSectorExamRow; onChanged: ()
   );
 }
 
-function InProgress({ exam, busy, run }: {
+export type ExamDecisionButton = {
+  decision: "close_sector" | "pass" | "retake";
+  label: string;
+  primary?: boolean;
+};
+
+const individualDecisions: ExamDecisionButton[] = [
+  { decision: "close_sector", label: "Завершить сектор", primary: true },
+  { decision: "retake", label: "Пересдача" },
+];
+
+/** The checklist being marked. The buttons below it are the decisions this exam allows. */
+export function InProgress({ exam, busy, run, decisions }: {
   exam: SectorExam;
   busy: string | null;
   run: (key: string, action: () => Promise<SectorExam | void>, reload?: boolean) => Promise<void>;
+  decisions: ExamDecisionButton[];
 }) {
   const [comment, setComment] = useState("");
   const marked = exam.items.filter((item) => item.done !== null).length;
@@ -154,29 +167,27 @@ function InProgress({ exam, busy, run }: {
         onChange={(event) => setComment(event.target.value)}
       />
       <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          className={`${control} bg-ink text-white`}
-          disabled={!allMarked || busy !== null}
-          onClick={() => void run("close", async () => (await sectorExamsApi.finish(exam.id, "close_sector", comment)).exam, true)}
-        >
-          {busy === "close" ? <LoaderCircle size={14} className="animate-spin" /> : <Award size={14} />} Завершить сектор
-        </button>
-        <button
-          type="button"
-          className={`${control} border border-stone-200 bg-white text-stone-700`}
-          disabled={!allMarked || busy !== null}
-          onClick={() => void run("retake", async () => (await sectorExamsApi.finish(exam.id, "retake", comment)).exam, true)}
-        >
-          {busy === "retake" ? <LoaderCircle size={14} className="animate-spin" /> : <RotateCcw size={14} />} Пересдача
-        </button>
+        {decisions.map((button) => (
+          <button
+            key={button.decision}
+            type="button"
+            className={`${control} ${button.primary ? "bg-ink text-white" : "border border-stone-200 bg-white text-stone-700"}`}
+            disabled={!allMarked || busy !== null}
+            onClick={() => void run(button.decision, async () => (await sectorExamsApi.finish(exam.id, button.decision, comment)).exam, true)}
+          >
+            {busy === button.decision
+              ? <LoaderCircle size={14} className="animate-spin" />
+              : button.decision === "retake" ? <RotateCcw size={14} /> : <Award size={14} />}
+            {" "}{button.label}
+          </button>
+        ))}
       </div>
       {!allMarked ? <p className="text-[11px] text-stone-500">Завершить можно, когда каждый пункт отмечен.</p> : null}
     </div>
   );
 }
 
-function PastResult({ exam }: { exam: SectorExam }) {
+export function PastResult({ exam }: { exam: SectorExam }) {
   const done = exam.items.filter((item) => item.done).length;
   return (
     <div className="mt-3 grid gap-2 rounded-xl border border-stone-200 bg-white p-3">

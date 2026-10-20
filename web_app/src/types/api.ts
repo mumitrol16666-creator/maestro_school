@@ -240,6 +240,8 @@ export interface StudentHomeMonthlyPlan {
   closedAt?: string | null;
   /** Plan 1.10: the sector exam held at the school, once it has left the admin's draft. */
   exam?: PublicSectorExam | null;
+  /** Plan 1.13: this student's pass of a group sector, by exam or counted by the teacher. */
+  memberPass?: { method: "exam" | "manual"; passedAt: string; points: number } | null;
   direction?: {
     id: string;
     crmDirectionId: string | null;

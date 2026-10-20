@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   ExternalLink,
   FilePlus2,
+  History,
   LoaderCircle,
   Plus,
   Save,
@@ -226,9 +227,18 @@ function GroupMonthlyPlanEditorContent({
           </p>
           <h3 className="mt-1 font-display text-xl">
             {mode.mode === "v2"
-              ? (resource.data?.plan ? `Сектор ${draft.sequence ?? resource.data.plan.sequence ?? 1}` : `Открываем сектор ${resource.data?.nextSequence ?? 1}`)
+              ? (resource.data?.plan ? `Сектор группы ${draft.sequence ?? resource.data.plan.sequence ?? 1}` : `Открываем сектор группы ${resource.data?.nextSequence ?? 1}`)
               : "План и материалы"}
           </h3>
+          {mode.mode === "v2" && resource.data?.history?.length ? (
+            <button
+              type="button"
+              onClick={() => setShowHistory((value) => !value)}
+              className="mt-1 inline-flex min-h-8 items-center gap-1 text-xs font-bold text-stone-500 hover:text-ink"
+            >
+              <History size={13} /> Закрыто секторов: {resource.data.history.length}
+            </button>
+          ) : null}
         </div>
         <div className={`mt-4 grid min-w-0 gap-3 ${
           mode.mode === "v2"

@@ -822,7 +822,16 @@ export async function listPublishedLearningPlansV2(
     include: planInclude,
     orderBy: [{ status: "asc" }, { sequence: "desc" }, { updatedAt: "desc" }],
   });
-  const examByPlan = await publicSectorExams(plans.map((plan) => plan.id));
+  const examByPlan = await publicSectorExams(plans.map((plan) => plan.id), crmStudentId);
+  // Plan 1.13: whether this student passed each group sector (by exam or counted by the teacher).
+  const groupPlanIds = plans.filter((plan) => plan.crmGroupId).map((plan) => plan.id);
+  const passes = groupPlanIds.length
+    ? await prisma.sectorMemberPass.findMany({
+        where: { planId: { in: groupPlanIds }, crmStudentId },
+        select: { planId: true, method: true, passedAt: true, pointsAwarded: true },
+      })
+    : [];
+  const passByPlan = new Map(passes.map((pass) => [pass.planId, pass]));
 
   return plans.flatMap((plan) => {
     if (!plan.publishedVersionNumber) return [];
@@ -836,6 +845,14 @@ export async function listPublishedLearningPlansV2(
       status: plan.status,
       closedAt: plan.closedAt,
       exam: examByPlan.get(plan.id) ?? null,
+      memberPass: plan.crmGroupId
+        ? (() => {
+            const pass = passByPlan.get(plan.id);
+            return pass
+              ? { method: pass.method as "exam" | "manual", passedAt: pass.passedAt, points: pass.pointsAwarded }
+              : null;
+          })()
+        : null,
       direction: dto.direction,
       teacher: dto.teacher,
       goal: dto.goal,
@@ -1102,78 +1119,8 @@ async function applyTopicMasteryRewards(params: {
     });
   }
 
-  const plans = await prisma.learningPlan.findMany({
-    where: {
-      directionId: params.topic.directionId,
-      crmStudentId: params.topic.crmStudentId,
-      crmGroupId: params.topic.crmGroupId,
-      publishedVersionNumber: { not: null },
-      versions: { some: { topics: { some: { topicId: params.topic.id } } } },
-    },
-    include: planInclude,
-  });
-  for (const plan of plans) {
-    const publishedVersion = plan.versions.find((version) => version.version === plan.publishedVersionNumber);
-    if (!publishedVersion?.topics.some((link) => link.topicId === params.topic.id)) continue;
-    await closeSectorIfComplete(plan, students, params.occurredAt);
-  }
-}
-
-type SectorForClosing = Prisma.LearningPlanGetPayload<{ include: typeof planInclude }>;
-
-/**
- * A sector closes once every active topic of its published version is at 100 %
- * and its test (if any) is passed. Closing is what pays the 250 Points and
- * what lets the teacher open the next sector.
- */
-async function closeSectorIfComplete(
-  plan: SectorForClosing,
-  students: Array<{ id: string }>,
-  occurredAt: Date,
-) {
-  const publishedVersion = plan.versions.find((version) => version.version === plan.publishedVersionNumber);
-  if (!publishedVersion) return false;
-  const activeTopics = publishedVersion.topics.filter((link) => link.state === LearningPlanTopicState.active);
-  if (!activeTopics.length || activeTopics.some((link) => link.topic.progressPercent !== 100)) return false;
-  // Plan 1.10: an individual sector waits for its exam; the teacher closes it after the exam.
-  // Group sectors keep closing on their own until group exams arrive (plan 1.13).
-  if (plan.crmStudentId) return false;
-
-  const completionSourceKey = `learning-plan-completion:${plan.id}`;
-  if (plan.completionRewardSourceKey?.includes("blocked-before-cutover")) return false;
-  if (plan.completionRewardSourceKey && plan.completionRewardSourceKey !== completionSourceKey) return false;
-
-  if (!plan.completionRewardSourceKey) {
-    await prisma.learningPlan.updateMany({
-      where: { id: plan.id, completionRewardSourceKey: null },
-      data: {
-        completionRewardSourceKey: completionSourceKey,
-        completedAt: occurredAt,
-        lockedAt: occurredAt,
-        status: "closed",
-        closedAt: occurredAt,
-        closeReason: "completed",
-      },
-    });
-  } else if (plan.status !== "closed") {
-    await prisma.learningPlan.update({
-      where: { id: plan.id },
-      data: { status: "closed", closedAt: plan.completedAt ?? occurredAt, closeReason: "completed" },
-    });
-  }
-
-  if (rewardEconomyV2AppliesToEvent(occurredAt)) {
-    for (const student of students) {
-      await awardSystemPoints({
-        studentId: student.id,
-        amount: NON_EMPTY_PLAN_COMPLETION_POINTS,
-        reason: `Закрыт сектор ${plan.sequence}`,
-        sourceKey: `${completionSourceKey}:${student.id}`,
-        eventAt: occurredAt,
-      });
-    }
-  }
-  return true;
+  // Plan 1.13: no sector closes on a lesson any more. An individual sector closes after its
+  // exam (1.10); a group's sector closes by its teacher, and its 250 goes to members who passed.
 }
 
 export type LearningTopicProgressFromLessonV2Input = {
@@ -1412,11 +1359,14 @@ export function sameLearningTopicProgressRequest(
 }
 
 
-/** What the student and parent see of a sector's exam: the latest one that left the draft. */
-async function publicSectorExams(planIds: string[]) {
+/**
+ * What the student and parent see of a sector's exam: the latest one that left the draft. In a
+ * group sector every member sits their own exam, so only this student's exam is shown.
+ */
+async function publicSectorExams(planIds: string[], crmStudentId: string) {
   if (!planIds.length) return new Map<string, ReturnType<typeof publicSectorExamDto>>();
   const exams = await prisma.sectorExam.findMany({
-    where: { planId: { in: planIds }, status: { notIn: ["draft", "cancelled"] } },
+    where: { planId: { in: planIds }, crmStudentId, status: { notIn: ["draft", "cancelled"] } },
     include: { items: { orderBy: { position: "asc" } }, results: true },
     orderBy: [{ attempt: "desc" }, { createdAt: "desc" }],
   });

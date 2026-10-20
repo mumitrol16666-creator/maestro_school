@@ -21,7 +21,8 @@ import { useApiResource } from "@/hooks/use-api-resource";
 import { familyApi } from "@/lib/family-api";
 import type { StudentHomeMonthlyPlan } from "@/types/api";
 import type { FamilyChild, FamilyNewsPost, FamilySchoolSummary } from "@/types/family";
-import { SectorExamSummary } from "@/components/sector-exam-summary";
+import { GroupSectorPassBadge, SectorExamSummary } from "@/components/sector-exam-summary";
+import { sectorTitle } from "@/lib/sector-label";
 
 const relationshipLabels: Record<string, string> = {
   mother: "Мама",
@@ -196,7 +197,7 @@ function MonthlyPlans({ studentId }: { studentId: string }) {
   const resource = useApiResource(() => familyApi.childMonthlyPlans(studentId), [studentId]);
   const plans = resource.data?.plans ?? [];
   const aggregate = resource.data?.aggregateProgress;
-  const title = plans.length === 1 && plans[0]?.sequence ? `Сектор ${plans[0].sequence}` : "Текущий сектор";
+  const title = plans.length === 1 ? sectorTitle(plans[0]!) : "Текущие сектора";
 
   return (
     <section className="border-t-2 border-stone-300 bg-paper p-5 shadow-soft sm:p-7">
@@ -231,9 +232,10 @@ function MonthlyPlans({ studentId }: { studentId: string }) {
           {resource.data.recentExams.map((plan) => (
             <article key={plan.id} className="rounded-2xl border border-stone-200 bg-white p-4">
               <p className="text-[10px] font-black uppercase tracking-[0.14em] text-stone-400">
-                {plan.sequence ? `Сектор ${plan.sequence}` : "Сектор"} закрыт{plan.direction?.title ? ` · ${plan.direction.title}` : ""}
+                {sectorTitle(plan)} закрыт{plan.direction?.title ? ` · ${plan.direction.title}` : ""}
               </p>
               <h3 className="font-display mt-2 text-xl leading-tight">{plan.goal}</h3>
+              <GroupSectorPassBadge pass={plan.memberPass} />
               <SectorExamSummary exam={plan.exam} />
             </article>
           ))}
@@ -247,7 +249,7 @@ function FamilyPlanDetails({ plan }: { plan: StudentHomeMonthlyPlan }) {
   return (
     <article className="rounded-2xl border border-stone-200 bg-white p-4">
       <p className="text-[10px] font-black uppercase tracking-[0.14em] text-stone-400">
-        {plan.sequence ? `Сектор ${plan.sequence}` : "Сектор"}{plan.scope === "group" ? " · группа" : ""}
+        {sectorTitle(plan)}
         {plan.direction?.title ? ` · ${plan.direction.title}` : ""}
       </p>
       <h3 className="font-display mt-2 text-2xl leading-tight">{plan.goal}</h3>
@@ -281,6 +283,7 @@ function FamilyPlanDetails({ plan }: { plan: StudentHomeMonthlyPlan }) {
           );
         })}
       </div>
+      <GroupSectorPassBadge pass={plan.memberPass} />
       <SectorExamSummary exam={plan.exam} />
     </article>
   );

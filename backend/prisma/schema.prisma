@@ -971,6 +971,7 @@ model LearningPlan {
   versions     LearningPlanVersion[]
   proposals    LearningSectorProposal[]
   exams        SectorExam[]
+  memberPasses SectorMemberPass[]
 
   @@index([directionId, month])
   @@index([crmStudentId, month])
@@ -987,6 +988,8 @@ model SectorExam {
   id                  String             @id @default(uuid()) @db.Uuid
   planId              String             @map("plan_id") @db.Uuid
   crmStudentId        String             @map("crm_student_id") @db.VarChar(128)
+  /// Plan 1.13: set for a group sector's exam; each member of the group sits their own exam.
+  crmGroupId          String?            @map("crm_group_id") @db.VarChar(128)
   directionId         String             @map("direction_id") @db.Uuid
   status              SectorExamStatus   @default(draft)
   attempt             Int                @default(1)
@@ -1016,12 +1019,34 @@ model SectorExam {
   retake       SectorExam?        @relation("SectorExamRetake")
   items        SectorExamItem[]
   results      SectorExamResult[]
+  memberPass   SectorMemberPass?
 
   @@index([planId, status])
   @@index([status, sentForScheduleAt])
   @@index([crmStudentId, status])
+  @@index([crmGroupId, status])
   @@index([crmClassId])
   @@map("sector_exams")
+}
+
+/// Plan 1.13: a member of a group who passed the group's sector, by exam or counted by the
+/// teacher without one. Each pass pays that member the sector's 250 Points once.
+model SectorMemberPass {
+  id            String   @id @default(uuid()) @db.Uuid
+  planId        String   @map("plan_id") @db.Uuid
+  crmStudentId  String   @map("crm_student_id") @db.VarChar(128)
+  method        String   @db.VarChar(16)
+  examId        String?  @unique @map("exam_id") @db.Uuid
+  passedById    String?  @map("passed_by_id") @db.Uuid
+  passedAt      DateTime @default(now()) @map("passed_at") @db.Timestamptz(6)
+  pointsAwarded Int      @default(0) @map("points_awarded")
+
+  plan LearningPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  exam SectorExam?  @relation(fields: [examId], references: [id], onDelete: SetNull)
+
+  @@unique([planId, crmStudentId])
+  @@index([crmStudentId])
+  @@map("sector_member_passes")
 }
 
 model SectorExamItem {

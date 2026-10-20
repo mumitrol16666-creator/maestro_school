@@ -22,7 +22,8 @@ import { useApiResource } from "@/hooks/use-api-resource";
 import { api, ApiError } from "@/lib/api-client";
 import type { StudentHomeMonthlyPlan } from "@/types/api";
 import type { SectorProposal } from "@/types/teacher-students";
-import { SectorExamSummary } from "@/components/sector-exam-summary";
+import { GroupSectorPassBadge, SectorExamSummary } from "@/components/sector-exam-summary";
+import { sectorTitle } from "@/lib/sector-label";
 import { sameSiteMediaUrl } from "@/lib/media-url";
 import { materialsApi } from "@/lib/materials-api";
 
@@ -85,7 +86,7 @@ export default function SectorPage() {
           </Link>
           <p className="mt-6 text-xs font-black uppercase tracking-[0.18em] text-gold-ink">Учебный маршрут</p>
           <h1 className="font-display mt-2 text-4xl leading-tight sm:text-5xl">
-            {active.length === 1 && active[0]?.sequence ? `Сектор ${active[0].sequence}` : "Мой сектор"}
+            {active.length === 1 ? sectorTitle(active[0]!, "student") : active.length > 1 ? "Мои сектора" : "Мой сектор"}
           </h1>
         </div>
         <div className="min-w-[220px] max-w-sm flex-1 sm:flex-none">
@@ -148,12 +149,13 @@ export default function SectorPage() {
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-bold text-ink">{plan.goal}</p>
                       <p className="text-xs text-stone-500">
-                        {plan.direction?.title ? `${plan.direction.title} · ` : ""}{plan.progress.completed} из {plan.progress.total} тем
+                        {plan.scope === "group" ? `${sectorTitle(plan, "student")} · ` : ""}{plan.direction?.title ? `${plan.direction.title} · ` : ""}{plan.progress.completed} из {plan.progress.total} тем
                         {plan.closedAt ? ` · закрыт ${formatDate(plan.closedAt)}` : ""}
                       </p>
                     </div>
                     <CheckCircle2 size={18} className="text-emerald-600" />
                   </div>
+                  <GroupSectorPassBadge pass={plan.memberPass} />
                   <SectorExamSummary exam={plan.exam} />
                 </article>
               ))}
@@ -180,7 +182,7 @@ function SectorDetails({ plan }: { plan: StudentHomeMonthlyPlan }) {
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2 text-xs font-black uppercase tracking-[0.12em] text-stone-500">
             {plan.scope === "group" ? <Users size={14} aria-hidden="true" /> : null}
-            <span>{plan.sequence ? `Сектор ${plan.sequence}` : "Сектор"}{plan.scope === "group" ? " · группа" : ""}</span>
+            <span>{sectorTitle(plan, "student")}</span>
             {plan.direction?.title ? <span className="text-amber-800">{plan.direction.title}</span> : null}
           </div>
           <h2 className="font-display mt-2 break-words text-3xl leading-tight text-ink">{plan.goal}</h2>
@@ -201,6 +203,7 @@ function SectorDetails({ plan }: { plan: StudentHomeMonthlyPlan }) {
         </p>
       </div>
 
+      <GroupSectorPassBadge pass={plan.memberPass} />
       <SectorExamSummary exam={plan.exam} />
 
       {plan.expectedResult ? (

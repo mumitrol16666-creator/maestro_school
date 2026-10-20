@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarClock, LoaderCircle, Plus, Send, Trash2, X } from "lucide-react";
+import { CalendarClock, CheckCircle2, LoaderCircle, Plus, Send, Trash2, Users, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { inputClass, primaryButton, secondaryButton } from "@/components/admin-ui";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
@@ -8,7 +8,7 @@ import { PageHeader } from "@/components/page-header";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { ApiError } from "@/lib/api-client";
 import { formatExamDate, sectorExamsApi, sectorExamStatusLabel, sectorExamOutcomeLabel } from "@/lib/sector-exams-api";
-import type { AdminSectorExamRow, SectorExamItemDraft } from "@/types/sector-exam";
+import type { AdminGroupSectorRow, AdminSectorExamRow, SectorExam, SectorExamItemDraft } from "@/types/sector-exam";
 
 type Filter = "ready" | "waiting" | "scheduled" | "all";
 
@@ -80,6 +80,28 @@ export default function SectorExamsPage() {
           title="Здесь пусто"
           description={filter === "ready" ? "Пока ни один ученик не закрыл все темы сектора." : "В этом отборе нет секторов."}
         />
+      ) : null}
+
+      {board.data?.groupSectors.length ? (
+        <section className="grid min-w-0 gap-3" data-testid="group-sector-exam-board">
+          <h2 className="inline-flex items-center gap-2 font-display text-2xl text-ink"><Users size={20} className="text-gold-ink" /> Сектора групп</h2>
+          <p className="text-xs leading-5 text-stone-500">
+            Каждый ученик группы сдаёт свой экзамен; CRM ставит всех выбранных в один урок. 250 баллов получает только сдавший.
+          </p>
+          <ul className="grid min-w-0 grid-cols-1 gap-3">
+            {board.data.groupSectors.map((row) => (
+              <li key={row.planId} className="min-w-0 rounded-2xl border border-stone-200 bg-white p-4" data-testid="group-sector-exam-row">
+                <GroupSectorRow
+                  row={row}
+                  editing={editing === row.planId}
+                  onEdit={() => setEditing(row.planId)}
+                  onClose={() => setEditing(null)}
+                  onChanged={() => { setEditing(null); void board.reload(); }}
+                />
+              </li>
+            ))}
+          </ul>
+        </section>
       ) : null}
 
       <ul className="grid min-w-0 grid-cols-1 gap-3" data-testid="sector-exam-board">
@@ -176,7 +198,12 @@ function SectorRow({ row, editing, onEdit, onClose, onChanged }: {
           ) : null}
         </div>
       ) : (
-        <ExamEditor row={row} onClose={onClose} onSaved={onChanged} />
+        <ExamEditor
+          planId={row.planId}
+          editable={row.exam && (row.exam.status === "draft" || row.exam.status === "awaiting_schedule") ? row.exam : null}
+          onClose={onClose}
+          onSaved={onChanged}
+        />
       )}
       {error ? <p className="text-xs font-bold text-red-700">{error}</p> : null}
     </div>
@@ -185,13 +212,19 @@ function SectorRow({ row, editing, onEdit, onClose, onChanged }: {
 
 type ItemDraft = SectorExamItemDraft & { key: string };
 
-function ExamEditor({ row, onClose, onSaved }: { row: AdminSectorExamRow; onClose: () => void; onSaved: () => void }) {
-  const editable = row.exam && (row.exam.status === "draft" || row.exam.status === "awaiting_schedule") ? row.exam : null;
+function ExamEditor({ planId, editable, onClose, onSaved, create }: {
+  planId: string;
+  editable: SectorExam | null;
+  onClose: () => void;
+  onSaved: () => void;
+  /** A group's exam: one exam per chosen member. Without it, the individual sector's exam. */
+  create?: (items: SectorExamItemDraft[], send: boolean) => Promise<void>;
+}) {
   const template = useApiResource(
     () => editable
-      ? Promise.resolve({ planId: row.planId, items: editable.items.map((item) => ({ kind: item.kind, topicId: item.topicId, title: item.title, criteria: item.criteria })) })
-      : sectorExamsApi.template(row.planId),
-    [row.planId, editable?.id],
+      ? Promise.resolve({ planId, items: editable.items.map((item) => ({ kind: item.kind, topicId: item.topicId, title: item.title, criteria: item.criteria })) })
+      : sectorExamsApi.template(planId),
+    [planId, editable?.id],
   );
   const [items, setItems] = useState<ItemDraft[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -214,8 +247,10 @@ function ExamEditor({ row, onClose, onSaved }: { row: AdminSectorExamRow; onClos
       if (editable) {
         await sectorExamsApi.updateItems(editable.id, payload);
         if (send && editable.status === "draft") await sectorExamsApi.send(editable.id);
+      } else if (create) {
+        await create(payload, send);
       } else {
-        await sectorExamsApi.create(row.planId, payload, send);
+        await sectorExamsApi.create(planId, payload, send);
       }
       onSaved();
     } catch (reason) {
@@ -290,5 +325,122 @@ function ExamEditor({ row, onClose, onSaved }: { row: AdminSectorExamRow; onClos
         <button type="button" className={secondaryButton} disabled={busy} onClick={onClose}>Закрыть</button>
       </div>
     </section>
+  );
+}
+
+/** Plan 1.13: a group's open sector with each member; the admin chooses who sits the exam. */
+function GroupSectorRow({ row, editing, onEdit, onClose, onChanged }: {
+  row: AdminGroupSectorRow;
+  editing: boolean;
+  onEdit: () => void;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const eligible = row.members.filter((member) => !member.pass && (!member.exam || ["completed", "cancelled"].includes(member.exam.status)));
+  const [chosen, setChosen] = useState<string[] | null>(null);
+  const selected = chosen ?? eligible.filter((member) => member.inGroup).map((member) => member.crmStudentId);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+
+  function toggle(crmStudentId: string) {
+    setChosen(selected.includes(crmStudentId) ? selected.filter((id) => id !== crmStudentId) : [...selected, crmStudentId]);
+  }
+
+  async function run(action: () => Promise<unknown>) {
+    setBusy(true);
+    setError(null);
+    try {
+      await action();
+      onChanged();
+    } catch (reason) {
+      setError(reason instanceof ApiError ? reason.message : "Не удалось сохранить");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="grid min-w-0 gap-3">
+      <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-amber-800">
+            Сектор группы {row.sequence} · {row.direction.title}
+          </p>
+          <h3 className="mt-1 break-words text-base font-bold text-ink">{row.groupName ?? "Группа"}</h3>
+          {row.goal ? <p className="mt-0.5 break-words text-xs text-stone-500">{row.goal}</p> : null}
+        </div>
+        <div className="text-right">
+          <strong className={`text-xl ${row.progress.ready ? "text-emerald-700" : "text-ink"}`}>{row.progress.percent}%</strong>
+          <p className="text-[11px] font-semibold text-stone-500">{row.progress.completed} из {row.progress.total} тем</p>
+        </div>
+      </div>
+      {!row.rosterAvailable ? (
+        <p className="text-[11px] text-amber-900">CRM не ответила: показаны только ученики, у которых уже есть экзамен или зачёт.</p>
+      ) : null}
+
+      <ul className="grid min-w-0 grid-cols-1 gap-1.5 sm:grid-cols-2">
+        {row.members.map((member) => {
+          const canChoose = eligible.some((item) => item.crmStudentId === member.crmStudentId);
+          const exam = member.exam;
+          return (
+            <li key={member.crmStudentId} className="flex min-w-0 items-center gap-2 rounded-xl border border-stone-200 px-3 py-2" data-testid="group-sector-exam-member">
+              {canChoose ? (
+                <input
+                  type="checkbox"
+                  aria-label={`Включить в экзамен: ${member.name}`}
+                  className="h-5 w-5 shrink-0 accent-amber-700"
+                  checked={selected.includes(member.crmStudentId)}
+                  onChange={() => toggle(member.crmStudentId)}
+                />
+              ) : member.pass ? <CheckCircle2 size={18} className="shrink-0 text-emerald-600" /> : <span className="h-5 w-5 shrink-0" />}
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-bold text-ink">{member.name}{!member.inGroup ? " · не в группе" : ""}</p>
+                <p className="truncate text-[11px] text-stone-500">
+                  {member.pass
+                    ? member.pass.method === "exam" ? "Сдал экзамен" : "Засчитан без экзамена"
+                    : exam
+                      ? `${exam.attempt > 1 ? `Пересдача ${exam.attempt - 1} · ` : ""}${sectorExamStatusLabel[exam.status]}${exam.scheduledAt && exam.status === "scheduled" ? ` · ${formatExamDate(exam.scheduledAt)}` : ""}`
+                      : "Экзамен не готовился"}
+                </p>
+              </div>
+              {exam && ["draft", "awaiting_schedule", "scheduled"].includes(exam.status) && !member.pass ? (
+                <button
+                  type="button"
+                  aria-label={`Отменить экзамен: ${member.name}`}
+                  className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-stone-500 hover:bg-stone-50"
+                  disabled={busy}
+                  onClick={() => void run(() => sectorExamsApi.cancel(exam.id))}
+                >
+                  <X size={15} />
+                </button>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+
+      {!editing ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" className={primaryButton} disabled={!selected.length} onClick={onEdit}>
+            <Plus size={14} /> Подготовить экзамен группы ({selected.length})
+          </button>
+          {!eligible.length ? <span className="text-[11px] text-stone-500">Все ученики сдали или уже ждут экзамена</span> : null}
+        </div>
+      ) : (
+        <ExamEditor
+          planId={row.planId}
+          editable={null}
+          onClose={onClose}
+          onSaved={onChanged}
+          create={async (items, send) => {
+            const result = await sectorExamsApi.createForGroup(row.planId, selected, items, send);
+            if (result.skipped.length) setNote(`Пропущено: ${result.skipped.length} (уже сдали или ждут экзамена)`);
+          }}
+        />
+      )}
+      {note ? <p className="text-xs font-semibold text-amber-900">{note}</p> : null}
+      {error ? <p className="text-xs font-bold text-red-700">{error}</p> : null}
+    </div>
   );
 }

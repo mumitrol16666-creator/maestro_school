@@ -3,7 +3,6 @@ import { productFeatureConfig, rewardEconomyV2AppliesToEvent } from "../../confi
 import { fetchTeacherGroupsForAccess, fetchTeacherStudentsForAccess } from "./teacher-substitution.service.js";
 import { isOfflineCoordinatorRole } from "../../domain/cms-access.js";
 import { AppError, BadRequestError, ConflictError, ForbiddenError } from "../../domain/errors.js";
-import { NON_EMPTY_PLAN_COMPLETION_POINTS } from "../../domain/product-economy-v2.js";
 import { prisma } from "../../infrastructure/database/prisma.js";
 import {
   fetchClassCard,
@@ -211,28 +210,6 @@ export function missingLearningHomeworkDecisions(
   ));
 }
 
-export function planCompletionRewardTopicId(plan: {
-  completionRewardSourceKey: string | null;
-  topics: Array<{
-    topicId: string;
-    state: LearningPlanTopicState;
-    topic: { progressPercent: number | null; archivedAt: Date | null };
-  }>;
-}) {
-  if (plan.completionRewardSourceKey !== null) return null;
-  const activeTopics = plan.topics.filter((item) => (
-    item.state === LearningPlanTopicState.active
-  ));
-  const incompleteTopics = activeTopics.filter((item) => item.topic.progressPercent !== 100);
-  return incompleteTopics.length === 1 && !incompleteTopics[0].topic.archivedAt
-    ? incompleteTopics[0].topicId
-    : null;
-}
-
-export function learningPlanCompletionRewardPoints(completionRewardSourceKey: string | null) {
-  return completionRewardSourceKey === null ? NON_EMPTY_PLAN_COMPLETION_POINTS : 0;
-}
-
 export function offlineLessonEventAt(lesson: LessonCard) {
   const source = lesson.date ? new Date(lesson.date) : new Date();
   if (Number.isNaN(source.getTime())) return new Date();
@@ -394,18 +371,12 @@ async function lessonPlans(scope: LessonScope) {
   return [...selectedByDirection.values()].flatMap((plan) => {
     const version = plan.versions.find((item) => item.version === plan.publishedVersionNumber);
     if (!version) return [];
-    // Plan 1.10: an individual sector pays its 250 when the teacher closes it after the exam,
-    // so its last topic no longer promises the sector reward.
-    const completionRewardTopicId = plan.crmStudentId ? null : planCompletionRewardTopicId({
-      completionRewardSourceKey: plan.completionRewardSourceKey,
-      topics: version.topics,
-    });
+    // Plans 1.10 and 1.13: no sector closes on a lesson. The teacher closes it after the exam
+    // (a group's 250 goes to members who passed), so no topic promises the sector reward.
     return [{
       planId: plan.id,
       month: plan.month,
-      planCompletionRewardPoints: plan.crmStudentId ? 0 : learningPlanCompletionRewardPoints(
-        plan.completionRewardSourceKey,
-      ),
+      planCompletionRewardPoints: 0,
       direction: {
         id: plan.direction.id,
         crmDirectionId: plan.direction.crmDirectionId,
@@ -422,9 +393,7 @@ async function lessonPlans(scope: LessonScope) {
           masteryCriteria: item.masteryCriteriaSnapshot,
           progressPercent: item.topic.progressPercent ?? 0,
           masteredAt: item.topic.masteredAt,
-          planCompletionRewardPoints: item.topic.id === completionRewardTopicId
-            ? NON_EMPTY_PLAN_COMPLETION_POINTS
-            : 0,
+          planCompletionRewardPoints: 0,
         })),
     }];
   });

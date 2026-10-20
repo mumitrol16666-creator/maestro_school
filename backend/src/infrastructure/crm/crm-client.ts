@@ -184,6 +184,22 @@ export async function fetchTeacherStudents(crmTeacherId: string) {
   }>(`/api/integration/v1/teachers/${encodeURIComponent(crmTeacherId)}/students`);
 }
 
+/** Plan 1.13: groups by id with their active students, for the admin's group sector exams. */
+export async function fetchGroupRosters(crmGroupIds: string[]) {
+  const ids = [...new Set(crmGroupIds.filter(Boolean))];
+  if (!ids.length) return { groups: [] };
+  return crmGet<{
+    groups: Array<{
+      crmGroupId: string;
+      name: string;
+      direction: string;
+      isActive: boolean;
+      crmTeacherId: string | null;
+      students: Array<{ crmStudentId: string; name: string; avatarUrl: string | null }>;
+    }>;
+  }>(`/api/integration/v1/groups?ids=${encodeURIComponent(ids.join(","))}`);
+}
+
 export async function fetchTeacherGroups(crmTeacherId: string) {
   return crmGet<{
     crmTeacherId: string;

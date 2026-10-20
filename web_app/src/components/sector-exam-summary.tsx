@@ -2,6 +2,18 @@ import { Award, CalendarClock, Check, GraduationCap, X } from "lucide-react";
 import { formatExamDate, sectorExamOutcomeLabel } from "@/lib/sector-exams-api";
 import type { PublicSectorExam } from "@/types/sector-exam";
 
+/** Plan 1.13: the student passed the group's sector (their own exam or counted by the teacher). */
+export function GroupSectorPassBadge({ pass }: { pass: { method: "exam" | "manual"; points: number } | null | undefined }) {
+  if (!pass) return null;
+  return (
+    <p className="mt-4 inline-flex flex-wrap items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-900" data-testid="group-sector-pass">
+      <Award size={15} className="shrink-0" />
+      {pass.method === "exam" ? "Сектор группы сдан на экзамене" : "Сектор группы засчитан преподавателем"}
+      {pass.points ? ` · +${pass.points} баллов` : ""}
+    </p>
+  );
+}
+
 /** Plan 1.10: what a student or parent sees of the sector exam held at the school. */
 export function SectorExamSummary({ exam }: { exam: PublicSectorExam | null | undefined }) {
   if (!exam) return null;

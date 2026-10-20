@@ -22,6 +22,12 @@ function shortDate(value?: string | null) {
   return new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short", timeZone: "Asia/Aqtobe" }).format(date);
 }
 
+const closeReasonLabel: Record<string, string> = {
+  completed: "закрыт",
+  exam: "закрыт после экзамена",
+  manual: "закрыт преподавателем",
+};
+
 /** Closed sectors of the owner in this direction, newest first. */
 export function SectorHistoryList({ history }: { history: SectorHistoryEntry[] }) {
   return (
@@ -32,10 +38,10 @@ export function SectorHistoryList({ history }: { history: SectorHistoryEntry[] }
           <div className="min-w-0 flex-1">
             <p className="truncate font-bold text-ink">{entry.goal || `Сектор ${entry.sequence}`}</p>
             <p className="text-xs text-stone-500">
-              {entry.topicsCompleted} из {entry.topicsTotal} тем · {entry.closeReason === "completed" ? "закрыт" : "закрыт без завершения"} {shortDate(entry.closedAt)}
+              {entry.topicsCompleted} из {entry.topicsTotal} тем · {closeReasonLabel[entry.closeReason ?? ""] ?? "закрыт без завершения"} {shortDate(entry.closedAt)}
             </p>
           </div>
-          <CheckCircle2 size={16} className={entry.closeReason === "completed" ? "text-emerald-600" : "text-stone-300"} />
+          <CheckCircle2 size={16} className={entry.closeReason === "completed" || entry.closeReason === "exam" ? "text-emerald-600" : "text-stone-300"} />
         </li>
       ))}
     </ul>

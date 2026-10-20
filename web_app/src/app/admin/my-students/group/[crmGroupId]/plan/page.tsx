@@ -3,8 +3,10 @@
 import { ArrowLeft, Users } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { useState } from "react";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
 import { GroupMonthlyPlanEditor } from "@/components/group-monthly-plan-editor";
+import { GroupSectorExamPanel } from "@/components/group-sector-exam-panel";
 import { PageHeader } from "@/components/page-header";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { teacherStudentsApi } from "@/lib/teacher-students-api";
@@ -13,6 +15,8 @@ export default function GroupPlanPage() {
   const params = useParams<{ crmGroupId: string }>();
   const crmGroupId = params.crmGroupId;
   const groupsResource = useApiResource(() => teacherStudentsApi.groups(), []);
+  // Closing the group's sector re-opens the editor on the next sector.
+  const [editorKey, setEditorKey] = useState(0);
 
   if (groupsResource.loading) {
     return <LoadingState label="Открываем сектор группы" />;
@@ -45,7 +49,7 @@ export default function GroupPlanPage() {
       <PageHeader
         eyebrow="Сектор группы"
         title={group.name}
-        description="Цель сектора, темы, прогресс и материалы для всех участников группы."
+        description="Цель сектора, темы и прогресс группы, экзамен каждого участника и переход к следующему сектору."
       />
 
       <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm font-semibold text-stone-500">
@@ -57,9 +61,12 @@ export default function GroupPlanPage() {
       </div>
 
       <GroupMonthlyPlanEditor
+        key={editorKey}
         crmGroupId={group.crmGroupId}
         directionTitle={group.direction}
       />
+
+      <GroupSectorExamPanel crmGroupId={group.crmGroupId} onSectorClosed={() => setEditorKey((value) => value + 1)} />
     </div>
   );
 }

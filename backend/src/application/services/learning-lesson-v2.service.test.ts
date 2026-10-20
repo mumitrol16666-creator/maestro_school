@@ -2,11 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   canApplyLearningLessonResults,
-  learningPlanCompletionRewardPoints,
   learningHomeworkAssignmentRecipientsForApproval,
   learningLessonV2ReferencedTopicIds,
   missingLearningHomeworkDecisions,
-  planCompletionRewardTopicId,
   validateLearningHomeworkAssignmentRecipients,
   validateLearningLessonV2ResultDuplicates,
   validateLearningLessonV2TopicReferences,
@@ -67,74 +65,6 @@ test("homework decision is matched by recipient and cycle", () => {
   );
 
   assert.deepEqual(missing, [{ recipientId: "homework-1", cycleNumber: 2 }]);
-});
-
-test("only the final unfinished active topic previews the plan completion reward", () => {
-  const topicId = planCompletionRewardTopicId({
-    completionRewardSourceKey: null,
-    topics: [
-      {
-        topicId: "mastered-topic",
-        state: LearningPlanTopicState.active,
-        topic: { progressPercent: 100, archivedAt: null },
-      },
-      {
-        topicId: "final-topic",
-        state: LearningPlanTopicState.active,
-        topic: { progressPercent: 75, archivedAt: null },
-      },
-      {
-        topicId: "draft-topic",
-        state: LearningPlanTopicState.transferred,
-        topic: { progressPercent: 0, archivedAt: null },
-      },
-    ],
-  });
-
-  assert.equal(topicId, "final-topic");
-});
-
-test("plan completion reward is not previewed without a unique unfinished topic", () => {
-  const topics = [
-    {
-      topicId: "topic-1",
-      state: LearningPlanTopicState.active,
-      topic: { progressPercent: 25, archivedAt: null },
-    },
-    {
-      topicId: "topic-2",
-      state: LearningPlanTopicState.active,
-      topic: { progressPercent: 50, archivedAt: null },
-    },
-  ];
-
-  assert.equal(planCompletionRewardTopicId({
-    completionRewardSourceKey: null,
-    topics,
-  }), null);
-  assert.equal(planCompletionRewardTopicId({
-    completionRewardSourceKey: "learning-plan-completion:plan-1",
-    topics: [topics[0]],
-  }), null);
-  assert.equal(planCompletionRewardTopicId({
-    completionRewardSourceKey: null,
-    topics: [{
-      ...topics[0],
-      topic: { progressPercent: 25, archivedAt: new Date("2026-09-05T00:00:00Z") },
-    }],
-  }), null);
-});
-
-test("lesson context exposes a plan reward only until that plan has paid it", () => {
-  assert.equal(learningPlanCompletionRewardPoints(null), 250);
-  assert.equal(
-    learningPlanCompletionRewardPoints("learning-plan-completion:plan-1"),
-    0,
-  );
-  assert.equal(
-    learningPlanCompletionRewardPoints("legacy-plan:completion:blocked-before-cutover"),
-    0,
-  );
 });
 
 test("an approved snapshot keeps only internal duplicate invariants", () => {

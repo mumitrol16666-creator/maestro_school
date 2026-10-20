@@ -1,5 +1,6 @@
 "use client";
 
+import { sectorTitle } from "@/lib/sector-label";
 import {
   ArrowRight,
   Award,
@@ -554,7 +555,7 @@ function MonthlyPlanCard({
       </div>
 
       <p className="mt-5 text-xs font-black uppercase tracking-[0.2em] text-gold-ink">
-        {plans.length === 1 && first.sequence ? `Сектор ${first.sequence}` : "Текущий сектор"}
+        {plans.length === 1 ? sectorTitle(first, "student") : "Мои сектора"}
       </p>
       <h2 className="font-display mt-2 text-3xl leading-tight text-ink sm:text-4xl">
         {plans.length === 1 ? first.goal : `${plans.length} открытых сектора`}

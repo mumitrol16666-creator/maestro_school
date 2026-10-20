@@ -286,7 +286,7 @@ function SectorBlock({ sector, onChanged }: { sector: StudentHomeMonthlyPlan; on
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[10px] font-black uppercase tracking-[0.16em] text-amber-800">
-            Сектор {sector.sequence ?? ""}{sector.scope === "group" ? " · группа" : ""}{sector.direction?.title ? ` · ${sector.direction.title}` : ""}
+            {sector.scope === "group" ? "Сектор группы" : "Сектор"} {sector.sequence ?? ""}{sector.direction?.title ? ` · ${sector.direction.title}` : ""}
           </p>
           <h3 className="font-display mt-1 break-words text-xl text-ink">{sector.goal || "Цель не задана"}</h3>
         </div>
@@ -642,7 +642,7 @@ function DynamicsTab({ data }: { data: TeacherStudentWorkspace }) {
           <ul className="mt-2 divide-y divide-stone-100">
             {dynamics.sectors.map((sector) => (
               <li key={sector.id} className="flex items-center justify-between gap-3 py-2 text-sm">
-                <span className="font-semibold text-ink">Сектор {sector.sequence}{sector.scope === "group" ? " (группа)" : ""} · {sector.direction}</span>
+                <span className="font-semibold text-ink">{sector.scope === "group" ? "Сектор группы" : "Сектор"} {sector.sequence} · {sector.direction}</span>
                 <span className="text-xs text-stone-500">{sector.completed}/{sector.total} тем · {sector.percent}%{sector.exam?.status === "completed" ? " · экзамен проведён" : sector.exam?.scheduledAt ? " · экзамен назначен" : ""}</span>
               </li>
             ))}
