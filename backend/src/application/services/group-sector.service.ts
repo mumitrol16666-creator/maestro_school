@@ -53,19 +53,17 @@ async function notifyMember(crmStudentId: string, message: { title: string; body
   try {
     const student = await studentUser(crmStudentId);
     if (!student) return;
-    const parents = await prisma.parentStudentLink.findMany({
-      where: { studentUserId: student.id, isActive: true, revokedAt: null },
-      select: { parentUserId: true },
-    });
+    const { familySectorNoticeUrl, parentsSeeingPlanProgress } = await import("./parent-visibility.service.js");
+    const parentIds = await parentsSeeingPlanProgress(student.id);
     const { deliverUserNotification } = await import("./notification.service.js");
     await deliverUserNotification({
       userId: student.id, type: "sector_exam_updated", title: message.title, body: message.body,
       url: "/monthly-plan", tag: message.dedupeKey, dedupeKey: `${message.dedupeKey}:student`,
     });
-    await Promise.allSettled(parents.map((link) => deliverUserNotification({
-      userId: link.parentUserId, type: "sector_exam_updated", title: message.title,
+    await Promise.allSettled(parentIds.map((parentUserId) => deliverUserNotification({
+      userId: parentUserId, type: "sector_exam_updated", title: message.title,
       body: `${student.firstName ?? "Ученик"}: ${message.body}`,
-      url: "/family", tag: message.dedupeKey, dedupeKey: `${message.dedupeKey}:parent:${link.parentUserId}`,
+      url: familySectorNoticeUrl(student.id), tag: message.dedupeKey, dedupeKey: `${message.dedupeKey}:parent:${parentUserId}`,
     })));
   } catch {
     // The pass and the close are saved even when delivery is temporarily unavailable.

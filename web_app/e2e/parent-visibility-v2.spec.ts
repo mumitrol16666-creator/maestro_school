@@ -39,7 +39,7 @@ test("parent sees the compact CRM-backed family skeleton", async ({ page, reques
   await expect(page.getByText("Баланс", { exact: true }).first()).toBeVisible();
   await expect(page.getByRole("heading", { name: "Расписание" })).toBeVisible();
   await expect(page.getByRole("heading", { name: /^(Сектор( группы)? \d+|Текущие сектора)$/ })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Достижения" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Результаты" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Новости школы" })).toBeVisible();
   await expect(page.getByText("Домашняя работа")).toHaveCount(0);
   await expect(page.getByText("Итоги уроков")).toHaveCount(0);

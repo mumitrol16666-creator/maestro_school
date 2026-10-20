@@ -226,6 +226,8 @@ function ParentAccessCard({
   reload: () => Promise<void>;
 }) {
   const [mode, setMode] = useState<"create" | "link">("create");
+  // Plan 3.6: CRM enrollment is the one way to set up a parent; the form here is for fixes.
+  const [manualFix, setManualFix] = useState(false);
   const [relationship, setRelationship] = useState<FamilyRelationship>("guardian");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -314,8 +316,8 @@ function ParentAccessCard({
           <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold-ink">Семейный доступ</p>
           <h2 className="font-display mt-2 text-3xl">Родители</h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-500">
-            Родитель видит расписание, ДЗ, итоги уроков и абонемент {studentName}.
-            Переписки, курсы и тесты ему недоступны.
+            Родитель видит расписание, посещения, оплату и абонемент, сектор и результаты {studentName},
+            переписывается с преподавателем. Домашние задания, курсы и тесты ему недоступны.
           </p>
         </div>
         <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-4 py-2 text-xs font-bold text-emerald-800">
@@ -395,6 +397,23 @@ function ParentAccessCard({
       )}
 
       <div className="mt-7 border-t border-stone-100 pt-7">
+        <p className="max-w-2xl text-sm leading-6 text-stone-500" data-testid="parent-access-crm-note">
+          Родителя заводят в CRM при оформлении ученика: там проверяют личность и передают доступ.
+          Здесь только исправления: отключить доступ, сменить пароль или привязать вручную, если в CRM не получилось.
+        </p>
+        {!manualFix ? (
+          <button
+            type="button"
+            onClick={() => setManualFix(true)}
+            className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl border border-stone-200 bg-white px-4 text-sm font-bold text-stone-700"
+          >
+            <UserPlus size={16} /> Исправить вручную
+          </button>
+        ) : null}
+      </div>
+
+      {manualFix ? (
+      <div className="mt-5">
         <div className="inline-flex rounded-2xl bg-stone-100 p-1.5">
           <button
             type="button"
@@ -489,6 +508,7 @@ function ParentAccessCard({
           </button>
         </form>
       </div>
+      ) : null}
     </section>
   );
 }

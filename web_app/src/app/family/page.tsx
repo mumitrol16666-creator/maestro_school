@@ -1,7 +1,9 @@
 "use client";
 
 import {
+  AlertTriangle,
   Award,
+  CalendarCheck,
   CalendarDays,
   CheckCircle2,
   Circle,
@@ -13,6 +15,7 @@ import {
   Target,
   UserRound,
   WalletCards,
+  XCircle,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
@@ -20,7 +23,7 @@ import { ProgressBar } from "@/components/progress-bar";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { familyApi } from "@/lib/family-api";
 import type { StudentHomeMonthlyPlan } from "@/types/api";
-import type { FamilyChild, FamilyNewsPost, FamilySchoolSummary } from "@/types/family";
+import type { FamilyChild, FamilyMembership, FamilyNewsPost, FamilyResults, FamilySchoolSummary, FamilyVisit } from "@/types/family";
 import { GroupSectorPassBadge, SectorExamSummary } from "@/components/sector-exam-summary";
 import { sectorTitle } from "@/lib/sector-label";
 
@@ -109,8 +112,39 @@ export default function FamilyPage() {
   );
 }
 
+/**
+ * Plan 3.4: a notification opens the family page at what it is about. `notice` names the
+ * section, `event` the lesson (its crmClassId) when there is one.
+ */
+const noticeSections: Record<string, { section: string; label: string }> = {
+  report: { section: "visits", label: "Отчёт по уроку" },
+  absence: { section: "visits", label: "Пропуск урока" },
+  homework: { section: "visits", label: "Проверка домашнего задания" },
+  balance: { section: "payment", label: "Оплата" },
+  cancelled: { section: "schedule", label: "Отмена урока" },
+  schedule: { section: "schedule", label: "Изменение расписания" },
+  sector: { section: "sector", label: "Сектор и экзамен" },
+};
+
+function useNotice() {
+  const [notice, setNotice] = useState<{ section: string; label: string; event: string | null } | null>(null);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const target = noticeSections[params.get("notice") ?? ""];
+    if (target) setNotice({ ...target, event: params.get("event") });
+  }, []);
+  return notice;
+}
+
 function ChildOverview({ child }: { child: FamilyChild }) {
   const resource = useApiResource(() => familyApi.childOverview(child.id), [child.id]);
+  const notice = useNotice();
+  useEffect(() => {
+    if (!notice || !resource.data) return;
+    const target = (notice.event && document.getElementById(`visit-${notice.event}`))
+      || document.getElementById(`family-${notice.section}`);
+    target?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [notice, resource.data]);
   if (resource.loading) return <LoadingState label={`Загружаем данные: ${child.fullName}`} />;
   if (resource.error) return <ErrorState message={resource.error} retry={resource.reload} />;
   if (!resource.data) return null;
@@ -138,6 +172,27 @@ function ChildOverview({ child }: { child: FamilyChild }) {
         </div>
       </section>
 
+      {summary.crmUnavailable || summary.crmStale ? (
+        <section className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm leading-6 text-amber-950" role="status" data-testid="family-crm-notice">
+          <AlertTriangle size={18} className="mt-0.5 shrink-0" />
+          <p>
+            {summary.crmUnavailable
+              ? "Сейчас не удалось получить данные школы: оплата, расписание и посещения появятся позже. Сектор и результаты показаны."
+              : `Данные школы показаны на ${summary.crmSnapshotAt ? new Date(summary.crmSnapshotAt).toLocaleString("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : "последнее обновление"}: связь со школой восстанавливается.`}
+          </p>
+        </section>
+      ) : null}
+
+      {notice ? (
+        <p className="rounded-xl bg-white px-4 py-2 text-xs font-semibold text-stone-600" data-testid="family-notice">
+          По уведомлению: {notice.label}
+        </p>
+      ) : null}
+
+      {summary.financialBalance && (summary.financialBalance.membership || summary.financialBalance.otherMemberships.length) ? (
+        <Payment balance={summary.financialBalance} highlighted={notice?.section === "payment"} />
+      ) : null}
+
       {visibleModules === 0 ? (
         <section className="border-l-4 border-gold bg-paper px-5 py-5 text-sm leading-6 text-stone-600">
           Данные обучения скрыты по текущим настройкам семейного доступа. Изменить их может администратор по запросу ученика.
@@ -145,11 +200,15 @@ function ChildOverview({ child }: { child: FamilyChild }) {
       ) : null}
 
       <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-        {visibility.showSchedule ? <Schedule summary={summary} /> : null}
-        {visibility.showPlanProgress ? <MonthlyPlans studentId={child.id} /> : null}
+        {visibility.showSchedule ? <Schedule summary={summary} highlighted={notice?.section === "schedule"} /> : null}
+        {visibility.showPlanProgress ? <div id="family-sector" className="scroll-mt-24"><MonthlyPlans studentId={child.id} /></div> : null}
       </div>
 
-      {visibility.showAchievements ? <Achievements achievements={summary.achievements} /> : null}
+      {visibility.showSchedule && !summary.crmUnavailable ? (
+        <Visits visits={summary.visits} highlightedClassId={notice?.section === "visits" ? notice.event : null} />
+      ) : null}
+
+      {visibility.showAchievements ? <Results results={summary.results} /> : null}
     </div>
   );
 }
@@ -165,9 +224,9 @@ function Balance({ balance }: { balance: NonNullable<FamilySchoolSummary["financ
   );
 }
 
-function Schedule({ summary }: { summary: FamilySchoolSummary }) {
+function Schedule({ summary, highlighted }: { summary: FamilySchoolSummary; highlighted?: boolean }) {
   return (
-    <section className="border-t-2 border-gold bg-paper p-5 shadow-soft sm:p-7">
+    <section id="family-schedule" className={`scroll-mt-24 border-t-2 border-gold bg-paper p-5 shadow-soft sm:p-7 ${highlighted ? "ring-2 ring-gold" : ""}`}>
       <div className="flex items-center justify-between gap-4">
         <div><p className="text-xs font-bold uppercase tracking-[0.17em] text-gold-ink">Ближайшие занятия</p><h2 className="font-display mt-2 text-3xl">Расписание</h2></div>
         <CalendarDays className="text-gold-ink" />
@@ -289,11 +348,170 @@ function FamilyPlanDetails({ plan }: { plan: StudentHomeMonthlyPlan }) {
   );
 }
 
-function Achievements({ achievements }: { achievements: FamilySchoolSummary["achievements"] }) {
+function lessonsLabel(count: number) {
+  const tail = count % 100;
+  if (tail >= 11 && tail <= 14) return "занятий";
+  if (count % 10 === 1) return "занятие";
+  if ([2, 3, 4].includes(count % 10)) return "занятия";
+  return "занятий";
+}
+
+function MembershipRow({ membership }: { membership: FamilyMembership }) {
   return (
-    <section className="border-t border-stone-200 py-2">
-      <div className="flex items-center gap-3"><Award className="text-gold-ink" /><div><p className="text-xs font-bold uppercase tracking-[0.17em] text-gold-ink">Результат</p><h2 className="font-display mt-1 text-3xl">Достижения</h2></div></div>
-      {achievements.length ? <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{achievements.slice(0, 6).map((item) => <article key={item.code} className="border-l-2 border-gold bg-paper px-4 py-4"><p className="font-bold text-ink">{item.title}</p><p className="mt-2 text-xs leading-5 text-stone-500">{item.description || "Достижение получено"}</p></article>)}</div> : <p className="mt-5 text-sm text-stone-500">Первые достижения появятся по мере обучения.</p>}
+    <article className="grid min-w-0 gap-2 rounded-2xl border border-stone-200 bg-white p-4 sm:grid-cols-[1fr_auto] sm:items-center" data-testid="family-membership">
+      <div className="min-w-0">
+        <p className="break-words font-bold text-ink">{membership.title}</p>
+        <p className="mt-1 break-words text-xs text-stone-500">
+          {[membership.directionName, membership.groupName].filter(Boolean).join(" · ") || "Абонемент школы"}
+          {membership.validUntil ? ` · до ${formatDate(membership.validUntil, true)}` : ""}
+        </p>
+      </div>
+      <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm sm:justify-end">
+        {membership.perLesson ? (
+          <span className="font-semibold text-stone-600">Оплата за каждое занятие</span>
+        ) : membership.classesRemaining !== null ? (
+          <span className="font-bold text-ink">
+            Осталось {membership.classesRemaining} {lessonsLabel(membership.classesRemaining)}
+            {membership.totalClasses ? <span className="font-semibold text-stone-500"> из {membership.totalClasses}</span> : null}
+          </span>
+        ) : null}
+        {membership.amountToPayKzt > 0 ? (
+          <span className="font-bold text-red-700">К оплате {membership.amountToPayKzt.toLocaleString("ru-RU")} ₸</span>
+        ) : membership.perLesson ? null : (
+          <span className="font-semibold text-emerald-700">Оплачен</span>
+        )}
+      </div>
+    </article>
+  );
+}
+
+/** Plan 3.1: what the parent pays for and what is left — from CRM, without payment history. */
+function Payment({ balance, highlighted }: { balance: NonNullable<FamilySchoolSummary["financialBalance"]>; highlighted?: boolean }) {
+  const memberships = [balance.membership, ...balance.otherMemberships].filter((item): item is FamilyMembership => Boolean(item));
+  // CRM's amount due is the unpaid part of memberships plus the lessons already held on credit.
+  const forMemberships = memberships.reduce((sum, item) => sum + item.amountToPayKzt, 0);
+  const forLessons = Math.max(0, balance.amountDueKzt - forMemberships);
+  return (
+    <section id="family-payment" className={`scroll-mt-24 border-t-2 border-gold bg-paper p-5 shadow-soft sm:p-7 ${highlighted ? "ring-2 ring-gold" : ""}`} data-testid="family-payment">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div><p className="text-xs font-bold uppercase tracking-[0.17em] text-gold-ink">Абонемент</p><h2 className="font-display mt-2 text-3xl">Оплата</h2></div>
+        <div className="text-right">
+          <p className={`font-display text-3xl ${balance.amountDueKzt > 0 ? "text-red-700" : "text-emerald-700"}`}>
+            {balance.amountDueKzt > 0 ? `${balance.amountDueKzt.toLocaleString("ru-RU")} ₸` : "Оплачено"}
+          </p>
+          <p className="text-xs text-stone-500">{balance.amountDueKzt > 0 ? "к оплате" : "долга нет"}</p>
+          {forLessons > 0 ? (
+            <p className="mt-1 text-xs font-semibold text-stone-600" data-testid="family-payment-lessons">
+              из них за проведённые уроки: {forLessons.toLocaleString("ru-RU")} ₸
+            </p>
+          ) : null}
+        </div>
+      </div>
+      <div className="mt-5 grid gap-3">
+        {memberships.map((membership, index) => <MembershipRow key={membership.id ?? index} membership={membership} />)}
+      </div>
+      <p className="mt-3 text-xs text-stone-500">Оплатить и уточнить детали можно у администратора школы.</p>
+    </section>
+  );
+}
+
+const attendanceView: Record<FamilyVisit["attendance"], { label: string; className: string; icon: typeof CheckCircle2 }> = {
+  present: { label: "Был", className: "bg-emerald-50 text-emerald-800", icon: CheckCircle2 },
+  late: { label: "Опоздал", className: "bg-amber-50 text-amber-900", icon: Clock3 },
+  excused: { label: "Пропуск по причине", className: "bg-stone-100 text-stone-700", icon: Circle },
+  absent: { label: "Пропуск", className: "bg-red-50 text-red-800", icon: XCircle },
+  unmarked: { label: "Не отмечено", className: "bg-stone-100 text-stone-500", icon: Circle },
+  pending: { label: "Ждёт подтверждения школой", className: "bg-stone-100 text-stone-600", icon: Clock3 },
+};
+
+/** Plan 3.2: the last lessons — came or not, and what the school confirmed was done. */
+function Visits({ visits, highlightedClassId }: { visits: FamilyVisit[]; highlightedClassId?: string | null }) {
+  return (
+    <section id="family-visits" className="scroll-mt-24 border-t-2 border-stone-300 bg-paper p-5 shadow-soft sm:p-7" data-testid="family-visits">
+      <div className="flex items-center justify-between gap-4">
+        <div><p className="text-xs font-bold uppercase tracking-[0.17em] text-gold-ink">Последние уроки</p><h2 className="font-display mt-2 text-3xl">Посещения</h2></div>
+        <CalendarCheck className="text-gold-ink" />
+      </div>
+      {visits.length ? (
+        <ul className="mt-5 divide-y divide-stone-200">
+          {visits.map((visit, index) => {
+            const view = attendanceView[visit.attendance];
+            const Icon = view.icon;
+            const highlighted = Boolean(highlightedClassId && visit.crmClassId === highlightedClassId);
+            return (
+              <li
+                key={visit.crmClassId ?? index}
+                id={visit.crmClassId ? `visit-${visit.crmClassId}` : undefined}
+                className={`grid scroll-mt-24 gap-2 py-4 sm:grid-cols-[150px_1fr] ${highlighted ? "rounded-xl bg-amber-50 px-3 ring-2 ring-gold" : ""}`}
+                data-testid="family-visit"
+              >
+                <div>
+                  <p className="text-sm font-bold">{visit.date ? formatDate(visit.date) : "Дата уточняется"}</p>
+                  <p className="mt-1 text-xs text-stone-500">{visit.startTime ?? ""}</p>
+                </div>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold ${view.className}`}><Icon size={13} />{view.label}</span>
+                    <span className="break-words text-sm font-semibold text-ink">{visit.title}</span>
+                  </div>
+                  {visit.topic ? <p className="mt-2 break-words text-sm text-stone-700"><span className="font-semibold">Тема:</span> {visit.topic}</p> : null}
+                  {visit.summary ? <p className="mt-1 break-words text-sm text-stone-600">{visit.summary}</p> : null}
+                  {!visit.confirmed ? (
+                    <p className="mt-1 text-xs text-stone-500">Посещение и итог урока появятся после подтверждения школой.</p>
+                  ) : null}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      ) : <p className="mt-5 text-sm text-stone-500">Прошедших уроков пока нет.</p>}
+    </section>
+  );
+}
+
+const sectorHow: Record<FamilyResults["sectors"][number]["how"], string> = {
+  exam: "сдан на экзамене",
+  teacher: "засчитан преподавателем",
+  completed: "все темы освоены",
+};
+
+/** Plan 3.3: the month's results instead of weekly streak milestones. */
+function Results({ results }: { results: FamilyResults | null }) {
+  const empty = !results || (!results.topics.length && !results.sectors.length && !results.level);
+  return (
+    <section className="border-t border-stone-200 py-2" data-testid="family-results">
+      <div className="flex items-center gap-3"><Award className="text-gold-ink" /><div><p className="text-xs font-bold uppercase tracking-[0.17em] text-gold-ink">{results ? formatMonth(results.month) : "Этот месяц"}</p><h2 className="font-display mt-1 text-3xl">Результаты</h2></div></div>
+      {empty ? <p className="mt-5 text-sm text-stone-500">Результаты месяца появятся, когда ребёнок освоит первую тему.</p> : (
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {results!.level ? (
+            <article className="border-l-2 border-gold bg-paper px-4 py-4" data-testid="family-result-level">
+              <p className="text-xs font-bold uppercase tracking-wider text-stone-400">Уровень</p>
+              <p className="font-display mt-1 text-2xl text-ink">{results!.level.title}</p>
+              <p className="mt-1 text-xs text-stone-500">
+                {results!.level.reachedThisMonth ? "Достигнут в этом месяце. " : ""}
+                {results!.level.nextTitle ? `Пройдено ${results!.level.progressPercent}% пути до ${results!.level.nextTitle}` : "Высший уровень"}
+              </p>
+            </article>
+          ) : null}
+          {results!.sectors.map((sector) => (
+            <article key={`${sector.scope}-${sector.planId}`} className="border-l-2 border-emerald-500 bg-paper px-4 py-4" data-testid="family-result-sector">
+              <p className="text-xs font-bold uppercase tracking-wider text-stone-400">{formatDate(sector.at)}</p>
+              <p className="mt-1 font-bold text-ink">{sectorTitle({ scope: sector.scope, sequence: sector.sequence })} · {sector.direction}</p>
+              <p className="mt-1 text-xs text-stone-500">{sectorHow[sector.how]}{sector.certificate ? ` · сертификат ${sector.certificate}` : ""}</p>
+            </article>
+          ))}
+          {results!.topics.length ? (
+            <article className="border-l-2 border-gold bg-paper px-4 py-4 sm:col-span-2 lg:col-span-1" data-testid="family-result-topics">
+              <p className="text-xs font-bold uppercase tracking-wider text-stone-400">Освоено тем: {results!.topics.length}</p>
+              <ul className="mt-2 grid gap-1">
+                {results!.topics.slice(0, 6).map((topic) => (
+                  <li key={topic.id} className="break-words text-sm text-stone-700">· {topic.title}{topic.group ? " (группа)" : ""}</li>
+                ))}
+              </ul>
+            </article>
+          ) : null}
+        </div>
+      )}
     </section>
   );
 }

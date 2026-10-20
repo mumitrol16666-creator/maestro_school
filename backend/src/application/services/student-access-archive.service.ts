@@ -55,6 +55,11 @@ export async function archiveStudentAccess(input: ArchiveStudentAccessInput) {
 
   await prisma.$transaction([
     prisma.pushSubscription.deleteMany({ where: { userId: user.id } }),
+    // Plan 3.6: an archived student has no family access left.
+    prisma.parentStudentLink.updateMany({
+      where: { studentUserId: user.id, isActive: true },
+      data: { isActive: false, revokedAt: archivedAt },
+    }),
     prisma.user.update({
       where: { id: user.id },
       data: {
@@ -84,6 +89,10 @@ export async function archiveStudentAccess(input: ArchiveStudentAccessInput) {
       },
     }),
   ]);
+
+  // The parents' dialogs with the teachers stay as read-only history.
+  const { archiveStudentParentDialogs } = await import("./learning-dialog-membership.service.js");
+  await archiveStudentParentDialogs(user.id, archivedAt).catch(() => 0);
 
   return {
     archived: true,

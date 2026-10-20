@@ -253,3 +253,27 @@ export async function decideParentVisibilityRequest(params: {
   }
   return getParentVisibilityWorkspace(params.studentId);
 }
+
+/**
+ * Plan 3.4: parents who should hear about the child's sector and exam — active, not deleted,
+ * and only while the family sees plan progress.
+ */
+export async function parentsSeeingPlanProgress(studentUserId: string) {
+  const visibility = await getParentVisibility(studentUserId);
+  if (!visibility.showPlanProgress) return [];
+  const links = await prisma.parentStudentLink.findMany({
+    where: {
+      studentUserId,
+      isActive: true,
+      revokedAt: null,
+      parent: { isActive: true, deletedAt: null },
+    },
+    select: { parentUserId: true },
+  });
+  return links.map((link) => link.parentUserId);
+}
+
+/** Where a parent lands from a notice about the child's sector. */
+export function familySectorNoticeUrl(studentUserId: string) {
+  return `/family?student=${encodeURIComponent(studentUserId)}&notice=sector`;
+}

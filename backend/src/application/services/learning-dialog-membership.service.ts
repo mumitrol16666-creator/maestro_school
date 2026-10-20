@@ -677,3 +677,54 @@ export async function openTeacherStudentDialog(
     )),
   };
 }
+
+/**
+ * Plan 3.4: a parent's dialog with the child's teacher exists from the moment the parent is
+ * linked (or is gone once unlinked), not from when the teacher next opens the mailbox. Re-runs
+ * each of the child's teachers' projection; never fails the link itself.
+ */
+export async function syncParentDialogsForStudent(studentUserId: string) {
+  if (!productFeatureConfig.flags.learningDialogsV2) return { synced: 0, failed: 0 };
+  const student = await prisma.user.findUnique({ where: { id: studentUserId }, select: { crmStudentId: true } });
+  if (!student?.crmStudentId) return { synced: 0, failed: 0 };
+  let crmTeacherIds: string[];
+  try {
+    const { fetchStudentTeachers } = await import("../../infrastructure/crm/crm-client.js");
+    crmTeacherIds = (await fetchStudentTeachers(student.crmStudentId)).teachers.map((teacher) => teacher.crmTeacherId);
+  } catch {
+    return { synced: 0, failed: 1 };
+  }
+  const teachers = crmTeacherIds.length
+    ? await prisma.user.findMany({
+        where: { crmTeacherId: { in: crmTeacherIds }, isActive: true, deletedAt: null, role: { slug: "teacher" } },
+        select: { id: true },
+      })
+    : [];
+  let synced = 0;
+  let failed = 0;
+  for (const teacher of teachers) {
+    try {
+      await syncTeacherLearningDialogsFromCrm(teacher.id);
+      synced += 1;
+    } catch {
+      // The teacher's next mailbox sync repairs it.
+      failed += 1;
+    }
+  }
+  return { synced, failed };
+}
+
+/** Plan 3.6: a student's access is archived — their parents' dialogs become read-only history. */
+export async function archiveStudentParentDialogs(studentUserId: string, at = new Date()) {
+  const conversations = await prisma.learningConversation.findMany({
+    where: { type: "parent_teacher", status: "active", context: { path: ["studentUserId"], equals: studentUserId } },
+    include: { members: { select: { id: true, userId: true, canWrite: true } } },
+  });
+  if (!conversations.length) return 0;
+  await prisma.$transaction(async (tx) => {
+    for (const conversation of conversations) {
+      await archiveLearningConversation(tx, conversation, "student_access_archived", at);
+    }
+  });
+  return conversations.length;
+}

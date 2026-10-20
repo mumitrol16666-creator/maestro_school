@@ -184,6 +184,11 @@ export async function fetchTeacherStudents(crmTeacherId: string) {
   }>(`/api/integration/v1/teachers/${encodeURIComponent(crmTeacherId)}/students`);
 }
 
+/** Plan 3.6: the platform revoked a parent's access; CRM reopens the access step of an open enrollment. */
+export async function postParentLinkRevoked(payload: { crmStudentId: string; parentUserId: string }) {
+  return crmPost<{ enrollments: number; reopened: number }>("/api/integration/v1/family/parent-link-revoked", payload);
+}
+
 /** Plan 1.13: groups by id with their active students, for the admin's group sector exams. */
 export async function fetchGroupRosters(crmGroupIds: string[]) {
   const ids = [...new Set(crmGroupIds.filter(Boolean))];

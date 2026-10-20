@@ -13,7 +13,9 @@ import { buildFamilyOfflineSummary } from "../../domain/family-view.js";
 import { isValidLogin, normalizeLogin } from "../../lib/login.js";
 import { isValidPhone, normalizePhoneDigits } from "../../lib/phone.js";
 import { getStudentSchoolOfflineSummary } from "./school-offline.service.js";
-import { getStudentAchievementsOverview } from "./achievement.service.js";
+import { getFamilyChildResults } from "./family-results.service.js";
+import { syncParentDialogsForStudent } from "./learning-dialog-membership.service.js";
+import { postParentLinkRevoked } from "../../infrastructure/crm/crm-client.js";
 import { getPublishedMonthlyPlansForStudent } from "./student-home.service.js";
 import { getParentVisibility } from "./parent-visibility.service.js";
 import {
@@ -166,6 +168,8 @@ export async function createParentForStudent(params: {
     return createdLink;
   });
 
+  // Plan 3.4: the parent's dialog with the child's teachers exists from the moment of linking.
+  await syncParentDialogsForStudent(params.studentId).catch(() => undefined);
   return parentLinkView(link);
 }
 
@@ -231,6 +235,8 @@ export async function linkExistingParentToStudent(params: {
     return updatedLink;
   });
 
+  // Plan 3.4: the parent's dialog with the child's teachers exists from the moment of linking.
+  await syncParentDialogsForStudent(params.studentId).catch(() => undefined);
   return parentLinkView(link);
 }
 
@@ -246,7 +252,7 @@ export async function revokeParentLink(params: {
       studentUserId: params.studentId,
       isActive: true,
     },
-    select: { id: true },
+    select: { id: true, parentUserId: true, student: { select: { crmStudentId: true } } },
   });
   if (!link) throw new NotFoundError("Parent link");
 
@@ -272,7 +278,15 @@ export async function revokeParentLink(params: {
       }, tx);
     }
   });
-  return { revoked: true };
+  // The parent leaves the teachers' dialogs; CRM learns the access is gone (plan 3.6).
+  await syncParentDialogsForStudent(params.studentId).catch(() => undefined);
+  let crmNotified = false;
+  if (link.student.crmStudentId) {
+    crmNotified = await postParentLinkRevoked({ crmStudentId: link.student.crmStudentId, parentUserId: link.parentUserId })
+      .then(() => true)
+      .catch(() => false);
+  }
+  return { revoked: true, crmNotified };
 }
 
 export async function resetLinkedParentPassword(params: {
@@ -370,7 +384,7 @@ export async function getParentChildOfflineSummary(
 ) {
   const link = await assertParentChildLink(parentUserId, studentUserId);
   const visibility = await getParentVisibility(studentUserId);
-  const [offlineRead, achievements] = await Promise.all([
+  const [offlineRead, results] = await Promise.all([
     getStudentSchoolOfflineSummary(studentUserId)
       .then((value) => ({ value, error: null as AppError | null }))
       .catch((error: unknown) => {
@@ -381,9 +395,10 @@ export async function getParentChildOfflineSummary(
         }
         throw error;
       }),
+    // Plan 3.3: «Результаты» (topics, sectors, LEVEL of the month) instead of streak milestones.
     visibility.showAchievements
-      ? getStudentAchievementsOverview(studentUserId)
-      : Promise.resolve([]),
+      ? getFamilyChildResults(studentUserId)
+      : Promise.resolve(null),
   ]);
   const summary = {
     ...(offlineRead.value
@@ -397,7 +412,7 @@ export async function getParentChildOfflineSummary(
     crmError: offlineRead.error?.code ?? null,
     crmSnapshotAt: (offlineRead.value as { crmSnapshotAt?: string } | null)?.crmSnapshotAt ?? null,
     crmStale: Boolean((offlineRead.value as { crmStale?: boolean } | null)?.crmStale),
-    achievements: achievements.filter((item) => item.earned),
+    results,
   };
   return {
     child: {

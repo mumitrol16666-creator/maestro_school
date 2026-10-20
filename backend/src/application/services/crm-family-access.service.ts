@@ -27,7 +27,21 @@ export type CrmParentInput = {
   login: string; firstName?: string; lastName?: string; middleName?: string; phone?: string; password?: string;
   parentUserId?: string; identityVerified: boolean; relationship: "mother" | "father" | "guardian";
 };
+/** CRM enrollment links the parent; their dialogs with the child's teachers appear right away (plan 3.4). */
 export async function provisionCrmParent(input: CrmParentInput) {
+  const result = await provisionCrmParentLink(input);
+  const student = await prisma.user.findFirst({
+    where: { crmStudentId: input.crmStudentId, deletedAt: null, role: { slug: "student" } },
+    select: { id: true },
+  });
+  if (student) {
+    const { syncParentDialogsForStudent } = await import("./learning-dialog-membership.service.js");
+    await syncParentDialogsForStudent(student.id).catch(() => undefined);
+  }
+  return result;
+}
+
+async function provisionCrmParentLink(input: CrmParentInput) {
   if (!input.identityVerified) throw new BadRequestError("Подтвердите личность и право представительства родителя");
   const login = normalizeLogin(input.login);
   if (!isValidLogin(login)) throw new BadRequestError("Логин: 3–32 символа, латиница, цифры и _");
