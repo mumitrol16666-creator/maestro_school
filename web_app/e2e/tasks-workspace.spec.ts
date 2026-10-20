@@ -27,7 +27,7 @@ function examples() {
 }
 type Options = { tasks?: UnifiedTask[]; fail?: boolean; partial?: boolean; delay?: number; truncated?: boolean };
 async function setup(page: Page, options: Options = {}, url = "/tasks") {
-  const user = { id: "tasks-isolated", firstName: "Айару", lastName: "Максот", role: "student", permissions: [], productFeatures: { roleNavigationV2: true, studentWorkspaceV2: true, homeworkFlowV2: true, learningTopicsV2: true } };
+  const user = { id: "tasks-isolated", firstName: "Айару", lastName: "Максот", role: "student", permissions: [], productFeatures: { roleNavigationV2: true, homeworkFlowV2: true, learningTopicsV2: true } };
   await page.clock.setFixedTime(new Date("2026-09-13T04:00:00Z"));
   await page.addInitScript(user => {
     localStorage.setItem("maestro_access_token", "isolated-tasks-mock");
@@ -41,7 +41,8 @@ async function setup(page: Page, options: Options = {}, url = "/tasks") {
     const url = new URL(route.request().url());
     const path = url.pathname.replace(/^.*\/api\/v1/, "");
     // Analytics is intercepted too; reject any unexpected business mutation.
-    if (route.request().method() !== "GET" && path !== "/usage/events") writes.push(path);
+    // The media cookie refresh (plan 1.12) is part of signing in, not a write of task data.
+    if (route.request().method() !== "GET" && path !== "/usage/events" && path !== "/auth/media-session") writes.push(path);
     if (path === "/auth/me") return route.fulfill({ json: { data: user } });
     if (path === "/students/me/tasks") {
       if (options.delay) await new Promise(resolve => setTimeout(resolve, options.delay));

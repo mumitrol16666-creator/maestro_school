@@ -126,12 +126,6 @@ export default function AdminOnlineLessonDetailPage() {
         {error && <p className="mt-4 rounded-2xl bg-red-50 p-4 text-sm font-semibold text-red-700">{error}</p>}
 
         <div className="mt-6 flex flex-wrap gap-2">
-          {isTeacher && item.status === "new" && (
-            <button disabled={acting} onClick={() => void runAction(async () => {
-              await onlineLessonsApi.assign(requestId);
-              setMessage("Заявка взята в работу и перемещена в «Уроки в работе».");
-            })} className={primaryButton}>Взять заявку</button>
-          )}
           {(item.status === "new" || item.status === "assigned") && (
             <button disabled={acting} onClick={() => void runAction(async () => {
               await onlineLessonsApi.cancel(requestId);

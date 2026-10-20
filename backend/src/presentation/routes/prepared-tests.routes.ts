@@ -6,7 +6,6 @@ import {
   WEEKLY_PREPARED_TEST_LIMIT,
   WEEKLY_PREPARED_TEST_RETRY_XP,
 } from "../../application/services/weekly-league-policy.js";
-import { evaluateAchievements } from "../../application/services/achievement.service.js";
 import { BadRequestError, ForbiddenError, NotFoundError } from "../../domain/errors.js";
 import {
   gradeHomeworkTest,
@@ -328,7 +327,6 @@ export async function preparedTestsRoutes(app: FastifyInstance) {
           testTitle: template.title,
           eventAt: attempt.createdAt,
         });
-        await evaluateAchievements(studentId);
       }
       const attemptsAfterSubmission = [attempt, ...attempts];
       const daily = preparedTestDailyState(attemptsAfterSubmission, testId, attempt.createdAt);

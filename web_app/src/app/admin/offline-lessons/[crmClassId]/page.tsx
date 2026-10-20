@@ -51,6 +51,7 @@ import { adminOfflineApi } from "@/lib/admin-offline-api";
 import { teacherOfflineApi } from "@/lib/teacher-offline-api";
 import { teacherStudentsApi } from "@/lib/teacher-students-api";
 import { currentAqtobeMonth } from "@/lib/aqtobe-month";
+import { LessonBonusXp } from "@/components/league-bonus-form";
 import { MaterialLibraryPicker } from "@/components/material-library-picker";
 import type { CmsMedia } from "@/types/cms";
 import type {
@@ -2054,6 +2055,13 @@ export default function AdminOfflineLessonDetailPage() {
                     </div>
                   ) : null}
                 </div>
+                {!isAdmin && !isAbsenceOnly ? (
+                  <LessonBonusXp
+                    students={students
+                      .filter((student) => ["present", "late"].includes(draftFor(student).attendanceStatus))
+                      .map((student) => ({ crmStudentId: student.crmStudentId, appUserId: student.appUserId ?? null, name: student.name }))}
+                  />
+                ) : null}
               </>
             )}
             </div>

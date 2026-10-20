@@ -20,7 +20,7 @@ function lesson(id = "next", extra: Partial<SchoolOfflineLesson> = {}): SchoolOf
 }
 
 async function setup(page: Page, options: { tasks?: UnifiedTask[]; partial?: boolean; failTasks?: boolean; failSchool?: boolean; failPlans?: boolean; lessons?: SchoolOfflineLesson[]; count?: number; plans?: unknown[] } = {}) {
-  const user = { id: "learning-mock-student", firstName: "Айару", lastName: "Максот", role: "student", permissions: [], productFeatures: { roleNavigationV2: true, studentWorkspaceV2: true, homeworkFlowV2: true, learningTopicsV2: true } };
+  const user = { id: "learning-mock-student", firstName: "Айару", lastName: "Максот", role: "student", permissions: [], productFeatures: { roleNavigationV2: true, homeworkFlowV2: true, learningTopicsV2: true } };
   await page.clock.setFixedTime(now);
   await page.addInitScript(user => {
     localStorage.setItem("maestro_access_token", "isolated-learning-mock");

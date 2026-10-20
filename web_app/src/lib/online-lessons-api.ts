@@ -9,20 +9,7 @@ export interface OnlineLessonsMeta {
 }
 
 export const onlineLessonsApi = {
-  myRequests: () => apiRequest<OnlineLessonRequest[]>("/online-lessons/requests"),
   myRequest: (id: string) => apiRequest<OnlineLessonRequest>(`/online-lessons/requests/${id}`),
-  createRequest: (body: {
-    requestType?: "trial" | "online_lesson";
-    directionId?: string | null;
-    directionTitle: string;
-    level: string;
-    preferredTime: string;
-    comment?: string;
-  }) =>
-    apiRequest<OnlineLessonRequest>("/online-lessons/requests", {
-      method: "POST",
-      body: JSON.stringify(body),
-    }),
   submitAssignment: (
     requestId: string,
     body: { comment?: string; attachmentUrl?: string; attachmentType?: string },
@@ -60,10 +47,10 @@ export const onlineLessonsApi = {
     apiRequest<{ newRequests: number; myInWork: number; assignedOrScheduled: number; submissions: number }>(
       "/admin/online-lesson-requests/pending-count",
     ),
-  assign: (id: string, teacherId?: string) =>
+  assign: (id: string, teacherId: string) =>
     apiRequest<OnlineLessonRequest>(`/admin/online-lesson-requests/${id}/assign`, {
       method: "PATCH",
-      body: JSON.stringify(teacherId ? { teacherId } : {}),
+      body: JSON.stringify({ teacherId }),
     }),
   schedule: (id: string, body: { scheduledAt: string; zoomUrl: string }) =>
     apiRequest<OnlineLessonRequest>(`/admin/online-lesson-requests/${id}/schedule`, {

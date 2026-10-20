@@ -7,19 +7,17 @@ import {
   completeOnlineLessonRequest,
   countPendingOnlineAssignmentSubmissions,
   countPendingOnlineLessonRequests,
-  createOnlineLessonRequest,
   getStaffOnlineLessonRequest,
   listOnlineLessonTeachers,
   getStudentOnlineLessonRequest,
   listAdminOnlineLessonRequests,
-  listStudentOnlineLessonRequests,
   markOnlineLessonNoShow,
   reviewOnlineLessonAssignment,
   scheduleOnlineLessonRequest,
   submitOnlineLessonAssignment,
 } from "../../application/services/online-lessons.service.js";
 import { getStudentCoins } from "../../application/services/coins.service.js";
-import { BadRequestError } from "../../domain/errors.js";
+import { BadRequestError, ForbiddenError } from "../../domain/errors.js";
 import {
   authenticate,
   requirePermission,
@@ -30,9 +28,6 @@ const manageGuards = () => [
   authenticate,
   requirePermission("online_lessons.manage"),
 ];
-
-const legacyOnlineRequestCreationEnabled =
-  process.env.ENABLE_LEGACY_ONLINE_REQUEST_CREATION === "true";
 
 const materialSchema = z.object({
   type: z.enum(["youtube", "link", "text", "pdf", "image", "file"]),
@@ -66,42 +61,6 @@ export async function onlineLessonsRoutes(app: FastifyInstance) {
     "/students/me/coins",
     { preHandler: [authenticate, requireStudent, requirePermission("coins.read")] },
     async (request) => ({ data: { balance: await getStudentCoins(request.user!.id) } }),
-  );
-
-  app.get(
-    "/online-lessons/requests",
-    { preHandler: [authenticate, requireStudent, requirePermission("online_lessons.read")] },
-    async (request) => ({
-      data: await listStudentOnlineLessonRequests(request.user!.id),
-    }),
-  );
-
-  app.post(
-    "/online-lessons/requests",
-    { preHandler: [authenticate, requireStudent, requirePermission("online_lessons.request")] },
-    async (request, reply) => {
-      if (!legacyOnlineRequestCreationEnabled) {
-        return reply.status(409).send({
-          error: "ONLINE_LESSONS_MANAGED_IN_CRM",
-          message: "Новые онлайн-уроки создаются в общем расписании и появляются здесь автоматически.",
-        });
-      }
-
-      const body = z.object({
-        requestType: z.enum(["trial", "online_lesson"]).default("online_lesson"),
-        directionId: z.string().uuid().nullable().optional(),
-        directionTitle: z.string().trim().min(1).max(255),
-        level: z.string().trim().min(1).max(128),
-        preferredTime: z.string().trim().min(1).max(512),
-        comment: z.string().trim().max(4000).optional(),
-      }).parse(request.body);
-
-      const item = await createOnlineLessonRequest({
-        studentId: request.user!.id,
-        ...body,
-      });
-      return reply.status(201).send({ data: item });
-    },
   );
 
   app.get(
@@ -205,16 +164,15 @@ export async function onlineLessonsRoutes(app: FastifyInstance) {
     async (request) => {
       const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
       const body = z.object({ teacherId: z.string().uuid().optional() }).parse(request.body ?? {});
-      const actor = request.user!;
-      const teacherId = actor.roleSlug === "teacher" ? actor.id : body.teacherId;
-      if (!teacherId) {
+      // Online requests are archived: new online lessons are CRM classes. Only an admin still
+      // reassigns an old request, a teacher no longer takes one (plan 1.7).
+      if (request.user!.roleSlug === "teacher") {
+        throw new ForbiddenError("Архивные онлайн-заявки назначает администратор");
+      }
+      if (!body.teacherId) {
         throw new BadRequestError("Выберите преподавателя");
       }
-      return {
-        data: await assignOnlineLessonRequest(id, teacherId, {
-          allowReassign: actor.roleSlug !== "teacher",
-        }),
-      };
+      return { data: await assignOnlineLessonRequest(id, body.teacherId, { allowReassign: true }) };
     },
   );
 

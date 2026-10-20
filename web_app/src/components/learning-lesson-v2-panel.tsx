@@ -232,23 +232,34 @@ export function LearningLessonV2Panel({
   disabled: boolean;
   onChange: (draft: LearningLessonV2Draft) => void;
   onTopicTitleChange?: (title: string) => void;
-  onQuickAddTopic?: (input: { title: string; masteryCriteria?: string }) => Promise<void | { success: boolean; topic?: { id: string; title: string } }>;
+  onQuickAddTopic?: (input: { title: string; masteryCriteria?: string; directionId: string }) => Promise<void | { success: boolean; topic?: { id: string; title: string } }>;
 }) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [quickTitle, setQuickTitle] = useState("");
   const [quickCriteria, setQuickCriteria] = useState("");
   const [addingTopic, setAddingTopic] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
+  const [quickDirectionId, setQuickDirectionId] = useState("");
+  // Plan 1.6: a quick topic goes only into an open published sector, so the direction is chosen
+  // from the sectors this lesson shows.
+  const sectorDirections = context.plans.map((plan) => plan.direction);
+  const canQuickAdd = Boolean(onQuickAddTopic) && !disabled && sectorDirections.length > 0;
 
   async function handleAddTopicSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const directionId = quickDirectionId || sectorDirections[0]?.id;
     if (!quickTitle.trim() || !onQuickAddTopic || addingTopic) return;
+    if (!directionId) {
+      setAddError("Сначала откройте сектор в карточке ученика");
+      return;
+    }
     setAddingTopic(true);
     setAddError(null);
     try {
       const res = await onQuickAddTopic({
         title: quickTitle.trim(),
         masteryCriteria: quickCriteria.trim() || undefined,
+        directionId,
       });
       setQuickTitle("");
       setQuickCriteria("");
@@ -329,7 +340,7 @@ export function LearningLessonV2Panel({
       <div className="mt-5 border-t border-stone-200 pt-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm font-black text-ink">Прогресс тем</p>
-          {onQuickAddTopic && !disabled ? (
+          {canQuickAdd ? (
             <button
               type="button"
               onClick={() => {
@@ -353,9 +364,22 @@ export function LearningLessonV2Panel({
               </p>
             </div>
             <p className="mt-1 text-xs text-amber-900/70">
-              Тема сразу добавится в открытый сектор ученика/группы и появится для выбора на этом уроке.
+              Тема сразу добавится в опубликованный сектор{sectorDirections.length === 1 ? ` «${sectorDirections[0]!.title}»` : ""} и появится для выбора на этом уроке. Черновик сектора тоже её получит.
             </p>
             <div className="mt-3 space-y-2.5">
+              {sectorDirections.length > 1 ? (
+                <select
+                  aria-label="Направление сектора"
+                  value={quickDirectionId || sectorDirections[0]?.id}
+                  disabled={addingTopic}
+                  onChange={(e) => setQuickDirectionId(e.target.value)}
+                  className="h-10 w-full rounded-xl border border-stone-300 bg-white px-3 text-sm font-medium text-ink focus:border-amber-500 focus:outline-none"
+                >
+                  {sectorDirections.map((direction) => (
+                    <option key={direction.id} value={direction.id}>{direction.title}</option>
+                  ))}
+                </select>
+              ) : null}
               <input
                 type="text"
                 placeholder="Название темы (например: «Гамма До-мажор в 2 октавы»)*"
@@ -502,13 +526,15 @@ export function LearningLessonV2Panel({
             <div className="flex items-center gap-2">
               <Sparkles size={18} className="text-amber-700" />
               <h4 className="text-sm font-bold text-amber-950">
-                В опубликованном плане пока нет активных тем
+                {sectorDirections.length ? "В открытом секторе пока нет активных тем" : "Сектор ещё не открыт"}
               </h4>
             </div>
             <p className="mt-1.5 text-xs leading-relaxed text-amber-900/80">
-              Вы можете добавить тему прямо сейчас. Она сохранится в плане текущего месяца, и вы сразу сможете зафиксировать прогресс её освоения.
+              {sectorDirections.length
+                ? "Добавьте тему прямо сейчас: она попадёт в опубликованный сектор, и вы сразу отметите прогресс её освоения."
+                : "Темы на уроке добавляются только в опубликованный сектор. Откройте и опубликуйте сектор в карточке ученика."}
             </p>
-            {onQuickAddTopic && !disabled && !showAddForm ? (
+            {canQuickAdd && !showAddForm ? (
               <button
                 type="button"
                 onClick={() => {

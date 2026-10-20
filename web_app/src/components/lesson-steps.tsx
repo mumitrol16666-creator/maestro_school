@@ -41,6 +41,7 @@ export function LessonStepper({
               <button
                 type="button"
                 aria-current={current ? "step" : undefined}
+                aria-label={`Шаг ${item.key}: ${item.title}`}
                 onClick={() => onSelect(item.key)}
                 className={`flex min-h-12 w-full flex-col items-center justify-center gap-1 rounded-2xl px-1 py-2 text-center transition ${
                   current ? "bg-ink text-white" : done ? "bg-emerald-50 text-emerald-900 hover:bg-emerald-100" : "text-stone-500 hover:bg-stone-50"

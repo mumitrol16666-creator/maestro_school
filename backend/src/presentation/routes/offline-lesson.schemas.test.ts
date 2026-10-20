@@ -78,10 +78,11 @@ test("lesson results schema rejects an empty homework assignment", () => {
   assert.equal(result.success, false);
 });
 
-test("offlineLessonQuickTopicSchema validates topic title and optional criteria", () => {
+test("offlineLessonQuickTopicSchema validates topic title, optional criteria and a required direction", () => {
   const valid = offlineLessonQuickTopicSchema.safeParse({
     title: "Гамма До-мажор",
     masteryCriteria: "Без запинок в темпе 80 bpm",
+    directionId: "11111111-1111-4111-8111-111111111111",
   });
   assert.equal(valid.success, true);
   if (valid.success) {
@@ -91,12 +92,14 @@ test("offlineLessonQuickTopicSchema validates topic title and optional criteria"
 
   const emptyTitle = offlineLessonQuickTopicSchema.safeParse({
     title: "   ",
+    directionId: "11111111-1111-4111-8111-111111111111",
   });
   assert.equal(emptyTitle.success, false);
 
-  const withDirection = offlineLessonQuickTopicSchema.safeParse({
-    title: "Песня Кукушка",
-    directionId: "11111111-1111-4111-8111-111111111111",
-  });
-  assert.equal(withDirection.success, true);
+  // Plan 1.6: without a direction the topic has no sector to go to.
+  const withoutDirection = offlineLessonQuickTopicSchema.safeParse({ title: "Песня Кукушка" });
+  assert.equal(withoutDirection.success, false);
+  if (!withoutDirection.success) {
+    assert.equal(withoutDirection.error.issues[0]?.message, "Выберите направление сектора");
+  }
 });

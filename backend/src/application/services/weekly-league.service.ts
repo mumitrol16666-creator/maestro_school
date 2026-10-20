@@ -587,6 +587,46 @@ export async function awardPreparedTestXp(params: {
   });
 }
 
+async function teacherHasCrmStudent(teacherId: string, crmStudentId: string) {
+  const teacher = await prisma.user.findUnique({ where: { id: teacherId }, select: { crmTeacherId: true } });
+  if (!teacher?.crmTeacherId) return false;
+  try {
+    const { fetchTeacherStudentsForAccess } = await import("./teacher-substitution.service.js");
+    const roster = await fetchTeacherStudentsForAccess(teacher.crmTeacherId, { need: crmStudentId });
+    return roster.students.some((item) => item.crmStudentId === crmStudentId);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Plan 1.5: whether each student already has this Aqtobe week's teacher bonus. The limit is one
+ * bonus per student per week whichever teacher gives it, so the lesson shows it before the form.
+ */
+export async function teacherLeagueBonusStatusThisWeek(teacherId: string, studentIds: string[]) {
+  const range = getAqtobeWeekRange();
+  const events = studentIds.length
+    ? await prisma.leagueXpEvent.findMany({
+        where: {
+          studentId: { in: studentIds },
+          sourceType: "teacher_bonus",
+          createdAt: { gte: range.start, lt: range.end },
+          reversedAt: null,
+        },
+        select: { studentId: true, amount: true, awardedById: true },
+      })
+    : [];
+  return studentIds.map((studentId) => {
+    const event = events.find((item) => item.studentId === studentId);
+    return {
+      studentId,
+      given: Boolean(event),
+      amount: event?.amount ?? null,
+      byMe: event ? event.awardedById === teacherId : false,
+    };
+  });
+}
+
 export async function awardTeacherLeagueBonus(params: {
   teacherId: string;
   studentId: string;
@@ -616,7 +656,12 @@ export async function awardTeacherLeagueBonus(params: {
         select: { id: true },
       })
     : null;
-  if (!teachingLink && !offlineLink) {
+  // Plan 1.5: the bonus is given from the lesson, so a student on the first lesson counts too:
+  // the teacher's CRM assignment (or a substitution) is enough.
+  const rosterLink = !teachingLink && !offlineLink && student.crmStudentId
+    ? await teacherHasCrmStudent(params.teacherId, student.crmStudentId)
+    : false;
+  if (!teachingLink && !offlineLink && !rosterLink) {
     throw new BadRequestError("Бонус можно начислять только своему ученику");
   }
 

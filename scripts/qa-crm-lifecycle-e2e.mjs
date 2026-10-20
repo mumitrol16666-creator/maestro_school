@@ -139,9 +139,6 @@ async function main() {
     lessonPoints: 0,
     homeworkReview: { status: 'not_assigned' },
   });
-  await appRequest(teacher1Token, 'POST', `/teachers/me/offline-lessons/${heldId}/finish`, {
-    comment: 'QA: урок завершён через приложение.',
-  });
   await appRequest(teacher1Token, 'POST', `/teachers/me/offline-lessons/${heldId}/submit`, {
     topic: 'QA сквозная тема урока',
     lessonSummary: 'QA: ученик выполнил план занятия.',

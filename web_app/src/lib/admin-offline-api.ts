@@ -142,7 +142,7 @@ export const adminOfflineApi = {
     ),
   quickAddTopic: (
     crmClassId: string,
-    data: { title: string; masteryCriteria?: string; directionId?: string },
+    data: { title: string; masteryCriteria?: string; directionId: string },
   ) =>
     apiRequest<{
       success: boolean;

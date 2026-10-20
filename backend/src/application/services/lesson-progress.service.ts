@@ -15,7 +15,6 @@ import {
 import { syncLessonAvailability } from "./lesson-unlock.service.js";
 import { requireCourseEnrollment } from "./enrollment.service.js";
 import { syncCourseCompletionStatus } from "./course-progress.service.js";
-import { evaluateAchievements } from "./achievement.service.js";
 import { rewardEconomyV2AppliesToEvent } from "../../config/product-features.js";
 
 async function runLessonCompletionSideEffects(params: {
@@ -78,7 +77,6 @@ async function runLessonCompletionSideEffects(params: {
       createdBy: params.actorId,
     });
   }
-  await evaluateAchievements(params.studentId, params.courseId);
 
   return { nextLessonId, courseCompleted };
 }

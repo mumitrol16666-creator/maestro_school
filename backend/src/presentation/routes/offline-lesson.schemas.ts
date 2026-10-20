@@ -106,5 +106,5 @@ export const learningLessonResultsSchema = z.object({
 export const offlineLessonQuickTopicSchema = z.object({
   title: z.string().trim().min(1, "Укажите название темы").max(1000, "Название темы слишком длинное"),
   masteryCriteria: z.string().trim().max(5000).optional().default(""),
-  directionId: z.string().uuid().optional(),
+  directionId: z.string({ required_error: "Выберите направление сектора" }).uuid("Выберите направление сектора"),
 });

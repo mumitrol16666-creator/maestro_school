@@ -1,7 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
-import { SEED_ACHIEVEMENTS } from "./seed-achievements.js";
 
 const prisma = new PrismaClient();
 
@@ -30,10 +29,8 @@ const PERMISSIONS = [
   { code: "news.manage", description: "Publish news posts" },
   { code: "homework.review", description: "Review homework submissions" },
   { code: "online_lessons.read", description: "View online lessons" },
-  { code: "online_lessons.request", description: "Request online lessons" },
   { code: "online_lessons.manage", description: "Manage online lesson requests" },
   { code: "coins.read", description: "View Maestro Coins balance" },
-  { code: "coins.award", description: "Award Maestro Coins manually" },
   { code: "offline_school.read", description: "View offline school lessons from CRM" },
   { code: "offline_school.write", description: "Manage offline school lessons via CRM proxy" },
   { code: "family.read", description: "View family dashboard for linked students" },
@@ -44,34 +41,34 @@ const ROLE_PERMISSION_MAP: Record<string, string[]> = {
   admin: [
     "directions.read", "courses.read", "lessons.read", "progress.read",
     "catalog.manage", "users.manage", "news.manage", "homework.review", "news.read",
-    "online_lessons.read", "online_lessons.manage", "coins.read", "coins.award",
+    "online_lessons.read", "online_lessons.manage", "coins.read",
     "offline_school.read", "offline_school.write",
   ],
   owner: [
     "directions.read", "courses.read", "lessons.read", "catalog.manage",
     "users.manage", "news.manage", "homework.review", "news.read",
-    "online_lessons.read", "online_lessons.manage", "coins.read", "coins.award",
+    "online_lessons.read", "online_lessons.manage", "coins.read",
     "offline_school.read", "offline_school.write",
   ],
   branch_manager: [
     "directions.read", "courses.read", "lessons.read", "users.manage", "homework.review",
-    "online_lessons.read", "online_lessons.manage", "coins.read", "coins.award",
+    "online_lessons.read", "online_lessons.manage", "coins.read",
     "offline_school.read", "offline_school.write",
   ],
   teacher: [
     "directions.read", "courses.read", "lessons.read", "homework.review", "progress.read",
-    "online_lessons.read", "online_lessons.manage", "coins.read", "coins.award",
+    "online_lessons.read", "online_lessons.manage", "coins.read",
     "offline_school.read", "offline_school.write",
   ],
   curator: [
     "directions.read", "courses.read", "lessons.read", "progress.read", "homework.review",
-    "online_lessons.read", "online_lessons.manage", "coins.read", "coins.award",
+    "online_lessons.read", "online_lessons.manage", "coins.read",
     "offline_school.read", "offline_school.write",
   ],
   student: [
     "directions.read", "courses.read", "lessons.read", "progress.read",
     "progress.write", "homework.submit", "news.read", "points.read",
-    "online_lessons.read", "online_lessons.request", "coins.read",
+    "online_lessons.read", "coins.read",
   ],
   parent: ["family.read"],
 };
@@ -138,19 +135,6 @@ async function main() {
         },
       });
     }
-  }
-
-  for (const achievement of SEED_ACHIEVEMENTS) {
-    await prisma.achievement.upsert({
-      where: { code: achievement.code },
-      update: {
-        title: achievement.title,
-        description: achievement.description,
-        criteriaType: achievement.criteriaType,
-        threshold: achievement.threshold,
-      },
-      create: achievement,
-    });
   }
 
   if (adminEnv) {

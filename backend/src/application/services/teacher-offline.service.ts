@@ -4,7 +4,6 @@ import {
   fetchClassCard,
   fetchClassStudents,
   fetchTeacherOfflineClasses,
-  postTeacherFinish,
   postTeacherMarkNotHeld,
   postTeacherWithdraw,
   postTeacherStart,
@@ -220,30 +219,6 @@ export async function teacherOfflineStart(appUserId: string, crmClassId: string)
     await updateProjectedOfflineLesson(crmClassId, {
       status: "started",
       startedAt: new Date().toISOString(),
-    });
-    return { crmClassId, status: "started", syncState: "pending_sync" };
-  }
-}
-
-export async function teacherOfflineFinish(
-  appUserId: string,
-  crmClassId: string,
-  comment?: string,
-) {
-  const crmTeacherId = await requireCrmTeacherId(appUserId);
-  try {
-    const result = await postTeacherFinish(crmClassId, { crmTeacherId, comment });
-    if (lessonSyncV2Enabled() && result.class && typeof result.class === "object") {
-      await projectOfflineAgenda([result.class as Record<string, unknown>]);
-    }
-    return result;
-  } catch (error) {
-    if (!lessonSyncV2Enabled() || !(error instanceof AppError) || error.statusCode < 500) throw error;
-    await getTeacherOfflineClass(appUserId, crmClassId);
-    await updateProjectedOfflineLesson(crmClassId, {
-      status: "started",
-      finishedAt: new Date().toISOString(),
-      ...(comment ? { teacherComment: comment } : {}),
     });
     return { crmClassId, status: "started", syncState: "pending_sync" };
   }

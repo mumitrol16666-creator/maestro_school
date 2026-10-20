@@ -209,7 +209,7 @@ async function main() {
   );
   assert(typeof meBefore.points === "number", "auth/me must return points");
   assert(typeof meBefore.coins === "number", "auth/me must return coins");
-  assert(meBefore.permissions.includes("online_lessons.request"), "student must have online_lessons.request");
+  assert(!meBefore.permissions.includes("online_lessons.request"), "online requests are not created in the app");
   console.log("✓ auth/me returns points and coins");
 
   await request(
@@ -223,10 +223,10 @@ async function main() {
         preferredTime: "вечер будни",
         comment: "E2E online lesson request",
       },
-      expectStatus: 409,
+      expectStatus: 404,
     },
   );
-  console.log("✓ App creation is blocked because CRM is the source of truth");
+  console.log("✓ The app has no request creation: online lessons are CRM classes");
 
   const [linkedTeacher, direction] = await Promise.all([
     prisma.user.findFirst({

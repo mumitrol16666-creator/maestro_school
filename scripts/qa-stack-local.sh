@@ -89,7 +89,6 @@ learning_exec() {
       INTEGRATION_SSO_SECRET=local-maestro-qa-sso-secret \
       PRODUCT_V2_CUTOVER_AT=2026-01-01T00:00:00.000Z \
       FEATURE_LEARNING_TOPICS_V2=true \
-      FEATURE_STUDENT_WORKSPACE_V2=true \
       FEATURE_HOMEWORK_FLOW_V2=true \
       FEATURE_UNIFIED_LESSON_V2=true \
       FEATURE_LESSON_SYNC_V2=true \

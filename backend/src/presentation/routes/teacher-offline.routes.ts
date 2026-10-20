@@ -4,7 +4,6 @@ import {
   getTeacherOfflineAgenda,
   getTeacherOfflineClass,
   getTeacherOfflineClassStudents,
-  teacherOfflineFinish,
   teacherOfflineMarkNotHeld,
   teacherOfflineWithdraw,
   teacherOfflineStart,
@@ -583,16 +582,6 @@ export async function teacherOfflineRoutes(app: FastifyInstance) {
           body.checks,
         ),
       };
-    },
-  );
-
-  app.post(
-    "/teachers/me/offline-lessons/:crmClassId/finish",
-    { preHandler: writeGuards },
-    async (request) => {
-      const { crmClassId } = z.object({ crmClassId: z.string().min(1) }).parse(request.params);
-      const body = z.object({ comment: z.string().max(5000).optional() }).parse(request.body ?? {});
-      return { data: await teacherOfflineFinish(request.user!.id, crmClassId, body.comment) };
     },
   );
 

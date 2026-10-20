@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import {
   awardTeacherLeagueBonus,
+  teacherLeagueBonusStatusThisWeek,
   createWeeklyStreakProtection,
   getAdminWeeklyLeagueOverview,
   getWeeklyLeagueHistory,
@@ -143,6 +144,18 @@ export async function weeklyLeagueRoutes(app: FastifyInstance) {
         });
       }
       return reply.status(result.idempotent ? 200 : 201).send({ data: result });
+    },
+  );
+
+  app.get(
+    "/teacher/weekly-league/bonus-status",
+    { preHandler: [authenticate, requireTeacher] },
+    async (request) => {
+      const { studentIds } = z.object({
+        studentIds: z.string().max(2000).transform((value) => [...new Set(value.split(",").map((id) => id.trim()).filter(Boolean))])
+          .pipe(z.array(z.string().uuid()).max(50)),
+      }).parse(request.query);
+      return { data: await teacherLeagueBonusStatusThisWeek(request.user!.id, studentIds) };
     },
   );
 

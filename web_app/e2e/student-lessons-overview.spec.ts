@@ -172,7 +172,6 @@ async function setup(
     // Match the enabled production features, verified on 2026-09-12.
     productFeatures: {
       learningTopicsV2: true,
-      studentWorkspaceV2: true,
       homeworkFlowV2: true,
       unifiedLessonV2: true,
       lessonSyncV2: true,

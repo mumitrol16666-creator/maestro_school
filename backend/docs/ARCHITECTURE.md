@@ -78,7 +78,7 @@ presentation  →  application  →  infrastructure
 - `catalog.manage`, `users.manage`
 - `points.read`
 - `online_lessons.read`, `online_lessons.request`, `online_lessons.manage`
-- `coins.read`, `coins.award`
+- `coins.read`
 - `offline_school.read`, `offline_school.write`
 
 Проверка: `request.user.permissions.includes(code)`.

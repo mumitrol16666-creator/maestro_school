@@ -6,14 +6,13 @@ import type {
 import { prisma } from "../../infrastructure/database/prisma.js";
 import { BadRequestError, ForbiddenError, NotFoundError } from "../../domain/errors.js";
 import { addMaestroCoins } from "./coins.service.js";
-import { evaluateAchievements } from "./achievement.service.js";
 import { deliverUserNotification } from "./notification.service.js";
 import { awardManualPoints } from "./points.service.js";
 import {
   awardHomeworkAcceptedXp,
   awardLessonAttendanceXp,
 } from "./weekly-league.service.js";
-import { postOnlineLessonBooking, postOnlineLessonStatus } from "../../infrastructure/crm/crm-client.js";
+import { postOnlineLessonStatus } from "../../infrastructure/crm/crm-client.js";
 import { rewardEconomyV2AppliesToEvent } from "../../config/product-features.js";
 
 const requestSelect = {
@@ -118,80 +117,6 @@ async function syncCrmStatus(requestId: string, status: "assigned" | "scheduled"
   } catch (error) {
     console.error("[online-lessons] Failed to sync CRM status:", error instanceof Error ? error.message : error);
   }
-}
-
-export async function createOnlineLessonRequest(params: {
-  studentId: string;
-  requestType?: "trial" | "online_lesson";
-  directionId?: string | null;
-  directionTitle: string;
-  level: string;
-  preferredTime: string;
-  comment?: string;
-}) {
-  let directionTitle = params.directionTitle.trim();
-  let directionId = params.directionId ?? null;
-
-  if (directionId) {
-    const direction = await prisma.direction.findFirst({
-      where: { id: directionId, isPublished: true, deletedAt: null },
-      select: { id: true, title: true },
-    });
-    if (!direction) throw new BadRequestError("Направление не найдено");
-    directionTitle = direction.title;
-    directionId = direction.id;
-  }
-
-  if (!directionTitle) throw new BadRequestError("Укажите направление");
-  if (!params.level.trim()) throw new BadRequestError("Укажите уровень подготовки");
-  if (!params.preferredTime.trim()) throw new BadRequestError("Укажите удобное время");
-
-  const request = await prisma.onlineLessonRequest.create({
-    data: {
-      studentId: params.studentId,
-      directionId,
-      directionTitle,
-      level: params.level.trim(),
-      preferredTime: params.preferredTime.trim(),
-      comment: params.comment?.trim() || null,
-      status: "new",
-    },
-    select: requestSelect,
-  });
-
-  try {
-    await postOnlineLessonBooking({
-      externalSourceId: request.id,
-      requestType: params.requestType,
-      name: request.student.firstName,
-      lastName: request.student.lastName,
-      middleName: request.student.middleName,
-      phone: request.student.phone,
-      direction: request.directionTitle,
-      level: request.level,
-      preferredTime: request.preferredTime,
-      comment: request.comment ?? undefined,
-    });
-  } catch (error) {
-    await prisma.onlineLessonRequest.delete({ where: { id: request.id } }).catch(() => undefined);
-    const message = error instanceof Error ? error.message : String(error);
-    console.error("[online-lessons] Failed to create CRM booking:", message);
-    throw new BadRequestError(
-      "Заявка временно не отправлена администратору. Попробуйте ещё раз.",
-      "CRM_BOOKING_FAILED",
-    );
-  }
-
-  return withOnlineLessonRewardPolicy(request);
-}
-
-export async function listStudentOnlineLessonRequests(studentId: string) {
-  const items = await prisma.onlineLessonRequest.findMany({
-    where: { studentId },
-    orderBy: { createdAt: "desc" },
-    select: requestSelect,
-  });
-  return items.map((item) => withOnlineLessonRewardPolicy(item));
 }
 
 export async function getStudentOnlineLessonRequest(studentId: string, requestId: string) {
@@ -670,10 +595,6 @@ export async function completeOnlineLessonRequest(requestId: string, params: {
       createdBy: params.completedBy,
     });
   }
-  if (params.lessonPoints > 0 || params.lessonCoins > 0) {
-    await evaluateAchievements(item.studentId);
-  }
-
   await syncCrmStatus(requestId, "completed");
   await bestEffortNotification({
     userId: item.studentId,
@@ -862,10 +783,6 @@ export async function reviewOnlineLessonAssignment(submissionId: string, params:
       createdBy: params.reviewerId,
     });
   }
-  if (params.action !== "return" && (params.reviewPoints > 0 || params.reviewCoins > 0)) {
-    await evaluateAchievements(submission.studentId);
-  }
-
   const reviewTitle = params.action === "return"
     ? "Нужна доработка задания"
     : params.action === "approve_with_remarks"

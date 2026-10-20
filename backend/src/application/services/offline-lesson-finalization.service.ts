@@ -9,7 +9,6 @@ import {
   awardLeagueXp,
   awardOfflineLessonAttendanceXp,
 } from "./weekly-league.service.js";
-import { evaluateAchievements } from "./achievement.service.js";
 import { buildMonthlyPlanSnapshot } from "../../domain/monthly-plan.js";
 import {
   applyApprovedLearningLessonV2Results,
@@ -27,17 +26,6 @@ export type FinalizedOfflineLesson = {
   classType?: string | null;
   group?: unknown;
   [key: string]: unknown;
-};
-
-type StoredPlanTopicUpdate = {
-  itemId: string;
-  status: "in_progress" | "completed";
-};
-
-type StoredMonthlyPlanItem = {
-  id: string;
-  title: string;
-  status: "planned" | "in_progress" | "completed" | "moved";
 };
 
 export function awardedOfflineLessonAttendanceAmounts(result: {
@@ -187,16 +175,9 @@ async function applyOfflineLessonAttendanceRewards(
       continue;
     }
 
-    const updates = Array.isArray(check.planTopicUpdates)
-      ? check.planTopicUpdates as StoredPlanTopicUpdate[]
-      : [];
-    let appliedPlanTopics = 0;
-    let completedPlanId: string | null = null;
-    const completedPlanTopics: Array<{ id: string; title: string }> = [];
-
     // Plan topic updates of the archived monthly plans (before 19.10) are no
     // longer applied: those plans live in legacy_archive and are read-only.
-    void updates;
+    const appliedPlanTopics = 0;
 
     const student = await prisma.user.findUnique({
       where: { crmStudentId: check.crmStudentId },
@@ -217,19 +198,6 @@ async function applyOfflineLessonAttendanceRewards(
         eventAt,
       });
       awardedXp = xpResult.awarded ? 20 : 0;
-      if (completedPlanId) {
-        for (const topic of completedPlanTopics) {
-          await awardLeagueXp({
-            studentId: student.id,
-            amount: 3,
-            sourceType: "monthly_plan",
-            sourceKey: `monthly-plan-topic:${completedPlanId}:${topic.id}`,
-            description: `Освоена тема плана «${topic.title}»`,
-            awardedById: check.teacherUserId ?? approvedBy,
-            eventAt,
-          });
-        }
-      }
       const pointsResult = await awardManualPoints({
         studentId: student.id,
         amount: check.lessonPoints,
@@ -251,7 +219,6 @@ async function applyOfflineLessonAttendanceRewards(
         eventAt,
       });
       awardedCoins = coinResult.awarded ? 1 : 0;
-      await evaluateAchievements(student.id);
     }
 
     await prisma.offlineLessonStudentCheck.update({

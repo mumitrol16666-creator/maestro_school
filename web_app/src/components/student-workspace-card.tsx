@@ -3,7 +3,6 @@
 import {
   Activity,
   BookOpenCheck,
-  Bolt,
   CalendarCheck,
   CheckCircle2,
   ClipboardCheck,
@@ -26,6 +25,7 @@ import { SectorProposalsPanel } from "@/components/sector-editor-parts";
 import { SectorExamPanel } from "@/components/sector-exam-panel";
 import { MaterialBadge, MaterialLibraryPicker } from "@/components/material-library-picker";
 import { ShareCourseLesson } from "@/components/share-course-lesson";
+import { BonusXpForm } from "@/components/league-bonus-form";
 import type { MaterialLibraryItem } from "@/types/materials";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { ApiError } from "@/lib/api-client";
@@ -493,56 +493,6 @@ function HomeworkAssignForm({
               {busy ? <LoaderCircle size={14} className="animate-spin" /> : <Send size={14} />} Выдать
             </button>
           </div>
-        </div>
-      ) : null}
-    </section>
-  );
-}
-
-function BonusXpForm({ appUserId, givenThisWeek }: { appUserId: string | null; givenThisWeek: boolean }) {
-  const [open, setOpen] = useState(false);
-  const [amount, setAmount] = useState(3);
-  const [reason, setReason] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [feedback, setFeedback] = useState<string | null>(null);
-
-  async function award() {
-    if (!appUserId || busy) return;
-    setBusy(true);
-    setFeedback(null);
-    try {
-      const result = await teacherStudentsApi.awardWeeklyLeagueBonus({ studentId: appUserId, amount, reason: reason.trim(), idempotencyKey: crypto.randomUUID() });
-      setFeedback(result.awarded ? `Начислено +${amount} XP` : "Этот бонус уже был начислен");
-      if (result.awarded) { setReason(""); setOpen(false); }
-    } catch (error) {
-      setFeedback(error instanceof Error ? error.message : "Не удалось начислить бонус");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <section className="rounded-2xl border border-stone-200 bg-white p-4">
-      <div className="flex items-center justify-between gap-2">
-        <p className="inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-stone-600"><Bolt size={14} /> Бонус XP в лиге</p>
-        <button type="button" onClick={() => setOpen((current) => !current)} disabled={!appUserId || givenThisWeek} className={`${control} min-h-8 border border-stone-200 px-2 text-stone-700`}>
-          {open ? "Скрыть" : "Дать бонус"}
-        </button>
-      </div>
-      {!appUserId ? <p className="mt-2 text-xs text-stone-500">Ученик ещё не вошёл в приложение, бонус начислить некому.</p> : null}
-      {appUserId && givenThisWeek ? <p className="mt-2 text-xs text-stone-500" data-testid="bonus-week-limit">Бонус на этой неделе уже дан. Следующий можно дать с понедельника.</p> : null}
-      {feedback ? <p className="mt-2 text-xs font-semibold text-amber-900">{feedback}</p> : null}
-      {open ? (
-        <div className="mt-3 grid gap-2">
-          <div className="flex flex-wrap gap-1">
-            {[1, 3, 5, 10].map((value) => (
-              <button key={value} type="button" onClick={() => setAmount(value)} className={`${control} min-h-8 px-2 ${amount === value ? "bg-amber-700 text-white" : "border border-amber-200 bg-white text-amber-900"}`}>+{value}</button>
-            ))}
-          </div>
-          <input value={reason} maxLength={160} onChange={(event) => setReason(event.target.value)} placeholder="За что: например, заметный прогресс в ритме" className="h-10 w-full rounded-lg border border-stone-200 bg-white px-3 text-sm" />
-          <button type="button" disabled={busy || reason.trim().length < 3} onClick={() => void award()} className={`${control} bg-amber-700 text-white`}>
-            {busy ? <LoaderCircle size={14} className="animate-spin" /> : <Bolt size={14} />} Начислить +{amount} XP
-          </button>
         </div>
       ) : null}
     </section>

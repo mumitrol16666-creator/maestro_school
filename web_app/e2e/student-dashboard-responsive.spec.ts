@@ -96,7 +96,8 @@ test("monthly plan opens from the dashboard on desktop and phone", async ({ page
   ]) {
     await page.setViewportSize(viewport);
     await page.goto("/dashboard");
-    await page.getByRole("link", { name: "Открыть сектор", exact: true }).click();
+    // The hero and the sector card may both lead to the sector.
+    await page.getByRole("link", { name: "Открыть сектор", exact: true }).first().click();
 
     await expect(page).toHaveURL(/\/monthly-plan$/);
     await expect(page.getByRole("heading", { name: /^(Сектор \d+|Мой сектор)$/ })).toBeVisible();

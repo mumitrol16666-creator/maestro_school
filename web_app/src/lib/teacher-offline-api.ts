@@ -48,11 +48,6 @@ export const teacherOfflineApi = {
       `/teachers/me/offline-lessons/${encodeURIComponent(crmClassId)}/start`,
       { method: "POST", body: JSON.stringify({}) },
     ),
-  finish: (crmClassId: string, comment?: string) =>
-    apiRequest<Record<string, unknown>>(
-      `/teachers/me/offline-lessons/${encodeURIComponent(crmClassId)}/finish`,
-      { method: "POST", body: JSON.stringify({ comment }) },
-    ),
   submit: (
     crmClassId: string,
     body: {
@@ -109,7 +104,7 @@ export const teacherOfflineApi = {
     ),
   quickAddTopic: (
     crmClassId: string,
-    data: { title: string; masteryCriteria?: string; directionId?: string },
+    data: { title: string; masteryCriteria?: string; directionId: string },
   ) =>
     apiRequest<{
       success: boolean;

@@ -130,7 +130,11 @@ integrationTest("one teacher bonus per student per week, whichever teacher gives
       data: { crmClassId: `early-class-${fixture.suffix}-${index}`, crmStudentId, teacherUserId: teacherUser.id, attendanceStatus: "present" },
     });
   }
-  const { awardTeacherLeagueBonus } = await import("./weekly-league.service.js");
+  const { awardTeacherLeagueBonus, teacherLeagueBonusStatusThisWeek } = await import("./weekly-league.service.js");
+  // Plan 1.5: the lesson step «Итог» asks first whether the week's bonus is still free.
+  assert.deepEqual(await teacherLeagueBonusStatusThisWeek(teacher.id, [student.id]), [
+    { studentId: student.id, given: false, amount: null, byMe: false },
+  ]);
 
   const first = await awardTeacherLeagueBonus({
     teacherId: teacher.id, studentId: student.id, amount: 5, reason: "Ровный ритм", idempotencyKey: randomUUID(),
@@ -146,4 +150,34 @@ integrationTest("one teacher bonus per student per week, whichever teacher gives
     (error: { code?: string; message?: string }) => error.code === "BONUS_WEEKLY_LIMIT" && /другой преподаватель/.test(error.message ?? ""),
   );
   assert.equal(await prisma.leagueXpEvent.count({ where: { studentId: student.id, sourceType: "teacher_bonus" } }), 1);
+  assert.deepEqual(await teacherLeagueBonusStatusThisWeek(otherTeacher.id, [student.id]), [
+    { studentId: student.id, given: true, amount: 5, byMe: false },
+  ]);
+});
+
+integrationTest("a teacher gives the bonus at the student's first lesson through the CRM assignment", async t => {
+  const fixture = await createFixture(t);
+  const { prisma, student, teacher } = fixture;
+  await prisma.user.update({ where: { id: student.id }, data: { leagueEligible: true } });
+  const { awardTeacherLeagueBonus } = await import("./weekly-league.service.js");
+
+  // No lesson checks yet: the CRM roster of the teacher has the student.
+  const awarded = await awardTeacherLeagueBonus({
+    teacherId: teacher.id, studentId: student.id, amount: 3, reason: "Первый урок", idempotencyKey: randomUUID(),
+  });
+  assert.equal(awarded.awarded, true);
+
+  // A teacher with no CRM link and no lessons with the student cannot.
+  const teacherRole = await prisma.role.findUniqueOrThrow({ where: { slug: "teacher" } });
+  const stranger = await prisma.user.create({
+    data: {
+      login: `early_x_${fixture.suffix}`, phone: `+7714${fixture.suffix.replace(/\D/g, "").padEnd(7, "3").slice(0, 7)}`, passwordHash: "x",
+      firstName: "Чужой", lastName: fixture.suffix, roleId: teacherRole.id,
+    },
+  });
+  t.after(() => prisma.user.delete({ where: { id: stranger.id } }));
+  await assert.rejects(
+    awardTeacherLeagueBonus({ teacherId: stranger.id, studentId: student.id, amount: 1, reason: "Чужой ученик", idempotencyKey: randomUUID() }),
+    /только своему ученику/,
+  );
 });

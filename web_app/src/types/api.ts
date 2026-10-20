@@ -29,7 +29,6 @@ export interface ApiAuthUser {
   permissions?: string[];
   productFeatures?: {
     learningTopicsV2: boolean;
-    studentWorkspaceV2: boolean;
     homeworkFlowV2: boolean;
     unifiedLessonV2: boolean;
     lessonSyncV2: boolean;

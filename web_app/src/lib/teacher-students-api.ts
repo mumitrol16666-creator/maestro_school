@@ -109,6 +109,10 @@ export const teacherStudentsApi = {
     `/teachers/me/learning-topics/${encodeURIComponent(topicId)}/progress`,
     { method: "PATCH", body: JSON.stringify(body) },
   ),
+  weeklyLeagueBonusStatus: (studentIds: string[]) =>
+    apiRequest<Array<{ studentId: string; given: boolean; amount: number | null; byMe: boolean }>>(
+      `/teacher/weekly-league/bonus-status?studentIds=${encodeURIComponent(studentIds.join(","))}`,
+    ),
   awardWeeklyLeagueBonus: (body: {
     studentId: string;
     amount: number;

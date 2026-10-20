@@ -1,23 +1,15 @@
 "use client";
 
-import { Award, BookCheck, Coins, Flame, Medal, Star, Target, Trophy } from "lucide-react";
+import { Flame, Medal, Star, Trophy } from "lucide-react";
 import type { StudentAchievementItem } from "@/types/api";
 
+// Achievements are the weekly streak milestones (the old catalog of 14 was retired in plan 1.7).
 const icons: Record<string, typeof Trophy> = {
-  first_lesson: Medal,
-  points_100: Star,
-  first_module: Award,
-  lessons_10: Flame,
-  offline_lesson_1: Medal,
-  offline_lessons_10: Flame,
-  offline_lessons_25: Trophy,
-  points_300: Star,
-  points_500: Trophy,
-  homework_3: BookCheck,
-  homework_10: BookCheck,
-  monthly_plan_1: Target,
-  coins_25: Coins,
-  coins_100: Coins,
+  weekly_streak_4: Flame,
+  weekly_streak_8: Flame,
+  weekly_streak_12: Star,
+  weekly_streak_24: Medal,
+  weekly_streak_52: Trophy,
 };
 
 function AchievementIcon({ code, earned }: { code: string; earned: boolean }) {

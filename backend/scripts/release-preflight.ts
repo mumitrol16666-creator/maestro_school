@@ -4,7 +4,6 @@ const failures: string[] = [];
 
 const featureKeys = [
   "FEATURE_LEARNING_TOPICS_V2",
-  "FEATURE_STUDENT_WORKSPACE_V2",
   "FEATURE_HOMEWORK_FLOW_V2",
   "FEATURE_UNIFIED_LESSON_V2",
   "FEATURE_LESSON_SYNC_V2",

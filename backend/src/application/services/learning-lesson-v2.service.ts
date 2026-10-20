@@ -2,14 +2,13 @@ import { LearningPlanTopicState, LearningTopicProgressSource } from "@prisma/cli
 import { productFeatureConfig, rewardEconomyV2AppliesToEvent } from "../../config/product-features.js";
 import { fetchTeacherGroupsForAccess, fetchTeacherStudentsForAccess } from "./teacher-substitution.service.js";
 import { isOfflineCoordinatorRole } from "../../domain/cms-access.js";
-import { AppError, BadRequestError, ForbiddenError } from "../../domain/errors.js";
+import { AppError, BadRequestError, ConflictError, ForbiddenError } from "../../domain/errors.js";
 import { NON_EMPTY_PLAN_COMPLETION_POINTS } from "../../domain/product-economy-v2.js";
 import { prisma } from "../../infrastructure/database/prisma.js";
 import {
   fetchClassCard,
   fetchClassStudents,
 } from "../../infrastructure/crm/crm-client.js";
-import { aqtobeMonthKey } from "../../lib/aqtobe-month.js";
 import {
   createLearningHomeworkAssignmentForRecipients,
   reviewLearningHomework,
@@ -713,10 +712,16 @@ export async function applyApprovedLearningLessonV2Results(
   return applyValidatedLearningLessonV2Results(actorUserId, crmClassId, input, context, approval);
 }
 
+/**
+ * Plan 1.6: a teacher adds a topic during the lesson. It goes into the open sector the lesson
+ * already shows for the chosen direction: the published version gets the topic, and an unpublished
+ * draft keeps the teacher's edits and gets the topic too. Without a published sector there is
+ * nowhere to add it: the sector is opened in the student or group card first.
+ */
 export async function quickAddOfflineLessonTopic(
   actorUserId: string,
   crmClassId: string,
-  input: { title: string; masteryCriteria?: string; directionId?: string },
+  input: { title: string; masteryCriteria?: string; directionId: string },
 ) {
   if (!learningLessonV2Enabled()) {
     throw new BadRequestError("Функционал учебных планов V2 отключен", "LEARNING_LESSON_V2_DISABLED");
@@ -725,178 +730,73 @@ export async function quickAddOfflineLessonTopic(
   if (!title) {
     throw new BadRequestError("Укажите название темы", "TOPIC_TITLE_REQUIRED");
   }
+  if (!input.directionId) {
+    throw new BadRequestError("Выберите направление сектора", "DIRECTION_REQUIRED");
+  }
   const masteryCriteria = (input.masteryCriteria ?? "").trim();
   const scope = await resolveLessonScope(actorUserId, crmClassId);
-  const month = aqtobeMonthKey(scope.eventAt);
-
-  let direction = null;
-  if (input.directionId) {
-    direction = await prisma.direction.findFirst({
-      where: {
-        id: input.directionId,
-        deletedAt: null,
-      },
-    });
+  if (scope.reportOnly) {
+    throw new BadRequestError("На этом уроке темы сектора не меняются", "QUICK_TOPIC_NOT_AVAILABLE");
   }
-  if (!direction) {
-    const existingPlan = await prisma.learningPlan.findFirst({
-      where: {
-        month: { lte: month },
-        ...(scope.owner.kind === "student"
-          ? { crmStudentId: scope.owner.id, crmGroupId: null }
-          : { crmStudentId: null, crmGroupId: scope.owner.id }),
-        ...(scope.allowedDirectionTitles && scope.allowedDirectionTitles.length > 0
-          ? { direction: { title: { in: scope.allowedDirectionTitles } } }
-          : {}),
-      },
-      include: { direction: true },
-      orderBy: [{ month: "desc" }, { updatedAt: "desc" }],
-    });
-    if (existingPlan?.direction) {
-      direction = existingPlan.direction;
-    }
-  }
-  if (!direction && scope.allowedDirectionTitles && scope.allowedDirectionTitles.length > 0) {
-    direction = await prisma.direction.findFirst({
-      where: {
-        title: { in: scope.allowedDirectionTitles },
-        deletedAt: null,
-      },
-    });
-  }
-  if (!direction) {
-    direction = await prisma.direction.findFirst({
-      where: { deletedAt: null },
-      orderBy: { createdAt: "asc" },
-    });
-  }
-  if (!direction) {
-    throw new BadRequestError("Направление обучения не найдено", "DIRECTION_NOT_FOUND");
-  }
+  const ownerWhere = scope.owner.kind === "student"
+    ? { crmStudentId: scope.owner.id, crmGroupId: null }
+    : { crmStudentId: null, crmGroupId: scope.owner.id };
 
-  const result = await prisma.$transaction(async (tx) => {
-    const ownerWhere = scope.owner.kind === "student"
-      ? { crmStudentId: scope.owner.id, crmGroupId: null }
-      : { crmStudentId: null, crmGroupId: scope.owner.id };
-    let plan = await tx.learningPlan.findFirst({
-      where: {
-        directionId: direction.id,
-        status: "active",
-        ...ownerWhere,
-      },
-      include: {
-        versions: {
-          orderBy: { version: "desc" },
-          take: 1,
-          include: {
-            topics: {
-              orderBy: { sortOrder: "asc" },
-              include: { topic: true },
-            },
-          },
-        },
-      },
-    });
-
-    if (!plan) {
-      const planId = crypto.randomUUID();
-      const versionId = crypto.randomUUID();
-      const topicId = crypto.randomUUID();
-      const sourceKey = "v2-plan-item:" + planId + ":" + topicId;
-
-      const createdTopic = await tx.learningTopic.create({
-        data: {
-          id: topicId,
-          directionId: direction.id,
-          ...(scope.owner.kind === "student"
-            ? { crmStudentId: scope.owner.id, crmGroupId: null }
-            : { crmStudentId: null, crmGroupId: scope.owner.id }),
-          title,
-          masteryCriteria,
-          progressPercent: 0,
-          createdById: actorUserId,
-          responsibleTeacherId: actorUserId,
-          legacySourceKey: sourceKey,
-          progressHistory: {
-            create: {
-              fromPercent: null,
-              toPercent: 0,
-              source: LearningTopicProgressSource.teacher,
-              sourceKey: sourceKey + ":progress:create",
-              changedById: actorUserId,
-              occurredAt: new Date(),
-            },
-          },
-        },
-      });
-
-      const lastSequence = await tx.learningPlan.aggregate({
-        where: { directionId: direction.id, ...ownerWhere },
-        _max: { sequence: true },
-      });
-      plan = await tx.learningPlan.create({
-        data: {
-          id: planId,
-          directionId: direction.id,
-          month,
-          sequence: (lastSequence._max.sequence ?? 0) + 1,
-          status: "active",
-          ...ownerWhere,
-          currentVersionNumber: 1,
-          publishedVersionNumber: 1,
-          createdById: actorUserId,
-          versions: {
-            create: {
-              id: versionId,
-              version: 1,
-              goal: "Освоить «" + title + "»",
-              publishedAt: new Date(),
-              createdById: actorUserId,
-              topics: {
-                create: {
-                  topicId: createdTopic.id,
-                  state: LearningPlanTopicState.active,
-                  sortOrder: 0,
-                  titleSnapshot: title,
-                  masteryCriteriaSnapshot: masteryCriteria,
-                },
-              },
-            },
-          },
-        },
+  // The same sector the lesson shows for this direction (see lessonPlans).
+  const plan = await prisma.learningPlan.findFirst({
+    where: {
+      directionId: input.directionId,
+      status: "active",
+      publishedVersionNumber: { not: null },
+      ...ownerWhere,
+      ...(scope.allowedDirectionTitles
+        ? { direction: { title: { in: scope.allowedDirectionTitles } } }
+        : {}),
+    },
+    include: {
+      versions: {
         include: {
-          versions: {
-            include: {
-              topics: {
-                include: { topic: true },
-              },
-            },
+          topics: {
+            orderBy: { sortOrder: "asc" },
+            include: { topic: true },
           },
         },
-      });
-
-      return { topic: createdTopic, planId: plan.id };
-    }
-
-    const latestVersion = plan.versions[0];
-    const existingTopics = latestVersion ? latestVersion.topics : [];
-
-    const duplicate = existingTopics.find(
-      (item) => item.state === LearningPlanTopicState.active && item.titleSnapshot.trim().toLowerCase() === title.toLowerCase(),
+      },
+    },
+    orderBy: [{ sequence: "desc" }, { updatedAt: "desc" }],
+  });
+  if (!plan || plan.publishedVersionNumber === null) {
+    throw new BadRequestError(
+      "По этому направлению нет открытого сектора. Откройте и опубликуйте сектор в карточке ученика.",
+      "QUICK_TOPIC_SECTOR_NOT_PUBLISHED",
     );
-    if (duplicate) {
-      return { topic: duplicate.topic, planId: plan.id };
-    }
+  }
+  if (plan.lockedAt) {
+    throw new ConflictError("Сектор завершён: темы в него больше не добавляются", "MONTHLY_PLAN_LOCKED");
+  }
+  const publishedVersionNumber = plan.publishedVersionNumber;
+  const published = plan.versions.find((version) => version.version === publishedVersionNumber);
+  if (!published) {
+    throw new ConflictError("Версия учебного плана не найдена", "MONTHLY_PLAN_VERSION_MISSING");
+  }
+  const draft = plan.currentVersionNumber > publishedVersionNumber
+    ? plan.versions.find((version) => version.version === plan.currentVersionNumber) ?? null
+    : null;
 
+  const sameTitle = (item: { state: LearningPlanTopicState; titleSnapshot: string }) => (
+    item.state === LearningPlanTopicState.active
+    && item.titleSnapshot.trim().toLowerCase() === title.toLowerCase()
+  );
+  const duplicate = published.topics.find(sameTitle);
+
+  const topic = duplicate ? duplicate.topic : await prisma.$transaction(async (tx) => {
     const topicId = crypto.randomUUID();
     const sourceKey = "v2-plan-item:" + plan.id + ":" + topicId;
     const createdTopic = await tx.learningTopic.create({
       data: {
         id: topicId,
-        directionId: direction.id,
-        ...(scope.owner.kind === "student"
-          ? { crmStudentId: scope.owner.id, crmGroupId: null }
-          : { crmStudentId: null, crmGroupId: scope.owner.id }),
+        directionId: plan.directionId,
+        ...ownerWhere,
         title,
         masteryCriteria,
         progressPercent: 0,
@@ -915,61 +815,75 @@ export async function quickAddOfflineLessonTopic(
         },
       },
     });
-
-    const nextVersionNum = (plan.currentVersionNumber || 0) + 1;
-    await tx.learningPlanVersion.create({
-      data: {
-        planId: plan.id,
-        version: nextVersionNum,
-        goal: latestVersion?.goal || ("Освоить «" + title + "»"),
-        expectedResult: latestVersion?.expectedResult || "",
-        skills: latestVersion?.skills || "",
-        checkpoint: latestVersion?.checkpoint || "",
-        note: latestVersion?.note || "",
-        materials: latestVersion?.materials ?? [],
-        publishedAt: new Date(),
-        createdById: actorUserId,
-        topics: {
-          create: [
-            ...existingTopics.map((item) => ({
-              topicId: item.topicId,
-              state: item.state,
-              sortOrder: item.sortOrder,
-              titleSnapshot: item.titleSnapshot,
-              masteryCriteriaSnapshot: item.masteryCriteriaSnapshot,
-              replacementTopicId: item.replacementTopicId,
-            })),
-            {
-              topicId: createdTopic.id,
-              state: LearningPlanTopicState.active,
-              sortOrder: existingTopics.length,
-              titleSnapshot: title,
-              masteryCriteriaSnapshot: masteryCriteria,
-            },
-          ],
+    const newLink = (sortOrder: number) => ({
+      topicId: createdTopic.id,
+      state: LearningPlanTopicState.active,
+      sortOrder,
+      titleSnapshot: title,
+      masteryCriteriaSnapshot: masteryCriteria,
+    });
+    const copyVersion = (version: typeof published, versionNumber: number, publishedAt: Date | null) => {
+      // A draft that already has a topic with this title points it at the new topic.
+      const replaced = version.topics.some(sameTitle);
+      return tx.learningPlanVersion.create({
+        data: {
+          planId: plan.id,
+          version: versionNumber,
+          goal: version.goal,
+          expectedResult: version.expectedResult,
+          skills: version.skills,
+          checkpoint: version.checkpoint,
+          note: version.note,
+          materials: version.materials ?? [],
+          publishedAt,
+          createdById: actorUserId,
+          topics: {
+            create: [
+              ...version.topics.map((item) => ({
+                topicId: replaced && sameTitle(item) ? createdTopic.id : item.topicId,
+                state: item.state,
+                sortOrder: item.sortOrder,
+                titleSnapshot: item.titleSnapshot,
+                masteryCriteriaSnapshot: item.masteryCriteriaSnapshot,
+                replacementTopicId: item.replacementTopicId,
+              })),
+              ...(replaced ? [] : [newLink(version.topics.length)]),
+            ],
+          },
         },
-      },
-    });
+      });
+    };
 
-    await tx.learningPlan.update({
-      where: { id: plan.id },
-      data: {
-        currentVersionNumber: nextVersionNum,
-        publishedVersionNumber: nextVersionNum,
-        updatedAt: new Date(),
-      },
-    });
+    const nextPublished = plan.currentVersionNumber + 1;
+    await copyVersion(published, nextPublished, new Date());
+    const nextCurrent = draft ? nextPublished + 1 : nextPublished;
+    if (draft) await copyVersion(draft, nextCurrent, null);
 
-    return { topic: createdTopic, planId: plan.id };
+    const updated = await tx.learningPlan.updateMany({
+      where: {
+        id: plan.id,
+        currentVersionNumber: plan.currentVersionNumber,
+        publishedVersionNumber,
+        lockedAt: null,
+      },
+      data: { currentVersionNumber: nextCurrent, publishedVersionNumber: nextPublished },
+    });
+    if (updated.count !== 1) {
+      throw new ConflictError(
+        "Сектор только что изменился. Обновите страницу и добавьте тему снова.",
+        "MONTHLY_PLAN_STALE_DRAFT",
+      );
+    }
+    return createdTopic;
   });
 
   const updatedContext = await getLearningLessonV2Context(actorUserId, crmClassId);
   return {
     success: true,
     topic: {
-      id: result.topic.id,
-      title: result.topic.title,
-      masteryCriteria: result.topic.masteryCriteria,
+      id: topic.id,
+      title: topic.title,
+      masteryCriteria: topic.masteryCriteria,
     },
     learningV2: updatedContext,
   };

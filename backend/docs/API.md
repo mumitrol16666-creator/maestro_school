@@ -36,7 +36,7 @@
 - `POST /teachers/me/students/:crmStudentId/monthly-plan/publish` — публикация
   плана ученику;
 - аналогичные `GET/PUT/.../publish` доступны для плана группы;
-- `POST .../start`, `.../finish`, `.../submit`, `.../not-held`,
+- `POST .../start`, `.../submit`, `.../not-held`,
   `.../attendance` — рабочий цикл преподавателя;
 - `GET /admin/offline-lessons/pending-review` — очередь администратора;
 - `POST /admin/offline-lessons/:crmClassId/attendance` — корректировка;

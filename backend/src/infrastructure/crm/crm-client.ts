@@ -358,16 +358,6 @@ export async function postTeacherStart(crmClassId: string, crmTeacherId: string)
   );
 }
 
-export async function postTeacherFinish(
-  crmClassId: string,
-  payload: { crmTeacherId: string; comment?: string },
-) {
-  return crmPost<Record<string, unknown>>(
-    `/api/integration/v1/classes/${encodeURIComponent(crmClassId)}/teacher-finish`,
-    payload,
-  );
-}
-
 export async function postTeacherSubmit(
   crmClassId: string,
   payload: TeacherSubmitPayload,
