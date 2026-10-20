@@ -4,7 +4,6 @@ import type { HomeworkTestQuestion } from "./homework-test.js";
 import {
   bestPreparedTestScore,
   buildPreparedTestReview,
-  isPreparedTestUnlocked,
   preparedTestDailyState,
   preparedTestDayKey,
   shufflePreparedTestOptions,
@@ -24,11 +23,6 @@ const questions: HomeworkTestQuestion[] = [{
 }];
 
 describe("prepared test progress", () => {
-  it("unlocks tests only after every previous test is passed", () => {
-    assert.equal(isPreparedTestUnlocked(1, ["one", "two"], attempts), true);
-    assert.equal(isPreparedTestUnlocked(2, ["one", "two", "three"], attempts), false);
-  });
-
   it("keeps the best score across attempts", () => {
     assert.equal(bestPreparedTestScore(attempts, "one"), 80);
     assert.equal(bestPreparedTestScore(attempts, "two"), null);

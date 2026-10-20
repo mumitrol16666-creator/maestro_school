@@ -8,7 +8,6 @@ export const PRODUCT_FEATURE_ENV = {
   rewardEconomyV2: "FEATURE_REWARD_ECONOMY_V2",
   curatorWorkspaceV2: "FEATURE_CURATOR_WORKSPACE_V2",
   learningDialogsV2: "FEATURE_LEARNING_DIALOGS_V2",
-  roleNavigationV2: "FEATURE_ROLE_NAVIGATION_V2",
 } as const;
 
 export type ProductFeatureKey = keyof typeof PRODUCT_FEATURE_ENV;

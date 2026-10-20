@@ -29,7 +29,7 @@ describe("student task aggregation", () => {
       const result = await getStudentTasks("student", filters, {
         course: async () => [task("course:1", "course", "todo")],
         offline: async () => { throw Object.assign(new Error("private upstream error"), { code: "CRM_TIMEOUT" }); },
-        online: async () => [task("online:1", "online", "waiting_review")],
+        online: async () => [task("online:1", "online", "waiting_review")], theory: async () => [],
       });
       assert.equal(result.meta.partial, true);
       assert.deepEqual(result.data.items.map((item) => item.id), ["course:1", "online:1"]);
@@ -44,7 +44,7 @@ describe("student task aggregation", () => {
     await assert.rejects(() => getStudentTasks("student", filters, {
       course: async () => { throw new Error("database unavailable"); },
       offline: async () => [],
-      online: async () => [],
+      online: async () => [], theory: async () => [],
     }), /database unavailable/);
   });
 
@@ -52,20 +52,20 @@ describe("student task aggregation", () => {
     const result = await getStudentTasks("student", { scope: "active", source: "course", limit: 1 }, {
       course: async () => [task("course:1", "course", "todo"), task("course:2", "course", "todo")],
       offline: async () => [task("offline:1", "offline", "completed")],
-      online: async () => [task("online:1", "online", "waiting_review")],
+      online: async () => [task("online:1", "online", "waiting_review")], theory: async () => [],
     });
     assert.equal(result.data.items.length, 1);
     assert.equal(result.meta.truncated, true);
     assert.equal(result.data.counts.actionRequired, 2);
-    assert.deepEqual(result.data.counts.bySource, { course: 2, offline: 1, online: 1 });
-    assert.deepEqual(result.data.filteredCounts.bySource, { course: 2, offline: 0, online: 0 });
+    assert.deepEqual(result.data.counts.bySource, { course: 2, offline: 1, online: 1, theory: 0 });
+    assert.deepEqual(result.data.filteredCounts.bySource, { course: 2, offline: 0, online: 0, theory: 0 });
     assert.equal(result.data.filteredCounts.completed, 0);
     assert.equal(result.data.filteredCounts.waitingReview, 0);
   });
 
   it("keeps canonical tasks and lower-bound counts in a partial school batch", async () => {
     const result = await getStudentTasks("student", { scope: "active", source: "offline", limit: 50 }, {
-      course: async () => [task("course", "course", "todo")], online: async () => [],
+      course: async () => [task("course", "course", "todo")], online: async () => [], theory: async () => [],
       offline: async () => ({ tasks: [task("v2", "offline", "waiting_review")], unavailableCode: "CRM_TIMEOUT" }),
     });
     assert.equal(result.meta.partial, true);

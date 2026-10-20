@@ -1,4 +1,4 @@
-import { ArrowRight, BookOpenCheck, MessageSquare, MonitorPlay, Music2 } from "lucide-react";
+import { ArrowRight, BookOpenCheck, ClipboardCheck, MessageSquare, MonitorPlay, Music2 } from "lucide-react";
 import Link from "next/link";
 import { isHistoricalTask, taskDate, taskStatusLabel } from "@/lib/task-presentation";
 import type { UnifiedTask } from "@/types/unified-tasks";
@@ -7,6 +7,7 @@ const sources = {
   course: { label: "Курс", icon: BookOpenCheck },
   offline: { label: "Урок с преподавателем", icon: Music2 },
   online: { label: "Онлайн", icon: MonitorPlay },
+  theory: { label: "Тест по теории", icon: ClipboardCheck },
 };
 
 export function UnifiedTaskCard({ task }: { task: UnifiedTask }) {

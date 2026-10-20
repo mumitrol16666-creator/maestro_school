@@ -27,7 +27,7 @@ function examples() {
 }
 type Options = { tasks?: UnifiedTask[]; fail?: boolean; partial?: boolean; delay?: number; truncated?: boolean };
 async function setup(page: Page, options: Options = {}, url = "/tasks") {
-  const user = { id: "tasks-isolated", firstName: "Айару", lastName: "Максот", role: "student", permissions: [], productFeatures: { roleNavigationV2: true, homeworkFlowV2: true, learningTopicsV2: true } };
+  const user = { id: "tasks-isolated", firstName: "Айару", lastName: "Максот", role: "student", permissions: [], productFeatures: { homeworkFlowV2: true, learningTopicsV2: true } };
   await page.clock.setFixedTime(new Date("2026-09-13T04:00:00Z"));
   await page.addInitScript(user => {
     localStorage.setItem("maestro_access_token", "isolated-tasks-mock");
@@ -136,7 +136,7 @@ test("failed load keeps navigation and retry, never presents zero as success", a
   const options = { fail: true };
   await setup(page, options);
   await expect(page.getByRole("heading", { name: "Не удалось загрузить задания" })).toBeVisible();
-  await expect(page.getByTestId("task-source-filters").getByRole("button")).toHaveCount(4);
+  await expect(page.getByTestId("task-source-filters").getByRole("button")).toHaveCount(5);
   await expect(page.getByTestId("task-state-filters")).not.toContainText("0");
   options.fail = false;
   await page.getByTestId("task-results").getByRole("button", { name: "Повторить" }).click();

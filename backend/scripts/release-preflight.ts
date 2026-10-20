@@ -10,7 +10,6 @@ const featureKeys = [
   "FEATURE_REWARD_ECONOMY_V2",
   "FEATURE_CURATOR_WORKSPACE_V2",
   "FEATURE_LEARNING_DIALOGS_V2",
-  "FEATURE_ROLE_NAVIGATION_V2",
 ] as const;
 
 function required(name: string) {

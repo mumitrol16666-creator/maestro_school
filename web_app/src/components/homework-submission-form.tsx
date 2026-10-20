@@ -30,6 +30,8 @@ interface HomeworkSubmissionFormProps {
     comment?: string;
     attachmentUrl?: string;
     attachmentType?: HomeworkAttachmentType;
+    /** Plan 2.5: a recording or a file instead of a link. */
+    file?: File;
   }) => Promise<void>;
 }
 
@@ -45,9 +47,14 @@ export function HomeworkSubmissionForm({
   const [comment, setComment] = useState(initialSubmission?.comment ?? "");
   const [attachmentUrl, setAttachmentUrl] = useState(initialSubmission?.attachmentUrl ?? "");
   const [attachmentType, setAttachmentType] = useState<HomeworkAttachmentType>(initialSubmission?.attachmentType ?? "text");
+  const [file, setFile] = useState<File | null>(null);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (attachmentType !== "text" && file) {
+      await onSubmit({ comment: comment.trim() || undefined, file });
+      return;
+    }
     await onSubmit({
       comment: comment.trim() || undefined,
       attachmentUrl: attachmentType === "text" ? undefined : attachmentUrl.trim() || undefined,
@@ -119,6 +126,24 @@ export function HomeworkSubmissionForm({
               className="w-full rounded-xl border border-stone-200 bg-white p-3 text-sm outline-none focus:border-gold disabled:opacity-60"
               placeholder={placeholders[attachmentType]}
             />
+          </label>
+        )}
+
+        {showUrlField && (
+          <label className="block" data-testid="homework-file-field">
+            <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-stone-400">
+              Или загрузите файл
+            </span>
+            <input
+              type="file"
+              accept={attachmentType === "video" ? "video/*" : attachmentType === "audio" ? "audio/*" : "image/*,application/pdf,audio/*,video/*"}
+              disabled={disabled || submitting}
+              onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+              className="block w-full text-sm text-stone-600 file:mr-3 file:min-h-10 file:rounded-xl file:border-0 file:bg-ink file:px-4 file:text-sm file:font-bold file:text-white"
+            />
+            <span className="mt-1 block text-[11px] text-stone-500">
+              {file ? `Будет отправлен: ${file.name}` : "Видео до 500 МБ, аудио до 100 МБ, фото до 15 МБ, PDF до 25 МБ. Файл увидит только преподаватель."}
+            </span>
           </label>
         )}
       </div>

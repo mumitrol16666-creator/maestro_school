@@ -1,4 +1,6 @@
 import type { PublicSectorExam } from "@/types/sector-exam";
+import type { UnifiedTask, UnifiedTaskCounts } from "@/types/unified-tasks";
+import type { SectorProposal } from "@/types/teacher-students";
 import type { LessonStatus } from "@/types";
 import type { HomeworkTestQuestion, HomeworkType } from "@/types/homework";
 import type { StudentOfflineSummary } from "@/types/school-offline";
@@ -35,7 +37,6 @@ export interface ApiAuthUser {
     rewardEconomyV2: boolean;
     curatorWorkspaceV2: boolean;
     learningDialogsV2: boolean;
-    roleNavigationV2: boolean;
   };
   points?: number;
   coins?: number;
@@ -292,8 +293,10 @@ export interface ApiStudentHome {
   dashboard: ApiDashboard;
   school: StudentOfflineSummary | null;
   monthlyPlans: StudentHomeMonthlyPlan[];
-  currentHomework: StudentHomeHomework | null;
-  lastHomeworkReview: StudentHomeHomework | null;
+  /** Plan 2.1: active tasks for «Сейчас», «Обучение» and the header; null when they could not be read. */
+  tasks: { items: UnifiedTask[]; counts: UnifiedTaskCounts; partial: boolean } | null;
+  achievementsEarned: number | null;
+  sectorProposals: SectorProposal[];
 }
 
 export interface CompleteLessonResponse {

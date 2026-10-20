@@ -173,17 +173,34 @@ export function selectStudentHomeHero({
   if (exactDue) return taskHero(exactDue);
 
   // Plan 1.10: a booked sector exam is the next thing to prepare for.
+  const sectorName = (plan: StudentHomeMonthlyPlan) => `сектора${plan.scope === "group" ? " группы" : ""}${plan.sequence ? ` ${plan.sequence}` : ""}`;
   const booked = plans.find((plan) => plan.exam?.status === "scheduled" && plan.exam.scheduledAt);
   if (booked?.exam) {
     const when = new Date(booked.exam.scheduledAt!);
     return {
       kind: "sector_exam",
       id: booked.exam.id,
-      eyebrow: `Скоро · экзамен сектора${booked.sequence ? ` ${booked.sequence}` : ""}`,
+      eyebrow: `Скоро · экзамен ${sectorName(booked)}`,
       title: `Экзамен ${when.toLocaleString("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Aqtobe" })}`,
       subtitle: booked.goal,
       detail: "Экзамен проходит в школе. Посмотри, что проверит преподаватель.",
       badge: null,
+      href: "/monthly-plan",
+      actionLabel: "Что проверят",
+    };
+  }
+
+  // Plan 2.3: an exam the school is preparing — the student gets ready before the date is set.
+  const preparing = plans.find((plan) => plan.exam?.status === "awaiting_schedule" && !plan.memberPass);
+  if (preparing?.exam) {
+    return {
+      kind: "sector_exam",
+      id: preparing.exam.id,
+      eyebrow: `Скоро · экзамен ${sectorName(preparing)}`,
+      title: preparing.exam.attempt > 1 ? "Пересдача экзамена готовится" : "Экзамен готовится",
+      subtitle: preparing.goal,
+      detail: "Школа назначит дату. Уже сейчас можно посмотреть, что проверит преподаватель.",
+      badge: { label: "Дата скоро", tone: "warning" },
       href: "/monthly-plan",
       actionLabel: "Что проверят",
     };

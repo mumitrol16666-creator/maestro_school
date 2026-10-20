@@ -5,14 +5,11 @@ import {
   CalendarDays,
   ClipboardCheck,
   Ellipsis,
-  ExternalLink,
-  Gift,
   GraduationCap,
   History,
   House,
   ListTodo,
   MessagesSquare,
-  ShoppingBag,
   Target,
   type LucideIcon,
 } from "lucide-react";
@@ -21,7 +18,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 export type StudentWorkspaceNavigationItem = {
-  id: "home" | "learning" | "schedule" | "messages" | "shop";
+  id: "home" | "learning" | "schedule" | "messages";
   href: string;
   label: string;
   icon: LucideIcon;
@@ -59,13 +56,7 @@ export const studentWorkspaceNavigation: StudentWorkspaceNavigationItem[] = [
     pathPrefixes: ["/messages"],
     messagesOnly: true,
   },
-  {
-    id: "shop",
-    href: "/rewards",
-    label: "Магазин",
-    icon: ShoppingBag,
-    pathPrefixes: ["/rewards"],
-  },
+  // Plan 2.6: the shop is off until CRM has goods and prices; /rewards stays reachable from Coins.
 ];
 
 export function pathMatchesAny(pathname: string, prefixes: readonly string[]) {
@@ -73,7 +64,7 @@ export function pathMatchesAny(pathname: string, prefixes: readonly string[]) {
 }
 
 const learningPrimaryLinks = [
-  { href: "/learning", label: "Сейчас", icon: GraduationCap },
+  { href: "/learning", label: "Обучение", icon: GraduationCap },
   { href: "/monthly-plan", label: "Сектор", icon: Target },
   { href: "/tasks", label: "Задания", icon: ListTodo },
 ] as const;
@@ -90,9 +81,7 @@ export function StudentWorkspaceContextNavigation() {
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
   const moreRef = useRef<HTMLDivElement>(null);
-  const storefrontUrl = process.env.NEXT_PUBLIC_MAESTRO_SHOP_URL?.trim() || "https://shop.maestro.com.kz";
   const learningSection = pathMatchesAny(pathname, studentWorkspaceNavigation[1].pathPrefixes);
-  const shopSection = pathMatchesAny(pathname, studentWorkspaceNavigation[4].pathPrefixes);
 
   useEffect(() => {
     setMoreOpen(false);
@@ -180,10 +169,6 @@ export function StudentWorkspaceContextNavigation() {
         </div>
       </nav>
     );
-  }
-
-  if (shopSection) {
-    return null;
   }
 
   return null;

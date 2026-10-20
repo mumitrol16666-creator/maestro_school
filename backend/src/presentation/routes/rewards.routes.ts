@@ -5,11 +5,9 @@ import {
   getStudentRewardsOverview,
   listAdminRewards,
   processRewardRedemption,
-  redeemReward,
   updateRewardCatalogItem,
 } from "../../application/services/rewards.service.js";
 import { writeAuditLog } from "../../application/services/audit.service.js";
-import { ForbiddenError } from "../../domain/errors.js";
 import {
   authenticate,
   requireContentAdmin,
@@ -35,14 +33,6 @@ export async function rewardsRoutes(app: FastifyInstance) {
     async (request) => ({
       data: await getStudentRewardsOverview(request.user!.id),
     }),
-  );
-
-  app.post(
-    "/rewards/:id/redeem",
-    { preHandler: [authenticate, requireStudent] },
-    async () => {
-      throw new ForbiddenError("Магазин временно недоступен");
-    },
   );
 
   app.get(

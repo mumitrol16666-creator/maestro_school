@@ -72,7 +72,7 @@ describe("unified task domain", () => {
       needsRevision: 0,
       completed: 1,
       archived: 0,
-      bySource: { course: 1, offline: 1, online: 1 },
+      bySource: { course: 1, offline: 1, online: 1, theory: 0 },
     });
   });
 

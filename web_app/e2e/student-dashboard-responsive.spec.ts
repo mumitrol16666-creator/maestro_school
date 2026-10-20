@@ -14,17 +14,19 @@ async function signInAsStudent(request: APIRequestContext, context: BrowserConte
   }, payload.data);
 }
 
-test("student dashboard keeps one task state and desktop league in the top row", async ({ page, request, context }) => {
+test("«Сейчас» keeps the focus and league in the top row and leads to «Обучение»", async ({ page, request, context }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await signInAsStudent(request, context);
   await page.goto("/dashboard");
 
   const focus = page.getByText(/^Сейчас · /).first();
   const league = page.getByRole("heading", { name: "Лидеры недели" });
-  const tasks = page.getByText(/Сейчас всё сделано|Нужно сделать/).first();
+  // Plan 2.1: tasks and the sector live on «Обучение»; «Сейчас» shows a short summary leading there.
+  const tasks = page.getByTestId("dashboard-learning-summary");
   await expect(focus).toBeVisible();
   await expect(league).toBeVisible();
   await expect(tasks).toBeVisible();
+  await expect(tasks.getByRole("link", { name: /Открыть обучение/ })).toHaveAttribute("href", "/learning");
   await expect(page.getByText("Процент не выставлен")).toHaveCount(0);
   await expect(page.getByTestId("dashboard-coins-chip")).toHaveAttribute("href", "/rewards");
   await expect(page.getByTestId("dashboard-achievements-chip")).toHaveAttribute("href", "/settings#achievements");
@@ -48,13 +50,14 @@ test("student dashboard keeps one task state and desktop league in the top row",
   expect(taskBox!.y).toBeGreaterThan(focusBox!.y);
 });
 
-test("student dashboard shows the task state before league on a phone", async ({ page, request, context }) => {
+test("on a phone «Сейчас» shows the focus, the league, then the way to «Обучение»", async ({ page, request, context }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await signInAsStudent(request, context);
   await page.goto("/dashboard");
 
   const focus = page.getByText(/^Сейчас · /).first();
-  const tasks = page.getByText(/Сейчас всё сделано|Нужно сделать/).first();
+  // Plan 2.1: tasks and the sector live on «Обучение»; «Сейчас» shows a short summary leading there.
+  const tasks = page.getByTestId("dashboard-learning-summary");
   const league = page.getByRole("heading", { name: "Лидеры недели" });
   await expect(focus).toBeVisible();
   await expect(tasks).toBeVisible();
@@ -66,8 +69,8 @@ test("student dashboard shows the task state before league on a phone", async ({
   expect(focusBox).not.toBeNull();
   expect(taskBox).not.toBeNull();
   expect(leagueBox).not.toBeNull();
-  expect(taskBox!.y).toBeGreaterThan(focusBox!.y);
-  expect(leagueBox!.y).toBeGreaterThan(taskBox!.y);
+  expect(leagueBox!.y).toBeGreaterThan(focusBox!.y);
+  expect(taskBox!.y).toBeGreaterThan(leagueBox!.y);
 
   const overflow = await page.evaluate(() => (
     document.documentElement.scrollWidth - document.documentElement.clientWidth
@@ -100,7 +103,7 @@ test("monthly plan opens from the dashboard on desktop and phone", async ({ page
     await page.getByRole("link", { name: "Открыть сектор", exact: true }).first().click();
 
     await expect(page).toHaveURL(/\/monthly-plan$/);
-    await expect(page.getByRole("heading", { name: /^(Сектор \d+|Мой сектор)$/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /^(Мой сектор( \d+)?|Сектор группы \d+|Мои сектора)$/ })).toBeVisible();
     await expect(page.getByRole("article")).not.toHaveCount(0);
     await expect(page.getByText("Application error", { exact: false })).toHaveCount(0);
     const overflow = await page.evaluate(() => (

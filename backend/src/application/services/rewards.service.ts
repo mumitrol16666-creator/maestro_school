@@ -1,6 +1,6 @@
 import { Prisma, type RewardRedemptionStatus } from "@prisma/client";
 import { prisma } from "../../infrastructure/database/prisma.js";
-import { BadRequestError, ConflictError, NotFoundError } from "../../domain/errors.js";
+import { BadRequestError, NotFoundError } from "../../domain/errors.js";
 import { getStudentRank } from "../../domain/student-rank.js";
 import {
   canTransitionRewardStatus,
@@ -94,89 +94,6 @@ export async function getStudentRewardsOverview(studentId: string) {
     catalog,
     redemptions,
   };
-}
-
-export async function redeemReward(params: {
-  studentId: string;
-  rewardId: string;
-  studentNote?: string | null;
-}) {
-  const redemption = await prisma.$transaction(async (tx) => {
-    const reward = await tx.rewardCatalogItem.findFirst({
-      where: { id: params.rewardId, isActive: true },
-      select: rewardItemSelect,
-    });
-    if (!reward) throw new NotFoundError("Награда");
-    if (reward.stock === 0) {
-      throw new ConflictError("Эта награда временно закончилась", "REWARD_OUT_OF_STOCK");
-    }
-
-    await tx.studentCoinBalance.upsert({
-      where: { studentId: params.studentId },
-      create: { studentId: params.studentId, balance: 0 },
-      update: {},
-    });
-
-    const reserved = await tx.$executeRaw`
-      UPDATE "reward_catalog_items"
-      SET
-        "stock" = CASE WHEN "stock" IS NULL THEN NULL ELSE "stock" - 1 END,
-        "updated_at" = CURRENT_TIMESTAMP
-      WHERE "id" = ${params.rewardId}::uuid
-        AND "is_active" = TRUE
-        AND ("stock" IS NULL OR "stock" > 0)
-    `;
-    if (reserved !== 1) {
-      throw new ConflictError("Эта награда временно недоступна", "REWARD_UNAVAILABLE");
-    }
-
-    const debited = await tx.studentCoinBalance.updateMany({
-      where: {
-        studentId: params.studentId,
-        balance: { gte: reward.costCoins },
-      },
-      data: { balance: { decrement: reward.costCoins } },
-    });
-    if (debited.count !== 1) {
-      throw new ConflictError(
-        `Для этой награды нужно ${reward.costCoins} Maestro Coins`,
-        "INSUFFICIENT_COINS",
-      );
-    }
-
-    const balance = await tx.studentCoinBalance.findUniqueOrThrow({
-      where: { studentId: params.studentId },
-      select: { balance: true },
-    });
-    const created = await tx.rewardRedemption.create({
-      data: {
-        studentId: params.studentId,
-        rewardId: reward.id,
-        rewardTitle: reward.title,
-        costCoins: reward.costCoins,
-        studentNote: params.studentNote?.trim() || null,
-      },
-      include: redemptionInclude,
-    });
-    await tx.maestroCoinTransaction.create({
-      data: {
-        studentId: params.studentId,
-        amount: -reward.costCoins,
-        transactionType: "spend",
-        reason: `Награда «${reward.title}»`,
-        sourceType: "reward",
-        sourceId: created.id,
-        sourceKey: `reward-spend:${created.id}`,
-        createdById: params.studentId,
-        balanceBefore: balance.balance + reward.costCoins,
-        balanceAfter: balance.balance,
-      },
-    });
-    return created;
-  });
-
-  await notifyRewardManagers(redemption.id, redemption.rewardTitle).catch(() => undefined);
-  return redemption;
 }
 
 export async function listAdminRewards(status?: RewardRedemptionStatus) {

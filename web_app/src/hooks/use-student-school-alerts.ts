@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api } from "@/lib/api-client";
+import { loadStudentHome } from "@/lib/student-home";
 import {
   getSchoolAlertCounts,
   SCHOOL_ALERTS_UPDATED_EVENT,
@@ -32,7 +32,8 @@ export function useStudentSchoolAlerts(userId?: string, pollMs = 60_000) {
   const reload = useCallback(async () => {
     if (!userId) return;
     try {
-      const summary = await api.studentOfflineSummary();
+      // Plan 2.1: the header reads the school summary from the shared home read, not CRM on its own.
+      const summary = (await loadStudentHome()).school;
       setData(summary);
       recalculate(summary);
     } catch {

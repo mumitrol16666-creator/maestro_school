@@ -19,7 +19,8 @@ import {
   learningHomeworkMaterialType,
   storeLearningHomeworkFile,
 } from "../../application/services/learning-homework-private-storage.service.js";
-import { BadRequestError } from "../../domain/errors.js";
+import { BadRequestError, ForbiddenError } from "../../domain/errors.js";
+import { prisma } from "../../infrastructure/database/prisma.js";
 import { writeAuditLog } from "../../application/services/audit.service.js";
 import { authenticate, requirePermission } from "../guards/auth.guards.js";
 
@@ -130,6 +131,60 @@ const reviewSchema = z
     }
   });
 
+/**
+ * Plan 2.5: a course homework answer may carry one file, kept in the same private storage as
+ * homework v2. Only text fields and one file are accepted.
+ */
+async function readCourseHomeworkMultipart(request: FastifyRequest, homeworkId: string) {
+  const fields: Record<string, string> = {};
+  let upload: StoredHomeworkUpload | null = null;
+  try {
+    const parts = request.parts({
+      limits: { fieldNameSize: 100, fieldSize: 10_000, fields: 2, fileSize: 500 * 1024 * 1024, files: 1, parts: 3 },
+    });
+    for await (const part of parts) {
+      if (part.type === "field") {
+        if (!["comment", "attachmentType"].includes(part.fieldname)) throw new BadRequestError("Неизвестное поле ответа");
+        fields[part.fieldname] = String(part.value ?? "");
+        continue;
+      }
+      const stored = await storeLearningHomeworkFile({
+        assignmentId: homeworkId, filename: part.filename, mimeType: part.mimetype, stream: part.file,
+      });
+      if (part.file.truncated) {
+        if (stored.created) await deleteLearningHomeworkFile(homeworkId, stored.filename);
+        throw new BadRequestError("Файл превышает допустимый размер");
+      }
+      upload = stored;
+    }
+    const comment = z.string().max(4000).optional().parse(fields.comment || undefined);
+    return { comment, upload };
+  } catch (error) {
+    if (upload?.created) await deleteLearningHomeworkFile(homeworkId, upload.filename);
+    throw error;
+  }
+}
+
+function courseHomeworkFileUrl(homeworkId: string, filename: string) {
+  return `/api/v1/homework-files/${homeworkId}/${filename}/download`;
+}
+
+/** The author of the answer, or staff who review homework, may read a course homework file. */
+async function requireCourseHomeworkFileAccess(
+  homeworkId: string,
+  filename: string,
+  user: { id: string; permissions: string[] },
+) {
+  const submission = await prisma.homeworkSubmission.findFirst({
+    where: { homeworkId, attachmentUrl: courseHomeworkFileUrl(homeworkId, filename) },
+    select: { studentId: true },
+  });
+  if (!submission) throw new ForbiddenError("Файл недоступен");
+  if (submission.studentId !== user.id && !user.permissions.includes("homework.review")) {
+    throw new ForbiddenError("Файл недоступен");
+  }
+}
+
 export async function homeworkRoutes(app: FastifyInstance) {
   app.get(
     "/homeworks/:homeworkId/submissions/me",
@@ -162,7 +217,11 @@ export async function homeworkRoutes(app: FastifyInstance) {
         assignmentId: z.string().uuid(),
         filename: z.string().regex(/^[a-f0-9]{64}\.[a-z0-9]+$/i),
       }).parse(request.params);
-      await requireLearningHomeworkFileAccess(assignmentId, request.user!.id);
+      if (await learningHomeworkAssignmentExists(assignmentId)) {
+        await requireLearningHomeworkFileAccess(assignmentId, request.user!.id);
+      } else {
+        await requireCourseHomeworkFileAccess(assignmentId, filename, request.user!);
+      }
       const file = await getLearningHomeworkFile(assignmentId, filename);
       reply.headers({
         "Cache-Control": "private, no-store",
@@ -250,18 +309,37 @@ export async function homeworkRoutes(app: FastifyInstance) {
         }
       }
 
-      const body = submitSchema.parse(request.body);
-
       await getHomeworkById(homeworkId);
 
-      const { submission, lessonId, testResult, lessonProgress } = await submitHomework({
-        homeworkId,
-        studentId,
-        comment: body.comment,
-        attachmentUrl: body.attachmentUrl,
-        attachmentType: body.attachmentType,
-        testAnswers: body.testAnswers,
-      });
+      let body: z.infer<typeof submitSchema>;
+      let courseUpload: StoredHomeworkUpload | null = null;
+      if (request.isMultipart()) {
+        const multipart = await readCourseHomeworkMultipart(request, homeworkId);
+        courseUpload = multipart.upload;
+        const fileType = courseUpload ? learningHomeworkMaterialType(courseUpload.mimeType) : null;
+        body = {
+          comment: multipart.comment,
+          ...(courseUpload ? { attachmentUrl: courseHomeworkFileUrl(homeworkId, courseUpload.filename), attachmentType: fileType! } : {}),
+        };
+      } else {
+        body = submitSchema.parse(request.body);
+      }
+
+      let submitted;
+      try {
+        submitted = await submitHomework({
+          homeworkId,
+          studentId,
+          comment: body.comment,
+          attachmentUrl: body.attachmentUrl,
+          attachmentType: body.attachmentType,
+          testAnswers: body.testAnswers,
+        });
+      } catch (error) {
+        if (courseUpload?.created) await deleteLearningHomeworkFile(homeworkId, courseUpload.filename);
+        throw error;
+      }
+      const { submission, lessonId, testResult, lessonProgress } = submitted;
 
       await writeAuditLog({
         entityType: "homework_submission",

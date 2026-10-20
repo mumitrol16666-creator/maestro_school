@@ -5,7 +5,7 @@ import { authenticate, requirePermission, requireStudent } from "../guards/auth.
 
 const querySchema = z.object({
   scope: z.enum(["active", "completed", "all", "archived"]).default("active"),
-  source: z.enum(["course", "offline", "online"]).optional(),
+  source: z.enum(["course", "offline", "online", "theory"]).optional(),
   status: z.enum(["todo", "waiting_review", "needs_revision", "completed", "archived"]).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });

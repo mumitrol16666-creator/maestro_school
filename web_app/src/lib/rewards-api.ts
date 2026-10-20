@@ -11,11 +11,6 @@ import type {
 export const rewardsApi = {
   studentOverview: () =>
     apiRequest<StudentRewardsOverview>("/students/me/rewards"),
-  redeem: (rewardId: string, studentNote?: string) =>
-    apiRequest<RewardRedemption>(`/rewards/${encodeURIComponent(rewardId)}/redeem`, {
-      method: "POST",
-      body: JSON.stringify({ studentNote: studentNote?.trim() || null }),
-    }),
   adminOverview: (status?: RewardRedemptionStatus) =>
     apiRequest<AdminRewardsOverview>(
       `/admin/rewards${status ? `?status=${encodeURIComponent(status)}` : ""}`,

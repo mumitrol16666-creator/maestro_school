@@ -1,11 +1,12 @@
-export type UnifiedTaskSource = "course" | "offline" | "online";
+/** Plan 2.3: «theory» — the standalone theory tests, one current test at a time. */
+export type UnifiedTaskSource = "course" | "offline" | "online" | "theory";
 export type UnifiedTaskStatus = "todo" | "waiting_review" | "needs_revision" | "completed" | "archived";
 export type UnifiedTaskScope = "active" | "completed" | "all" | "archived";
 
 export type UnifiedTask = {
   id: string;
   source: UnifiedTaskSource;
-  provenance?: "legacy_offline" | "learning_homework_v2";
+  provenance?: "legacy_offline" | "learning_homework_v2" | "prepared_test";
   legacyDecision?: "accepted" | "continue" | "obsolete";
   kind: "assignment" | "test";
   title: string;
@@ -128,6 +129,7 @@ export function unifiedTaskCounts(tasks: UnifiedTask[]): UnifiedTaskCounts {
       course: tasks.filter((task) => task.source === "course").length,
       offline: tasks.filter((task) => task.source === "offline").length,
       online: tasks.filter((task) => task.source === "online").length,
+      theory: tasks.filter((task) => task.source === "theory").length,
     },
   };
 }

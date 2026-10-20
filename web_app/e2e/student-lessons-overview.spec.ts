@@ -142,7 +142,6 @@ async function expectCurrentStudentNavigation(
     /Обучение/,
     /Расписание/,
     /Сообщения/,
-    /Магазин/,
   ]);
   await expect(navigation.getByRole("link", { name: active })).toHaveAttribute(
     "aria-current",
@@ -178,7 +177,6 @@ async function setup(
       rewardEconomyV2: true,
       curatorWorkspaceV2: true,
       learningDialogsV2: true,
-      roleNavigationV2: true,
     },
   };
   await page.clock.setFixedTime(new Date("2026-09-12T16:00:00Z"));

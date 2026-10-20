@@ -1,6 +1,6 @@
 "use client";
 
-import { ExternalLink } from "lucide-react";
+import { HomeworkAttachmentLink } from "./homework-attachment-link";
 import { attachmentTypeLabels, attemptStatusLabel, submissionStatusClass } from "@/lib/homework-ui";
 import type { HomeworkAttempt } from "@/types/homework";
 
@@ -51,14 +51,7 @@ export function HomeworkAttemptHistory({ attempts, title = "История по�
             )}
 
             {attempt.attachmentUrl && (
-              <a
-                href={attempt.attachmentUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-3 inline-flex items-center gap-2 text-sm font-bold text-gold-ink"
-              >
-                <ExternalLink size={14} /> Открыть материал
-              </a>
+              <HomeworkAttachmentLink url={attempt.attachmentUrl} className="mt-3 inline-flex items-center gap-2 text-sm font-bold text-gold-ink" />
             )}
 
             {attempt.reviewComment && (

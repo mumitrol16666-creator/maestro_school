@@ -16,11 +16,11 @@ test("product feature switches accept explicit boolean values", () => {
   const config = loadProductFeatureConfig({
     FEATURE_LEARNING_TOPICS_V2: "true",
     FEATURE_REWARD_ECONOMY_V2: "1",
-    FEATURE_ROLE_NAVIGATION_V2: "off",
+    FEATURE_HOMEWORK_FLOW_V2: "off",
   });
   assert.equal(config.flags.learningTopicsV2, true);
   assert.equal(config.flags.rewardEconomyV2, true);
-  assert.equal(config.flags.roleNavigationV2, false);
+  assert.equal(config.flags.homeworkFlowV2, false);
 });
 
 test("unified lesson v2 is unavailable without lesson sync v2", () => {

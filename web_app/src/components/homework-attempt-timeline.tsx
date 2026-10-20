@@ -1,6 +1,6 @@
 "use client";
 
-import { ExternalLink } from "lucide-react";
+import { HomeworkAttachmentLink } from "./homework-attachment-link";
 import { attachmentTypeLabels, submissionStatusClass, submissionStatusLabels } from "@/lib/homework-ui";
 import type { HomeworkAttempt } from "@/types/homework";
 
@@ -55,14 +55,7 @@ export function HomeworkAttemptTimeline({ attempts, currentSubmissionId }: Homew
               {attempt.comment && <p className="mt-3 text-sm text-stone-600">{attempt.comment}</p>}
 
               {attempt.attachmentUrl && (
-                <a
-                  href={attempt.attachmentUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-3 inline-flex items-center gap-2 text-sm font-bold text-gold-ink"
-                >
-                  <ExternalLink size={14} /> Открыть материал
-                </a>
+                <HomeworkAttachmentLink url={attempt.attachmentUrl} className="mt-3 inline-flex items-center gap-2 text-sm font-bold text-gold-ink" />
               )}
 
               {attempt.reviewComment && (

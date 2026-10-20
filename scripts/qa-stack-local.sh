@@ -95,7 +95,6 @@ learning_exec() {
       FEATURE_REWARD_ECONOMY_V2=true \
       FEATURE_CURATOR_WORKSPACE_V2=true \
       FEATURE_LEARNING_DIALOGS_V2=true \
-      FEATURE_ROLE_NAVIGATION_V2=true \
       MAESTRO_QA_LOCAL=true \
       MAESTRO_QA_DB_MARKER=maestro-learning-regression \
       "$@"

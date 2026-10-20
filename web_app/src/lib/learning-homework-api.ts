@@ -12,6 +12,8 @@ import type {
   TeacherLearningHomeworkResponse,
 } from "@/types/learning-homework";
 
+import type { HomeworkSubmissionResponse } from "@/types/api";
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "/api/v1";
 
 async function authenticatedFetch(path: string, init: RequestInit = {}) {
@@ -71,6 +73,24 @@ async function multipartSubmission(
     );
   }
   return payload.data as StudentLearningHomeworkAssignment;
+}
+
+/** Plan 2.5: a course homework answer with one file, stored in the private homework storage. */
+export async function submitCourseHomeworkWithFile(homeworkId: string, body: { comment?: string; file: File }) {
+  const form = new FormData();
+  if (body.comment?.trim()) form.set("comment", body.comment.trim());
+  form.append("file", body.file, body.file.name);
+  const response = await authenticatedFetch(`/homeworks/${encodeURIComponent(homeworkId)}/submissions`, { method: "POST", body: form });
+  const payload = await response.json().catch(() => ({})) as { data?: HomeworkSubmissionResponse; error?: { code?: string; message?: string } };
+  if (!response.ok) {
+    throw new ApiError(payload.error?.message ?? "Не удалось отправить работу", response.status, payload.error?.code ?? "API_ERROR");
+  }
+  return payload.data as HomeworkSubmissionResponse;
+}
+
+/** A file in the private homework storage opens only with the session: fetch it, then save it. */
+export function isPrivateHomeworkFile(url: string | null | undefined) {
+  return Boolean(url?.startsWith("/api/v1/homework-files/"));
 }
 
 export const learningHomeworkApi = {

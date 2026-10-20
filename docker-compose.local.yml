@@ -44,7 +44,6 @@ services:
       FEATURE_REWARD_ECONOMY_V2: "false"
       FEATURE_CURATOR_WORKSPACE_V2: "false"
       FEATURE_LEARNING_DIALOGS_V2: "false"
-      FEATURE_ROLE_NAVIGATION_V2: "false"
       MAESTRO_QA_LOCAL: "true"
       MAESTRO_QA_DB_MARKER: maestro-local-qa
       ADMIN_EMAIL: admin@maestro.local

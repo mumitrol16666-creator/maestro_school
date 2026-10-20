@@ -5,14 +5,10 @@ import {
   ArrowRight,
   Award,
   BookOpenCheck,
-  CalendarClock,
   CalendarDays,
-  CheckCircle2,
   ChevronRight,
-  CircleDot,
-  Clock3,
   Coins,
-  ListTodo,
+  GraduationCap,
   MonitorPlay,
   RotateCcw,
   School,
@@ -20,7 +16,6 @@ import {
   Star,
   Target,
   Trophy,
-  UserRound,
 } from "lucide-react";
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
@@ -29,12 +24,11 @@ import { ErrorState, LoadingState } from "@/components/data-states";
 import { LevelBadge, LevelProgressDialog } from "@/components/level-summary";
 import { ProgressBar } from "@/components/progress-bar";
 import { useApiResource } from "@/hooks/use-api-resource";
-import { api } from "@/lib/api-client";
+import { invalidateStudentHome, loadStudentHome } from "@/lib/student-home";
 import { selectStudentHomeHero, type StudentHomeHero } from "@/lib/student-home-priority";
 import { weeklyLeagueApi } from "@/lib/weekly-league-api";
 import type { SchoolOfflineLesson } from "@/types/school-offline";
-import type { StudentHomeHomework, StudentHomeMonthlyPlan, StudentMonthlyPlansResponse } from "@/types/api";
-import type { UnifiedTask } from "@/types/unified-tasks";
+import type { StudentHomeMonthlyPlan, StudentMonthlyPlansResponse } from "@/types/api";
 
 function formatLessonDate(value: string) {
   const date = new Date(value);
@@ -48,50 +42,34 @@ function formatLessonDate(value: string) {
   return new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" }).format(date);
 }
 
-function homeworkStatus(homework: StudentHomeHomework) {
-  if (homework.status === "needs_revision") return { label: "Нужна доработка", className: "bg-red-50 text-red-800" };
-  if (homework.status === "completed") return { label: "Проверено", className: "bg-emerald-50 text-emerald-800" };
-  return { label: "Нужно сделать", className: "bg-amber-50 text-amber-900" };
-}
-
 export default function DashboardPage() {
   const { user } = useAuth();
   const [levelDialogOpen, setLevelDialogOpen] = useState(false);
-  const resource = useApiResource(() => api.studentHome(), []);
-  const taskResource = useApiResource(() => api.studentTasks({ scope: "active", limit: 4 }), []);
-  const planResource = useApiResource(() => api.studentMonthlyPlans(), []);
-  const achievementsResource = useApiResource(() => api.achievements(), []);
-  if (resource.loading || taskResource.loading || planResource.loading) {
+  // Plan 2.1: «Сейчас» is one read of the student's home; the header shares it.
+  const resource = useApiResource(() => loadStudentHome(), []);
+  if (resource.loading) {
     return <LoadingState label="Собираем вашу учебную главную" />;
   }
   if (resource.error || !resource.data) {
-    return <ErrorState message={resource.error ?? "Не удалось загрузить главную"} retry={resource.reload} />;
+    return <ErrorState message={resource.error ?? "Не удалось загрузить главную"} retry={() => { invalidateStudentHome(); return resource.reload(); }} />;
   }
 
   const data = resource.data;
   const school = data.school;
   const upcoming = school?.upcomingLessons ?? [];
-  const plans = planResource.data?.plans ?? data.monthlyPlans;
-  const planProgress = planResource.data?.aggregateProgress ?? aggregatePlanProgress(plans);
-  const actionTasks = taskResource.data?.data.items.filter((task) => task.actionRequired) ?? [];
+  const plans = data.monthlyPlans;
+  const planProgress = aggregatePlanProgress(plans);
+  const actionTasks = data.tasks?.items.filter((task) => task.actionRequired) ?? [];
   const hero = selectStudentHomeHero({
     tasks: actionTasks,
     schoolLessons: upcoming,
     plans,
     dashboard: data.dashboard,
   });
-  const visibleTasks = hero?.kind === "task"
-    ? actionTasks.filter((task) => task.id !== hero.id).slice(0, 3)
-    : actionTasks.slice(0, 3);
-  const taskActionCount = taskResource.data?.data.counts.actionRequired ?? 0;
-  const showTaskPanel = Boolean(
-    (taskResource.data && (taskActionCount === 0 || visibleTasks.length > 0))
-    || (!taskResource.data && data.currentHomework),
-  );
   const visibleUpcoming = upcoming
     .filter((lesson) => !["school_lesson", "online_lesson"].includes(hero?.kind ?? "") || lesson.crmClassId !== hero?.id)
     .slice(0, 3);
-  const earnedAchievements = achievementsResource.data?.meta?.earnedCount;
+  const earnedAchievements = data.achievementsEarned;
   const currentCourseLessonHref = data.dashboard.nextAvailableLesson
     ? `/lessons/${data.dashboard.nextAvailableLesson.id}`
     : null;
@@ -99,7 +77,6 @@ export default function DashboardPage() {
     || (hero?.kind === "task" && currentCourseLessonHref && hero.href.startsWith(currentCourseLessonHref));
   const hasLearningData = Boolean(
     hero
-    || data.currentHomework
     || plans.length
     || data.dashboard.currentCourse
     || actionTasks.length,
@@ -140,30 +117,15 @@ export default function DashboardPage() {
       <div className={`grid items-stretch gap-5 ${hero ? "xl:grid-cols-[minmax(0,1.75fr)_minmax(280px,0.65fr)]" : ""}`}>
         {hero ? <div className="order-1"><NowHero hero={hero} /></div> : null}
         <div className="order-3 xl:order-2"><LeagueMiniWidget /></div>
-        {showTaskPanel ? (
-          <div className={`order-2 space-y-5 xl:order-3 ${hero ? "xl:col-span-2" : ""}`}>
-            {taskResource.data ? (
-              <DashboardTasks
-                tasks={visibleTasks}
-                actionCount={taskActionCount}
-                hiddenInHero={hero?.kind === "task" ? 1 : 0}
-              />
-            ) : data.currentHomework ? (
-              <HomeworkCard homework={data.currentHomework} lastReview={data.lastHomeworkReview} />
-            ) : null}
-          </div>
-        ) : null}
       </div>
 
-      {(plans.length || visibleUpcoming.length) ? (
-        <div className={`mt-5 grid items-start gap-5 ${plans.length && visibleUpcoming.length ? "lg:grid-cols-2" : ""}`}>
-          {plans.length ? (
-            <MonthlyPlanCard
-              plans={plans}
-              aggregateProgress={planProgress}
-              hideCurrentFocus={hero?.kind === "plan"}
-            />
-          ) : null}
+      {(plans.length || data.tasks || visibleUpcoming.length) ? (
+        <div className={`mt-5 grid items-start gap-5 ${visibleUpcoming.length ? "lg:grid-cols-2" : ""}`}>
+          <LearningSummary
+            actionCount={data.tasks?.counts.actionRequired ?? null}
+            plans={plans}
+            planProgress={planProgress}
+          />
           {visibleUpcoming.length ? <UpcomingLessons lessons={visibleUpcoming} /> : null}
         </div>
       ) : null}
@@ -203,123 +165,49 @@ export default function DashboardPage() {
   );
 }
 
-function DashboardTasks({
-  tasks,
+/**
+ * Plan 2.1: «Обучение» lives on its own page; «Сейчас» only says how much is waiting there
+ * and how far the sector has come, and leads to it.
+ */
+function LearningSummary({
   actionCount,
-  hiddenInHero,
+  plans,
+  planProgress,
 }: {
-  tasks: Awaited<ReturnType<typeof api.studentTasks>>["data"]["items"];
-  actionCount: number;
-  hiddenInHero: number;
+  actionCount: number | null;
+  plans: StudentHomeMonthlyPlan[];
+  planProgress: StudentMonthlyPlansResponse["aggregateProgress"];
 }) {
-  if (actionCount === 0) {
-    return (
-      <Link href="/tasks" className="flex items-center justify-between gap-4 rounded-[24px] border border-emerald-100 bg-emerald-50/70 p-5 text-emerald-950 shadow-soft">
-        <span>
-          <span className="block text-xs font-black uppercase tracking-[0.18em] text-emerald-700">Задания</span>
-          <span className="font-display mt-1 block text-2xl">Сейчас всё сделано</span>
-        </span>
-        <CheckCircle2 className="shrink-0 text-emerald-600" />
-      </Link>
-    );
-  }
-  if (!tasks.length) return null;
-
-  const visibleActionCount = Math.max(0, actionCount - hiddenInHero);
-
   return (
-    <section>
-      <div className="mb-3 flex items-end justify-between gap-3">
-        <div>
-          <p className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-gold-ink"><ListTodo size={16} /> Ближайшие задания</p>
-          <h2 className="font-display mt-1 text-2xl">
-            {hiddenInHero ? "Ещё нужно сделать" : "Нужно сделать"} · {visibleActionCount}
-          </h2>
+    <section className="rounded-[28px] border border-stone-200 bg-white p-6 shadow-soft sm:p-7" data-testid="dashboard-learning-summary">
+      <p className="text-xs font-black uppercase tracking-[0.2em] text-gold-ink">Обучение</p>
+      <h2 className="font-display mt-2 text-3xl leading-tight text-ink">
+        {actionCount == null
+          ? "Задания и сектор"
+          : actionCount > 0
+            ? `${actionCount} ${actionCount === 1 ? "задание ждёт" : actionCount < 5 ? "задания ждут" : "заданий ждут"}`
+            : "Все задания сделаны"}
+      </h2>
+      {plans.length ? (
+        <div className="mt-5">
+          <p className="text-sm font-bold text-stone-700">
+            {plans.length === 1 ? sectorTitle(plans[0]!, "student") : "Мои сектора"} · {planProgress.percent}%
+          </p>
+          <div className="mt-2"><ProgressBar value={planProgress.percent} /></div>
+          <p className="mt-2 text-xs font-semibold text-stone-500">{planProgress.completed} из {planProgress.total} тем закрыто</p>
         </div>
-        <Link
-          href="/tasks"
-          className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 text-xs font-bold text-stone-600 transition hover:border-gold/40 hover:text-gold-ink"
-        >
-          Все задания
-          <ChevronRight size={18} />
+      ) : null}
+      <div className="mt-5 flex flex-wrap gap-2">
+        <Link href="/learning" className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-ink px-4 text-sm font-bold text-white">
+          Открыть обучение <ArrowRight size={16} />
         </Link>
-      </div>
-      <div className="overflow-hidden rounded-[20px] border border-stone-200 bg-white shadow-soft">
-        {tasks.slice(0, 3).map((task) => <DashboardTaskRow key={task.id} task={task} />)}
+        {plans.length ? (
+          <Link href="/monthly-plan" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-stone-300 px-4 text-sm font-bold text-ink">
+            Открыть сектор
+          </Link>
+        ) : null}
       </div>
     </section>
-  );
-}
-
-function dashboardTaskDue(task: UnifiedTask) {
-  if (!task.timing.dueAt) return null;
-  const value = new Intl.DateTimeFormat("ru-RU", {
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "Asia/Aqtobe",
-  }).format(new Date(task.timing.dueAt));
-  if (task.timing.overdue) return `Срок прошёл · ${value}`;
-  if (task.timing.dueKind === "next_lesson") return `К уроку · ${value}`;
-  return `До ${value}`;
-}
-
-function DashboardTaskRow({ task }: { task: UnifiedTask }) {
-  const isRevision = task.status === "needs_revision";
-  const due = dashboardTaskDue(task);
-  const sourceLabel = task.source === "offline"
-    ? "Урок с преподавателем"
-    : task.source === "online"
-      ? "Онлайн-урок"
-      : "Самостоятельно";
-  const statusLabel = isRevision ? "Нужна доработка" : "Нужно сделать";
-  const StatusIcon = isRevision ? RotateCcw : Clock3;
-  const completion = task.source === "offline" && task.result.completionPercent != null
-    ? Math.min(100, Math.max(0, Math.round(task.result.completionPercent)))
-    : null;
-
-  return (
-    <Link
-      href={task.target.href}
-      className="group grid min-w-0 gap-3 border-b border-stone-100 p-4 transition last:border-b-0 hover:bg-stone-50 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-5"
-    >
-      <span className="min-w-0">
-        <span className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-          <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase text-amber-900">
-            <School size={13} /> {sourceLabel}
-          </span>
-          <span className={`inline-flex items-center gap-1.5 text-[10px] font-black uppercase ${isRevision ? "text-red-700" : "text-stone-500"}`}>
-            <StatusIcon size={13} /> {statusLabel}
-          </span>
-          {isRevision && completion != null ? (
-            <span className="text-[10px] font-black uppercase text-red-700">Проверено на {completion}%</span>
-          ) : null}
-        </span>
-        <strong className="mt-2 block break-words font-display text-lg leading-tight text-ink sm:text-xl">
-          {task.title}
-        </strong>
-        {task.descriptionPreview ? (
-          <span className="mt-1.5 block line-clamp-1 break-words text-sm text-stone-600">{task.descriptionPreview}</span>
-        ) : null}
-        <span className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs font-semibold text-stone-500">
-          {task.context.teacherName ? (
-            <span className="inline-flex items-center gap-1.5"><UserRound size={13} /> {task.context.teacherName}</span>
-          ) : null}
-          {due ? (
-            <span className={`inline-flex items-center gap-1.5 ${task.timing.overdue ? "text-red-700" : ""}`}>
-              <CalendarClock size={13} /> {due}
-            </span>
-          ) : null}
-        </span>
-      </span>
-      <span className="inline-flex min-h-10 items-center justify-between gap-3 justify-self-stretch text-sm font-bold text-ink sm:justify-self-end">
-        <span>{task.target.actionLabel}</span>
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-ink text-white transition group-hover:bg-gold group-hover:text-ink">
-          <ArrowRight size={16} />
-        </span>
-      </span>
-    </Link>
   );
 }
 
@@ -369,7 +257,9 @@ function NowHero({ hero }: { hero: StudentHomeHero }) {
       ? MonitorPlay
       : hero.kind === "plan"
         ? Target
-        : BookOpenCheck;
+        : hero.kind === "sector_exam"
+          ? GraduationCap
+          : BookOpenCheck;
   const badgeClass = hero.badge?.tone === "danger"
     ? "bg-red-500/20 text-red-100"
     : hero.badge?.tone === "success"
@@ -481,42 +371,6 @@ function LeagueMiniWidget() {
   );
 }
 
-function HomeworkCard({ homework, lastReview }: { homework: StudentHomeHomework; lastReview: StudentHomeHomework | null }) {
-  const status = homeworkStatus(homework);
-  const separateReview = lastReview && lastReview.sourceLessonId !== homework.sourceLessonId ? lastReview : null;
-  return (
-    <section className="rounded-[28px] border border-stone-200 bg-white p-6 shadow-soft">
-      <div className="flex items-start justify-between gap-3">
-        <span className="grid h-11 w-11 place-items-center rounded-2xl bg-amber-50 text-gold-ink"><BookOpenCheck size={21} /></span>
-        <span className={`rounded-full px-3 py-1.5 text-[10px] font-black uppercase tracking-wide ${status.className}`}>{status.label}</span>
-      </div>
-      <p className="mt-6 text-xs font-black uppercase tracking-[0.18em] text-stone-400">Текущее домашнее задание</p>
-      <h2 className="font-display mt-2 text-3xl leading-tight">{homework.title}</h2>
-      <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-stone-600">{homework.description}</p>
-      {homework.due ? (
-        <p className="mt-4 inline-flex items-center gap-2 text-xs font-bold text-amber-900">
-          <CalendarDays size={15} /> К следующему уроку: {formatLessonDate(homework.due.date)}, {homework.due.time}
-        </p>
-      ) : null}
-      {homework.review?.completionPercent != null ? <ReviewLine homework={homework} /> : null}
-      {separateReview?.review?.completionPercent != null ? <ReviewLine homework={separateReview} previous /> : null}
-      <Link href={homework.href} className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl bg-ink px-4 text-sm font-bold text-white">
-        {homework.status === "needs_revision" ? "Посмотреть доработку" : "Открыть задание"} <ArrowRight size={16} />
-      </Link>
-    </section>
-  );
-}
-
-function ReviewLine({ homework, previous = false }: { homework: StudentHomeHomework; previous?: boolean }) {
-  return (
-    <div className="mt-4 rounded-2xl bg-stone-50 p-4">
-      <p className="text-[10px] font-black uppercase tracking-[0.16em] text-stone-400">{previous ? "Проверка прошлого ДЗ" : "Оценка преподавателя"}</p>
-      <p className="mt-1 text-sm font-bold text-stone-800">Выполнено на {homework.review?.completionPercent}%</p>
-      {homework.review?.feedback ? <p className="mt-1 text-xs leading-5 text-stone-600">{homework.review.feedback}</p> : null}
-    </div>
-  );
-}
-
 function aggregatePlanProgress(plans: StudentHomeMonthlyPlan[]): StudentMonthlyPlansResponse["aggregateProgress"] {
   const completed = plans.reduce((total, plan) => total + plan.progress.completed, 0);
   const itemTotal = plans.reduce((total, plan) => total + plan.progress.total, 0);
@@ -525,62 +379,6 @@ function aggregatePlanProgress(plans: StudentHomeMonthlyPlan[]): StudentMonthlyP
     total: itemTotal,
     percent: itemTotal ? Math.round((completed / itemTotal) * 100) : 0,
   };
-}
-
-function MonthlyPlanCard({
-  plans,
-  aggregateProgress,
-  hideCurrentFocus,
-}: {
-  plans: StudentHomeMonthlyPlan[];
-  aggregateProgress: StudentMonthlyPlansResponse["aggregateProgress"];
-  hideCurrentFocus: boolean;
-}) {
-  const first = plans[0];
-  const allItems = plans.flatMap((plan) => plan.items);
-  const nextItem = allItems.find((item) => item.status === "in_progress")
-    ?? allItems.find((item) => item.status === "planned")
-    ?? null;
-
-  return (
-    <section className="rounded-[28px] border border-stone-200 bg-white p-6 shadow-soft sm:p-7">
-      <div className="flex items-start justify-between gap-3">
-        <span className="grid h-11 w-11 place-items-center rounded-2xl bg-amber-50 text-gold-ink">
-          <CircleDot size={22} />
-        </span>
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3.5 py-1.5 text-xs font-black text-amber-950">
-          <Sparkles size={13} className="text-gold-ink" />
-          {aggregateProgress.percent}% выполнено
-        </span>
-      </div>
-
-      <p className="mt-5 text-xs font-black uppercase tracking-[0.2em] text-gold-ink">
-        {plans.length === 1 ? sectorTitle(first, "student") : "Мои сектора"}
-      </p>
-      <h2 className="font-display mt-2 text-3xl leading-tight text-ink sm:text-4xl">
-        {plans.length === 1 ? first.goal : `${plans.length} открытых сектора`}
-      </h2>
-      <div className="mt-5">
-        <ProgressBar value={aggregateProgress.percent} />
-        <p className="mt-2.5 text-xs font-semibold text-stone-500">
-          {aggregateProgress.completed} из {aggregateProgress.total} тем закрыто
-        </p>
-      </div>
-
-      {!hideCurrentFocus ? (
-        <div className="mt-5 border-y border-stone-100 py-4">
-          <p className="text-[11px] font-black uppercase tracking-wider text-stone-400">Сейчас в фокусе</p>
-          <p className="mt-2 text-sm font-bold leading-6 text-stone-800">
-            {nextItem?.title ?? "Все темы сектора закрыты"}
-          </p>
-        </div>
-      ) : null}
-
-      <Link href="/monthly-plan" className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl bg-ink px-4 text-sm font-bold text-white">
-        Открыть сектор <ArrowRight size={16} />
-      </Link>
-    </section>
-  );
 }
 
 function UpcomingLessons({ lessons }: { lessons: SchoolOfflineLesson[] }) {

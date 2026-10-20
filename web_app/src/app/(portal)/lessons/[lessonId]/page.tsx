@@ -1,5 +1,6 @@
 "use client";
 
+import { submitCourseHomeworkWithFile } from "@/lib/learning-homework-api";
 import {
   ArrowLeft,
   ArrowRight,
@@ -131,13 +132,16 @@ export default function LessonPage() {
     attachmentUrl?: string;
     attachmentType?: HomeworkAttachmentType;
     testAnswers?: Record<string, string>;
+    file?: File;
   }) {
     if (!lesson.homeworkId) return;
     setSubmitting(true);
     setActionError(null);
     setSuccess(null);
     try {
-      const result = await api.submitHomework(lesson.homeworkId, payload);
+      const result = payload.file
+        ? await submitCourseHomeworkWithFile(lesson.homeworkId, { comment: payload.comment, file: payload.file })
+        : await api.submitHomework(lesson.homeworkId, payload);
       const freshAttempts = await api.myHomeworkSubmissions(lesson.homeworkId);
       resource.setData((current) =>
         current

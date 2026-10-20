@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 
 test("only CRM approves a lesson; Platform shows role-appropriate status without writes", async ({ page }) => {
-  const user = { id: "crm-only-fixture", firstName: "Администратор", lastName: "Проверка", role: "admin", permissions: ["offline_school.read", "offline_school.write"], productFeatures: { roleNavigationV2: true, lessonSyncV2: true } };
+  const user = { id: "crm-only-fixture", firstName: "Администратор", lastName: "Проверка", role: "admin", permissions: ["offline_school.read", "offline_school.write"], productFeatures: { lessonSyncV2: true } };
   await page.addInitScript(user => {
     localStorage.setItem("maestro_access_token", "isolated-crm-only-fixture");
     localStorage.setItem("maestro_auth_user", JSON.stringify(user));

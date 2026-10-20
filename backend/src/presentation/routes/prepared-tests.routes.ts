@@ -17,7 +17,6 @@ import {
   bestPreparedTestScore,
   buildPreparedTestReview,
   hasPassedPreparedTest,
-  isPreparedTestUnlocked,
   preparedTestDailyState,
   PREPARED_TEST_DAILY_TEST_LIMIT,
   PREPARED_TEST_MAX_ATTEMPTS,
@@ -70,12 +69,10 @@ function latestAttempt(attempts: Attempt[], testId: string) {
   return attemptsForTest(attempts, testId)[0] ?? null;
 }
 
-function assertTestAccess(testId: string, attempts: Attempt[]) {
-  const templates = listPreparedTestTemplates();
-  const index = templates.findIndex((item) => item.id === testId);
-  if (!isPreparedTestUnlocked(index, templates.map((item) => item.id), attempts)) {
-    throw new ForbiddenError("Сначала пройдите предыдущий тест");
-  }
+/** Plan 2.3: every theory test is open in any order; only the daily limit applies. */
+function assertTestAccess(testId: string, _attempts: Attempt[]) {
+  const index = listPreparedTestTemplates().findIndex((item) => item.id === testId);
+  if (index < 0) throw new NotFoundError("Prepared test");
   return index;
 }
 
@@ -95,12 +92,10 @@ function assertDailyAttemptAccess(testId: string, attempts: Attempt[]) {
 
 function buildProgress(attempts: Attempt[]) {
   const templates = listPreparedTestTemplates();
-  const orderedIds = templates.map((item) => item.id);
   return templates.map((template, index) => {
     const testAttempts = attemptsForTest(attempts, template.id);
     const latest = latestAttempt(attempts, template.id);
     const passed = hasPassedPreparedTest(attempts, template.id);
-    const unlocked = isPreparedTestUnlocked(index, orderedIds, attempts);
     const daily = preparedTestDailyState(attempts, template.id);
     return {
       id: template.id,
@@ -111,10 +106,11 @@ function buildProgress(attempts: Attempt[]) {
       questionCount: template.questions.length,
       passingScore: PREPARED_TEST_PASSING_SCORE,
       maxAttempts: PREPARED_TEST_MAX_ATTEMPTS,
-      locked: !unlocked,
-      dailyLocked: unlocked && !passed && daily.dailyLocked,
-      available: unlocked && !passed && !daily.dailyLocked && daily.attemptsRemaining > 0,
-      exhausted: unlocked && !passed && !daily.dailyLocked && daily.attemptsRemaining === 0,
+      // Plan 2.3: no fixed order any more; only today's limit closes a test.
+      locked: false,
+      dailyLocked: !passed && daily.dailyLocked,
+      available: !passed && !daily.dailyLocked && daily.attemptsRemaining > 0,
+      exhausted: !passed && !daily.dailyLocked && daily.attemptsRemaining === 0,
       passed,
       bestScore: bestPreparedTestScore(attempts, template.id),
       latestScore: latest?.score ?? null,

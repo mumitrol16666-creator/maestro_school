@@ -5,64 +5,21 @@ import {
   Calendar,
   CheckCircle2,
   Clock3,
-  Coffee,
   Coins,
   Crown,
   Gift,
-  LoaderCircle,
-  Music,
-  Percent,
-  ShoppingBag,
   Sparkles,
-  Tag,
   Trophy,
-  Video,
   X,
   XCircle,
 } from "lucide-react";
 import { useState } from "react";
-import { useAuth } from "@/components/auth-provider";
 import { ErrorState, LoadingState } from "@/components/data-states";
 import { PageHeader } from "@/components/page-header";
-import { SuccessModal } from "@/components/success-modal";
-import { CommercialShop } from "@/components/commercial-shop";
 import { useDialogBehavior } from "@/hooks/use-dialog-behavior";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { rewardsApi } from "@/lib/rewards-api";
-import type { RewardCatalogItem, RewardRedemptionStatus } from "@/types/rewards";
-
-const categoryCopy: Record<string, string> = {
-  accessories: "Расходники",
-  merch: "Стикеры",
-  beverage: "Напитки и уют",
-  digital: "Цифровая награда",
-  rehearsal: "Практика",
-  studio: "Творчество",
-  discount: "Абонемент",
-  lesson: "На уроке",
-  learning: "Для обучения",
-};
-
-function getCategoryStyle(category: string) {
-  switch (category) {
-    case "accessories":
-      return { bg: "bg-blue-50 text-blue-700", icon: Music };
-    case "merch":
-      return { bg: "bg-rose-50 text-rose-700", icon: Tag };
-    case "beverage":
-      return { bg: "bg-amber-50 text-amber-800", icon: Coffee };
-    case "digital":
-      return { bg: "bg-yellow-50 text-yellow-800", icon: Crown };
-    case "rehearsal":
-      return { bg: "bg-emerald-50 text-emerald-800", icon: Calendar };
-    case "studio":
-      return { bg: "bg-amber-50 text-amber-700", icon: Video };
-    case "discount":
-      return { bg: "bg-teal-50 text-teal-800", icon: Percent };
-    default:
-      return { bg: "bg-amber-50 text-amber-700", icon: Gift };
-  }
-}
+import type { RewardRedemptionStatus } from "@/types/rewards";
 
 const statusCopy: Record<RewardRedemptionStatus, { label: string; className: string; icon: typeof Clock3 }> = {
   requested: { label: "Ждёт подтверждения", className: "bg-amber-50 text-amber-800", icon: Clock3 },
@@ -112,60 +69,23 @@ const coinSources = [
 
 export default function RewardsPage() {
   const resource = useApiResource(() => rewardsApi.studentOverview(), []);
-  const { refreshUser } = useAuth();
-  const [selected, setSelected] = useState<RewardCatalogItem | null>(null);
-  const [note, setNote] = useState("");
-  const [redeeming, setRedeeming] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [redeemed, setRedeemed] = useState<{
-    title: string;
-    costCoins: number;
-    remainingCoins: number;
-  } | null>(null);
   const [coinGuideOpen, setCoinGuideOpen] = useState(false);
-  const confirmationRef = useDialogBehavior(
-    Boolean(selected),
-    () => setSelected(null),
-    { canClose: !redeeming },
-  );
   const coinGuideRef = useDialogBehavior(
     coinGuideOpen,
     () => setCoinGuideOpen(false),
   );
 
-  if (resource.loading) return <LoadingState label="Открываем магазин" />;
+  if (resource.loading) return <LoadingState label="Открываем Maestro Coins" />;
   if (resource.error) return <ErrorState message={resource.error} retry={resource.reload} />;
   if (!resource.data) return null;
   const data = resource.data;
 
-  async function redeem() {
-    if (!selected) return;
-    const reward = selected;
-    setRedeeming(true);
-    setError(null);
-    try {
-      await rewardsApi.redeem(reward.id, note);
-      setSelected(null);
-      setNote("");
-      setRedeemed({
-        title: reward.title,
-        costCoins: reward.costCoins,
-        remainingCoins: Math.max(0, data.coins - reward.costCoins),
-      });
-      void Promise.all([resource.reload(), refreshUser()]).catch(() => undefined);
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Не удалось оформить награду");
-    } finally {
-      setRedeeming(false);
-    }
-  }
-
   return (
     <>
       <PageHeader
-        eyebrow="Магазин Maestro · За Coins"
-        title="Магазин"
-        description="Товары и возможности, которые можно получить за накопленные Coins."
+        eyebrow="Maestro Coins"
+        title="Coins"
+        description="Сколько Coins накоплено, за что они начисляются и прошлые заявки."
         action={(
           <button
             type="button"
@@ -194,32 +114,11 @@ export default function RewardsPage() {
         </p>
       </section>
 
-      <div className="mt-8 overflow-hidden rounded-[28px] border border-amber-200/80 bg-gradient-to-br from-amber-50/70 via-white to-stone-50 p-7 shadow-soft sm:p-12">
-        <div className="mx-auto max-w-xl text-center">
-          <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-gold/15 text-gold-ink shadow-inner sm:h-20 sm:w-20">
-            <ShoppingBag size={38} strokeWidth={2} />
-          </div>
-          <span className="mt-5 inline-block rounded-full border border-amber-300/80 bg-amber-100/80 px-3.5 py-1 text-xs font-black uppercase tracking-wider text-amber-950">
-            Временно на обновлении
-          </span>
-          <h2 className="font-display mt-3 text-3xl text-ink sm:text-4xl">Магазин пока недоступен</h2>
-          <p className="mt-3 text-sm leading-6 text-stone-600 sm:text-base">
-            Мы обновляем ассортимент товаров, мерча и витрину наград. Совсем скоро магазин откроется с новыми позициями!
-          </p>
-
-          <div className="mt-8 flex flex-col gap-3.5 rounded-2xl border border-stone-200/80 bg-white/90 p-4 text-left shadow-sm sm:flex-row sm:items-center">
-            <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-gold/15 text-gold-ink">
-              <Sparkles size={22} />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-xs font-bold text-ink">Coins продолжают копиться</p>
-              <p className="mt-0.5 text-xs leading-5 text-stone-600">
-                Занимайтесь, проходите тесты, выполняйте цели недели и поднимайтесь в лиге — все ваши накопленные Coins сохраняются на балансе.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* Plan 2.6: the shop is off until CRM has goods and prices; Coins keep adding up. */}
+      <p className="mt-6 flex items-start gap-3 rounded-2xl border border-stone-200 bg-white px-5 py-4 text-sm leading-6 text-stone-600" data-testid="coins-shop-note">
+        <Sparkles size={18} className="mt-0.5 shrink-0 text-gold-ink" />
+        Магазин наград откроется позже. Все накопленные Coins сохраняются на балансе.
+      </p>
 
       {data.redemptions.length ? (
         <section className="mt-10 rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
@@ -248,80 +147,6 @@ export default function RewardsPage() {
             })}
           </div>
         </section>
-      ) : null}
-
-      {selected ? (
-        <div className="fixed inset-0 z-[90] flex items-end justify-center p-0 sm:items-center sm:p-4">
-          <button
-            type="button"
-            disabled={redeeming}
-            onClick={() => setSelected(null)}
-            className="absolute inset-0 h-full w-full bg-black/45 backdrop-blur-[2px] disabled:cursor-wait"
-            aria-label="Закрыть подтверждение по фону"
-          />
-          <section
-            ref={confirmationRef}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="reward-redemption-title"
-            aria-describedby="reward-redemption-description"
-            className="relative max-h-[92dvh] w-full max-w-lg overflow-y-auto overscroll-contain rounded-t-xl bg-paper px-6 pb-[max(1.5rem,env(safe-area-inset-bottom,0px))] pt-6 shadow-2xl sm:rounded-xl sm:p-8"
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-xs font-black uppercase tracking-[0.18em] text-gold-ink">Подтверждение</p>
-                <h2 id="reward-redemption-title" className="font-display mt-2 text-3xl">{selected.title}</h2>
-              </div>
-              <button
-                type="button"
-                disabled={redeeming}
-                onClick={() => setSelected(null)}
-                aria-label="Закрыть"
-                className="grid h-10 w-10 place-items-center rounded-lg border border-stone-200 text-stone-500 transition-colors hover:border-stone-300 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold disabled:opacity-50"
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <p id="reward-redemption-description" className="mt-4 text-sm leading-6 text-stone-600">
-              С баланса спишется <strong className="text-ink">{selected.costCoins} Maestro Coins</strong>.
-              Администратор получит заявку и подтвердит выдачу награды.
-            </p>
-            <div className="mt-5 grid grid-cols-2 border-y border-stone-200 py-4">
-              <div className="border-r border-stone-200 pr-4">
-                <p className="text-[10px] font-black uppercase tracking-[0.14em] text-stone-400">Сейчас</p>
-                <p className="mt-1 text-xl font-black text-ink">{data.coins.toLocaleString("ru-RU")} Coins</p>
-              </div>
-              <div className="pl-4">
-                <p className="text-[10px] font-black uppercase tracking-[0.14em] text-stone-400">После заявки</p>
-                <p className="mt-1 text-xl font-black text-emerald-800">
-                  {Math.max(0, data.coins - selected.costCoins).toLocaleString("ru-RU")} Coins
-                </p>
-              </div>
-            </div>
-            <label className="mt-5 block text-xs font-bold uppercase tracking-wider text-stone-500">
-              Комментарий для администратора — необязательно
-              <textarea
-                value={note}
-                name="rewardNote"
-                autoComplete="off"
-                maxLength={500}
-                onChange={(event) => setNote(event.target.value)}
-                placeholder="Например, какую песню хотите разобрать…"
-                className="mt-2 min-h-24 w-full rounded-2xl border border-stone-200 bg-white px-4 py-3 text-sm normal-case tracking-normal outline-none transition-colors focus:border-gold focus-visible:ring-2 focus-visible:ring-amber-100"
-              />
-            </label>
-            {error ? <p role="alert" className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</p> : null}
-            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-              <button type="button" disabled={redeeming} onClick={() => setSelected(null)} className="min-h-12 rounded-lg border border-stone-200 px-5 text-sm font-bold transition-colors hover:bg-stone-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold disabled:opacity-50">
-                Отмена
-              </button>
-              <button type="button" disabled={redeeming} onClick={() => void redeem()} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-ink px-5 text-sm font-bold text-white transition-colors hover:bg-gold hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold disabled:opacity-60">
-                {redeeming ? <LoaderCircle size={16} className="animate-spin" /> : <Coins size={16} />}
-                Обменять {selected.costCoins} Coins
-              </button>
-            </div>
-          </section>
-        </div>
       ) : null}
 
       {coinGuideOpen ? (
@@ -411,15 +236,6 @@ export default function RewardsPage() {
         </div>
       ) : null}
 
-      <SuccessModal
-        open={Boolean(redeemed)}
-        title="Заявка отправлена"
-        description={redeemed
-          ? `Награда «${redeemed.title}» появилась в разделе «Мои заявки». Списано ${redeemed.costCoins} Coins, доступный баланс — ${redeemed.remainingCoins} Coins.`
-          : ""}
-        confirmLabel="Вернуться к наградам"
-        onClose={() => setRedeemed(null)}
-      />
     </>
   );
 }

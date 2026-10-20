@@ -63,17 +63,6 @@ export function hasPassedPreparedTest(attempts: PreparedAttemptSummary[], testId
   return attempts.some((attempt) => attempt.testId === testId && attempt.passed);
 }
 
-export function isPreparedTestUnlocked(
-  testIndex: number,
-  orderedTestIds: string[],
-  attempts: PreparedAttemptSummary[],
-): boolean {
-  if (testIndex <= 0) return true;
-  return orderedTestIds
-    .slice(0, testIndex)
-    .every((testId) => hasPassedPreparedTest(attempts, testId));
-}
-
 export function bestPreparedTestScore(attempts: PreparedAttemptSummary[], testId: string): number | null {
   const scores = attemptsForTest(attempts, testId).map((attempt) => attempt.score);
   return scores.length ? Math.max(...scores) : null;

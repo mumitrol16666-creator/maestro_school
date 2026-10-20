@@ -8,26 +8,25 @@ async function signInAsStudent(request: APIRequestContext, context: BrowserConte
   });
   expect(response.ok()).toBe(true);
   const payload = await response.json();
-  expect(payload.data.user.productFeatures.roleNavigationV2).toBe(true);
   await context.addInitScript(({ token, user }) => {
     window.localStorage.setItem("maestro_access_token", token);
     window.localStorage.setItem("maestro_auth_user", JSON.stringify(user));
   }, payload.data);
 }
 
-test("student has exactly five first-level sections and profile stays in the avatar menu", async ({ page, request, context }) => {
+test("student has exactly four first-level sections and profile stays in the avatar menu", async ({ page, request, context }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await signInAsStudent(request, context);
   await page.goto("/dashboard");
 
   const navigation = page.getByTestId("student-primary-navigation");
-  await expect(navigation.getByRole("link")).toHaveCount(5);
+  await expect(navigation.getByRole("link")).toHaveCount(4);
   await expect(navigation.getByRole("link", { name: /Главная/ })).toBeVisible();
   await expect(navigation.getByRole("link", { name: /Обучение/ })).toBeVisible();
   await expect(navigation.getByRole("link", { name: /Расписание/ })).toBeVisible();
   await expect(navigation.getByRole("link", { name: /Сообщения/ })).toBeVisible();
-  await expect(navigation.getByRole("link", { name: /Магазин/ })).toBeVisible();
-  await expect(navigation.getByRole("link", { name: /Профиль|Задания|Сектор|Недельная лига|Курсы|Тесты/ })).toHaveCount(0);
+  // Plan 2.6: the shop is off until CRM has goods and prices.
+  await expect(navigation.getByRole("link", { name: /Профиль|Задания|Сектор|Недельная лига|Курсы|Тесты|Магазин/ })).toHaveCount(0);
 
   await page.locator("header button[aria-haspopup='menu']").click();
   await expect(page.getByRole("menuitem", { name: "Профиль и настройки" })).toBeVisible();
@@ -46,7 +45,6 @@ test("legacy student links keep their parent section active", async ({ page, req
     ["/league", "Главная"],
     ["/board", "Главная"],
     ["/online-lessons", "Расписание"],
-    ["/rewards", "Магазин"],
   ] as const;
 
   for (const [path, section] of cases) {
@@ -56,13 +54,13 @@ test("legacy student links keep their parent section active", async ({ page, req
   }
 });
 
-test("learning and shop expose compact secondary navigation", async ({ page, request, context }) => {
+test("learning exposes compact secondary navigation; Coins have their own page without a shop", async ({ page, request, context }) => {
   await signInAsStudent(request, context);
   await page.goto("/learning");
 
-  await expect(page.getByRole("heading", { name: "Сейчас", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Обучение", exact: true })).toBeVisible();
   const learningNavigation = page.getByTestId("student-learning-navigation");
-  await expect(learningNavigation.getByRole("link", { name: "Сейчас" })).toHaveAttribute("aria-current", "page");
+  await expect(learningNavigation.getByRole("link", { name: "Обучение" })).toHaveAttribute("aria-current", "page");
   await expect(learningNavigation.getByRole("link", { name: "Сектор" })).toBeVisible();
   await expect(learningNavigation.getByRole("link", { name: "Задания" })).toBeVisible();
   await learningNavigation.getByRole("button", { name: "Ещё" }).click();
@@ -71,10 +69,9 @@ test("learning and shop expose compact secondary navigation", async ({ page, req
   await expect(learningNavigation.getByRole("menuitem", { name: "Тесты" })).toBeVisible();
 
   await page.goto("/rewards");
-  const shopNavigation = page.getByTestId("student-shop-navigation");
-  await expect(shopNavigation.getByRole("link", { name: /Товары за ₸/ })).toHaveAttribute("href", "https://shop.maestro.com.kz");
-  await expect(shopNavigation.getByRole("link", { name: "За Coins" })).toHaveAttribute("aria-current", "page");
-  await expect(page.getByRole("heading", { name: "Магазин", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Coins", exact: true })).toBeVisible();
+  await expect(page.getByTestId("coins-shop-note")).toContainText("Магазин наград откроется позже");
+  await expect(page.getByRole("button", { name: /Получить награду|Обменять/ })).toHaveCount(0);
 });
 
 test("student workspace fits all required mobile widths", async ({ page, request, context }) => {
@@ -85,7 +82,7 @@ test("student workspace fits all required mobile widths", async ({ page, request
     await page.goto("/learning");
 
     const mobileNavigation = page.getByTestId("student-mobile-navigation");
-    await expect(mobileNavigation.getByRole("link")).toHaveCount(5);
+    await expect(mobileNavigation.getByRole("link")).toHaveCount(4);
     await expect(mobileNavigation.getByText("Профиль", { exact: true })).toHaveCount(0);
     await expect(page.getByTestId("student-learning-navigation")).toBeVisible();
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
@@ -99,7 +96,8 @@ test("mobile tasks show every source filter and schedule starts with the nearest
 
   await page.goto("/tasks");
   const sourceFilters = page.getByTestId("task-source-filters");
-  await expect(sourceFilters.getByRole("button")).toHaveCount(4);
+  await expect(sourceFilters.getByRole("button")).toHaveCount(5);
+  await expect(sourceFilters.getByRole("button", { name: "Теория", exact: true })).toBeVisible();
   await expect(sourceFilters.getByRole("button", { name: "Все", exact: true })).toBeVisible();
   await expect(sourceFilters.getByRole("button", { name: "Курсы", exact: true })).toBeVisible();
   await expect(sourceFilters.getByRole("button", { name: "С преподавателем", exact: true })).toBeVisible();
@@ -150,7 +148,7 @@ test("mobile task filters keep the screen stable and an offline task opens", asy
 
   await states.getByRole("button", { name: /Нужно сделать/ }).click();
   await expect(results).toHaveAttribute("aria-busy", "false");
-  const taskLink = results.getByRole("link", { name: /Посмотреть/ }).first();
+  const taskLink = results.getByRole("link", { name: /Посмотреть|Открыть/ }).first();
   await expect(taskLink).toBeVisible();
   await taskLink.click();
   await expect(page).toHaveURL(/\/tasks\/school\//);

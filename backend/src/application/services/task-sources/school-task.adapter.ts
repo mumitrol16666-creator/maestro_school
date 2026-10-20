@@ -1,6 +1,7 @@
 import { descriptionPreview, withTaskState, type UnifiedTask, type UnifiedTaskStatus } from "../../../domain/unified-task.js";
 import { learningHomeworkV2Enabled, listStudentLearningHomeworkAssignments } from "../learning-homework-v2.service.js";
 import { loadOfflineTasks } from "./offline-task.adapter.js";
+import { productFeatureConfig } from "../../../config/product-features.js";
 
 type Assignment = Awaited<ReturnType<typeof listStudentLearningHomeworkAssignments>>[number];
 export type SchoolTaskBatch = { tasks: UnifiedTask[]; unavailableCode?: string };
@@ -27,13 +28,27 @@ export function mapLearningHomeworkTask(assignment: Assignment, now = new Date()
   }, now);
 }
 
-export function mergeSchoolTasks(legacy: UnifiedTask[], assignments: Assignment[], now = new Date()) {
+/**
+ * Plan 2.4: homework v2 is the task. CRM's homework text of a lesson before the V2 cutover lives
+ * in the lesson history only. After the cutover it is a task only while the lesson has no v2
+ * assignment — a lesson of a student without a sector, where homework has no topic to attach to.
+ */
+export function mergeSchoolTasks(
+  legacy: UnifiedTask[],
+  assignments: Assignment[],
+  now = new Date(),
+  cutoverAt: Date = productFeatureConfig.cutoverAt,
+) {
   // One old report aggregates a lesson; v2 holds the individual assignments from it.
   // Match by stable lesson ID only. Similar titles do not establish identity.
   const representedLessons = new Set(assignments.map(item => item.sourceLessonId).filter(Boolean));
   return [
     ...assignments.map(item => mapLearningHomeworkTask(item, now)),
-    ...legacy.filter(task => !representedLessons.has(task.id.replace(/^offline:/, ""))),
+    ...legacy.filter(task => (
+      !representedLessons.has(task.id.replace(/^offline:/, ""))
+      && Boolean(task.timing.assignedAt)
+      && new Date(task.timing.assignedAt!).getTime() >= cutoverAt.getTime()
+    )),
   ];
 }
 

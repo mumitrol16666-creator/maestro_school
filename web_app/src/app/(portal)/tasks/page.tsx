@@ -18,7 +18,7 @@ const views = [
 ] as const;
 const sources: Array<{ key: "all" | UnifiedTaskSource; label: string }> = [
   { key: "all", label: "Все" }, { key: "offline", label: "С преподавателем" },
-  { key: "course", label: "Курсы" }, { key: "online", label: "Онлайн" },
+  { key: "course", label: "Курсы" }, { key: "online", label: "Онлайн" }, { key: "theory", label: "Теория" },
 ];
 const focus = "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-700";
 
@@ -28,7 +28,7 @@ function TasksContent() {
   const rawView = params.get("view");
   const rawSource = params.get("source");
   const view: View = rawView === "waiting" || rawView === "completed" || rawView === "archived" ? rawView : "action";
-  const source = rawSource === "course" || rawSource === "offline" || rawSource === "online" ? rawSource : "all";
+  const source = rawSource === "course" || rawSource === "offline" || rawSource === "online" || rawSource === "theory" ? rawSource : "all";
   const filterKey = `${view}:${source}`;
   const resource = useApiResource(async () => ({
     key: filterKey,

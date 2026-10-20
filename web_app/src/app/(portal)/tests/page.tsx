@@ -37,8 +37,8 @@ export default function TestsPage() {
     <>
       <PageHeader
         eyebrow="Теория Maestro"
-        title="Курс теории гитары"
-        description="Сначала прочитайте короткий урок, затем закрепите его тестом. В день доступен один тест и до двух попыток на него."
+        title="Тесты по теории"
+        description="Выбирайте любой тест: прочитайте короткий урок и закрепите его. В день доступен один тест и до двух попыток на него."
         action={
           <div className="rounded-2xl border border-stone-200 bg-paper px-4 py-3 text-sm shadow-soft">
             <span className="font-display text-2xl">{completedCount}</span>

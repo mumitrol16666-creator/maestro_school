@@ -7,7 +7,7 @@ function item(key: string, extra: Partial<TeacherHomeworkItem> = {}): TeacherHom
   return { key, model: "legacy", title: "Звезда по имени солнце", instructions: "Доучить 1 куплет и припев", assignedAt: "2026-08-27T10:00:00Z", state: "clarify", comment: null, reviewHref: null, lessonHref: "/admin/offline-lessons/old", canResolve: true, revision: 0, crmClassId: key, history: [], ...extra };
 }
 async function setup(page: Page, extra: { readOnly?: boolean; partial?: boolean; fail?: boolean } = {}) {
-  const user = { id: "teacher-fixture", firstName: "Владислав", lastName: "Сидоров", role: "teacher", permissions: ["offline_school.read", "homework.review"], productFeatures: { roleNavigationV2: true, learningTopicsV2: true, homeworkFlowV2: true } };
+  const user = { id: "teacher-fixture", firstName: "Владислав", lastName: "Сидоров", role: "teacher", permissions: ["offline_school.read", "homework.review"], productFeatures: { learningTopicsV2: true, homeworkFlowV2: true } };
   const data: TeacherHomeworkWorkspace = { student: { crmStudentId: "student-fixture", name: "Анна Учебная" }, planHref: "/admin/my-students/student/student-fixture/plan", partial: !!extra.partial, items: [
     item("old", { canResolve: !extra.readOnly }), item("current", { title: "Переходы Am–E", state: "continue", comment: "Сыграть медленно" }),
     item("review", { title: "Бой 4-ка", model: "learning_homework_v2", state: "waiting_review", canResolve: false, reviewHref: "/admin/homework-review/recipient-one" }),

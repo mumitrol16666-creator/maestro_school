@@ -6,6 +6,7 @@ import { loadSchoolTasks, mapLearningHomeworkTask, mergeSchoolTasks } from "./sc
 
 type Assignment = Parameters<typeof mapLearningHomeworkTask>[0];
 const now = new Date("2026-09-13T04:00:00Z");
+const earlyCutover = new Date("2026-01-01T00:00:00Z");
 function assignment(extra: Partial<Assignment> = {}): Assignment {
   return {
     id: "assignment", recipientId: "recipient", model: "learning_homework_v2", state: "assigned",
@@ -35,7 +36,7 @@ describe("canonical school task list", () => {
     }
   });
   it("keeps every topic of one lesson once, suppresses its legacy aggregate only", () => {
-    const result = mergeSchoolTasks([legacy(), legacy("unrelated")], [assignment(), assignment({ id: "second", recipientId: "second-recipient" })], now);
+    const result = mergeSchoolTasks([legacy(), legacy("unrelated")], [assignment(), assignment({ id: "second", recipientId: "second-recipient" })], now, earlyCutover);
     assert.deepEqual(result.map(t => t.id), ["learning-homework:recipient", "learning-homework:second-recipient", "offline:unrelated"]);
     assert.equal(result.filter(t => t.title === "Am–E").length, 3);
   });
@@ -70,7 +71,13 @@ describe("canonical school task list", () => {
     }), /database unavailable/);
   });
   it("preserves legacy tasks when no canonical homework exists", () => {
-    assert.deepEqual(mergeSchoolTasks([legacy()], [], now), [legacy()]);
+    assert.deepEqual(mergeSchoolTasks([legacy()], [], now, earlyCutover), [legacy()]);
+  });
+  it("plan 2.4: CRM homework of a lesson before the V2 cutover stays in the lesson history only", () => {
+    const cutover = new Date("2026-09-01T00:00:00+05:00");
+    assert.deepEqual(mergeSchoolTasks([legacy()], [], now, cutover), [], "2026-08-01 is before the cutover");
+    const after = mapOfflineTask({ crmClassId: "after", title: "Урок", topic: "Бой", date: "2026-09-10", status: "completed", homework: "Бой", homeworkReview: null }, [], now)!;
+    assert.deepEqual(mergeSchoolTasks([after], [], now, cutover).map((task) => task.id), ["offline:after"], "a lesson without a v2 assignment after the cutover keeps its task");
   });
   it("prioritizes explicit current assignments over historical partial grades", () => {
     assert.equal(sortUnifiedTasks([legacy(), mapLearningHomeworkTask(assignment(), now)])[0].provenance, "learning_homework_v2");

@@ -10,6 +10,7 @@ import {
 import { loadCourseTasks } from "./task-sources/course-task.adapter.js";
 import { loadSchoolTasks, type SchoolTaskBatch } from "./task-sources/school-task.adapter.js";
 import { loadOnlineTasks } from "./task-sources/online-task.adapter.js";
+import { loadTheoryTasks } from "./task-sources/theory-task.adapter.js";
 
 export type StudentTaskFilters = {
   scope: UnifiedTaskScope;
@@ -25,6 +26,7 @@ const defaultLoaders: TaskSourceLoaders = {
   course: loadCourseTasks,
   offline: loadSchoolTasks,
   online: loadOnlineTasks,
+  theory: loadTheoryTasks,
 };
 
 function safeSourceCode(source: UnifiedTaskSource, reason: unknown) {
@@ -46,6 +48,7 @@ export async function getStudentTasks(
     course: loaders.course(studentId, generatedAt),
     offline: loaders.offline(studentId, generatedAt),
     online: loaders.online(studentId, generatedAt),
+    theory: loaders.theory(studentId, generatedAt),
   } as const;
   const sourceNames = Object.keys(sourcePromises) as UnifiedTaskSource[];
   const settled = await Promise.allSettled(sourceNames.map((source) => sourcePromises[source]));

@@ -1,6 +1,6 @@
 "use client";
 
-import { BookMarked, CalendarRange, CircleUserRound, ClipboardCheck, Gift, House, ListTodo, Megaphone, Menu, MessagesSquare, School, Trophy, X, type LucideIcon } from "lucide-react";
+import { Menu, X, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
@@ -8,8 +8,8 @@ import { useStudentSchoolAlerts } from "@/hooks/use-student-school-alerts";
 import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
 import { useMessageMailboxStatus } from "@/hooks/use-message-mailbox-status";
 import { useApiResource } from "@/hooks/use-api-resource";
-import { api } from "@/lib/api-client";
-import { isStaffRole, isStudentRole, roleLabel, settingsPathForRole } from "@/lib/role-labels";
+import { loadStudentHome } from "@/lib/student-home";
+import { isStaffRole, isStudentRole } from "@/lib/role-labels";
 import { useAuth } from "./auth-provider";
 import { AdminPendingHomeworkBadge } from "./admin-pending-homework-badge";
 import { Brand } from "./brand";
@@ -28,56 +28,28 @@ type ShellNavigationItem = {
   messagesOnly?: boolean;
 };
 
-const navigation: ShellNavigationItem[] = [
-  { href: "/dashboard", label: "Главная", icon: House },
-  { href: "/tasks", label: "Задания", icon: ListTodo, studentOnly: true },
-  { href: "/monthly-plan", label: "Сектор", icon: CalendarRange, studentOnly: true },
-  { href: "/courses", label: "Курсы", icon: BookMarked },
-  { href: "/league", label: "Недельная лига", icon: Trophy, studentOnly: true },
-  { href: "/school-lessons", label: "Уроки", icon: School, studentOnly: true },
-  { href: "/tests", label: "Тесты", icon: ClipboardCheck, studentOnly: true },
-  { href: "/rewards", label: "Награды", icon: Gift, studentOnly: true },
-  { href: "/messages", label: "Сообщения", icon: MessagesSquare, studentOnly: true, messagesOnly: true },
-  { href: "/board", label: "Доска Maestro", icon: Megaphone },
-  { href: "/settings", label: "Профиль", icon: CircleUserRound },
-];
-
-const studentMobileNavigation: ShellNavigationItem[] = [
-  { href: "/dashboard", label: "Главная", icon: House },
-  { href: "/tasks", label: "Задания", icon: ListTodo },
-  { href: "/monthly-plan", label: "Сектор", icon: CalendarRange },
-  { href: "/school-lessons", label: "Уроки", icon: School },
-  { href: "/settings", label: "Профиль", icon: CircleUserRound },
-];
-
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const { user } = useAuth();
   const student = isStudentRole(user?.role);
   const staff = isStaffRole(user?.role);
-  const roleNavigationV2 = student && Boolean(user?.productFeatures?.roleNavigationV2);
-  const points = user?.points ?? 0;
-  const coins = user?.coins ?? 0;
   const { count: unreadNotifications, reload: reloadUnreadNotifications } = useUnreadNotifications(30_000);
   const learningDialogsV2 = Boolean(user?.productFeatures?.learningDialogsV2);
   const { count: unreadMessages, hasAccess: hasMessageAccess } = useMessageMailboxStatus(student, 30_000, learningDialogsV2);
   const { counts: schoolAlerts } = useStudentSchoolAlerts(student ? user?.id : undefined);
   const taskSummary = useApiResource(
-    () => student ? api.studentTasks({ scope: "active", limit: 1 }) : Promise.resolve(null),
+    () => student ? loadStudentHome() : Promise.resolve(null),
     [student, user?.id],
   );
-  const taskActionCount = taskSummary.data?.data.counts.actionRequired ?? 0;
+  const taskActionCount = taskSummary.data?.tasks?.counts.actionRequired ?? 0;
   const schoolNavigationCount = schoolAlerts.reports
     + schoolAlerts.todayLessons
     + schoolAlerts.tomorrowLessons;
-  const primaryNavigation: ShellNavigationItem[] = roleNavigationV2
-    ? studentWorkspaceNavigation
-    : navigation;
-  const mobileNavigation: ShellNavigationItem[] = roleNavigationV2
-    ? studentWorkspaceNavigation
-    : studentMobileNavigation;
-  const messagesAvailable = roleNavigationV2 || hasMessageAccess;
+  // Plan 2.7: the student workspace navigation is the only one; the pre-V2 menu is gone.
+  const primaryNavigation: ShellNavigationItem[] = studentWorkspaceNavigation;
+  const mobileNavigation: ShellNavigationItem[] = studentWorkspaceNavigation;
+  const messagesAvailable = student || hasMessageAccess;
 
   function activeNavigationItem(item: ShellNavigationItem) {
     return item.pathPrefixes
@@ -143,23 +115,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           );
         })}
       </nav>
-      {!roleNavigationV2 ? (
-        <Link
-          href={settingsPathForRole(user?.role)}
-          onClick={() => setOpen(false)}
-          className="mt-auto rounded-[22px] border border-white/10 bg-white/[0.045] p-4 transition hover:border-gold/25 hover:bg-white/[0.075]"
-        >
-          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gold-ink">{roleLabel(user?.role)}</p>
-          {student ? (
-            <p className="mt-2 text-sm font-semibold">
-              {points.toLocaleString("ru-RU")} баллов · {coins.toLocaleString("ru-RU")} Coins
-            </p>
-          ) : (
-            <p className="mt-2 text-sm font-semibold">{user?.email}</p>
-          )}
-          <p className="mt-2 text-xs text-white/40">Открыть профиль</p>
-        </Link>
-      ) : null}
     </aside>
   );
 
@@ -204,8 +159,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         } ${
           student ? "pb-[calc(6.75rem+env(safe-area-inset-bottom,0px))] sm:pb-[calc(6.75rem+env(safe-area-inset-bottom,0px))] lg:pb-10" : ""
         }`}>
-          {roleNavigationV2 ? (
-            <div className={`${student && pathname.startsWith("/messages") ? "hidden md:block" : ""} print:hidden`}>
+          {student ? (
+            <div className={`${pathname.startsWith("/messages") ? "hidden md:block" : ""} print:hidden`}>
               <StudentWorkspaceContextNavigation />
             </div>
           ) : null}
@@ -216,7 +171,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <nav
           data-testid="student-mobile-navigation"
           data-mobile-app-navigation
-          className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-stone-200/90 bg-paper/95 px-2 pb-[env(safe-area-inset-bottom,0px)] shadow-[0_-12px_35px_rgba(37,33,25,0.08)] backdrop-blur-xl lg:hidden print:hidden"
+          className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-stone-200/90 bg-paper/95 px-2 pb-[env(safe-area-inset-bottom,0px)] shadow-[0_-12px_35px_rgba(37,33,25,0.08)] backdrop-blur-xl lg:hidden print:hidden"
           aria-label="Основная навигация"
         >
           {mobileNavigation.filter((item) => !item.messagesOnly || messagesAvailable).map(({ href, label, icon: Icon }) => {

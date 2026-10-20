@@ -10,6 +10,9 @@ import { aqtobeMonthKey } from "../../lib/aqtobe-month.js";
 import { getStudentDashboard } from "./student-dashboard.service.js";
 import { getStudentSchoolOfflineSummary } from "./school-offline.service.js";
 import { listPublishedMonthlyPlansAdapted } from "./monthly-plan-adapter.service.js";
+import { getStudentTasks } from "./student-tasks.service.js";
+import { getStudentAchievementsOverview } from "./achievement.service.js";
+import { listStudentSectorProposals } from "./sector-proposal.service.js";
 
 // Re-export pure domain functions so existing consumers keep working.
 export { buildOfflineHomework, offlineHomeworkStatus, selectOfflineHomeworks };
@@ -41,7 +44,39 @@ type StudentSchoolSummary = {
   profile?: { groups?: Array<{ crmGroupId?: string | null }> };
 };
 
+export const HOME_TASKS_LIMIT = 6;
+
+/**
+ * Plan 2.1: everything the student's «Сейчас», «Обучение» and the header need, in one read.
+ * Tasks, achievements and proposals are platform data; the only CRM read is the cached summary.
+ * Each extra is optional: one that fails leaves its block empty instead of failing the home.
+ */
+async function homeExtras(studentUserId: string) {
+  const [tasks, achievements, proposals] = await Promise.allSettled([
+    getStudentTasks(studentUserId, { scope: "active", limit: HOME_TASKS_LIMIT }),
+    getStudentAchievementsOverview(studentUserId),
+    listStudentSectorProposals(studentUserId),
+  ]);
+  return {
+    tasks: tasks.status === "fulfilled"
+      ? { items: tasks.value.data.items, counts: tasks.value.data.counts, partial: tasks.value.meta.partial }
+      : null,
+    achievementsEarned: achievements.status === "fulfilled"
+      ? achievements.value.filter((item) => item.earned).length
+      : null,
+    sectorProposals: proposals.status === "fulfilled" ? proposals.value : [],
+  };
+}
+
 export async function getStudentHome(studentUserId: string) {
+  const [base, extras] = await Promise.all([
+    getStudentHomeBase(studentUserId),
+    homeExtras(studentUserId),
+  ]);
+  return { ...base, ...extras };
+}
+
+async function getStudentHomeBase(studentUserId: string) {
   const user = await prisma.user.findUnique({
     where: { id: studentUserId },
     select: { crmStudentId: true },
@@ -53,8 +88,6 @@ export async function getStudentHome(studentUserId: string) {
       dashboard,
       school: null,
       monthlyPlans: [],
-      currentHomework: null,
-      lastHomeworkReview: null,
     };
   }
 
@@ -78,10 +111,7 @@ export async function getStudentHome(studentUserId: string) {
     if (dashboardResult.status === "rejected" && !monthlyPlans.length) {
       throw new BadRequestError("Не удалось собрать учебную главную", "STUDENT_HOME_UNAVAILABLE");
     }
-    return {
-      generatedAt: new Date().toISOString(), dashboard, school: null,
-      monthlyPlans, currentHomework: null, lastHomeworkReview: null,
-    };
+    return { generatedAt: new Date().toISOString(), dashboard, school: null, monthlyPlans };
   }
 
   const school = schoolResult.value as unknown as {
@@ -94,15 +124,12 @@ export async function getStudentHome(studentUserId: string) {
   const monthlyPlans = await getPublishedMonthlyPlansForStudent(studentUserId, month, {
     schoolSummary: school,
   });
-  const upcoming = school.upcomingLessons ?? [];
-  const homeworks = selectOfflineHomeworks(school.lessonHistory ?? [], upcoming);
-
+  // Plan 2.4: CRM's legacy homework is read in the lesson history only; tasks are homework v2.
   return {
     generatedAt: new Date().toISOString(),
     dashboard,
     school,
     monthlyPlans,
-    ...homeworks,
   };
 }
 
