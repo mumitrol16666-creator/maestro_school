@@ -3164,14 +3164,17 @@ function StudentRoster({
             {compactGroup ? "Групповой урок" : "По каждому ученику"}
           </p>
           <h2 className="font-display mt-1 text-3xl">
-            {compactGroup ? "Группа и проверка ДЗ" : "Посещаемость и результат"}
+            {compactGroup ? (showLearningResult ? "Группа и проверка ДЗ" : "Посещаемость группы") : "Посещаемость и результат"}
           </h2>
         </div>
       </div>
       <p className="mt-2 text-sm text-stone-500">
         {canManageAttendance
           ? compactGroup
-            ? "Общее задание проверяется по каждому присутствующему ученику."
+            // A V2 lesson checks homework with a percent on the «Темы и проверка» step.
+            ? showLearningResult
+              ? "Общее задание проверяется по каждому присутствующему ученику."
+              : "Отметьте, кто пришёл. Домашнее задание проверяется на шаге «Темы и проверка»."
             : "Отметьте посещаемость, проверку прошлого ДЗ и освоенные темы из сектора."
           : "Отметки доступны во время урока и сохраняются в его истории."}
       </p>
@@ -3194,7 +3197,10 @@ function StudentRoster({
           canEdit={canEdit && canManageAttendance}
           canSetExcusedAbsence={canSetExcusedAbsence}
           showLearningResult={showLearningResult}
-          previousHomework={previousGroupHomework}
+          // A V2 lesson checks homework with a percent on the topics step; the old CRM
+          // group check (done / partly / not) is for lessons before V2 only.
+          previousHomework={showHomeworkReview ? previousGroupHomework : null}
+          homeworkOnTopicsStep={!showLearningResult}
           drafts={drafts}
           onSelectTopic={onSelectTopic}
           onDraftChange={onDraftChange}
@@ -3276,6 +3282,7 @@ function GroupLessonRoster({
   canSetExcusedAbsence,
   showLearningResult,
   previousHomework,
+  homeworkOnTopicsStep = false,
   drafts,
   onSelectTopic,
   onDraftChange,
@@ -3285,6 +3292,7 @@ function GroupLessonRoster({
   canSetExcusedAbsence: boolean;
   showLearningResult: boolean;
   previousHomework: PreviousHomeworkSource | null;
+  homeworkOnTopicsStep?: boolean;
   drafts: Record<string, StudentLessonCheckDraft>;
   onSelectTopic?: (topic: string) => void;
   onDraftChange: (studentId: string, draft: StudentLessonCheckDraft) => void;
@@ -3358,7 +3366,7 @@ function GroupLessonRoster({
             ) : null}
           </div>
         </div>
-      ) : (
+      ) : homeworkOnTopicsStep ? null : (
         <div className="border-b border-stone-200 bg-stone-50 px-4 py-3 text-sm font-semibold text-stone-600 sm:px-5">
           На прошлых групповых уроках домашнее задание не найдено.
         </div>
