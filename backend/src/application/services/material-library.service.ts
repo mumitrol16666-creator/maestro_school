@@ -99,17 +99,36 @@ function normalizeLink(url: string) {
   }
   // Files uploaded here are kept as same-site paths, whatever host they were copied from.
   const media = /^\/api\/v1\/media\/(images|pdf|files)\/[A-Za-z0-9._-]+$/.exec(parsed.pathname);
-  return media ? parsed.pathname : value;
+  if (media) return parsed.pathname;
+  // Some sites add an ad marker to the address; the same page must stay one library entry.
+  if (parsed.hash === "#google_vignette") return value.slice(0, value.length - parsed.hash.length);
+  return value;
 }
 
-/** The library, newest first; `search` matches the caption, so typing a title finds the material. */
+/** The search text as a library link, when a teacher pasted a whole address. */
+function searchedLink(search: string) {
+  if (!/^https?:\/\//i.test(search)) return null;
+  try {
+    return normalizeLink(search);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The library, newest first; `search` matches the caption, so typing a title finds the material,
+ * and a pasted address finds the entry with that link.
+ */
 export async function listMaterialLibrary(input: { search?: string; kind?: MaterialKind; limit?: number } = {}) {
   const search = input.search?.trim();
+  const link = search ? searchedLink(search) : null;
   const rows = await prisma.materialLibraryItem.findMany({
     where: {
       archivedAt: null,
       ...(input.kind ? { kind: input.kind } : {}),
-      ...(search ? { title: { contains: search, mode: "insensitive" as const } } : {}),
+      ...(link
+        ? { OR: [{ url: link }, { title: { contains: search, mode: "insensitive" as const } }] }
+        : search ? { title: { contains: search, mode: "insensitive" as const } } : {}),
     },
     include: withAuthor,
     orderBy: { createdAt: "desc" },

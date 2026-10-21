@@ -162,6 +162,11 @@ if (!process.env.TEST_DATABASE_URL) {
 
     const found = await app.inject({ method: "GET", url: `/api/v1/materials/library?search=${encodeURIComponent(`бой восьмыми ${suffix}`)}`, headers: auth(colleagueToken) });
     assert.deepEqual(found.json().data.map((item: { title: string }) => item.title), [`Бой восьмыми ${suffix}`]);
+    const chords = await app.inject({ method: "POST", url: "/api/v1/materials/library/links", headers: auth(token),
+      payload: { url: `https://mychords.net/ru/song/${suffix}-odnogo.html#google_vignette`, title: `Одного ${suffix}` } });
+    assert.equal(chords.json().data.url, `https://mychords.net/ru/song/${suffix}-odnogo.html`, "the ad marker is not part of the link");
+    const pasted = await app.inject({ method: "GET", url: `/api/v1/materials/library?search=${encodeURIComponent(`https://mychords.net/ru/song/${suffix}-odnogo.html#google_vignette`)}`, headers: auth(colleagueToken) });
+    assert.deepEqual(pasted.json().data.map((item: { title: string }) => item.title), [`Одного ${suffix}`], "a pasted address finds its entry");
     const forbidden = await app.inject({ method: "GET", url: "/api/v1/materials/library", headers: auth(studentToken) });
     assert.equal(forbidden.statusCode, 403, "students do not browse the staff library");
 

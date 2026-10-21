@@ -8,6 +8,35 @@ import { inferFileMimeType } from "@/lib/media-utils";
 import { materialsApi } from "@/lib/materials-api";
 import type { MaterialLibraryItem } from "@/types/materials";
 
+/** A link pasted straight into the search: saved as it is, without the ad marker some sites add. */
+function pastedLink(query: string) {
+  const value = query.trim();
+  if (!/^https?:\/\/\S+$/i.test(value)) return null;
+  try {
+    const url = new URL(value);
+    if (url.hash === "#google_vignette") url.hash = "";
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+/** A readable caption guess from the link, e.g. «Tatyana kurtukova odnogo — mychords.net»; the teacher can rewrite it. */
+export function captionFromLink(link: string) {
+  const url = new URL(link);
+  const host = url.hostname.replace(/^www\./, "");
+  const segment = url.pathname.split("/").filter(Boolean).pop() ?? "";
+  let slug = segment;
+  try {
+    slug = decodeURIComponent(segment);
+  } catch {
+    // keep the raw segment
+  }
+  slug = slug.replace(/\.[a-z0-9]{2,5}$/i, "").replace(/^\d+[-_]+/, "").replace(/[-_+]+/g, " ").trim();
+  if (!slug || /^(watch|index|view|edit)$/i.test(slug) || /^\d+$/.test(slug)) return host;
+  return `${slug.charAt(0).toUpperCase()}${slug.slice(1)} — ${host}`.slice(0, 255);
+}
+
 const control = "inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl px-3 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50";
 
 export function MaterialBadge({ badge }: { badge: string }) {
@@ -39,9 +68,16 @@ export function MaterialLibraryPicker({
   const [loading, setLoading] = useState(false);
   const [adding, setAdding] = useState<"link" | null>(null);
   const [linkUrl, setLinkUrl] = useState("");
+  const [caption, setCaption] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const link = pastedLink(query);
+
+  // A pasted link gets a caption guess right away, so saving it is one click.
+  useEffect(() => {
+    setCaption(link ? captionFromLink(link) : "");
+  }, [link]);
 
   useEffect(() => {
     if (!open) return;
@@ -62,17 +98,18 @@ export function MaterialLibraryPicker({
     setOpen(false);
     setAdding(null);
     setLinkUrl("");
+    setCaption("");
   }
 
-  async function addLink() {
-    if (!linkUrl.trim() || !query.trim()) {
+  async function addLink(url: string, title: string) {
+    if (!url.trim() || !title.trim()) {
       setError("Вставьте ссылку и напишите подпись");
       return;
     }
     setBusy(true);
     setError(null);
     try {
-      pick(await materialsApi.addLink(linkUrl.trim(), query.trim()));
+      pick(await materialsApi.addLink(url.trim(), title.trim()));
     } catch (reason) {
       setError(reason instanceof ApiError ? reason.message : "Не удалось добавить ссылку");
     } finally {
@@ -102,7 +139,15 @@ export function MaterialLibraryPicker({
   }
 
   return (
-    <div className="relative min-w-0" data-testid="material-library-picker">
+    <div
+      className="relative min-w-0"
+      data-testid="material-library-picker"
+      onBlur={(event) => {
+        // Moving between the search and the fields inside the list keeps the list open.
+        if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+        window.setTimeout(() => setOpen(false), 150);
+      }}
+    >
       <label htmlFor={inputId} className="block text-[10px] font-black uppercase tracking-wider text-stone-500">{label}</label>
       <input
         id={inputId}
@@ -115,7 +160,6 @@ export function MaterialLibraryPicker({
         value={query}
         placeholder="Начните писать название: «бой восьмыми», «аккорды Am»…"
         onFocus={() => setOpen(true)}
-        onBlur={() => window.setTimeout(() => setOpen(false), 150)}
         onChange={(event) => { setQuery(event.target.value); setOpen(true); }}
         className="brand-input mt-1 w-full"
       />
@@ -124,10 +168,39 @@ export function MaterialLibraryPicker({
           id={listId}
           role="listbox"
           className="absolute left-0 right-0 z-30 mt-1 max-h-72 overflow-y-auto rounded-xl border border-stone-200 bg-white p-1 shadow-lg"
-          onMouseDown={(event) => event.preventDefault()}
+          onMouseDown={(event) => {
+            // Clicks on options and buttons keep the focus in the search; the link fields take it.
+            if (!(event.target instanceof HTMLInputElement)) event.preventDefault();
+          }}
         >
           {loading && !items.length ? <p className="px-3 py-2 text-xs text-stone-500">Ищем в библиотеке…</p> : null}
-          {!loading && !items.length ? (
+          {link ? (
+            <div className="grid gap-2 px-2 pb-2 pt-1" data-testid="material-pasted-link">
+              <p className="text-xs text-stone-500">{items.length ? "Эта ссылка уже есть в библиотеке — выберите её выше." : "Это ссылка. Проверьте подпись и сохраните."}</p>
+              {items.length ? null : (
+                <>
+                  <input
+                    type="text"
+                    aria-label="Подпись к ссылке"
+                    className="brand-input"
+                    value={caption}
+                    maxLength={255}
+                    onChange={(event) => setCaption(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        void addLink(link, caption);
+                      }
+                    }}
+                  />
+                  <button type="button" className={`${control} justify-self-start bg-ink text-white`} disabled={busy} onClick={() => void addLink(link, caption)}>
+                    {busy ? <LoaderCircle size={14} className="animate-spin" /> : <Plus size={14} />} Сохранить в библиотеку и выбрать
+                  </button>
+                </>
+              )}
+            </div>
+          ) : null}
+          {!link && !loading && !items.length ? (
             <p className="px-3 py-2 text-xs text-stone-500">{query.trim() ? "В библиотеке такого нет. Добавьте ссылку или файл ниже." : "Библиотека пока пустая."}</p>
           ) : null}
           {items.map((item) => (
@@ -143,6 +216,7 @@ export function MaterialLibraryPicker({
               <span className="min-w-0 flex-1 truncate font-semibold text-ink">{item.title}</span>
             </button>
           ))}
+          {link ? null : (
           <div className="mt-1 flex flex-wrap gap-1 border-t border-stone-100 px-1 pt-2">
             <button type="button" className={`${control} text-stone-700 hover:bg-stone-50`} onClick={() => setAdding("link")}>
               <Link2 size={14} /> Добавить ссылку
@@ -151,7 +225,8 @@ export function MaterialLibraryPicker({
               {busy ? <LoaderCircle size={14} className="animate-spin" /> : <FileUp size={14} />} Загрузить файл
             </button>
           </div>
-          {adding === "link" ? (
+          )}
+          {!link && adding === "link" ? (
             <div className="grid gap-2 px-2 pb-2 pt-1">
               <input
                 type="url"
@@ -162,7 +237,7 @@ export function MaterialLibraryPicker({
                 onChange={(event) => setLinkUrl(event.target.value)}
               />
               <p className="text-[11px] text-stone-500">Подпись — то, что написано в поле выше.</p>
-              <button type="button" className={`${control} justify-self-start bg-ink text-white`} disabled={busy} onClick={() => void addLink()}>
+              <button type="button" className={`${control} justify-self-start bg-ink text-white`} disabled={busy} onClick={() => void addLink(linkUrl, query)}>
                 <Plus size={14} /> Сохранить в библиотеку и выбрать
               </button>
             </div>
