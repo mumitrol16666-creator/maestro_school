@@ -35,7 +35,7 @@ test("the sector editor offers an early close with the Points the teacher writes
   await expect(panel.getByRole("button", { name: /Закрыть сектор \d+ за 120 баллов/ })).toBeEnabled();
 });
 
-test("the attendance step does not repeat the previous lesson shown on step 1", async ({ page, request, context }) => {
+test("the next step does not repeat the previous lesson shown on step 1", async ({ page, request, context }) => {
   const token = await signIn(request, context, "qa_teacher_1", "staff");
   const date = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const created = await request.post(`${CRM_URL}/api/qa/v1/lessons`, {
@@ -56,7 +56,7 @@ test("the attendance step does not repeat the previous lesson shown on step 1", 
   await page.goto(`/admin/offline-lessons/${crmClassId}`);
   await expect(page.getByTestId("lesson-context-step")).toContainText("Контекст прошлого урока");
   await page.getByTestId("lesson-step-nav").getByRole("button", { name: "Далее" }).click();
-  await expect(page.getByTestId("lesson-stepper")).toContainText("Шаг 2 из 5");
+  await expect(page.getByTestId("lesson-stepper")).toContainText("Шаг 2 из 4");
   await expect(page.getByText("Контекст прошлого урока")).toHaveCount(0);
 });
 

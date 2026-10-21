@@ -285,6 +285,26 @@ export async function teacherOfflineSubmit(
   return postTeacherSubmit(crmClassId, { ...fullPayload, crmTeacherId });
 }
 
+/**
+ * Plan 1.14: «Отменить урок». Every student of the lesson is marked «Не пришёл» with the reason and
+ * the lesson goes to the admin as an absence; the admin sets the kind of absence when confirming.
+ * A lesson not started yet is started first, so CRM accepts the attendance.
+ */
+export async function teacherOfflineCancel(appUserId: string, crmClassId: string, reason?: string | null) {
+  const lesson = await getTeacherOfflineClass(appUserId, crmClassId) as { status?: string | null };
+  if (lesson.status === "scheduled") await teacherOfflineStart(appUserId, crmClassId);
+  const roster = await getTeacherOfflineClassStudents(appUserId, crmClassId) as { students?: Array<{ crmStudentId?: string }> };
+  const studentIds = (roster.students ?? []).map((student) => student.crmStudentId).filter((id): id is string => Boolean(id));
+  if (!studentIds.length) throw new BadRequestError("В уроке нет учеников", "LESSON_HAS_NO_STUDENTS");
+  const comment = reason?.trim() || undefined;
+  await teacherOfflineSetAttendanceBatch(appUserId, crmClassId, studentIds.map((studentId) => ({
+    studentId,
+    attendanceStatus: "unexcused_absence",
+    teacherNote: comment ?? "Урок отменён: ученик не пришёл",
+  })));
+  return teacherOfflineSubmit(appUserId, crmClassId, { teacherOutcomeHint: "no_submission", comment });
+}
+
 export async function teacherOfflineMarkNotHeld(
   appUserId: string,
   crmClassId: string,

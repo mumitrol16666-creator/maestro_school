@@ -276,7 +276,11 @@ export type LearningLessonV2Context = {
       progressPercent: number;
       masteredAt: string | null;
       planCompletionRewardPoints: number;
+      /** Plan 1.14: materials the step template keeps for this topic. */
+      materials?: Array<{ title: string; url: string }>;
     }>;
+    /** Plan 1.14: the sector's own materials. */
+    materials?: Array<{ title: string; url: string }>;
   }>;
   students: Array<{
     crmStudentId: string;
@@ -333,4 +337,50 @@ export type WhatsappHomeworkMessageDraft = {
   source: "ai" | "template" | "unavailable";
   model: string | null;
   note?: string;
+};
+
+/** Plan 1.14: the strip above the lesson steps, one entry per student of the lesson. */
+export type LessonStudentOverview = {
+  crmStudentId: string;
+  name: string;
+  appLinked: boolean;
+  directions: string[];
+  programLevel: string | null;
+  sector: { sequence: number; percent: number; completed: number; total: number; direction: string } | null;
+  level: {
+    level: number;
+    code: string;
+    minPoints: number;
+    title: string;
+    tone: string;
+    emblem: string;
+    points: number;
+    progressPercent: number;
+    pointsToNext: number;
+    isMaxLevel: boolean;
+  } | null;
+  league: { position: number | null; participantCount: number; xp: number; goalXp: number } | null;
+  streakWeeks: number | null;
+  attendance: {
+    attended: number;
+    total: number;
+    recent: Array<{ date: string; attendanceStatus: string; attended: boolean }>;
+  } | null;
+  lastLessonDate: string | null;
+};
+
+export type LessonStudentsOverview = {
+  crmClassId: string;
+  generatedAt: string;
+  group: { crmGroupId: string; direction: string | null } | null;
+  students: LessonStudentOverview[];
+};
+
+export type LessonTextTemplate = {
+  id: string;
+  kind: "summary" | "homework";
+  text: string;
+  scope: "own" | "school";
+  crmDirectionId: string | null;
+  sortOrder: number;
 };

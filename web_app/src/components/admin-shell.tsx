@@ -1,6 +1,8 @@
 "use client";
 
-import { ArrowRight, BookMarked, ChevronRight, ClipboardCheck, ClipboardPenLine, FolderKanban, Gift, GraduationCap, Layers3, LayoutDashboard, LibraryBig, ListChecks, LogOut, Megaphone, Menu, MessagesSquare, Presentation, Settings, Trophy, UserCog, UsersRound, X } from "lucide-react";
+import { ArrowRight, BookMarked, ChevronRight, ClipboardCheck, ClipboardPenLine, FolderKanban, Gift, GraduationCap, Layers3, LayoutDashboard, LibraryBig, ListChecks, LogOut, Megaphone, Menu, MessagesSquare, Presentation, Settings, Trophy, UserCog, UsersRound, X,
+  MessageSquareText,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -23,6 +25,7 @@ const cmsNavigation = [
   { href: "/admin", label: "Обзор", icon: LayoutDashboard },
   { href: "/admin/directions", label: "Направления", icon: FolderKanban },
   { href: "/admin/sector-templates", label: "Ступени программы", icon: Layers3 },
+  { href: "/admin/lesson-templates", label: "Шаблоны урока", icon: MessageSquareText },
   { href: "/admin/sector-exams", label: "Экзамены секторов", icon: GraduationCap },
   { href: "/admin/materials", label: "Библиотека материалов", icon: LibraryBig },
   { href: "/admin/courses", label: "Курсы", icon: BookMarked },

@@ -226,6 +226,7 @@ export function LearningLessonV2Panel({
   onChange,
   onTopicTitleChange,
   onQuickAddTopic,
+  onOpenSector,
 }: {
   context: LearningLessonV2Context;
   draft: LearningLessonV2Draft;
@@ -233,6 +234,8 @@ export function LearningLessonV2Panel({
   onChange: (draft: LearningLessonV2Draft) => void;
   onTopicTitleChange?: (title: string) => void;
   onQuickAddTopic?: (input: { title: string; masteryCriteria?: string; directionId: string }) => Promise<void | { success: boolean; topic?: { id: string; title: string } }>;
+  /** Plan 1.14: opens the sector editor over the lesson when there is no published sector yet. */
+  onOpenSector?: () => void;
 }) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [quickTitle, setQuickTitle] = useState("");
@@ -532,8 +535,19 @@ export function LearningLessonV2Panel({
             <p className="mt-1.5 text-xs leading-relaxed text-amber-900/80">
               {sectorDirections.length
                 ? "Добавьте тему прямо сейчас: она попадёт в опубликованный сектор, и вы сразу отметите прогресс её освоения."
-                : "Темы на уроке добавляются только в опубликованный сектор. Откройте и опубликуйте сектор в карточке ученика."}
+                : onOpenSector && !disabled
+                  ? "Откройте сектор прямо здесь: выберите шаблон ступени или начните с пустого, опубликуйте — и темы появятся на этом шаге."
+                  : "Темы на уроке добавляются только в опубликованный сектор. Откройте и опубликуйте сектор в карточке ученика."}
             </p>
+            {!sectorDirections.length && onOpenSector && !disabled ? (
+              <button
+                type="button"
+                onClick={onOpenSector}
+                className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-xl bg-amber-600 px-4 text-sm font-bold text-white shadow-sm transition hover:bg-amber-700"
+              >
+                <Plus size={16} /> Открыть сектор
+              </button>
+            ) : null}
             {canQuickAdd && !showAddForm ? (
               <button
                 type="button"

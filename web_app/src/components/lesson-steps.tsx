@@ -3,36 +3,43 @@
 import { ArrowLeft, ArrowRight, Check } from "lucide-react";
 
 /**
- * The lesson report as five short steps (02 §3.4): context and past work,
- * attendance, topics and homework check, summary and new homework, preview
- * and submit. The page keeps every field mounted and only shows the step
- * the teacher is on, so the autosaved draft and the submit validation stay
- * untouched.
+ * The lesson report as short steps (02 §3.4, plan 1.14): before the lesson, attendance (groups only —
+ * a started individual lesson means the student came), homework check and topics, summary and new
+ * homework, preview and submit. The page keeps every field mounted and only shows the step the
+ * teacher is on, so the autosaved draft and the submit validation stay untouched.
  */
 export type LessonStep = 1 | 2 | 3 | 4 | 5;
 
 export const lessonSteps: Array<{ key: LessonStep; title: string; short: string }> = [
-  { key: 1, title: "Контекст и прошлые работы", short: "Контекст" },
+  { key: 1, title: "Перед уроком", short: "Перед уроком" },
   { key: 2, title: "Посещаемость", short: "Посещаемость" },
-  { key: 3, title: "Темы и проверка", short: "Темы" },
+  { key: 3, title: "ДЗ и темы", short: "ДЗ и темы" },
   { key: 4, title: "Итог и новое ДЗ", short: "Итог и ДЗ" },
   { key: 5, title: "Предпросмотр и отправка", short: "Отправка" },
 ];
 
+/** The steps a lesson goes through: an individual lesson has no attendance step. */
+export function visibleLessonSteps(withAttendance: boolean) {
+  return lessonSteps.filter((item) => withAttendance || item.key !== 2);
+}
+
 export function LessonStepper({
   step,
+  steps = lessonSteps,
   issues,
   onSelect,
 }: {
   step: LessonStep;
+  steps?: typeof lessonSteps;
   /** Per-step blocking issue: shown as a warning dot and on the step itself. */
   issues: Partial<Record<LessonStep, string | null>>;
   onSelect: (step: LessonStep) => void;
 }) {
   return (
     <nav aria-label="Шаги урока" className="mb-6 rounded-[24px] border border-stone-200 bg-white p-2" data-testid="lesson-stepper">
-      <ol className="grid grid-cols-5 gap-1">
-        {lessonSteps.map((item) => {
+      <ol className="grid gap-1" style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))` }}>
+        {steps.map((item, index) => {
+          const number = index + 1;
           const current = item.key === step;
           const done = item.key < step;
           const issue = issues[item.key];
@@ -41,7 +48,7 @@ export function LessonStepper({
               <button
                 type="button"
                 aria-current={current ? "step" : undefined}
-                aria-label={`Шаг ${item.key}: ${item.title}`}
+                aria-label={`Шаг ${number}: ${item.title}`}
                 onClick={() => onSelect(item.key)}
                 className={`flex min-h-12 w-full flex-col items-center justify-center gap-1 rounded-2xl px-1 py-2 text-center transition ${
                   current ? "bg-ink text-white" : done ? "bg-emerald-50 text-emerald-900 hover:bg-emerald-100" : "text-stone-500 hover:bg-stone-50"
@@ -50,7 +57,7 @@ export function LessonStepper({
                 <span className={`grid h-6 w-6 place-items-center rounded-full text-[11px] font-black ${
                   current ? "bg-gold text-ink" : done ? (issue ? "bg-amber-200 text-amber-900" : "bg-emerald-600 text-white") : "bg-stone-100 text-stone-500"
                 }`}>
-                  {done && !issue ? <Check size={13} /> : item.key}
+                  {done && !issue ? <Check size={13} /> : number}
                 </span>
                 <span className="hidden text-[11px] font-bold leading-tight sm:block">{item.short}</span>
               </button>
@@ -59,7 +66,7 @@ export function LessonStepper({
         })}
       </ol>
       <p className="mt-2 px-2 text-xs font-semibold text-stone-500">
-        Шаг {step} из {lessonSteps.length}: {lessonSteps[step - 1]?.title}
+        Шаг {steps.findIndex((item) => item.key === step) + 1} из {steps.length}: {steps.find((item) => item.key === step)?.title}
         {issues[step] ? <span className="ml-2 text-amber-800">· {issues[step]}</span> : null}
       </p>
     </nav>
@@ -79,6 +86,7 @@ export function LessonStepNav({
   onNext: () => void;
 }) {
   if (step === 5) return null;
+  // Step 1 is always the first one, whichever steps the lesson skips.
   return (
     <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-stone-200 pt-5" data-testid="lesson-step-nav">
       <button

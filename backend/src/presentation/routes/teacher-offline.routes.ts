@@ -1,9 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { getLessonStudentsOverview } from "../../application/services/lesson-students-overview.service.js";
 import {
   getTeacherOfflineAgenda,
   getTeacherOfflineClass,
   getTeacherOfflineClassStudents,
+  teacherOfflineCancel,
   teacherOfflineMarkNotHeld,
   teacherOfflineWithdraw,
   teacherOfflineStart,
@@ -486,6 +488,15 @@ export async function teacherOfflineRoutes(app: FastifyInstance) {
   );
 
   app.get(
+    "/teachers/me/offline-lessons/:crmClassId/students-overview",
+    { preHandler: readGuards },
+    async (request) => {
+      const { crmClassId } = z.object({ crmClassId: z.string().min(1) }).parse(request.params);
+      return { data: await getLessonStudentsOverview(request.user!.id, crmClassId) };
+    },
+  );
+
+  app.get(
     "/teachers/me/offline-lessons/:crmClassId/draft",
     { preHandler: readGuards },
     async (request) => {
@@ -619,6 +630,16 @@ export async function teacherOfflineRoutes(app: FastifyInstance) {
       const { crmClassId } = z.object({ crmClassId: z.string().min(1) }).parse(request.params);
       const body = z.object({ comment: z.string().trim().min(3).max(5000) }).parse(request.body ?? {});
       return { data: await teacherOfflineMarkNotHeld(request.user!.id, crmClassId, body.comment) };
+    },
+  );
+
+  app.post(
+    "/teachers/me/offline-lessons/:crmClassId/cancel",
+    { preHandler: writeGuards },
+    async (request) => {
+      const { crmClassId } = z.object({ crmClassId: z.string().min(1) }).parse(request.params);
+      const body = z.object({ reason: z.string().trim().max(2000).optional() }).parse(request.body ?? {});
+      return { data: await teacherOfflineCancel(request.user!.id, crmClassId, body.reason) };
     },
   );
 

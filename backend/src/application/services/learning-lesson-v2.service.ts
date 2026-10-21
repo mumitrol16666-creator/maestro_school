@@ -368,6 +368,16 @@ async function lessonPlans(scope: LessonScope) {
       selectedByDirection.set(plan.directionId, plan);
     }
   }
+  // Plan 1.14: the lesson suggests materials for homework — the sector's own and, per topic, the
+  // ones the step template keeps for a topic of the same title.
+  const templateIds = [...new Set([...selectedByDirection.values()].map((plan) => plan.templateStepId).filter((id): id is string => Boolean(id)))];
+  const templateTopics = templateIds.length
+    ? await prisma.sectorTemplateTopic.findMany({ where: { templateId: { in: templateIds } }, select: { templateId: true, title: true, materials: true } })
+    : [];
+  const templateMaterials = new Map(templateTopics.map((item) => [
+    `${item.templateId}:${topicTitleKey(item.title)}`,
+    lessonMaterialLinks(item.materials),
+  ]));
   return [...selectedByDirection.values()].flatMap((plan) => {
     const version = plan.versions.find((item) => item.version === plan.publishedVersionNumber);
     if (!version) return [];
@@ -382,6 +392,7 @@ async function lessonPlans(scope: LessonScope) {
         crmDirectionId: plan.direction.crmDirectionId,
         title: plan.direction.title,
       },
+      materials: lessonMaterialLinks(version.materials),
       topics: version.topics
         .filter((item) => (
           item.state === LearningPlanTopicState.active
@@ -394,8 +405,28 @@ async function lessonPlans(scope: LessonScope) {
           progressPercent: item.topic.progressPercent ?? 0,
           masteredAt: item.topic.masteredAt,
           planCompletionRewardPoints: 0,
+          materials: plan.templateStepId
+            ? templateMaterials.get(`${plan.templateStepId}:${topicTitleKey(item.titleSnapshot)}`) ?? []
+            : [],
         })),
     }];
+  });
+}
+
+function topicTitleKey(title: string) {
+  return title.replace(/\s+/g, " ").trim().toLocaleLowerCase("ru");
+}
+
+/** Saved material lists (`[{title, url, …}]`) as plain links; anything without a URL is skipped. */
+export function lessonMaterialLinks(value: unknown): Array<{ title: string; url: string }> {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const record = item as Record<string, unknown>;
+    const url = typeof record.url === "string" ? record.url.trim() : "";
+    if (!url) return [];
+    const title = typeof record.title === "string" && record.title.trim() ? record.title.trim() : url;
+    return [{ title: title.slice(0, 255), url }];
   });
 }
 

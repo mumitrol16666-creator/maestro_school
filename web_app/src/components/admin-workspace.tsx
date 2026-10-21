@@ -21,6 +21,7 @@ import {
   UserCog,
   UsersRound,
   type LucideIcon,
+  MessageSquareText,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -92,6 +93,7 @@ export const adminWorkspaceSections: AdminWorkspaceSection[] = [
       "/admin/homework-review",
       "/admin/directions",
       "/admin/sector-templates",
+      "/admin/lesson-templates",
       "/admin/sector-exams",
       "/admin/materials",
       "/admin/courses",
@@ -129,6 +131,13 @@ export const adminWorkspaceSections: AdminWorkspaceSection[] = [
         description: "Готовые секторы по направлениям: темы и критерии, которые преподаватель открывает ученику.",
         group: "Программы и контент",
         icon: Layers3,
+      },
+      {
+        href: "/admin/lesson-templates",
+        label: "Шаблоны урока",
+        description: "Фразы для итога и домашнего задания по направлениям: преподаватель вставляет их в отчёт одним нажатием.",
+        group: "Программы и контент",
+        icon: MessageSquareText,
       },
       {
         href: "/admin/sector-exams",

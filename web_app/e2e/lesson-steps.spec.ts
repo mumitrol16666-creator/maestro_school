@@ -43,26 +43,22 @@ async function startedLesson(request: APIRequestContext, token: string) {
   return crmClassId;
 }
 
-test("the teacher fills a learning lesson in five steps and sees the preview before sending", async ({ page, request, context }) => {
+test("the teacher fills an individual learning lesson in four steps and sees the preview before sending", async ({ page, request, context }) => {
   const token = await signInAsTeacher(request, context);
   const crmClassId = await startedLesson(request, token);
   await page.goto(`/admin/offline-lessons/${crmClassId}`);
 
   const stepper = page.getByTestId("lesson-stepper");
   await expect(stepper).toBeVisible();
-  await expect(stepper).toContainText("Шаг 1 из 5");
+  await expect(stepper).toContainText("Шаг 1 из 4");
   await expect(page.getByTestId("lesson-context-step")).toContainText("Казыбаев Камбар");
   await expect(page.getByRole("button", { name: "Открыть карточку: Казыбаев Камбар" })).toBeVisible();
+  // Plan 1.14: starting an individual lesson marks the student present, there is no attendance step.
+  await expect(page.getByTestId("lesson-auto-present")).toBeVisible();
 
   const nav = page.getByTestId("lesson-step-nav");
   await nav.getByRole("button", { name: "Далее" }).click();
-  await expect(stepper).toContainText("Шаг 2 из 5");
-  await expect(stepper).toContainText("Не отмечено: 1");
-  await page.getByRole("radio", { name: "Присутствовал" }).or(page.getByText("Присутствовал", { exact: true })).first().click();
-  await expect(stepper).not.toContainText("Не отмечено");
-
-  await nav.getByRole("button", { name: "Далее" }).click();
-  await expect(stepper).toContainText("Шаг 3 из 5");
+  await expect(stepper).toContainText("Шаг 2 из 4");
   await expect(page.getByText("Прогресс тем", { exact: true })).toBeVisible();
   // The QA seed leaves homework waiting for this student; a lesson must check it before sending.
   const pendingHomework = page.getByLabel(/Процент выполнения ДЗ/);
@@ -71,12 +67,12 @@ test("the teacher fills a learning lesson in five steps and sees the preview bef
   }
 
   await nav.getByRole("button", { name: "Далее" }).click();
-  await expect(stepper).toContainText("Шаг 4 из 5");
+  await expect(stepper).toContainText("Шаг 3 из 4");
   await page.getByPlaceholder("Какую песню или тему разбирали сегодня?").fill("Бой шестёркой");
   await page.getByPlaceholder("Что получилось, что разобрали, какой результат занятия?").fill("Разобрали бой шестёркой");
 
   await nav.getByRole("button", { name: "К предпросмотру" }).click();
-  await expect(stepper).toContainText("Шаг 5 из 5");
+  await expect(stepper).toContainText("Шаг 4 из 4");
   const preview = page.getByTestId("lesson-report-preview");
   await expect(preview).toContainText("1 был");
   await expect(preview).toContainText("Бой шестёркой");
@@ -84,6 +80,6 @@ test("the teacher fills a learning lesson in five steps and sees the preview bef
   await expect(page.getByRole("button", { name: "Отправить на проверку" })).toBeEnabled();
 
   // Earlier steps stay reachable from the stepper itself.
-  await stepper.getByRole("button", { name: /Посещаемость/ }).click();
-  await expect(stepper).toContainText("Шаг 2 из 5");
+  await stepper.getByRole("button", { name: /ДЗ и темы/ }).click();
+  await expect(stepper).toContainText("Шаг 2 из 4");
 });

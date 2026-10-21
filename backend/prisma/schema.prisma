@@ -450,6 +450,31 @@ model MaterialLibraryItem {
   @@map("material_library_items")
 }
 
+/// Plan 1.14: phrases for the lesson summary and homework. A teacher's own (owner set) or the
+/// school's for a CRM direction (owner null; direction null means every direction).
+model LessonTextTemplate {
+  id             String                 @id @default(uuid()) @db.Uuid
+  kind           LessonTextTemplateKind
+  text           String                 @db.VarChar(500)
+  ownerId        String?                @map("owner_id") @db.Uuid
+  crmDirectionId String?                @map("crm_direction_id") @db.VarChar(64)
+  sortOrder      Int                    @default(0) @map("sort_order")
+  archivedAt     DateTime?              @map("archived_at") @db.Timestamptz(6)
+  createdAt      DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  owner User? @relation("LessonTextTemplateOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId, kind, archivedAt])
+  @@index([crmDirectionId, kind, archivedAt])
+  @@map("lesson_text_templates")
+}
+
+enum LessonTextTemplateKind {
+  summary
+  homework
+}
+
 enum MaterialKind {
   video
   image
@@ -582,6 +607,7 @@ model User {
   learningModerationActionsCreated   LearningConversationModerationAction[] @relation("LearningModerationActor")
   learningModerationActionsTargeted  LearningConversationModerationAction[] @relation("LearningModerationTargetUser")
   materialLibraryItems               MaterialLibraryItem[]                  @relation("MaterialLibraryAuthor")
+  lessonTextTemplates                LessonTextTemplate[]                   @relation("LessonTextTemplateOwner")
   lessonSharesReceived               LessonShare[]                          @relation("LessonShareStudent")
   lessonSharesSent                   LessonShare[]                          @relation("LessonShareTeacher")
   learningConversationMemberEvents   LearningConversationMembershipEvent[]

@@ -50,10 +50,9 @@ test("the teacher adds a topic to the open sector and gives the week's bonus fro
 
   const stepper = page.getByTestId("lesson-stepper");
   const nav = page.getByTestId("lesson-step-nav");
+  // Plan 1.14: a started individual lesson has no attendance step — the student came.
   await nav.getByRole("button", { name: "Далее" }).click();
-  await page.getByRole("radio", { name: "Присутствовал" }).or(page.getByText("Присутствовал", { exact: true })).first().click();
-  await nav.getByRole("button", { name: "Далее" }).click();
-  await expect(stepper).toContainText("Шаг 3 из 5");
+  await expect(stepper).toContainText("Шаг 2 из 4");
 
   const title = `Быстрая тема ${Date.now().toString(36)}`;
   await page.getByRole("button", { name: "+ Добавить тему в сектор" }).click();
@@ -67,7 +66,7 @@ test("the teacher adds a topic to the open sector and gives the week's bonus fro
     await pendingHomework.nth(index).fill("100");
   }
   await nav.getByRole("button", { name: "Далее" }).click();
-  await expect(stepper).toContainText("Шаг 4 из 5");
+  await expect(stepper).toContainText("Шаг 3 из 4");
 
   const bonus = page.getByTestId("lesson-bonus-xp");
   await expect(bonus).toContainText("Бонус XP за урок");
@@ -89,7 +88,6 @@ test("the teacher adds a topic to the open sector and gives the week's bonus fro
   await page.reload();
   await nav.getByRole("button", { name: "Далее" }).click();
   await nav.getByRole("button", { name: "Далее" }).click();
-  await nav.getByRole("button", { name: "Далее" }).click();
-  await expect(stepper).toContainText("Шаг 4 из 5");
+  await expect(stepper).toContainText("Шаг 3 из 4");
   await expect(page.getByTestId("lesson-bonus-xp").getByTestId("bonus-week-limit")).toBeVisible();
 });

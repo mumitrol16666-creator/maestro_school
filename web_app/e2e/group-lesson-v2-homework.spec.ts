@@ -31,7 +31,7 @@ test("a V2 group lesson has no old done / partly / not homework check", async ({
   await nav.getByRole("button", { name: "Далее" }).click();
   await expect(page.getByTestId("lesson-stepper")).toContainText("Шаг 2 из 5");
   await expect(page.getByRole("heading", { name: "Посещаемость группы" })).toBeVisible();
-  await expect(page.getByText("Домашнее задание проверяется на шаге «Темы и проверка».")).toBeVisible();
+  await expect(page.getByText("Домашнее задание проверяется на шаге «ДЗ и темы».")).toBeVisible();
   await expect(page.getByText("На прошлых групповых уроках домашнее задание не найдено.")).toHaveCount(0);
   await expect(page.getByRole("group", { name: /Проверка ДЗ для/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Частично", exact: true })).toHaveCount(0);
