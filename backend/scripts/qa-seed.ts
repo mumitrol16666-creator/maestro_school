@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
-import { assertLocalQaDatabase } from "./qa-database-guard.js";
+import { assertConnectedQaDatabase, assertLocalQaDatabase } from "./qa-database-guard.js";
+import { deleteQaRewardLedger } from "./qa-seed-ledger.js";
 
 const prisma = new PrismaClient();
 
@@ -26,7 +27,14 @@ const QA_IDS = {
   learningGroupTopic: "e0699756-3838-4cb0-8d25-8aac7617a64d",
   learningIndividualAssignment: "40000000-0000-4000-8000-000000000001",
   learningGroupAssignment: "40000000-0000-4000-8000-000000000002",
+  teacherStudentDialog: "50000000-0000-4000-8000-000000000001",
+  teacherStudentDialogFirstMessage: "50000000-0000-4000-8000-000000000011",
+  teacherStudentDialogSecondMessage: "50000000-0000-4000-8000-000000000012",
 } as const;
+
+// Not the "crm:" namespace: the teacher's sync on login archives every "crm:" dialog that is
+// missing from the CRM roster, and this dialog has no CRM assignment behind it.
+const TEACHER_STUDENT_DIALOG_SOURCE_KEY = "qa:seed-dialog:learning:student-1";
 
 const CRM = {
   teacher1: "QA-TEACHER-1",
@@ -103,7 +111,9 @@ async function upsertUser(input: {
 }
 
 async function main() {
+  // Order matters: URL and marker first, then the server that really answers, then any write.
   assertLocalQaDatabase();
+  await assertConnectedQaDatabase(prisma);
 
   const disposableEpochs = await prisma.economicEpoch.findMany({
     where: { code: { startsWith: "e2e-economy-v2-" } },
@@ -219,6 +229,10 @@ async function main() {
     { id: "qa-ind-4", title: "Первый куплет песни", status: "planned", progress: 0 },
   ];
 
+
+  // The topics below are recreated, so the rewards paid for them earlier must go too; otherwise
+  // reward scenarios end with "delta 0". The function re-checks the QA database before deleting.
+  await deleteQaRewardLedger(prisma, [QA_IDS.student1, QA_IDS.student2, QA_IDS.student3, QA_IDS.student4]);
 
   const topicPercents = [0, 70, 99, 100];
   for (const [index, percent] of topicPercents.entries()) {
@@ -612,6 +626,67 @@ async function main() {
       });
     }
   }
+
+  // One teacher-student dialog with two messages, outside the CRM sync's reach.
+  const dialogStartedAt = new Date(Date.now() - 2 * 60 * 60 * 1000);
+  const dialogRepliedAt = new Date(dialogStartedAt.getTime() + 15 * 60 * 1000);
+  await prisma.learningConversation.deleteMany({
+    where: { OR: [{ id: QA_IDS.teacherStudentDialog }, { sourceKey: TEACHER_STUDENT_DIALOG_SOURCE_KEY }] },
+  });
+  await prisma.learningConversation.create({
+    data: {
+      id: QA_IDS.teacherStudentDialog,
+      sourceKey: TEACHER_STUDENT_DIALOG_SOURCE_KEY,
+      scopeKey: TEACHER_STUDENT_DIALOG_SOURCE_KEY,
+      type: "learning_direction",
+      title: "Гитара",
+      crmDirectionId: "QA-DIRECTION-GUITAR",
+      context: { cycle: 1, qaSeed: true },
+      lastMessageAt: dialogRepliedAt,
+      members: {
+        create: [
+          { userId: QA_IDS.student1, role: "student", joinedAt: dialogStartedAt, lastReadAt: dialogRepliedAt },
+          { userId: QA_IDS.teacher1, role: "teacher", joinedAt: dialogStartedAt, lastReadAt: dialogRepliedAt },
+        ],
+      },
+      messages: {
+        create: [
+          {
+            id: QA_IDS.teacherStudentDialogFirstMessage,
+            sourceKey: `${TEACHER_STUDENT_DIALOG_SOURCE_KEY}:message:1`,
+            authorId: QA_IDS.student1,
+            createdAt: dialogStartedAt,
+            versions: {
+              create: {
+                sourceKey: `${TEACHER_STUDENT_DIALOG_SOURCE_KEY}:message:1:v1`,
+                version: 1,
+                kind: "created",
+                body: "QA: можно разобрать бой восьмыми на следующем уроке?",
+                createdById: QA_IDS.student1,
+                createdAt: dialogStartedAt,
+              },
+            },
+          },
+          {
+            id: QA_IDS.teacherStudentDialogSecondMessage,
+            sourceKey: `${TEACHER_STUDENT_DIALOG_SOURCE_KEY}:message:2`,
+            authorId: QA_IDS.teacher1,
+            createdAt: dialogRepliedAt,
+            versions: {
+              create: {
+                sourceKey: `${TEACHER_STUDENT_DIALOG_SOURCE_KEY}:message:2:v1`,
+                version: 1,
+                kind: "created",
+                body: "QA: да, начнём с него. Сыграй дома две минуты под метроном.",
+                createdById: QA_IDS.teacher1,
+                createdAt: dialogRepliedAt,
+              },
+            },
+          },
+        ],
+      },
+    },
+  });
 
   await prisma.pointsTransaction.upsert({
     where: { sourceKey: "qa:legacy-points:student-1" },
