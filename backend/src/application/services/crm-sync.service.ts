@@ -1,4 +1,4 @@
-import { syncStudentFromApp } from "../../infrastructure/crm/crm-client.js";
+import { crmOutboundSecret, syncStudentFromApp } from "../../infrastructure/crm/crm-client.js";
 import { linkUserToCrm } from "../repositories/user-link.repository.js";
 import { normalizePhoneDigits } from "../../lib/phone.js";
 
@@ -10,8 +10,8 @@ export async function syncNewStudentToCrm(params: {
   middleName?: string | null;
   email: string;
 }) {
-  if (!process.env.INTEGRATION_SERVICE_SECRET) {
-    console.warn("[crm-sync] INTEGRATION_SERVICE_SECRET is not configured, skip sync");
+  if (!crmOutboundSecret()) {
+    console.warn("[crm-sync] CRM_OUTBOUND_SECRET / INTEGRATION_SERVICE_SECRET is not configured, skip sync");
     return null;
   }
 

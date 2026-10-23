@@ -21,6 +21,11 @@ const envSchema = z.object({
   VAPID_PRIVATE_KEY: z.string().optional(),
   VAPID_SUBJECT: z.string().default("mailto:admin@maestro.local"),
   INTEGRATION_SERVICE_SECRET: z.string().min(16).optional(),
+  // Подпись исходящих запросов платформы в CRM. Нет значения — используется INTEGRATION_SERVICE_SECRET.
+  CRM_OUTBOUND_SECRET: z.preprocess(
+    (value) => typeof value === "string" && value.trim() === "" ? undefined : value,
+    z.string().min(16).optional(),
+  ),
   INTEGRATION_SSO_SECRET: z.string().min(16).optional(),
   CRM_API_URL: z.string().default("http://127.0.0.1:5000"),
   PRIVATE_STORAGE_DRIVER: z.enum(["local", "s3"]).default("local"),

@@ -3,6 +3,7 @@ import { prisma } from "../../infrastructure/database/prisma.js";
 import { AppError, BadRequestError, ConflictError } from "../../domain/errors.js";
 import { CRM_APPROVAL_REQUIRED } from "../../domain/offline-lesson-approval-policy.js";
 import {
+  crmOutboundSecret,
   fetchClassCard,
   invalidateStudentOfflineSummary,
   postAdminApproveClass,
@@ -1682,7 +1683,7 @@ export async function processDueCrmOutboxEvents(
 }
 
 export function startCrmOutboxWorker() {
-  if (!process.env.INTEGRATION_SERVICE_SECRET) return () => undefined;
+  if (!crmOutboundSecret()) return () => undefined;
   let running = false;
   const run = async () => {
     if (running) return;

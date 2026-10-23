@@ -11,10 +11,15 @@ type CrmResponse<T> = {
 type TrialLessonReportPayload = Record<string, unknown>;
 const CRM_REQUEST_TIMEOUT_MS = 20_000;
 
-function integrationHeaders(): Record<string, string> {
-  const secret = process.env.INTEGRATION_SERVICE_SECRET;
+/** Secret that signs platform → CRM requests; CRM_OUTBOUND_SECRET, else the shared INTEGRATION_SERVICE_SECRET. */
+export function crmOutboundSecret(): string | undefined {
+  return process.env.CRM_OUTBOUND_SECRET || process.env.INTEGRATION_SERVICE_SECRET || undefined;
+}
+
+export function integrationHeaders(): Record<string, string> {
+  const secret = crmOutboundSecret();
   if (!secret) {
-    throw new Error("INTEGRATION_SERVICE_SECRET is not configured");
+    throw new Error("CRM_OUTBOUND_SECRET or INTEGRATION_SERVICE_SECRET is not configured");
   }
   return {
     Authorization: `Bearer ${secret}`,

@@ -1,5 +1,5 @@
 import { prisma } from "../../infrastructure/database/prisma.js";
-import { fetchClassCard } from "../../infrastructure/crm/crm-client.js";
+import { crmOutboundSecret, fetchClassCard } from "../../infrastructure/crm/crm-client.js";
 import { saveOfflineLessonProjectionSnapshot } from "./offline-lesson-projection-store.service.js";
 import { reconcileObservedCrmApproval } from "./crm-outbox.service.js";
 
@@ -111,7 +111,7 @@ export async function reconcilePendingCrmApprovals(
 }
 
 export function startPendingCrmApprovalReconciliationJob() {
-  if (!process.env.INTEGRATION_SERVICE_SECRET) return () => undefined;
+  if (!crmOutboundSecret()) return () => undefined;
   let running = false;
   const run = async () => {
     if (running) return;

@@ -55,6 +55,7 @@ if (!['127.0.0.1', 'localhost'].includes(required("HOST"))) {
 parsedUrl("DATABASE_URL", ["postgresql:", "postgres:"]);
 secureSecret("JWT_SECRET");
 secureSecret("INTEGRATION_SERVICE_SECRET");
+if (process.env.CRM_OUTBOUND_SECRET) secureSecret("CRM_OUTBOUND_SECRET");
 secureSecret("INTEGRATION_SSO_SECRET");
 
 for (const origin of required("CORS_ORIGIN").split(",").map((value) => value.trim()).filter(Boolean)) {
