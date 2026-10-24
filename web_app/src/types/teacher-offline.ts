@@ -110,6 +110,8 @@ export type TeacherOfflineClass = {
   deliveryFormat?: "offline" | "online";
   meetingUrl?: string | null;
   crmIndividualStudentId?: string | null;
+  /** The group's direction title from CRM, for the sector editor opened from the lesson. */
+  groupDirection?: string | null;
   group?: { crmGroupId: string; name: string } | null;
   teacher?: { crmTeacherId: string; name: string } | null;
   room?: { crmRoomId: string; name: string } | null;

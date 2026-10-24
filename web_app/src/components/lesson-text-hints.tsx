@@ -28,6 +28,12 @@ export function LessonTextHints({
   onRemoveOwn: (id: string) => void;
 }) {
   const chip = "min-h-9 rounded-lg px-2.5 py-1 text-left text-[12px] font-semibold transition disabled:opacity-50";
+  // One phrase appears once: the lesson's own first, then the teacher's, then the school's.
+  const seen = new Set<string>();
+  const unique = (items: string[]) => items.filter((text) => (seen.has(text) ? false : (seen.add(text), true)));
+  fromLesson = unique(fromLesson);
+  own = own.filter((item) => (seen.has(item.text) ? false : (seen.add(item.text), true)));
+  school = unique(school);
   return (
     <div className="mt-2 space-y-2" data-testid={testId}>
       {fromLesson.length ? (
@@ -35,8 +41,8 @@ export function LessonTextHints({
           <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-emerald-800">
             <Sparkles size={12} /> Из урока
           </span>
-          {fromLesson.map((text) => (
-            <button key={text} type="button" disabled={disabled} onClick={() => onInsert(text)}
+          {fromLesson.map((text, index) => (
+            <button key={`${index}-${text}`} type="button" disabled={disabled} onClick={() => onInsert(text)}
               className={`${chip} border border-emerald-200 bg-emerald-50 text-emerald-900 hover:bg-emerald-100`}>
               + {text}
             </button>
@@ -64,8 +70,8 @@ export function LessonTextHints({
       {school.length ? (
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-[10px] font-black uppercase tracking-wider text-stone-500">Школа</span>
-          {school.map((text) => (
-            <button key={text} type="button" disabled={disabled} onClick={() => onInsert(text)}
+          {school.map((text, index) => (
+            <button key={`${index}-${text}`} type="button" disabled={disabled} onClick={() => onInsert(text)}
               className={`${chip} border border-stone-200 bg-stone-50 text-stone-700 hover:bg-stone-100 hover:text-ink`}>
               + {text}
             </button>

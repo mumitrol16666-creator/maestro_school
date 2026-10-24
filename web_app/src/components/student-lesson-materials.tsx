@@ -85,9 +85,10 @@ export function LessonMaterialItems({
       {materials.map((material, index) => {
         if (!material.url) return null;
         const isFile =
+          !parseVideoUrl(material.url) && (
           isManagedMediaUrl(material.url) ||
           ["file", "pdf", "image", "audio"].includes(material.type ?? "") ||
-          Boolean(material.mimeType && !material.mimeType.startsWith("video/"));
+          Boolean(material.mimeType && !material.mimeType.startsWith("video/")));
         const title = material.title || `Материал ${index + 1}`;
 
         return (

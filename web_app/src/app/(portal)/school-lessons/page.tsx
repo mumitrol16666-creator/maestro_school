@@ -104,14 +104,16 @@ function LessonCard({
   hideDate = false,
   streakWeeks = null,
   nextLesson = null,
+  latest = false,
 }: {
   lesson: SchoolOfflineLesson;
   upcoming?: boolean;
   defaultOpen?: boolean;
   hideDate?: boolean;
-  /** Plan 2.7: the current streak and the next lesson, shown in a confirmed lesson's result. */
+  /** Plan 2.7: the current streak and the next lesson, shown only on the latest confirmed lesson. */
   streakWeeks?: number | null;
   nextLesson?: { date: string; startTime: string } | null;
+  latest?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen ?? false);
   useEffect(() => {
@@ -130,13 +132,12 @@ function LessonCard({
   // Plan 2.7: one line of what the lesson gave, then the sector step and the homework check.
   const earnedPoints =
     (lesson.lessonPointsAwarded ?? 0)
-    + (lesson.learningTopicResults ?? []).reduce((sum, item) => sum + item.masteryPointsAwarded, 0)
-    + (lesson.learningPlanCompletionResults ?? []).reduce((sum, item) => sum + item.pointsAwarded, 0);
+    + (lesson.learningTopicResults ?? []).reduce((sum, item) => sum + item.masteryPointsAwarded, 0);
   const earned = [
-    earnedPoints > 0 ? { key: "points", label: `+${earnedPoints} баллов`, tone: "bg-gold/20 text-amber-950" } : null,
+    earnedPoints > 0 ? { key: "points", label: `итого +${earnedPoints} баллов`, tone: "bg-gold/20 text-amber-950" } : null,
     lesson.lessonRewards?.xp ? { key: "xp", label: `+${lesson.lessonRewards.xp} XP`, tone: "bg-emerald-100 text-emerald-900" } : null,
     lesson.lessonRewards?.bonusXp ? { key: "bonus", label: `бонус от преподавателя +${lesson.lessonRewards.bonusXp} XP`, tone: "bg-sky-100 text-sky-900" } : null,
-    streakWeeks && lesson.status === "completed" ? { key: "streak", label: `серия ${streakWeeks} нед.`, tone: "bg-orange-100 text-orange-900" } : null,
+    streakWeeks && latest ? { key: "streak", label: `серия ${streakWeeks} нед.`, tone: "bg-orange-100 text-orange-900" } : null,
   ].filter((item): item is { key: string; label: string; tone: string } => Boolean(item));
 
   const hasDetails =
@@ -423,7 +424,7 @@ function LessonCard({
             </div>
           ) : null}
 
-          {lesson.homework || (lesson.status === "completed" && nextLesson) ? (
+          {lesson.homework || (latest && nextLesson) ? (
             <div className="flex flex-wrap items-center gap-3" data-testid="lesson-next">
               {lesson.homework ? (
                 <Link
@@ -433,7 +434,7 @@ function LessonCard({
                   Открыть задание →
                 </Link>
               ) : null}
-              {lesson.status === "completed" && nextLesson ? (
+              {latest && nextLesson ? (
                 <p className="text-xs font-semibold text-stone-500">
                   Следующий урок: {schoolDateLabel(nextLesson.date.slice(0, 10), false)} · {nextLesson.startTime}
                 </p>
@@ -461,12 +462,14 @@ function GroupedLessonList({
   requestedLessonId,
   streakWeeks = null,
   nextLesson = null,
+  latestCompletedId = null,
 }: {
   lessons: SchoolOfflineLesson[];
   upcoming?: boolean;
   requestedLessonId?: string | null;
   streakWeeks?: number | null;
   nextLesson?: { date: string; startTime: string } | null;
+  latestCompletedId?: string | null;
 }) {
   const groups = new Map<string, SchoolOfflineLesson[]>();
   const sorted = [...lessons].sort((a, b) => {
@@ -497,6 +500,7 @@ function GroupedLessonList({
                 hideDate
                 streakWeeks={streakWeeks}
                 nextLesson={nextLesson}
+                latest={lesson.crmClassId === latestCompletedId}
               />
             ))}
           </div>
@@ -650,6 +654,13 @@ function SchoolSchedule() {
         (availableMonths[0]?.monthKey ?? currentAqtobeMonth())
       : historyFilterMonth;
 
+  // Plan 2.7: the latest confirmed lesson carries the streak and the next lesson's date.
+  const latestCompletedId = useMemo(() => {
+    const completed = lessonHistory
+      .filter((lesson) => lesson.status === "completed")
+      .sort((a, b) => b.date.slice(0, 10).localeCompare(a.date.slice(0, 10)) || b.startTime.localeCompare(a.startTime));
+    return completed[0]?.crmClassId ?? null;
+  }, [lessonHistory]);
   // Plan 2.7: the nearest lesson ahead, named in a confirmed lesson's result.
   const nextScheduledLesson = useMemo(() => {
     const ahead = [...(resource.data?.upcomingLessons ?? [])]
@@ -876,7 +887,7 @@ function SchoolSchedule() {
             </div>
             {requestedLessonId && !lessonHistory.some((lesson) => lesson.crmClassId === requestedLessonId) ? (
               <p className="mb-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900" data-testid="history-lesson-missing">
-                Этот урок старше последних {lessonHistory.length} занятий и в истории уже не показывается. Итог и задание по нему остаются в разделе «Обучение».
+                Этого урока нет в истории: он старше последних {lessonHistory.length} занятий или был перенесён. Задание по нему остаётся в разделе «Обучение».
               </p>
             ) : null}
             {displayHistory.length === 0 ? (
@@ -891,6 +902,7 @@ function SchoolSchedule() {
                 requestedLessonId={requestedLessonId}
                 streakWeeks={data.streakWeeks ?? null}
                 nextLesson={nextScheduledLesson}
+                latestCompletedId={latestCompletedId}
               />
             )}
           </section>

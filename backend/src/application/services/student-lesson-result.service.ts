@@ -78,7 +78,7 @@ export function sectorProgressAroundLesson(input: {
 export async function readLessonRewards(input: {
   appUserId: string;
   crmStudentId: string;
-  lessons: Array<{ crmClassId: string; date: string; startTime?: string | null; status?: string | null }>;
+  lessons: Array<{ crmClassId: string; date: string; startTime?: string | null; status?: string | null; crmTeacherId?: string | null }>;
 }) {
   input = {
     ...input,
@@ -96,22 +96,29 @@ export async function readLessonRewards(input: {
         { sourceType: "teacher_bonus" },
       ],
     },
-    select: { sourceType: true, sourceKey: true, amount: true, recordedAt: true, createdAt: true },
+    select: { sourceType: true, sourceKey: true, amount: true, recordedAt: true, createdAt: true, awardedById: true },
   });
-  const bonusByDay = new Map<string, number>();
+  // A bonus belongs to the lesson of the teacher who gave it, on the same Aqtobe day.
+  const teacherIds = [...new Set(input.lessons.map((lesson) => lesson.crmTeacherId).filter((id): id is string => Boolean(id)))];
+  const teacherUsers = teacherIds.length
+    ? await prisma.user.findMany({ where: { crmTeacherId: { in: teacherIds } }, select: { id: true, crmTeacherId: true } })
+    : [];
+  const userIdByCrmTeacher = new Map(teacherUsers.map((user) => [user.crmTeacherId!, user.id]));
+  const bonusByDayAndTeacher = new Map<string, number>();
   for (const event of events) {
-    if (event.sourceType !== "teacher_bonus") continue;
-    const day = aqtobeDayKey(event.recordedAt ?? event.createdAt);
-    bonusByDay.set(day, (bonusByDay.get(day) ?? 0) + event.amount);
+    if (event.sourceType !== "teacher_bonus" || !event.awardedById) continue;
+    const key = `${aqtobeDayKey(event.recordedAt ?? event.createdAt)}:${event.awardedById}`;
+    bonusByDayAndTeacher.set(key, (bonusByDayAndTeacher.get(key) ?? 0) + event.amount);
   }
   const result = new Map<string, StudentLessonRewards>();
   const bonusTaken = new Set<string>();
   for (const lesson of input.lessons) {
     const key = `offline-lesson:${lesson.crmClassId}:${input.crmStudentId}`;
     const xp = events.filter((event) => event.sourceKey === key).reduce((sum, event) => sum + event.amount, 0);
-    const day = aqtobeDayKey(lesson.date);
-    const bonusXp = bonusTaken.has(day) ? 0 : bonusByDay.get(day) ?? 0;
-    if (bonusXp) bonusTaken.add(day);
+    const teacherUserId = lesson.crmTeacherId ? userIdByCrmTeacher.get(lesson.crmTeacherId) : null;
+    const bonusKey = teacherUserId ? `${aqtobeDayKey(lesson.date)}:${teacherUserId}` : null;
+    const bonusXp = bonusKey && !bonusTaken.has(bonusKey) ? bonusByDayAndTeacher.get(bonusKey) ?? 0 : 0;
+    if (bonusXp && bonusKey) bonusTaken.add(bonusKey);
     if (xp || bonusXp) result.set(lesson.crmClassId, { xp, bonusXp });
   }
   return result;

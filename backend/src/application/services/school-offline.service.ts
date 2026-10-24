@@ -354,7 +354,13 @@ export async function getStudentSchoolOfflineSummary(
       crmStudentId: user.crmStudentId,
       lessons: lessonHistory
         .filter((lesson): lesson is OfflineSummaryLesson & { crmClassId: string; date: string } => Boolean(lesson.crmClassId && lesson.date))
-        .map((lesson) => ({ crmClassId: lesson.crmClassId, date: lesson.date, startTime: lesson.startTime, status: typeof lesson.status === "string" ? lesson.status : null })),
+        .map((lesson) => ({
+          crmClassId: lesson.crmClassId,
+          date: lesson.date,
+          startTime: lesson.startTime,
+          status: typeof lesson.status === "string" ? lesson.status : null,
+          crmTeacherId: typeof (lesson as { crmTeacherId?: unknown }).crmTeacherId === "string" ? (lesson as { crmTeacherId: string }).crmTeacherId : null,
+        })),
     }),
     readSectorProgress(changesByClassId),
     readHomeworkChecks({ crmStudentId: user.crmStudentId, crmClassIds: classIds }),
@@ -476,7 +482,6 @@ export async function studentLessonResultBrief(appUserId: string, crmClassId: st
         OR: [
           { sourceKey: { startsWith: `offline-lesson-points:${crmClassId}:` } },
           { sourceKey: { startsWith: "learning-topic-mastery:" } },
-          { sourceKey: { startsWith: "learning-plan-completion:" } },
         ],
       },
       select: { sourceKey: true, amount: true },

@@ -290,8 +290,23 @@ export async function teacherOfflineSubmit(
  * the lesson goes to the admin as an absence; the admin sets the kind of absence when confirming.
  * A lesson not started yet is started first, so CRM accepts the attendance.
  */
-export async function teacherOfflineCancel(appUserId: string, crmClassId: string, reason?: string | null) {
-  const lesson = await getTeacherOfflineClass(appUserId, crmClassId) as { status?: string | null };
+const aqtobeDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Aqtobe", year: "numeric", month: "2-digit", day: "2-digit" });
+
+/** The lesson's start as a moment in time: its Aqtobe calendar day plus the start time. */
+export function offlineLessonStartsAt(date: string | Date, startTime: string) {
+  const [hours = "0", minutes = "0"] = String(startTime || "00:00").split(":");
+  return new Date(`${aqtobeDate.format(new Date(date))}T${hours.padStart(2, "0")}:${minutes.padStart(2, "0")}:00+05:00`);
+}
+
+export async function teacherOfflineCancel(appUserId: string, crmClassId: string, reason?: string | null, now = new Date()) {
+  const lesson = await getTeacherOfflineClass(appUserId, crmClassId) as { status?: string | null; date?: string; startTime?: string; classType?: string | null };
+  if (["completed", "cancelled", "pending_admin_review"].includes(String(lesson.status))) {
+    throw new BadRequestError("Урок уже отправлен администратору или закрыт", "LESSON_ALREADY_CLOSED");
+  }
+  // CRM accepts an absence from the lesson time; starting the lesson earlier would leave it hanging.
+  if (lesson.date && lesson.startTime && now < offlineLessonStartsAt(lesson.date, lesson.startTime)) {
+    throw new BadRequestError(`Отменить урок можно с ${lesson.startTime}, когда наступит время урока`, "LESSON_CANCEL_TOO_EARLY");
+  }
   if (lesson.status === "scheduled") await teacherOfflineStart(appUserId, crmClassId);
   const roster = await getTeacherOfflineClassStudents(appUserId, crmClassId) as { students?: Array<{ crmStudentId?: string }> };
   const studentIds = (roster.students ?? []).map((student) => student.crmStudentId).filter((id): id is string => Boolean(id));

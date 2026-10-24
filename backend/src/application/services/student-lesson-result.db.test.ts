@@ -23,6 +23,13 @@ integrationTest("the student's lesson result reads the sector step, the homework
       firstName: "Итог", lastName: suffix, roleId: role.id, crmStudentId,
     },
   });
+  const teacherRole = await prisma.role.upsert({ where: { slug: "teacher" }, create: { slug: "teacher", name: "teacher" }, update: {} });
+  const teacher = await prisma.user.create({
+    data: { login: `result_teacher_${suffix}`, phone: `+7702${suffix.replace(/\D/g, "").padEnd(7, "3").slice(0, 7)}`, passwordHash: "x", firstName: "Учитель", lastName: suffix, roleId: teacherRole.id, crmTeacherId: `crm-teacher-${suffix}` },
+  });
+  const otherTeacher = await prisma.user.create({
+    data: { login: `result_other_${suffix}`, phone: `+7703${suffix.replace(/\D/g, "").padEnd(7, "4").slice(0, 7)}`, passwordHash: "x", firstName: "Другой", lastName: suffix, roleId: teacherRole.id, crmTeacherId: `crm-other-${suffix}` },
+  });
   const direction = await prisma.direction.create({ data: { title: `Гитара ${suffix}`, slug: `direction-${suffix}`, isPublished: true } });
   const epoch = await prisma.economicEpoch.create({
     data: { code: `result-${suffix}`, name: "Тестовая эпоха", startsAt: new Date("2026-01-01T00:00:00.000Z"), status: "archived", sourceKey: `result-epoch:${suffix}`, activatedAt: new Date("2026-01-01T00:00:00.000Z") },
@@ -55,21 +62,24 @@ integrationTest("the student's lesson result reads the sector step, the homework
   await prisma.leagueXpEvent.createMany({
     data: [
       { economicEpochId: epoch.id, studentId: student.id, amount: 20, sourceType: "offline_lesson", sourceKey: `offline-lesson:${crmClassId}:${crmStudentId}`, description: "Посещение", recordedAt: lessonAt },
-      { economicEpochId: epoch.id, studentId: student.id, amount: 3, sourceType: "teacher_bonus", sourceKey: `teacher-bonus:${suffix}:same-day`, description: "Бонус", recordedAt: new Date("2026-10-20T13:00:00.000Z") },
-      { economicEpochId: epoch.id, studentId: student.id, amount: 5, sourceType: "teacher_bonus", sourceKey: `teacher-bonus:${suffix}:other-day`, description: "Бонус", recordedAt: new Date("2026-10-22T07:00:00.000Z") },
+      { economicEpochId: epoch.id, studentId: student.id, amount: 3, sourceType: "teacher_bonus", sourceKey: `teacher-bonus:${suffix}:same-day`, description: "Бонус", recordedAt: new Date("2026-10-20T13:00:00.000Z"), awardedById: teacher.id },
+      { economicEpochId: epoch.id, studentId: student.id, amount: 7, sourceType: "teacher_bonus", sourceKey: `teacher-bonus:${suffix}:other-teacher`, description: "Бонус группы", recordedAt: new Date("2026-10-20T14:00:00.000Z"), awardedById: otherTeacher.id },
+      { economicEpochId: epoch.id, studentId: student.id, amount: 5, sourceType: "teacher_bonus", sourceKey: `teacher-bonus:${suffix}:other-day`, description: "Бонус", recordedAt: new Date("2026-10-22T07:00:00.000Z"), awardedById: teacher.id },
       { economicEpochId: epoch.id, studentId: student.id, amount: 20, sourceType: "offline_lesson", sourceKey: `offline-lesson:${crmClassId}-reversed:${crmStudentId}`, description: "Откат", recordedAt: lessonAt, reversedAt: lessonAt },
     ],
   });
 
   try {
     const lessons = [
-      { crmClassId, date: lessonAt.toISOString(), startTime: "12:00", status: "completed" },
-      { crmClassId: `${crmClassId}-later`, date: "2026-10-20T10:00:00.000Z", startTime: "15:00", status: "completed" },
-      { crmClassId: `${crmClassId}-draft`, date: lessonAt.toISOString(), startTime: "09:00", status: "not_filled" },
+      { crmClassId, date: lessonAt.toISOString(), startTime: "12:00", status: "completed", crmTeacherId: teacher.crmTeacherId },
+      { crmClassId: `${crmClassId}-later`, date: "2026-10-20T10:00:00.000Z", startTime: "15:00", status: "completed", crmTeacherId: teacher.crmTeacherId },
+      { crmClassId: `${crmClassId}-group`, date: "2026-10-20T13:00:00.000Z", startTime: "18:00", status: "completed", crmTeacherId: otherTeacher.crmTeacherId },
+      { crmClassId: `${crmClassId}-draft`, date: lessonAt.toISOString(), startTime: "09:00", status: "not_filled", crmTeacherId: teacher.crmTeacherId },
     ];
     const rewards = await readLessonRewards({ appUserId: student.id, crmStudentId, lessons });
-    assert.deepEqual(rewards.get(crmClassId), { xp: 20, bonusXp: 3 }, "attendance XP plus the bonus of the same Aqtobe day");
-    assert.equal(rewards.get(`${crmClassId}-later`), undefined, "the day's bonus is shown once, on the first confirmed lesson");
+    assert.deepEqual(rewards.get(crmClassId), { xp: 20, bonusXp: 3 }, "attendance XP plus this teacher's bonus of the same Aqtobe day");
+    assert.equal(rewards.get(`${crmClassId}-later`), undefined, "the day's bonus is shown once, on the teacher's first confirmed lesson");
+    assert.deepEqual(rewards.get(`${crmClassId}-group`), { xp: 0, bonusXp: 7 }, "another teacher's bonus goes to that teacher's lesson");
     assert.equal(rewards.get(`${crmClassId}-draft`), undefined, "an unconfirmed lesson earns nothing");
 
     const sector = await readSectorProgress(new Map([[crmClassId, [
@@ -92,6 +102,6 @@ integrationTest("the student's lesson result reads the sector step, the homework
     await prisma.leagueXpEvent.deleteMany({ where: { studentId: student.id } });
     await prisma.economicEpoch.deleteMany({ where: { id: epoch.id } });
     await prisma.direction.deleteMany({ where: { id: direction.id } });
-    await prisma.user.deleteMany({ where: { id: student.id } });
+    await prisma.user.deleteMany({ where: { id: { in: [student.id, teacher.id, otherTeacher.id] } } });
   }
 });

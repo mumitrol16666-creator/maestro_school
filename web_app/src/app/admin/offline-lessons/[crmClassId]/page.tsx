@@ -701,9 +701,14 @@ export default function AdminOfflineLessonDetailPage() {
   );
   const draftHydrated = hydratedLessonDraftKey === lessonDraftKey;
   // Plan 1.14: a started individual lesson means the student came; «Отменить урок» is the other way.
+  // An exam and the admin «за преподавателя» keep the attendance step: there the kind of absence matters.
+  const withAttendanceStep = !isIndividualLesson || lesson?.classType === "exam" || canActForTeacher;
   const autoPresent = Boolean(
-    canEditTeacherReport && isLearningLessonV2 && isIndividualLesson && draftHydrated && lesson?.classType !== "exam",
+    canEditTeacherReport && !withAttendanceStep && isLearningLessonV2 && draftHydrated && lesson?.startedAt,
   );
+  // 1.3: cancelling before the lesson time would leave the lesson started and the absence rejected by CRM.
+  const lessonStartsAt = lesson ? lessonStartDateTime(lesson.date, lesson.startTime).getTime() : null;
+  const cancelAvailableFrom = lessonStartsAt != null && clockNow < lessonStartsAt ? lesson!.startTime : null;
   useEffect(() => {
     if (!autoPresent) return;
     const unmarked = students.filter((student) => draftFor(student).attendanceStatus === "unmarked");
@@ -715,7 +720,7 @@ export default function AdminOfflineLessonDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoPresent, unmarkedCount]);
 
-  const overviewEnabled = Boolean(canEditTeacherReport && isLearningLessonV2 && !isTrialLesson);
+  const overviewEnabled = Boolean(canEditTeacherReport && !isAdmin && isLearningLessonV2 && !isTrialLesson);
   useEffect(() => {
     if (!overviewEnabled) return;
     let cancelled = false;
@@ -729,13 +734,16 @@ export default function AdminOfflineLessonDetailPage() {
 
   const lessonDirectionId = learningV2?.plans[0]?.direction.crmDirectionId ?? null;
   useEffect(() => {
-    if (!overviewEnabled) return;
+    if (!canEditTeacherReport || !isLearningLessonV2 || isTrialLesson) return;
     let cancelled = false;
-    lessonTemplatesApi.forLesson(lessonDirectionId)
+    // The admin «за преподавателя» sees the school's phrases only; own templates belong to teachers.
+    (isAdmin
+      ? lessonTemplatesApi.school(lessonDirectionId).then((school) => ({ own: [], school }))
+      : lessonTemplatesApi.forLesson(lessonDirectionId))
       .then((data) => { if (!cancelled) setLessonTemplates(data); })
       .catch(() => undefined);
     return () => { cancelled = true; };
-  }, [overviewEnabled, lessonDirectionId]);
+  }, [canEditTeacherReport, isLearningLessonV2, isTrialLesson, isAdmin, lessonDirectionId]);
 
   // «Тема урока» follows the topics whose percent changed until the teacher writes their own.
   const autoLessonTopic = learningV2
@@ -1525,11 +1533,12 @@ export default function AdminOfflineLessonDetailPage() {
     },
     { accepted: 0, notCompleted: 0 },
   );
-  // The report is filled in five short steps (02 §3.4) when the teacher edits a
-  // learning lesson; admins, trial lessons and absence-only reports keep one page.
+  // The report is filled in short steps (02 §3.4, plan 1.14) when a learning lesson is edited:
+  // four for an individual lesson, five with attendance for groups, exams and the admin;
+  // trial lessons and absence-only reports keep one page.
   const useLessonSteps = Boolean(canEditTeacherReport && isLearningLessonV2 && !isTrialLesson && !isAbsenceOnly);
   const showStep = (step: LessonStep) => !useLessonSteps || lessonStep === step;
-  const stepList = visibleLessonSteps(!isIndividualLesson);
+  const stepList = visibleLessonSteps(withAttendanceStep);
   const moveStep = (direction: 1 | -1) => {
     const index = stepList.findIndex((item) => item.key === lessonStep);
     const next = stepList[Math.min(stepList.length - 1, Math.max(0, index + direction))];
@@ -1586,8 +1595,12 @@ export default function AdminOfflineLessonDetailPage() {
           crmStudentId: students[0].crmStudentId,
           directionTitles: overviewStudents.find((item) => item.crmStudentId === students[0].crmStudentId)?.directions ?? [],
         }
-      : studentsOverview?.group
-        ? { kind: "group" as const, crmGroupId: studentsOverview.group.crmGroupId, directionTitle: studentsOverview.group.direction ?? "" }
+      : (studentsOverview?.group?.crmGroupId ?? lesson?.group?.crmGroupId)
+        ? {
+            kind: "group" as const,
+            crmGroupId: (studentsOverview?.group?.crmGroupId ?? lesson?.group?.crmGroupId)!,
+            directionTitle: studentsOverview?.group?.direction ?? lesson?.groupDirection ?? "",
+          }
         : null
     : null;
   function addMaterial(item: { url: string; title: string; type?: string }) {
@@ -1795,7 +1808,7 @@ export default function AdminOfflineLessonDetailPage() {
           <p className="mt-2 text-sm text-stone-500">
             Что было на прошлом уроке и какие работы ждут проверки. «Статистика ученика» открывает сектор, тесты, задания и динамику.
           </p>
-          {isIndividualLesson ? (
+          {autoPresent ? (
             <p className="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900" data-testid="lesson-auto-present">
               Урок начат — ученик отмечен присутствующим. Если ученик не пришёл, нажмите «Отменить урок» внизу страницы.
             </p>
@@ -2028,7 +2041,7 @@ export default function AdminOfflineLessonDetailPage() {
                     own={ownTemplates("summary")}
                     school={schoolPhrases("summary")}
                     disabled={!canEditReport}
-                    canSave={canEditReport && Boolean(lessonSummary.trim())}
+                    canSave={canEditReport && !isAdmin && Boolean(lessonSummary.trim())}
                     onInsert={(text) => setLessonSummary((current) => appendPhrase(current, text))}
                     onSave={() => void saveOwnTemplate("summary", lessonSummary)}
                     onRemoveOwn={(id) => void removeOwnTemplate(id)}
@@ -2099,7 +2112,7 @@ export default function AdminOfflineLessonDetailPage() {
                     own={ownTemplates("homework")}
                     school={schoolPhrases("homework")}
                     disabled={!canEditReport}
-                    canSave={canEditReport && Boolean(homework.trim())}
+                    canSave={canEditReport && !isAdmin && Boolean(homework.trim())}
                     onInsert={(text) => setHomework((current) => appendPhrase(current, text))}
                     onSave={() => void saveOwnTemplate("homework", homework)}
                     onRemoveOwn={(id) => void removeOwnTemplate(id)}
@@ -2491,15 +2504,20 @@ export default function AdminOfflineLessonDetailPage() {
                 : "Урок уйдёт администратору как отсутствие. Списывать ли занятие, администратор решит при подтверждении."}
             </p>
           </div>
-          <button
-            type="button"
-            disabled={busy != null}
-            onClick={() => setNotHeldOpen(true)}
-            className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-red-200 px-4 py-2.5 text-sm font-bold text-red-700 disabled:opacity-50"
-          >
-            {["not-held", "cancel"].includes(busy ?? "") ? <LoaderCircle className="animate-spin" size={16} /> : <XCircle size={16} />}
-            {canActForTeacher ? "Урок не состоялся" : "Отменить урок"}
-          </button>
+          <div className="flex flex-col items-end gap-1">
+            {!canActForTeacher && cancelAvailableFrom ? (
+              <span className="text-xs font-semibold text-stone-500" data-testid="lesson-cancel-from">Отменить можно с {cancelAvailableFrom}</span>
+            ) : null}
+            <button
+              type="button"
+              disabled={busy != null || (!canActForTeacher && Boolean(cancelAvailableFrom))}
+              onClick={() => setNotHeldOpen(true)}
+              className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-red-200 px-4 py-2.5 text-sm font-bold text-red-700 disabled:opacity-50"
+            >
+              {["not-held", "cancel"].includes(busy ?? "") ? <LoaderCircle className="animate-spin" size={16} /> : <XCircle size={16} />}
+              {canActForTeacher ? "Урок не состоялся" : "Отменить урок"}
+            </button>
+          </div>
         </section>
       ) : null}
 
@@ -2605,11 +2623,11 @@ export default function AdminOfflineLessonDetailPage() {
                 </button>
                 <button
                   type="button"
-                  disabled={busy != null}
+                  disabled={busy != null || Boolean(cancelAvailableFrom)}
                   onClick={() => setNotHeldOpen(true)}
                   className="flex w-full items-center justify-center gap-2 rounded-2xl border border-red-200 bg-white px-5 py-3.5 text-sm font-bold text-red-700 transition-colors hover:bg-red-50 disabled:opacity-50"
                 >
-                  <XCircle size={16} /> Отменить урок
+                  <XCircle size={16} /> {cancelAvailableFrom ? `Отменить можно с ${cancelAvailableFrom}` : "Отменить урок"}
                 </button>
                 <Link
                   href="/admin/offline-lessons"
@@ -3335,7 +3353,7 @@ function StudentRoster({
       <p className="mt-2 text-sm text-stone-500">
         {canManageAttendance
           ? compactGroup
-            // A V2 lesson checks homework with a percent on the «Темы и проверка» step.
+            // A V2 lesson checks homework with a percent on the «ДЗ и темы» step.
             ? showLearningResult
               ? "Общее задание проверяется по каждому присутствующему ученику."
               : "Отметьте, кто пришёл. Домашнее задание проверяется на шаге «ДЗ и темы»."
