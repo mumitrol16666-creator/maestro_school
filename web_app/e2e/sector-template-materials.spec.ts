@@ -43,8 +43,26 @@ async function noHorizontalScroll(page: Page) {
   expect(overflow).toBeLessThanOrEqual(1);
 }
 
-function psql(sql: string) {
-  execFileSync("psql", ["-h", "localhost", "-U", "vladislav", "-d", QA_DB, "-At", "-c", sql]);
+/** The page picks the first direction itself once the list has loaded; wait for that, then choose ours. */
+async function pickDirection(page: Page) {
+  const select = page.getByLabel("Направление");
+  await expect(select).not.toHaveValue("");
+  await select.selectOption({ label: DIRECTION });
+  await expect(select.locator("option:checked")).toHaveText(DIRECTION);
+}
+
+function psql(sql: string, db = QA_DB) {
+  execFileSync("psql", ["-h", "localhost", "-U", "vladislav", "-d", db, "-At", "-c", sql]);
+}
+
+const QA_CRM_DB = process.env.QA_CRM_DB ?? "maestro_crm_regression";
+/**
+ * The sector editor in the lesson takes the student's directions from the teacher's roster, and the seed
+ * leaves QA-STUDENT-3 without a teacher. The spec hands the student to QA-TEACHER-1 for the run and takes
+ * them back in afterAll.
+ */
+function assignStudentTo(teacherId: string | null) {
+  psql(`update "Student" set "assignedTeacherId" = ${teacherId ? `'${teacherId}'` : "null"} where id = '${STUDENT}'`, QA_CRM_DB);
 }
 
 /** QA-STUDENT-3 has no open sector in the seed; whatever this spec opened is closed again. */
@@ -67,6 +85,7 @@ let adminSession: Session;
 
 test.afterAll(async ({ request }) => {
   closeStudentSectors();
+  assignStudentTo(null);
   // The step leaves the teachers' list of steps, so later runs and other specs see a clean picker.
   const token = adminSession?.token;
   if (!token) return;
@@ -87,7 +106,7 @@ test("the admin adds materials to a topic of a step, saves, and they stay after 
 
   await page.goto("/admin/sector-templates");
   await expect(page.getByRole("heading", { name: "Ступени программы" })).toBeVisible();
-  await page.getByLabel("Направление").selectOption({ label: DIRECTION });
+  await pickDirection(page);
   await page.getByRole("button", { name: "Новая ступень" }).click();
   await page.getByLabel("Название ступени").fill(stepTitle);
   await page.getByPlaceholder("Тема или песня").first().fill(topicTitle);
@@ -126,7 +145,7 @@ test("the admin adds materials to a topic of a step, saves, and they stay after 
 
   // After a reload the editor shows them again; one is taken off and the change is saved too.
   await page.reload();
-  await page.getByLabel("Направление").selectOption({ label: DIRECTION });
+  await pickDirection(page);
   await page.locator("article").filter({ hasText: stepTitle }).getByRole("button", { name: "Изменить" }).click();
   const reopened = page.getByTestId("topic-materials").first();
   await expect(reopened.getByTestId("topic-materials-list")).toContainText(materialA);
@@ -137,7 +156,7 @@ test("the admin adds materials to a topic of a step, saves, and they stay after 
   await expect(page.getByText("Изменить ступень")).toHaveCount(0, { timeout: 15_000 });
 
   await page.reload();
-  await page.getByLabel("Направление").selectOption({ label: DIRECTION });
+  await pickDirection(page);
   await page.locator("article").filter({ hasText: stepTitle }).getByRole("button", { name: "Изменить" }).click();
   const afterRemoval = page.getByTestId("topic-materials").first().getByTestId("topic-materials-list");
   await expect(afterRemoval).toContainText(materialA);
@@ -152,6 +171,7 @@ test("the admin adds materials to a topic of a step, saves, and they stay after 
 
 test("a sector opened from the step brings the topic materials into the teacher's lesson", async ({ page, request, context }, testInfo) => {
   closeStudentSectors();
+  assignStudentTo("QA-TEACHER-1");
   const teacher = await login(request, "qa_teacher_1");
   await install(context, teacher);
 
