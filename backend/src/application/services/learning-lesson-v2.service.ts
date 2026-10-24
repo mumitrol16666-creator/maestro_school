@@ -2,6 +2,7 @@ import { LearningPlanTopicState, LearningTopicProgressSource } from "@prisma/cli
 import { productFeatureConfig, rewardEconomyV2AppliesToEvent } from "../../config/product-features.js";
 import { fetchTeacherGroupsForAccess, fetchTeacherStudentsForAccess } from "./teacher-substitution.service.js";
 import { isOfflineCoordinatorRole } from "../../domain/cms-access.js";
+import { topicTitleKey } from "../../domain/sector-topic-title.js";
 import { AppError, BadRequestError, ConflictError, ForbiddenError } from "../../domain/errors.js";
 import { prisma } from "../../infrastructure/database/prisma.js";
 import {
@@ -411,10 +412,6 @@ async function lessonPlans(scope: LessonScope) {
         })),
     }];
   });
-}
-
-function topicTitleKey(title: string) {
-  return title.replace(/\s+/g, " ").trim().toLocaleLowerCase("ru");
 }
 
 /** Saved material lists (`[{title, url, …}]`) as plain links; anything without a URL is skipped. */

@@ -104,6 +104,19 @@ integrationTest("sector templates are numbered per direction and publish only wi
   assert.equal(filled.topics.length, 3);
   assert.deepEqual(filled.topics[0]?.materials, [{ title: "Аккорд Am", url: "https://youtu.be/am-chord", note: "" }], "topic materials are saved trimmed, empty rows dropped");
   assert.deepEqual(filled.topics[1]?.materials, [], "a topic without materials returns an empty list");
+  // A sector topic keeps no line, so the lesson finds step materials by title alone: a repeated title
+  // is refused, in the same line and in another one, whatever the case and spacing.
+  for (const duplicate of [{ line: "melody" as const, title: "Мелодия «Кузнечик»" }, { line: "song" as const, title: "  мелодия  «кузнечик» " }]) {
+    await assert.rejects(
+      updateSectorTemplate(filled.id, {
+        crmDirectionId: direction.crmDirectionId, number: 1, title: "Ступень 1. Первые аккорды",
+        topics: [{ line: "melody", title: "Мелодия «Кузнечик»" }, duplicate],
+      }),
+      (error: { code?: string; message?: string }) => error.code === "SECTOR_TEMPLATE_TOPIC_TITLE_DUPLICATE" && error.message === `В ступени уже есть тема «${duplicate.title.trim()}»`,
+    );
+  }
+  const afterRefusal = await listSectorTemplates({ crmDirectionId: direction.crmDirectionId });
+  assert.equal(afterRefusal[0]?.topics.length, 3, "a refused save leaves the step as it was");
   const reloaded = await listSectorTemplates({ crmDirectionId: direction.crmDirectionId });
   assert.equal(reloaded[0]?.topics[0]?.materials.length, 1, "materials come back from the list the editor opens");
   assert.equal(filled.preparedTest?.known, true);

@@ -232,7 +232,8 @@ async function main() {
 
   // The topics below are recreated, so the rewards paid for them earlier must go too; otherwise
   // reward scenarios end with "delta 0". The function re-checks the QA database before deleting.
-  await deleteQaRewardLedger(prisma, [QA_IDS.student1, QA_IDS.student2, QA_IDS.student3, QA_IDS.student4]);
+  const clearedLedger = await deleteQaRewardLedger(prisma, [QA_IDS.student1, QA_IDS.student2, QA_IDS.student3, QA_IDS.student4]);
+  console.log(`QA seed: удалено проводок наград — Points ${clearedLedger.points}, XP лиги ${clearedLedger.leagueXp}`);
 
   const topicPercents = [0, 70, 99, 100];
   for (const [index, percent] of topicPercents.entries()) {

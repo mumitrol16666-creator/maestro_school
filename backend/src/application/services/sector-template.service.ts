@@ -2,6 +2,7 @@ import type { SectorTemplateLine } from "@prisma/client";
 import { prisma } from "../../infrastructure/database/prisma.js";
 import { BadRequestError, ConflictError, NotFoundError } from "../../domain/errors.js";
 import { listPreparedTestTemplates } from "../../domain/prepared-tests.js";
+import { topicTitleKey } from "../../domain/sector-topic-title.js";
 
 /**
  * Ступени программы. Шаблон хранит темы по линиям (мелодия / аккорды / теория /
@@ -72,9 +73,17 @@ function normalizeTemplateInput(input: SectorTemplateInput) {
   if (input.preparedTestId && !listPreparedTestTemplates().some((item) => item.id === input.preparedTestId)) {
     throw new BadRequestError("Такого теста нет", "SECTOR_TEMPLATE_TEST_UNKNOWN");
   }
+  // Тема открытого сектора хранит только название, без линии: урок находит материалы темы ступени
+  // по названию. Два одинаковых названия в ступени затёрли бы друг друга, даже в разных линиях.
+  const seenTitles = new Set<string>();
   const topics = input.topics.map((topic, index) => {
     const topicTitle = topic.title.trim();
     if (!topicTitle) throw new BadRequestError(`Тема ${index + 1}: укажите название`, "SECTOR_TEMPLATE_TOPIC_TITLE_REQUIRED");
+    const titleKey = topicTitleKey(topicTitle);
+    if (seenTitles.has(titleKey)) {
+      throw new BadRequestError(`В ступени уже есть тема «${topicTitle}»`, "SECTOR_TEMPLATE_TOPIC_TITLE_DUPLICATE");
+    }
+    seenTitles.add(titleKey);
     return {
       sortOrder: index,
       line: topic.line,

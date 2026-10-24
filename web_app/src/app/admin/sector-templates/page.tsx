@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowDown, ArrowUp, Layers3, LoaderCircle, Plus, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { inputClass, primaryButton, PublishBadge, secondaryButton } from "@/components/admin-ui";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
 import { MaterialLibraryPicker } from "@/components/material-library-picker";
@@ -75,6 +75,8 @@ function draftFrom(template: SectorTemplate | null, nextNumber: number, crmDirec
 
 export default function SectorTemplatesAdminPage() {
   const [crmDirectionId, setCrmDirectionId] = useState("");
+  // The first direction is chosen for the admin only while they have not chosen one themselves.
+  const directionChosen = useRef(false);
   const directions = useApiResource(() => cmsApi.directions("", 1, 100), []);
   const templates = useApiResource(() => cmsApi.sectorTemplates(crmDirectionId), [crmDirectionId]);
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -86,7 +88,8 @@ export default function SectorTemplatesAdminPage() {
   const nextNumber = list.reduce((max, item) => Math.max(max, item.number), 0) + 1;
 
   useEffect(() => {
-    if (!crmDirectionId && directionList[0]?.crmDirectionId) setCrmDirectionId(directionList[0].crmDirectionId);
+    const first = directionList[0]?.crmDirectionId;
+    if (first && !directionChosen.current) setCrmDirectionId((current) => current || first);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [directions.data]);
 
@@ -141,7 +144,7 @@ export default function SectorTemplatesAdminPage() {
           Направление
           <select
             value={crmDirectionId}
-            onChange={(event) => { setCrmDirectionId(event.target.value); setDraft(null); }}
+            onChange={(event) => { directionChosen.current = true; setCrmDirectionId(event.target.value); setDraft(null); }}
             className={`${inputClass} mt-1 block min-w-[240px] normal-case tracking-normal`}
           >
             <option value="">Все направления</option>
@@ -304,9 +307,9 @@ function TemplateForm({
               <input value={topic.masteryCriteria} onChange={(event) => setTopic(topic.key, { masteryCriteria: event.target.value })} placeholder="Критерий освоения (необязательно)" className={inputClass} />
             </div>
             <div className="flex items-start gap-1">
-              <button type="button" aria-label="Выше" onClick={() => move(index, -1)} className="rounded-lg p-2 text-stone-500 hover:bg-stone-100"><ArrowUp size={14} /></button>
-              <button type="button" aria-label="Ниже" onClick={() => move(index, 1)} className="rounded-lg p-2 text-stone-500 hover:bg-stone-100"><ArrowDown size={14} /></button>
-              <button type="button" aria-label="Удалить" onClick={() => set("topics", draft.topics.filter((item) => item.key !== topic.key))} className="rounded-lg p-2 text-red-600 hover:bg-red-50"><Trash2 size={14} /></button>
+              <button type="button" aria-label="Выше" onClick={() => move(index, -1)} className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-stone-500 hover:bg-stone-100"><ArrowUp size={14} /></button>
+              <button type="button" aria-label="Ниже" onClick={() => move(index, 1)} className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-stone-500 hover:bg-stone-100"><ArrowDown size={14} /></button>
+              <button type="button" aria-label="Удалить" onClick={() => set("topics", draft.topics.filter((item) => item.key !== topic.key))} className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-red-600 hover:bg-red-50"><Trash2 size={14} /></button>
             </div>
             <TopicMaterials
               materials={topic.materials}
@@ -337,6 +340,14 @@ function TopicMaterials({
   topicTitle: string;
   onChange: (materials: TopicMaterial[]) => void;
 }) {
+  // Materials are saved with a topic, and a topic without a title is dropped on save — so wait for the title.
+  if (!topicTitle.trim()) {
+    return (
+      <p className="border-t border-stone-100 pt-3 text-xs text-stone-500 sm:col-span-3" data-testid="topic-materials-hint">
+        Сначала назовите тему
+      </p>
+    );
+  }
   return (
     <div className="grid gap-2 border-t border-stone-100 pt-3 sm:col-span-3" data-testid="topic-materials">
       <p className="text-[10px] font-black uppercase tracking-wider text-stone-500">Материалы темы</p>

@@ -36,7 +36,7 @@ const templateInputSchema = z.object({
     masteryCriteria: z.string().trim().max(5000).optional(),
     materials: z.array(z.object({
       title: z.string().trim().max(255),
-      url: z.string().trim().max(1024),
+      url: z.string().trim().max(2048),
       note: z.string().trim().max(1000).optional(),
     })).max(20).optional(),
   })).max(60),
