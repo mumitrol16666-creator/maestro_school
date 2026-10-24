@@ -10,7 +10,7 @@ import {
 } from "../../domain/parent-notification-policy.js";
 import { findUserByCrmStudentId, findUserByCrmTeacherId } from "../repositories/user-link.repository.js";
 import { sendPushToUser } from "./push-notification.service.js";
-import { getStudentSchoolOfflineSummary } from "./school-offline.service.js";
+import { getStudentSchoolOfflineSummary, studentLessonResultBrief } from "./school-offline.service.js";
 import { getParentVisibility } from "./parent-visibility.service.js";
 
 export async function createUserNotification(params: {
@@ -417,22 +417,23 @@ export async function notifyOfflineLessonEvent(params: {
   const studentIds = [...new Set(params.crmStudentIds ?? [])];
   const students = (await Promise.all(studentIds.map((crmStudentId) => findUserByCrmStudentId(crmStudentId))))
     .filter((student): student is NonNullable<typeof student> => Boolean(student));
-  const studentCopy = params.event === "approved"
-    ? {
-        type: "offline_lesson_report_ready" as const,
-        title: "Готов итог урока",
-        body: `${lessonTitle}${context}. Посмотрите итог, материалы и домашнее задание.`,
-      }
-    : {
-        type: teacherCopy.type,
-        title: teacherCopy.title,
-        body: teacherCopy.body,
-      };
-  await Promise.all(students.map((student) => deliverUserNotification({
+  // Plan 2.7: the approve notification carries the main figures of the lesson for this student.
+  const studentCopyFor = async (studentId: string) => {
+    if (params.event !== "approved") {
+      return { type: teacherCopy.type, title: teacherCopy.title, body: teacherCopy.body };
+    }
+    const brief = await studentLessonResultBrief(studentId, params.crmClassId).catch(() => null);
+    return {
+      type: "offline_lesson_report_ready" as const,
+      title: "Готов итог урока",
+      body: brief
+        ? `${lessonTitle}${context}. ${brief}. Посмотрите итог, материалы и домашнее задание.`
+        : `${lessonTitle}${context}. Посмотрите итог, материалы и домашнее задание.`,
+    };
+  };
+  await Promise.all(students.map(async (student) => deliverUserNotification({
     userId: student.id,
-    type: studentCopy.type,
-    title: studentCopy.title,
-    body: studentCopy.body,
+    ...(await studentCopyFor(student.id)),
     url: studentUrl,
     tag: `${teacherCopy.tag}-${params.crmClassId}-${student.id}`,
     dedupeKey: offlineLessonNotificationDedupeKey(

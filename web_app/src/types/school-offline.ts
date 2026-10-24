@@ -59,6 +59,20 @@ export type SchoolOfflineLesson = {
     completedAt: string;
     pointsAwarded: number;
   }>;
+  /** Plan 2.7: XP for coming and the teacher's bonus of the same day. */
+  lessonRewards?: { xp: number; bonusXp: number } | null;
+  /** Plan 2.7: the sector before and after this lesson. */
+  sectorProgress?: {
+    planId: string;
+    sequence: number | null;
+    direction: string | null;
+    fromPercent: number;
+    toPercent: number;
+    completed: number;
+    total: number;
+  } | null;
+  /** Plan 2.7: the teacher's check of the previous homework made on this lesson. */
+  homeworkChecks?: Array<{ topicTitle: string; completionPercent: number; comment: string | null; reviewedAt: string }>;
 };
 
 export type SchoolOfflineMembership = {
@@ -87,6 +101,8 @@ export type SchoolOfflineMembership = {
 export type StudentOfflineSummary = {
   crmStudentId: string;
   appUserId: string | null;
+  /** Plan 2.7: the current streak of weeks, shown in the lesson result. */
+  streakWeeks?: number | null;
   externalLinkStatus?: string | null;
   linkStatus?: string;
   profile: {

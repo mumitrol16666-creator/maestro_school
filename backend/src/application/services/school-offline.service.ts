@@ -3,6 +3,13 @@ import { prisma } from "../../infrastructure/database/prisma.js";
 import { BadRequestError } from "../../domain/errors.js";
 import { linkOfflineHomeworkResults } from "../../domain/offline-homework-progress.js";
 import { readStudentOfflineSummary } from "../../infrastructure/crm/crm-client.js";
+import {
+  lessonResultBrief,
+  readHomeworkChecks,
+  readLessonRewards,
+  readSectorProgress,
+  type LessonTopicChange,
+} from "./student-lesson-result.service.js";
 
 type OfflineSummaryLesson = {
   crmClassId?: string;
@@ -331,6 +338,28 @@ export async function getStudentSchoolOfflineSummary(
     planCompletionRewards,
     completedLearningPlans,
   );
+  // Plan 2.7: what the lesson gave — XP and the day's bonus, the sector before and after, the
+  // teacher's check of the previous homework, the current streak.
+  const changesByClassId = new Map<string, LessonTopicChange[]>();
+  for (const event of learningTopicProgress) {
+    const crmClassId = lessonIdFromTopicProgressSourceKey(event.sourceKey, event.topicId);
+    if (!crmClassId) continue;
+    const list = changesByClassId.get(crmClassId) ?? [];
+    list.push({ topicId: event.topicId, fromPercent: event.fromPercent, toPercent: event.toPercent, occurredAt: event.occurredAt });
+    changesByClassId.set(crmClassId, list);
+  }
+  const [lessonRewards, sectorProgress, homeworkChecks, streakState] = await Promise.all([
+    readLessonRewards({
+      appUserId,
+      crmStudentId: user.crmStudentId,
+      lessons: lessonHistory
+        .filter((lesson): lesson is OfflineSummaryLesson & { crmClassId: string; date: string } => Boolean(lesson.crmClassId && lesson.date))
+        .map((lesson) => ({ crmClassId: lesson.crmClassId, date: lesson.date, startTime: lesson.startTime, status: typeof lesson.status === "string" ? lesson.status : null })),
+    }),
+    readSectorProgress(changesByClassId),
+    readHomeworkChecks({ crmStudentId: user.crmStudentId, crmClassIds: classIds }),
+    prisma.weeklyStreakState.findFirst({ where: { studentId: appUserId }, orderBy: { updatedAt: "desc" }, select: { currentWeeks: true } }),
+  ]);
   // Item titles of the archived monthly plans are not read any more.
   const planItemsById = new Map<string, Map<string, OfflinePlanItem>>();
   const checksByClassId = new Map(checks.map((check) => [check.crmClassId, check]));
@@ -384,11 +413,17 @@ export async function getStudentSchoolOfflineSummary(
     const planCompletionResults = lesson.crmClassId
       ? learningPlanCompletionResults.get(lesson.crmClassId) ?? []
       : [];
+    const rewards = lesson.crmClassId ? lessonRewards.get(lesson.crmClassId) ?? null : null;
+    const sector = lesson.crmClassId ? sectorProgress.get(lesson.crmClassId) ?? null : null;
+    const checks = lesson.crmClassId ? homeworkChecks.get(lesson.crmClassId) ?? [] : [];
     if (
       !check
       && !homeworkResult
       && topicResults.length === 0
       && planCompletionResults.length === 0
+      && !rewards
+      && !sector
+      && checks.length === 0
     ) return lesson;
     const planItems = check?.monthlyPlanId ? planItemsById.get(check.monthlyPlanId) : null;
     const updates = Array.isArray(check?.planTopicUpdates)
@@ -401,6 +436,9 @@ export async function getStudentSchoolOfflineSummary(
       homeworkResult,
       learningTopicResults: topicResults,
       learningPlanCompletionResults: planCompletionResults,
+      lessonRewards: rewards,
+      sectorProgress: sector,
+      homeworkChecks: checks,
       planTopicResults: updates.map((update) => ({
         itemId: update.itemId,
         title: planItems?.get(update.itemId)?.title ?? "Тема учебного плана",
@@ -420,5 +458,41 @@ export async function getStudentSchoolOfflineSummary(
       })(),
     })),
     linkStatus: user.externalLinkStatus ?? "linked",
+    streakWeeks: streakState?.currentWeeks ?? null,
   };
+}
+
+/** The one line of the «Готов итог урока» notification for one student; null when nothing was earned. */
+export async function studentLessonResultBrief(appUserId: string, crmClassId: string) {
+  const [progress, points] = await Promise.all([
+    prisma.learningTopicProgress.findMany({
+      where: { source: LearningTopicProgressSource.lesson, sourceKey: { startsWith: `offline-lesson:${crmClassId}:topic:` } },
+      select: { topicId: true, fromPercent: true, toPercent: true, sourceKey: true, topic: { select: { title: true } } },
+      orderBy: { occurredAt: "asc" },
+    }),
+    prisma.pointsTransaction.findMany({
+      where: {
+        studentId: appUserId,
+        OR: [
+          { sourceKey: { startsWith: `offline-lesson-points:${crmClassId}:` } },
+          { sourceKey: { startsWith: "learning-topic-mastery:" } },
+          { sourceKey: { startsWith: "learning-plan-completion:" } },
+        ],
+      },
+      select: { sourceKey: true, amount: true },
+    }),
+  ]);
+  const topics = progress
+    .filter((event) => lessonIdFromTopicProgressSourceKey(event.sourceKey, event.topicId) === crmClassId)
+    .map((event) => ({ title: event.topic.title, fromPercent: event.fromPercent, toPercent: event.toPercent }));
+  const masteredKeys = new Set(progress.filter((event) => event.toPercent === 100).map((event) => `learning-topic-mastery:${event.topicId}:${appUserId}`));
+  const user = await prisma.user.findUnique({ where: { id: appUserId }, select: { crmStudentId: true } });
+  const xp = user?.crmStudentId
+    ? await prisma.leagueXpEvent.aggregate({ _sum: { amount: true }, where: { studentId: appUserId, reversedAt: null, sourceKey: `offline-lesson:${crmClassId}:${user.crmStudentId}` } })
+    : null;
+  const lessonPoints = points
+    .filter((row) => row.sourceKey?.startsWith(`offline-lesson-points:${crmClassId}:`) || (row.sourceKey && masteredKeys.has(row.sourceKey)))
+    .reduce((sum, row) => sum + Math.max(0, row.amount), 0);
+  const brief = lessonResultBrief({ points: lessonPoints, xp: xp?._sum.amount ?? 0, topics });
+  return brief || null;
 }

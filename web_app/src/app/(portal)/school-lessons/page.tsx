@@ -102,11 +102,16 @@ function LessonCard({
   upcoming,
   defaultOpen,
   hideDate = false,
+  streakWeeks = null,
+  nextLesson = null,
 }: {
   lesson: SchoolOfflineLesson;
   upcoming?: boolean;
   defaultOpen?: boolean;
   hideDate?: boolean;
+  /** Plan 2.7: the current streak and the next lesson, shown in a confirmed lesson's result. */
+  streakWeeks?: number | null;
+  nextLesson?: { date: string; startTime: string } | null;
 }) {
   const [open, setOpen] = useState(defaultOpen ?? false);
   useEffect(() => {
@@ -118,7 +123,21 @@ function LessonCard({
     (lesson.lessonPoints ?? 0) > 0 ||
     (lesson.planTopicResults?.length ?? 0) > 0 ||
     (lesson.learningTopicResults?.length ?? 0) > 0 ||
-    (lesson.learningPlanCompletionResults?.length ?? 0) > 0;
+    (lesson.learningPlanCompletionResults?.length ?? 0) > 0 ||
+    Boolean(lesson.lessonRewards) ||
+    Boolean(lesson.sectorProgress) ||
+    (lesson.homeworkChecks?.length ?? 0) > 0;
+  // Plan 2.7: one line of what the lesson gave, then the sector step and the homework check.
+  const earnedPoints =
+    (lesson.lessonPointsAwarded ?? 0)
+    + (lesson.learningTopicResults ?? []).reduce((sum, item) => sum + item.masteryPointsAwarded, 0)
+    + (lesson.learningPlanCompletionResults ?? []).reduce((sum, item) => sum + item.pointsAwarded, 0);
+  const earned = [
+    earnedPoints > 0 ? { key: "points", label: `+${earnedPoints} баллов`, tone: "bg-gold/20 text-amber-950" } : null,
+    lesson.lessonRewards?.xp ? { key: "xp", label: `+${lesson.lessonRewards.xp} XP`, tone: "bg-emerald-100 text-emerald-900" } : null,
+    lesson.lessonRewards?.bonusXp ? { key: "bonus", label: `бонус от преподавателя +${lesson.lessonRewards.bonusXp} XP`, tone: "bg-sky-100 text-sky-900" } : null,
+    streakWeeks && lesson.status === "completed" ? { key: "streak", label: `серия ${streakWeeks} нед.`, tone: "bg-orange-100 text-orange-900" } : null,
+  ].filter((item): item is { key: string; label: string; tone: string } => Boolean(item));
 
   const hasDetails =
     lesson.topic ||
@@ -259,10 +278,37 @@ function LessonCard({
               <p className="text-xs font-bold uppercase tracking-wider text-amber-700">
                 Учебный результат
               </p>
-              {(lesson.lessonPoints ?? 0) > 0 ? (
+              {earned.length ? (
+                <div className="mt-2 flex flex-wrap gap-1.5" data-testid="lesson-earned">
+                  {earned.map((item) => (
+                    <span key={item.key} className={`rounded-lg px-2.5 py-1 text-xs font-black ${item.tone}`}>{item.label}</span>
+                  ))}
+                </div>
+              ) : (lesson.lessonPoints ?? 0) > 0 ? (
                 <p className="mt-2 text-sm font-bold text-amber-950">
                   +{lesson.lessonPoints} учебных баллов
                 </p>
+              ) : null}
+              {lesson.sectorProgress ? (
+                <div className="mt-3 rounded-xl border border-amber-100 bg-white/80 p-3" data-testid="lesson-sector-progress">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs font-bold text-amber-950">
+                      Сектор{lesson.sectorProgress.sequence ? ` ${lesson.sectorProgress.sequence}` : ""}
+                      {lesson.sectorProgress.direction ? ` · ${lesson.sectorProgress.direction}` : ""}
+                    </p>
+                    <span className="rounded-lg bg-amber-100 px-2.5 py-1 text-xs font-black text-amber-900">
+                      {lesson.sectorProgress.fromPercent} % → {lesson.sectorProgress.toPercent} %
+                    </span>
+                  </div>
+                  <div className="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-stone-200" aria-hidden="true">
+                    <div className="h-full rounded-full bg-amber-300" style={{ width: `${lesson.sectorProgress.toPercent}%` }}>
+                      <div className="h-full rounded-full bg-amber-600" style={{ width: lesson.sectorProgress.toPercent ? `${Math.round((lesson.sectorProgress.fromPercent / lesson.sectorProgress.toPercent) * 100)}%` : "0%" }} />
+                    </div>
+                  </div>
+                  <p className="mt-1 text-[11px] font-semibold text-stone-500">
+                    Освоено тем: {lesson.sectorProgress.completed} из {lesson.sectorProgress.total}
+                  </p>
+                </div>
               ) : null}
               {lesson.learningTopicResults?.length ? (
                 <div className="mt-3 space-y-2">
@@ -333,6 +379,30 @@ function LessonCard({
                   ))}
                 </div>
               ) : null}
+              {lesson.homeworkChecks?.length ? (
+                <div className="mt-3 space-y-2" data-testid="lesson-homework-checks">
+                  <p className="text-xs font-bold uppercase tracking-wider text-amber-700">Прошлое домашнее задание</p>
+                  {lesson.homeworkChecks.map((check, index) => (
+                    <div key={`${check.topicTitle}-${index}`} className="rounded-xl border border-amber-100 bg-white/80 p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="min-w-0 text-sm font-bold text-amber-950">{check.topicTitle}</p>
+                        <span className={`shrink-0 rounded-lg px-2.5 py-1 text-xs font-black ${
+                          check.completionPercent >= 80
+                            ? "bg-emerald-100 text-emerald-900"
+                            : check.completionPercent >= 50
+                              ? "bg-orange-100 text-orange-900"
+                              : "bg-red-100 text-red-900"
+                        }`}>
+                          {check.completionPercent === 0 ? "не выполнено" : `выполнено на ${check.completionPercent} %`}
+                        </span>
+                      </div>
+                      {check.comment ? (
+                        <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-stone-600">{check.comment}</p>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
               {lesson.planTopicResults?.length ? (
                 <div className="mt-3 flex flex-wrap gap-2">
                   {lesson.planTopicResults.map((item) => (
@@ -353,13 +423,22 @@ function LessonCard({
             </div>
           ) : null}
 
-          {lesson.homework ? (
-            <Link
-              href={`/tasks/school/${encodeURIComponent(lesson.crmClassId)}`}
-              className="inline-flex min-h-11 items-center rounded-lg bg-amber-50 px-3 text-sm font-semibold text-amber-900"
-            >
-              Открыть задание →
-            </Link>
+          {lesson.homework || (lesson.status === "completed" && nextLesson) ? (
+            <div className="flex flex-wrap items-center gap-3" data-testid="lesson-next">
+              {lesson.homework ? (
+                <Link
+                  href={`/tasks/school/${encodeURIComponent(lesson.crmClassId)}`}
+                  className="inline-flex min-h-11 items-center rounded-lg bg-amber-50 px-3 text-sm font-semibold text-amber-900"
+                >
+                  Открыть задание →
+                </Link>
+              ) : null}
+              {lesson.status === "completed" && nextLesson ? (
+                <p className="text-xs font-semibold text-stone-500">
+                  Следующий урок: {schoolDateLabel(nextLesson.date.slice(0, 10), false)} · {nextLesson.startTime}
+                </p>
+              ) : null}
+            </div>
           ) : null}
 
           {lesson.materials.length > 0 ? (
@@ -380,10 +459,14 @@ function GroupedLessonList({
   lessons,
   upcoming = false,
   requestedLessonId,
+  streakWeeks = null,
+  nextLesson = null,
 }: {
   lessons: SchoolOfflineLesson[];
   upcoming?: boolean;
   requestedLessonId?: string | null;
+  streakWeeks?: number | null;
+  nextLesson?: { date: string; startTime: string } | null;
 }) {
   const groups = new Map<string, SchoolOfflineLesson[]>();
   const sorted = [...lessons].sort((a, b) => {
@@ -412,6 +495,8 @@ function GroupedLessonList({
                 upcoming={upcoming}
                 defaultOpen={lesson.crmClassId === requestedLessonId}
                 hideDate
+                streakWeeks={streakWeeks}
+                nextLesson={nextLesson}
               />
             ))}
           </div>
@@ -565,6 +650,13 @@ function SchoolSchedule() {
         (availableMonths[0]?.monthKey ?? currentAqtobeMonth())
       : historyFilterMonth;
 
+  // Plan 2.7: the nearest lesson ahead, named in a confirmed lesson's result.
+  const nextScheduledLesson = useMemo(() => {
+    const ahead = [...(resource.data?.upcomingLessons ?? [])]
+      .filter((lesson) => lesson.status === "scheduled" || !lesson.status)
+      .sort((a, b) => a.date.slice(0, 10).localeCompare(b.date.slice(0, 10)) || a.startTime.localeCompare(b.startTime));
+    return ahead[0] ? { date: ahead[0].date, startTime: ahead[0].startTime } : null;
+  }, [resource.data?.upcomingLessons]);
   const displayHistory = useMemo(() => {
     if (activeMonth === "all") return lessonHistory;
     return lessonHistory.filter(
@@ -797,6 +889,8 @@ function SchoolSchedule() {
               <GroupedLessonList
                 lessons={displayHistory}
                 requestedLessonId={requestedLessonId}
+                streakWeeks={data.streakWeeks ?? null}
+                nextLesson={nextScheduledLesson}
               />
             )}
           </section>
