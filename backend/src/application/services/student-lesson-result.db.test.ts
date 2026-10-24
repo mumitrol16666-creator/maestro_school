@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import test from "node:test";
 import { prisma } from "../../infrastructure/database/prisma.js";
 import { readHomeworkChecks, readLessonRewards, readSectorProgress } from "./student-lesson-result.service.js";
+import { studentLessonResultBrief } from "./school-offline.service.js";
 
 const integrationTest = process.env.RUN_DB_INTEGRATION_TESTS === "1" ? test : test.skip;
 
@@ -89,6 +90,21 @@ integrationTest("the student's lesson result reads the sector step, the homework
     assert.deepEqual(sector.get(crmClassId), {
       planId: plan.id, sequence: 2, direction: direction.title, fromPercent: 25, toPercent: 50, completed: 2, total: 4,
     });
+
+    // The notification line: this student's topics only, awards once even after a reversal rename.
+    const classmate = await prisma.learningTopic.create({ data: { directionId: direction.id, crmStudentId: `crm-mate-${suffix}`, title: "Чужая тема", progressPercent: 100 } });
+    await prisma.learningTopicProgress.create({ data: { topicId: classmate.id, fromPercent: 50, toPercent: 100, source: "lesson", sourceKey: `offline-lesson:${crmClassId}:topic:${classmate.id}`, occurredAt: lessonAt } });
+    await prisma.pointsTransaction.createMany({
+      data: [
+        { economicEpochId: epoch.id, studentId: student.id, amount: 100, reason: "Освоена тема", sourceKey: `learning-topic-mastery:${topics[1].id}:${student.id}` },
+        { economicEpochId: epoch.id, studentId: student.id, amount: 10, reason: "Урок", sourceKey: `offline-lesson-points:${crmClassId}:${crmStudentId}` },
+        { economicEpochId: epoch.id, studentId: student.id, amount: 10, reason: "Урок (откат)", sourceKey: `offline-lesson-points:${crmClassId}:${crmStudentId}:reversed:v1` },
+      ],
+    });
+    const brief = await studentLessonResultBrief(student.id, crmClassId);
+    assert.equal(brief, "+110 баллов · +20 XP · «Бой восьмыми» 70 → 100 % · «Переходы» 0 → 30 %");
+    await prisma.pointsTransaction.deleteMany({ where: { studentId: student.id } });
+    await prisma.learningTopic.deleteMany({ where: { id: classmate.id } });
 
     const checks = await readHomeworkChecks({ crmStudentId, crmClassIds: [crmClassId, `${crmClassId}-later`] });
     assert.deepEqual(checks.get(crmClassId)?.map((check) => ({ ...check, reviewedAt: check.reviewedAt.toISOString() })), [

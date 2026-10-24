@@ -470,17 +470,25 @@ export async function getStudentSchoolOfflineSummary(
 
 /** The one line of the «Готов итог урока» notification for one student; null when nothing was earned. */
 export async function studentLessonResultBrief(appUserId: string, crmClassId: string) {
+  const user = await prisma.user.findUnique({ where: { id: appUserId }, select: { crmStudentId: true } });
+  if (!user?.crmStudentId) return null;
   const [progress, points] = await Promise.all([
+    // Only this student's topics: in a group lesson every member gets their own line.
     prisma.learningTopicProgress.findMany({
-      where: { source: LearningTopicProgressSource.lesson, sourceKey: { startsWith: `offline-lesson:${crmClassId}:topic:` } },
+      where: {
+        source: LearningTopicProgressSource.lesson,
+        sourceKey: { startsWith: `offline-lesson:${crmClassId}:topic:` },
+        topic: { OR: [{ crmStudentId: user.crmStudentId }, { crmStudentId: null, crmGroupId: { not: null } }] },
+      },
       select: { topicId: true, fromPercent: true, toPercent: true, sourceKey: true, topic: { select: { title: true } } },
       orderBy: { occurredAt: "asc" },
     }),
+    // Exact keys: a reversed award is renamed to «…:reversed:v<n>» and must not count again.
     prisma.pointsTransaction.findMany({
       where: {
         studentId: appUserId,
         OR: [
-          { sourceKey: { startsWith: `offline-lesson-points:${crmClassId}:` } },
+          { sourceKey: `offline-lesson-points:${crmClassId}:${user.crmStudentId}` },
           { sourceKey: { startsWith: "learning-topic-mastery:" } },
         ],
       },
@@ -491,13 +499,13 @@ export async function studentLessonResultBrief(appUserId: string, crmClassId: st
     .filter((event) => lessonIdFromTopicProgressSourceKey(event.sourceKey, event.topicId) === crmClassId)
     .map((event) => ({ title: event.topic.title, fromPercent: event.fromPercent, toPercent: event.toPercent }));
   const masteredKeys = new Set(progress.filter((event) => event.toPercent === 100).map((event) => `learning-topic-mastery:${event.topicId}:${appUserId}`));
-  const user = await prisma.user.findUnique({ where: { id: appUserId }, select: { crmStudentId: true } });
-  const xp = user?.crmStudentId
-    ? await prisma.leagueXpEvent.aggregate({ _sum: { amount: true }, where: { studentId: appUserId, reversedAt: null, sourceKey: `offline-lesson:${crmClassId}:${user.crmStudentId}` } })
-    : null;
+  const xp = await prisma.leagueXpEvent.aggregate({
+    _sum: { amount: true },
+    where: { studentId: appUserId, reversedAt: null, sourceKey: `offline-lesson:${crmClassId}:${user.crmStudentId}` },
+  });
   const lessonPoints = points
-    .filter((row) => row.sourceKey?.startsWith(`offline-lesson-points:${crmClassId}:`) || (row.sourceKey && masteredKeys.has(row.sourceKey)))
+    .filter((row) => row.sourceKey === `offline-lesson-points:${crmClassId}:${user.crmStudentId}` || (row.sourceKey && masteredKeys.has(row.sourceKey)))
     .reduce((sum, row) => sum + Math.max(0, row.amount), 0);
-  const brief = lessonResultBrief({ points: lessonPoints, xp: xp?._sum.amount ?? 0, topics });
+  const brief = lessonResultBrief({ points: lessonPoints, xp: xp._sum.amount ?? 0, topics });
   return brief || null;
 }
