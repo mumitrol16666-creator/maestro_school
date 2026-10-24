@@ -44,7 +44,7 @@ export function parseVideoUrl(videoUrl?: string | null): ParsedVideo | null {
       if (!id) return null;
       return { provider: "youtube", videoId: id, embedUrl: youtubeEmbedId(id) };
     }
-    if (url.pathname.startsWith("/shorts/")) {
+    if (url.pathname.startsWith("/shorts/") || url.pathname.startsWith("/live/")) {
       const id = url.pathname.split("/")[2];
       if (!id) return null;
       return { provider: "youtube", videoId: id, embedUrl: youtubeEmbedId(id) };

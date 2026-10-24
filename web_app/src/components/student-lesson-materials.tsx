@@ -13,25 +13,12 @@ function MaterialPreview({
   if (!material.url) return null;
   const url = sameSiteMediaUrl(material.url as string);
   material = { ...material, url };
+  // A YouTube / Vimeo / Cloudflare link is embedded whatever type it was saved with: the library
+  // marks such links «video», and a native <video> tag cannot play a YouTube page.
   const parsed = parseVideoUrl(url);
-  const directVideo =
-    material.type === "video" ||
-    material.mimeType?.startsWith("video/") ||
-    /\.(mp4|webm|mov|m4v|ogv)(\?|$)/i.test(url);
-  if (directVideo) {
-    return (
-      <video
-        controls
-        preload="metadata"
-        className="mb-3 max-h-72 w-full rounded-xl bg-black"
-        onClick={(event) => event.stopPropagation()}
-        src={material.url}
-      />
-    );
-  }
   if (parsed) {
     return (
-      <div className="relative mb-3 aspect-video overflow-hidden rounded-xl bg-black">
+      <div className="relative mb-3 aspect-video overflow-hidden rounded-xl bg-black" data-testid="material-embed">
         <iframe
           title={material.title || "Видео к уроку"}
           src={parsed.embedUrl}
@@ -41,6 +28,23 @@ function MaterialPreview({
           onClick={(event) => event.stopPropagation()}
         />
       </div>
+    );
+  }
+  // The native player is for video files only: uploaded media or a direct file link.
+  const directVideo =
+    material.mimeType?.startsWith("video/") ||
+    /\.(mp4|webm|mov|m4v|ogv)(\?|$)/i.test(url) ||
+    (material.type === "video" && isManagedMediaUrl(url));
+  if (directVideo) {
+    return (
+      <video
+        controls
+        preload="metadata"
+        className="mb-3 max-h-72 w-full rounded-xl bg-black"
+        onClick={(event) => event.stopPropagation()}
+        src={material.url}
+        data-testid="material-video-file"
+      />
     );
   }
   if (material.type === "image" || material.mimeType?.startsWith("image/")) {
@@ -110,10 +114,10 @@ export function LessonMaterialItems({
                 }
                 window.open(sameSiteMediaUrl(material.url as string), "_blank", "noopener,noreferrer");
               }}
-              className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-stone-200 bg-white px-4 py-2 text-xs font-bold text-ink shadow-xs transition hover:border-amber-300 hover:bg-amber-50"
+              className="inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-stone-200 bg-white px-4 py-2 text-xs font-bold text-ink shadow-xs transition hover:border-amber-300 hover:bg-amber-50"
             >
               <Download size={14} className="text-gold-ink" />
-              <span>{isFile ? "Скачать файл" : "Открыть материал"}</span>
+              <span>{isFile ? "Скачать файл" : parseVideoUrl(material.url) ? "Открыть видео на сайте" : "Открыть материал"}</span>
             </button>
           </div>
         );

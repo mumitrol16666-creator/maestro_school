@@ -782,6 +782,11 @@ function SchoolSchedule() {
                 ))}
               </select>
             </div>
+            {requestedLessonId && !lessonHistory.some((lesson) => lesson.crmClassId === requestedLessonId) ? (
+              <p className="mb-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900" data-testid="history-lesson-missing">
+                Этот урок старше последних {lessonHistory.length} занятий и в истории уже не показывается. Итог и задание по нему остаются в разделе «Обучение».
+              </p>
+            ) : null}
             {displayHistory.length === 0 ? (
               <p className="rounded-2xl border border-stone-200 bg-white p-4 text-sm text-stone-500">
                 {activeMonth === "all"
