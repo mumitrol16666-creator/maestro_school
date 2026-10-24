@@ -4,6 +4,7 @@ import { ArrowDown, ArrowUp, Layers3, LoaderCircle, Plus, Trash2 } from "lucide-
 import { useEffect, useState } from "react";
 import { inputClass, primaryButton, PublishBadge, secondaryButton } from "@/components/admin-ui";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
+import { MaterialLibraryPicker } from "@/components/material-library-picker";
 import { PageHeader } from "@/components/page-header";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { ApiError } from "@/lib/api-client";
@@ -18,7 +19,17 @@ const lineOptions: Array<{ value: SectorTemplateTopic["line"]; label: string }> 
   { value: "other", label: "Тема" },
 ];
 
-type TopicDraft = { key: string; line: SectorTemplateTopic["line"]; title: string; masteryCriteria: string };
+type TopicMaterial = SectorTemplateTopic["materials"][number];
+
+const MAX_TOPIC_MATERIALS = 20;
+
+type TopicDraft = {
+  key: string;
+  line: SectorTemplateTopic["line"];
+  title: string;
+  masteryCriteria: string;
+  materials: TopicMaterial[];
+};
 
 type Draft = {
   id: string | null;
@@ -35,7 +46,7 @@ function newKey() {
 }
 
 function emptyTopic(line: SectorTemplateTopic["line"] = "other"): TopicDraft {
-  return { key: newKey(), line, title: "", masteryCriteria: "" };
+  return { key: newKey(), line, title: "", masteryCriteria: "", materials: [] };
 }
 
 function draftFrom(template: SectorTemplate | null, nextNumber: number, crmDirectionId: string): Draft {
@@ -52,7 +63,13 @@ function draftFrom(template: SectorTemplate | null, nextNumber: number, crmDirec
     title: template.title,
     summary: template.summary,
     preparedTestId: template.preparedTest?.id ?? "",
-    topics: template.topics.map((topic) => ({ key: topic.id, line: topic.line, title: topic.title, masteryCriteria: topic.masteryCriteria })),
+    topics: template.topics.map((topic) => ({
+      key: topic.id,
+      line: topic.line,
+      title: topic.title,
+      masteryCriteria: topic.masteryCriteria,
+      materials: topic.materials ?? [],
+    })),
   };
 }
 
@@ -97,7 +114,12 @@ export default function SectorTemplatesAdminPage() {
       preparedTestId: null,
       topics: draft.topics
         .filter((topic) => topic.title.trim())
-        .map((topic) => ({ line: topic.line, title: topic.title.trim(), masteryCriteria: topic.masteryCriteria.trim() })),
+        .map((topic) => ({
+          line: topic.line,
+          title: topic.title.trim(),
+          masteryCriteria: topic.masteryCriteria.trim(),
+          materials: topic.materials.filter((material) => material.url.trim()),
+        })),
     };
     await run("save", async () => {
       if (draft.id) await cmsApi.updateSectorTemplate(draft.id, body);
@@ -286,6 +308,11 @@ function TemplateForm({
               <button type="button" aria-label="Ниже" onClick={() => move(index, 1)} className="rounded-lg p-2 text-stone-500 hover:bg-stone-100"><ArrowDown size={14} /></button>
               <button type="button" aria-label="Удалить" onClick={() => set("topics", draft.topics.filter((item) => item.key !== topic.key))} className="rounded-lg p-2 text-red-600 hover:bg-red-50"><Trash2 size={14} /></button>
             </div>
+            <TopicMaterials
+              materials={topic.materials}
+              topicTitle={topic.title}
+              onChange={(materials) => setTopic(topic.key, { materials })}
+            />
           </div>
         ))}
       </div>
@@ -297,5 +324,51 @@ function TemplateForm({
         <button type="button" className={secondaryButton} disabled={saving} onClick={onCancel}>Отмена</button>
       </div>
     </section>
+  );
+}
+
+/** Materials of a topic: the teacher gets them as «Материалы темы» in a lesson of a sector opened from this step. */
+function TopicMaterials({
+  materials,
+  topicTitle,
+  onChange,
+}: {
+  materials: TopicMaterial[];
+  topicTitle: string;
+  onChange: (materials: TopicMaterial[]) => void;
+}) {
+  return (
+    <div className="grid gap-2 border-t border-stone-100 pt-3 sm:col-span-3" data-testid="topic-materials">
+      <p className="text-[10px] font-black uppercase tracking-wider text-stone-500">Материалы темы</p>
+      {materials.length ? (
+        <ul className="grid gap-1.5" data-testid="topic-materials-list">
+          {materials.map((material) => (
+            <li key={material.url} className="flex min-w-0 items-center gap-2 rounded-lg bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-900">
+              <span className="min-w-0 flex-1 truncate">{material.title || material.url}</span>
+              <button
+                type="button"
+                aria-label={`Убрать материал ${material.title || material.url}${topicTitle.trim() ? ` из темы ${topicTitle.trim()}` : ""}`}
+                className="inline-flex min-h-11 shrink-0 items-center rounded-lg px-3 text-xs font-bold text-red-700 hover:bg-red-50"
+                onClick={() => onChange(materials.filter((item) => item.url !== material.url))}
+              >
+                Убрать
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-xs text-stone-500">Материалов пока нет. Найдите в библиотеке или добавьте ссылку.</p>
+      )}
+      {materials.length < MAX_TOPIC_MATERIALS ? (
+        <MaterialLibraryPicker
+          label="Добавить материал из библиотеки"
+          onPick={(item) => onChange(
+            materials.some((material) => material.url === item.url) ? materials : [...materials, { title: item.title, url: item.url }],
+          )}
+        />
+      ) : (
+        <p className="text-xs text-stone-500">Достаточно: у темы уже {MAX_TOPIC_MATERIALS} материалов.</p>
+      )}
+    </div>
   );
 }

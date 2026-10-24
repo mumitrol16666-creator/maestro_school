@@ -90,12 +90,22 @@ integrationTest("sector templates are numbered per direction and publish only wi
   const filled = await updateSectorTemplate(empty.id, {
     crmDirectionId: direction.crmDirectionId, number: 1, title: "Ступень 1. Первые аккорды", preparedTestId: "theory-1-1",
     topics: [
-      { line: "chords", title: "Am и E", masteryCriteria: "Переход без паузы" },
+      {
+        line: "chords", title: "Am и E", masteryCriteria: "Переход без паузы",
+        materials: [
+          { title: "  Аккорд Am  ", url: " https://youtu.be/am-chord " },
+          { title: "", url: "" },
+        ],
+      },
       { line: "melody", title: "Мелодия «Кузнечик»" },
       { line: "theory", title: "Струны и строй" },
     ],
   });
   assert.equal(filled.topics.length, 3);
+  assert.deepEqual(filled.topics[0]?.materials, [{ title: "Аккорд Am", url: "https://youtu.be/am-chord", note: "" }], "topic materials are saved trimmed, empty rows dropped");
+  assert.deepEqual(filled.topics[1]?.materials, [], "a topic without materials returns an empty list");
+  const reloaded = await listSectorTemplates({ crmDirectionId: direction.crmDirectionId });
+  assert.equal(reloaded[0]?.topics[0]?.materials.length, 1, "materials come back from the list the editor opens");
   assert.equal(filled.preparedTest?.known, true);
   const published = await setSectorTemplatePublished(filled.id, true);
   assert.equal(published.isPublished, true);
