@@ -24,6 +24,21 @@
 | `maestro-crm-stage0-20261017` | CRM (Express + Prisma) | `codex/stage0-approve-callback-20261017` | `maestro` = `mumitrol16666-creator/maestro_crm` (не `origin`) |
 | `maestro-platform-map-20261017` | документы (эта папка) | `codex/app-map-20261017` | `origin` |
 
+### Состояние на 24.10
+
+| Задача | Состояние |
+|---|---|
+| A выкатка | сделано 23.10: прод платформы `941d30d`, CRM `9c921d0` |
+| B разные секреты | код сделан и выкачен; значения на сервере — по слову Владислава |
+| C `npm audit` | сделано и выкачено (0 critical, 0 high в обоих) |
+| D материалы в редакторе ступеней | сделано 24.10 (`1235bd1`, спека `1bdcb23`), доработки по проверке логики в работе; не запушено |
+| E1 кнопка админа | ждёт ответов Владислава по проверке логики 1.14 (документ 13, под 1.14) |
+| E2 «Опоздал» | закрыто без кода: не нужен (решение 23.10) |
+| F гигиена QA-данных | сделано 24.10 (`ed1042c`), прогон QA зелёный; не запушено |
+| G этап 4 | заблокирован, 18 вопросов без ответа |
+
+Ведущая сессия раздаёт задачи субагентам из `/Library/Project/Maestro/MAESTRO/.claude/agents/` и сама пишет статусы в документ 13.
+
 ## 1. Правила для любой задачи из очереди
 
 Полные нормы — в документе 14, раздел 1. Самое важное:
@@ -263,6 +278,8 @@ E2 ★ (нужно решение Владислава). В индивидуал
 ```bash
 cd /Library/Project/Maestro/MAESTRO/maestro-platform-stage0-20261017/backend && env DATABASE_URL='postgresql://vladislav@localhost:5432/maestro_regression?schema=public' MAESTRO_QA_DB_MARKER=maestro-learning-regression MAESTRO_QA_LOCAL=true npx tsx scripts/qa-seed.ts && env DATABASE_URL='postgresql://vladislav@localhost:5432/maestro_regression?schema=public' npm run economy:v2:cutover:apply
 ```
+
+После seed для спеки `learning-dialogs-v2` нужен ещё `npm run learning-dialogs-v2:ui-fixture` (жалоба и переписка с родителем), затем `economy:v2:cutover:apply`. Обе команды запускать с тем же набором `FEATURE_*_V2=true` и `PRODUCT_V2_CUTOVER_AT=2026-01-01T00:00:00.000Z`, что у платформы на 4001 (раздел 1.2), иначе fixture и cutover падают.
 
 ### G. Этап 4: курсы для людей вне школы ★ (заблокирован)
 
