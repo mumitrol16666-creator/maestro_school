@@ -19,7 +19,8 @@ test("«Сейчас» keeps the focus and league in the top row and leads to «
   await signInAsStudent(request, context);
   await page.goto("/dashboard");
 
-  const focus = page.getByText(/^Сейчас · /).first();
+  // Plan 5.1: «Сегодня» opens the home.
+  const focus = page.getByTestId("student-today");
   const league = page.getByRole("heading", { name: "Лидеры недели" });
   // Plan 2.1: tasks and the sector live on «Обучение»; «Сейчас» shows a short summary leading there.
   const tasks = page.getByTestId("dashboard-learning-summary");
@@ -28,8 +29,10 @@ test("«Сейчас» keeps the focus and league in the top row and leads to «
   await expect(tasks).toBeVisible();
   await expect(tasks.getByRole("link", { name: /Открыть обучение/ })).toHaveAttribute("href", "/learning");
   await expect(page.getByText("Процент не выставлен")).toHaveCount(0);
-  await expect(page.getByTestId("dashboard-coins-chip")).toHaveAttribute("href", "/rewards");
-  await expect(page.getByTestId("dashboard-achievements-chip")).toHaveAttribute("href", "/settings#achievements");
+  // Decision 24.10: Coins and achievements are not on the home.
+  await expect(page.getByTestId("dashboard-coins-chip")).toHaveCount(0);
+  await expect(page.getByTestId("dashboard-achievements-chip")).toHaveCount(0);
+  await expect(page.getByTestId("today-cta")).toBeVisible();
 
   await page.getByTestId("dashboard-level-chip").click();
   const levelDialog = page.getByTestId("level-progress-dialog");
@@ -55,7 +58,7 @@ test("on a phone «Сейчас» shows the focus, the league, then the way to �
   await signInAsStudent(request, context);
   await page.goto("/dashboard");
 
-  const focus = page.getByText(/^Сейчас · /).first();
+  const focus = page.getByTestId("student-today");
   // Plan 2.1: tasks and the sector live on «Обучение»; «Сейчас» shows a short summary leading there.
   const tasks = page.getByTestId("dashboard-learning-summary");
   const league = page.getByRole("heading", { name: "Лидеры недели" });
@@ -77,8 +80,7 @@ test("on a phone «Сейчас» shows the focus, the league, then the way to �
   ));
   expect(overflow).toBeLessThanOrEqual(1);
   await expect(page.getByText("баллов", { exact: true })).toBeVisible();
-  await expect(page.getByText("Coins", { exact: true })).toBeVisible();
-  await expect(page.getByText("достижений", { exact: true })).toBeVisible();
+  await expect(page.getByText("Coins", { exact: true })).toHaveCount(0);
   await page.getByTestId("dashboard-points-chip").click();
   const levelDialog = page.getByTestId("level-progress-dialog");
   await expect(levelDialog).toBeVisible();
@@ -99,8 +101,9 @@ test("monthly plan opens from the dashboard on desktop and phone", async ({ page
   ]) {
     await page.setViewportSize(viewport);
     await page.goto("/dashboard");
-    // The hero and the sector card may both lead to the sector.
-    await page.getByRole("link", { name: "Открыть сектор", exact: true }).first().click();
+    // Plan 5.1: one «Открыть сектор» on the home, in the learning summary.
+    await expect(page.getByRole("link", { name: "Открыть сектор", exact: true })).toHaveCount(1);
+    await page.getByRole("link", { name: "Открыть сектор", exact: true }).click();
 
     await expect(page).toHaveURL(/\/monthly-plan$/);
     await expect(page.getByRole("heading", { name: /^(Мой сектор( \d+)?|Сектор группы \d+|Мои сектора)$/ })).toBeVisible();

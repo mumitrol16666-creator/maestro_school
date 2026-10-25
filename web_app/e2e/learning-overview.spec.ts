@@ -111,7 +111,7 @@ test("partial empty result never claims everything is completed", async ({ page 
 test("real empty and waiting states stay distinct", async ({ page }) => {
   await setup(page, { tasks: [task({ status: "waiting_review", actionRequired: false })], lessons: [] });
   await expect(page.getByRole("heading", { name: "Задания на проверке" })).toBeVisible();
-  await expect(page.getByText("На проверке: 1", { exact: true })).toBeVisible();
+  await expect(page.getByText("Проверит на уроке: 1", { exact: true })).toBeVisible();
 });
 
 test("long names fit phone and desktop without horizontal overflow", async ({ page }) => {

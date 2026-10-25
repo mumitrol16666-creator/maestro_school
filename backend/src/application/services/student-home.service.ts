@@ -13,6 +13,7 @@ import { listPublishedMonthlyPlansAdapted } from "./monthly-plan-adapter.service
 import { getStudentTasks } from "./student-tasks.service.js";
 import { getStudentAchievementsOverview } from "./achievement.service.js";
 import { listStudentSectorProposals } from "./sector-proposal.service.js";
+import { buildStudentToday, STUDENT_BANNER_TYPES, type TodayLesson } from "../../domain/student-today.js";
 
 // Re-export pure domain functions so existing consumers keep working.
 export { buildOfflineHomework, offlineHomeworkStatus, selectOfflineHomeworks };
@@ -68,12 +69,32 @@ async function homeExtras(studentUserId: string) {
   };
 }
 
+/** Plan 5.2: unread notifications shown as banners; plan 5.1: the current streak for «Сегодня». */
+async function homeSignals(studentUserId: string) {
+  const [banners, streak] = await Promise.allSettled([
+    prisma.userNotification.findMany({
+      where: { userId: studentUserId, readAt: null, type: { in: [...STUDENT_BANNER_TYPES] } },
+      orderBy: { createdAt: "desc" },
+      take: 5,
+      select: { id: true, type: true, title: true, body: true, url: true, createdAt: true },
+    }),
+    prisma.weeklyStreakState.findFirst({ where: { studentId: studentUserId }, orderBy: { updatedAt: "desc" }, select: { currentWeeks: true } }),
+  ]);
+  return {
+    banners: banners.status === "fulfilled" ? banners.value : [],
+    streakWeeks: streak.status === "fulfilled" ? streak.value?.currentWeeks ?? 0 : null,
+  };
+}
+
 export async function getStudentHome(studentUserId: string) {
-  const [base, extras] = await Promise.all([
+  const [base, extras, signals] = await Promise.all([
     getStudentHomeBase(studentUserId),
     homeExtras(studentUserId),
+    homeSignals(studentUserId),
   ]);
-  return { ...base, ...extras };
+  const upcoming = (base.school as { upcomingLessons?: TodayLesson[] } | null)?.upcomingLessons ?? [];
+  const today = buildStudentToday({ upcomingLessons: upcoming, tasks: extras.tasks?.items ?? [] });
+  return { ...base, ...extras, ...signals, today };
 }
 
 async function getStudentHomeBase(studentUserId: string) {

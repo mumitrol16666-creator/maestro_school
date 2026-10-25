@@ -3,18 +3,11 @@
 import { sectorTitle } from "@/lib/sector-label";
 import {
   ArrowRight,
-  Award,
-  BookOpenCheck,
-  CalendarDays,
   ChevronRight,
-  Coins,
-  GraduationCap,
   MonitorPlay,
-  RotateCcw,
   School,
   Sparkles,
   Star,
-  Target,
   Trophy,
 } from "lucide-react";
 import Link from "next/link";
@@ -24,8 +17,9 @@ import { ErrorState, LoadingState } from "@/components/data-states";
 import { LevelBadge, LevelProgressDialog } from "@/components/level-summary";
 import { ProgressBar } from "@/components/progress-bar";
 import { useApiResource } from "@/hooks/use-api-resource";
+import { StudentBanners } from "@/components/student-banners";
+import { StudentTodayCard } from "@/components/student-today-card";
 import { invalidateStudentHome, loadStudentHome } from "@/lib/student-home";
-import { selectStudentHomeHero, type StudentHomeHero } from "@/lib/student-home-priority";
 import { weeklyLeagueApi } from "@/lib/weekly-league-api";
 import type { SchoolOfflineLesson } from "@/types/school-offline";
 import type { StudentHomeMonthlyPlan, StudentMonthlyPlansResponse } from "@/types/api";
@@ -60,23 +54,13 @@ export default function DashboardPage() {
   const plans = data.monthlyPlans;
   const planProgress = aggregatePlanProgress(plans);
   const actionTasks = data.tasks?.items.filter((task) => task.actionRequired) ?? [];
-  const hero = selectStudentHomeHero({
-    tasks: actionTasks,
-    schoolLessons: upcoming,
-    plans,
-    dashboard: data.dashboard,
-  });
+  // Plan 5.1: «Сегодня» opens the home; the lessons after the nearest one go to the list.
+  const today = data.today ?? { nextLesson: null, tasks: [], tasksTotal: 0 };
   const visibleUpcoming = upcoming
-    .filter((lesson) => !["school_lesson", "online_lesson"].includes(hero?.kind ?? "") || lesson.crmClassId !== hero?.id)
+    .filter((lesson) => lesson.crmClassId !== today.nextLesson?.crmClassId)
     .slice(0, 3);
-  const earnedAchievements = data.achievementsEarned;
-  const currentCourseLessonHref = data.dashboard.nextAvailableLesson
-    ? `/lessons/${data.dashboard.nextAvailableLesson.id}`
-    : null;
-  const hideCurrentCourse = hero?.kind === "course"
-    || (hero?.kind === "task" && currentCourseLessonHref && hero.href.startsWith(currentCourseLessonHref));
   const hasLearningData = Boolean(
-    hero
+    today.nextLesson
     || plans.length
     || data.dashboard.currentCourse
     || actionTasks.length,
@@ -92,7 +76,8 @@ export default function DashboardPage() {
           </h1>
           <p className="mt-1 text-[13px] text-stone-500 sm:mt-2 sm:text-sm">Здесь только то, что важно сейчас.</p>
         </div>
-        <div className={`grid w-full gap-2 sm:w-auto ${data.dashboard.level ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"}`}>
+        {/* Plan 5.1: two figures only — LEVEL and Points. Coins wait for the shop (decision 24.10). */}
+        <div className="grid w-full grid-cols-2 gap-2 sm:w-auto">
           {data.dashboard.level ? (
             <MetricChip
               leading={<LevelBadge level={data.dashboard.level.level} size="small" />}
@@ -103,10 +88,6 @@ export default function DashboardPage() {
             />
           ) : null}
           <MetricChip icon={Star} value={data.dashboard.points.toLocaleString("ru-RU")} label="баллов" onClick={data.dashboard.level ? () => setLevelDialogOpen(true) : undefined} testId="dashboard-points-chip" />
-          <MetricChip icon={Coins} value={(user?.coins ?? 0).toLocaleString("ru-RU")} label="Coins" href="/rewards" testId="dashboard-coins-chip" />
-          {earnedAchievements != null ? (
-            <MetricChip icon={Award} value={earnedAchievements.toLocaleString("ru-RU")} label="достижений" href="/settings#achievements" testId="dashboard-achievements-chip" />
-          ) : null}
         </div>
       </header>
 
@@ -114,8 +95,10 @@ export default function DashboardPage() {
         <LevelProgressDialog progress={data.dashboard.level} onClose={() => setLevelDialogOpen(false)} />
       ) : null}
 
-      <div className={`grid items-stretch gap-5 ${hero ? "xl:grid-cols-[minmax(0,1.75fr)_minmax(280px,0.65fr)]" : ""}`}>
-        {hero ? <div className="order-1"><NowHero hero={hero} /></div> : null}
+      <StudentBanners banners={data.banners ?? []} />
+
+      <div className="grid items-stretch gap-5 xl:grid-cols-[minmax(0,1.75fr)_minmax(280px,0.65fr)]">
+        <div className="order-1"><StudentTodayCard today={today} streakWeeks={data.streakWeeks ?? null} /></div>
         <div className="order-3 xl:order-2"><LeagueMiniWidget /></div>
       </div>
 
@@ -130,7 +113,7 @@ export default function DashboardPage() {
         </div>
       ) : null}
 
-      {data.dashboard.currentCourse && !hideCurrentCourse ? (
+      {data.dashboard.currentCourse ? (
         <section className="mt-6 rounded-[26px] border border-stone-200 bg-white p-5 shadow-soft sm:p-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -155,9 +138,9 @@ export default function DashboardPage() {
       {!hasLearningData ? (
         <section className="mt-8 rounded-[28px] border border-dashed border-stone-300 bg-white p-8 text-center">
           <Sparkles className="mx-auto text-gold-ink" />
-          <h2 className="font-display mt-4 text-3xl">Учебный маршрут готовится</h2>
+          <h2 className="font-display mt-4 text-3xl">Пока всё тихо</h2>
           <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-stone-500">
-            После назначения расписания, домашнего задания или открытия сектора здесь появятся следующие действия.
+            Когда школа поставит урок, преподаватель даст задание или откроет сектор, всё это появится здесь.
           </p>
         </section>
       ) : null}
@@ -249,60 +232,6 @@ function MetricChip({
   }
   return <div className={className} aria-label={accessibleLabel} title={accessibleLabel} data-testid={testId}>{content}</div>;
 }
-
-function NowHero({ hero }: { hero: StudentHomeHero }) {
-  const Icon = hero.kind === "school_lesson"
-    ? School
-    : hero.kind === "online_lesson"
-      ? MonitorPlay
-      : hero.kind === "plan"
-        ? Target
-        : hero.kind === "sector_exam"
-          ? GraduationCap
-          : BookOpenCheck;
-  const badgeClass = hero.badge?.tone === "danger"
-    ? "bg-red-500/20 text-red-100"
-    : hero.badge?.tone === "success"
-      ? "bg-emerald-400/20 text-emerald-100"
-      : "bg-gold/20 text-amber-100";
-  const DetailIcon = hero.badge?.tone === "danger" ? RotateCcw : CalendarDays;
-
-  return (
-    <section className="h-full overflow-hidden rounded-[20px] border border-white/10 bg-charcoal p-4 text-white shadow-soft sm:p-5">
-      <div className="flex h-full flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0 max-w-3xl">
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-            <span className="grid h-8 w-8 place-items-center rounded-lg bg-white/10 text-gold-ink">
-              <Icon size={17} />
-            </span>
-            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-gold-ink sm:text-xs">{hero.eyebrow}</p>
-            {hero.badge ? (
-              <span className={`inline-flex min-h-6 items-center rounded-md px-2.5 text-[10px] font-black ${badgeClass}`}>
-                {hero.badge.label}
-              </span>
-            ) : null}
-          </div>
-          <h2 className="font-display mt-3 break-words text-2xl leading-tight sm:text-[28px]">{hero.title}</h2>
-          {hero.subtitle ? <p className="mt-2 line-clamp-1 break-words text-xs leading-5 text-white/70 sm:text-sm">{hero.subtitle}</p> : null}
-          {hero.detail ? (
-            <p className={`mt-2 inline-flex items-start gap-2 text-xs leading-5 sm:text-[13px] ${hero.badge?.tone === "danger" ? "rounded-xl border border-red-400/20 bg-red-500/10 p-2.5 text-red-50" : "text-white/60"}`}>
-              <DetailIcon size={16} className="mt-0.5 shrink-0 text-gold-ink" /> {hero.detail}
-            </p>
-          ) : null}
-        </div>
-        <Link
-          href={hero.href}
-          target={hero.external ? "_blank" : undefined}
-          rel={hero.external ? "noreferrer" : undefined}
-          className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-gold px-4 text-sm font-black text-ink transition hover:bg-amber-400 sm:min-h-11"
-        >
-          {hero.actionLabel} <ArrowRight size={17} />
-        </Link>
-      </div>
-    </section>
-  );
-}
-
 
 function LeagueMiniWidget() {
   const resource = useApiResource(() => weeklyLeagueApi.studentOverview(0), []);

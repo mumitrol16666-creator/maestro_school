@@ -98,19 +98,24 @@ export default function TestsPage() {
         </div>
       </div>
 
-      <div className="space-y-8">
-        {sections.map((section) => (
-          <section key={section}>
-            <div className="mb-3 flex items-center gap-3">
-              <span className="grid h-9 w-9 place-items-center rounded-xl bg-ink font-display text-lg text-gold-ink">
+      {/* Plan 5.3: sections are folded; the one with the next test is open. */}
+      <div className="space-y-4">
+        {sections.map((section) => {
+          const inSection = tests.filter((test) => test.section === section);
+          const passedCount = inSection.filter((test) => test.passed).length;
+          return (
+          <details key={section} open={next ? next.section === section : section === sections[0]} className="group rounded-[26px] border border-stone-200 bg-white" data-testid={`tests-section-${section}`}>
+            <summary className="flex min-h-14 cursor-pointer list-none items-center gap-3 px-4 py-3 sm:px-5">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-ink font-display text-lg text-gold-ink">
                 {section}
               </span>
-              <div>
-                <h2 className="font-display text-2xl">Раздел {section}</h2>
-                <p className="text-xs text-stone-500">Тесты открываются по порядку</p>
-              </div>
-            </div>
-            <div className="space-y-3">
+              <span className="min-w-0 flex-1">
+                <span className="block font-display text-2xl">Раздел {section}</span>
+                <span className="block text-xs text-stone-500">Пройдено {passedCount} из {inSection.length}</span>
+              </span>
+              <ChevronRight size={18} className="shrink-0 text-stone-400 transition group-open:rotate-90" />
+            </summary>
+            <div className="space-y-3 px-3 pb-3 sm:px-4 sm:pb-4">
               {tests.filter((test) => test.section === section).map((test) => (
                 <div
                   key={test.id}
@@ -174,8 +179,9 @@ export default function TestsPage() {
                 </div>
               ))}
             </div>
-          </section>
-        ))}
+          </details>
+          );
+        })}
       </div>
     </>
   );

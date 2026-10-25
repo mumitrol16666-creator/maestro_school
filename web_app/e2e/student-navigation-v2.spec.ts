@@ -68,10 +68,9 @@ test("learning exposes compact secondary navigation; Coins have their own page w
   await expect(learningNavigation.getByRole("menuitem", { name: "Курсы" })).toBeVisible();
   await expect(learningNavigation.getByRole("menuitem", { name: "Тесты" })).toBeVisible();
 
+  // Decision 24.10: the Coins page is gone until the shop opens; the old link goes home.
   await page.goto("/rewards");
-  await expect(page.getByRole("heading", { name: "Coins", exact: true })).toBeVisible();
-  await expect(page.getByTestId("coins-shop-note")).toContainText("Магазин наград откроется позже");
-  await expect(page.getByRole("button", { name: /Получить награду|Обменять/ })).toHaveCount(0);
+  await expect(page).toHaveURL(/\/dashboard$/);
 });
 
 test("student workspace fits all required mobile widths", async ({ page, request, context }) => {

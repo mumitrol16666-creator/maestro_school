@@ -297,6 +297,28 @@ export interface ApiStudentHome {
   tasks: { items: UnifiedTask[]; counts: UnifiedTaskCounts; partial: boolean } | null;
   achievementsEarned: number | null;
   sectorProposals: SectorProposal[];
+  /** Plan 5.1: the nearest school lesson and what to do before it. */
+  today: {
+    nextLesson: {
+      crmClassId: string;
+      title: string;
+      date: string;
+      startTime: string;
+      endTime: string;
+      status?: string | null;
+      teacherName?: string | null;
+      roomName?: string | null;
+      groupName?: string | null;
+      deliveryFormat?: string | null;
+      isToday: boolean;
+      isTomorrow: boolean;
+    } | null;
+    tasks: UnifiedTask[];
+    tasksTotal: number;
+  };
+  /** Plan 5.2: unread notifications shown as banners until opened. */
+  banners: Array<{ id: string; type: string; title: string; body: string; url: string | null; createdAt: string }>;
+  streakWeeks: number | null;
 }
 
 export interface CompleteLessonResponse {

@@ -68,8 +68,7 @@ test("LEVEL uses the current epoch and replaces the legacy rank", async ({ page,
   expect(profileSummaryBox?.height ?? Number.POSITIVE_INFINITY).toBeLessThan(600);
 
   await page.goto("/rewards");
-  await expect(page.getByRole("heading", { name: "Coins", exact: true })).toBeVisible();
-  await expect(page.getByTestId("level-summary")).toHaveCount(0);
+  await expect(page).toHaveURL(/\/dashboard$/);
 
   await page.goto("/progress");
   await expect(page.getByRole("heading", { name: "История обучения" })).toBeVisible();

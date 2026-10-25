@@ -611,8 +611,10 @@ function SchoolSchedule() {
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
   const [historyFilterMonth, setHistoryFilterMonth] = useState<string>("auto");
+  const [showPending, setShowPending] = useState(false);
   useEffect(() => {
     setHistoryFilterMonth("auto");
+    setShowPending(false);
   }, [requestedLessonId]);
   useEffect(() => {
     setLessonFormatFilter(
@@ -668,12 +670,24 @@ function SchoolSchedule() {
       .sort((a, b) => a.date.slice(0, 10).localeCompare(b.date.slice(0, 10)) || a.startTime.localeCompare(b.startTime));
     return ahead[0] ? { date: ahead[0].date, startTime: ahead[0].startTime } : null;
   }, [resource.data?.upcomingLessons]);
+  // Plan 5.3: by default the last two weeks, unconfirmed lessons folded into one line.
+  const recentOnly = historyFilterMonth === "auto" && !requestedLessonId;
+  const twoWeeksAgo = useMemo(() => {
+    const date = new Date();
+    date.setDate(date.getDate() - 14);
+    return date.toISOString().slice(0, 10);
+  }, []);
+  const isPendingLesson = (lesson: SchoolOfflineLesson) => ["pending_admin_review", "not_filled", "started"].includes(lesson.status);
+  const pendingLessons = useMemo(() => lessonHistory.filter(isPendingLesson), [lessonHistory]);
   const displayHistory = useMemo(() => {
-    if (activeMonth === "all") return lessonHistory;
-    return lessonHistory.filter(
-      (lesson) => lesson.date && lesson.date.startsWith(activeMonth),
-    );
-  }, [lessonHistory, activeMonth]);
+    const base = activeMonth === "all"
+      ? lessonHistory
+      : recentOnly
+        ? lessonHistory.filter((lesson) => lesson.date && lesson.date.slice(0, 10) >= twoWeeksAgo)
+        : lessonHistory.filter((lesson) => lesson.date && lesson.date.startsWith(activeMonth));
+    return showPending || !recentOnly ? base : base.filter((lesson) => !isPendingLesson(lesson));
+  }, [lessonHistory, activeMonth, recentOnly, twoWeeksAgo, showPending]);
+  const hiddenOlder = recentOnly ? lessonHistory.length - lessonHistory.filter((lesson) => lesson.date && lesson.date.slice(0, 10) >= twoWeeksAgo).length : 0;
 
   useEffect(() => {
     if (!user || !resource.data) return;
@@ -864,10 +878,11 @@ function SchoolSchedule() {
               <h2 className="text-lg font-bold">История занятий</h2>
               <select
                 aria-label="Месяц истории"
-                value={activeMonth}
+                value={recentOnly ? "auto" : activeMonth}
                 onChange={(event) => setHistoryFilterMonth(event.target.value)}
                 className="min-h-11 max-w-full rounded-xl border border-stone-200 bg-white px-3 text-sm focus-visible:ring-2 focus-visible:ring-gold"
               >
+                {recentOnly ? <option value="auto">Последние две недели</option> : null}
                 <option value="all">
                   Все занятия ({lessonHistory.length})
                 </option>
@@ -890,11 +905,24 @@ function SchoolSchedule() {
                 Этого урока нет в истории: он старше последних {lessonHistory.length} занятий или был перенесён. Задание по нему остаётся в разделе «Обучение».
               </p>
             ) : null}
+            {recentOnly && pendingLessons.length ? (
+              <button
+                type="button"
+                onClick={() => setShowPending((value) => !value)}
+                className="mb-3 flex min-h-11 w-full items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 text-left text-sm font-semibold text-stone-700"
+                data-testid="history-pending-toggle"
+              >
+                <span>{pendingLessons.length} {pendingLessons.length === 1 ? "урок ждёт итогов" : pendingLessons.length < 5 ? "урока ждут итогов" : "уроков ждут итогов"} от преподавателя и школы</span>
+                <span className="text-xs text-stone-500">{showPending ? "Скрыть" : "Показать"}</span>
+              </button>
+            ) : null}
             {displayHistory.length === 0 ? (
               <p className="rounded-2xl border border-stone-200 bg-white p-4 text-sm text-stone-500">
                 {activeMonth === "all"
                   ? "История занятий пока пуста."
-                  : "В этом месяце занятий пока нет. Выберите другой месяц или все занятия."}
+                  : recentOnly
+                    ? "За две недели подтверждённых уроков нет."
+                    : "В этом месяце занятий пока нет. Выберите другой месяц или все занятия."}
               </p>
             ) : (
               <GroupedLessonList
@@ -905,6 +933,16 @@ function SchoolSchedule() {
                 latestCompletedId={latestCompletedId}
               />
             )}
+            {recentOnly && hiddenOlder > 0 ? (
+              <button
+                type="button"
+                onClick={() => setHistoryFilterMonth("all")}
+                className="mt-4 inline-flex min-h-11 w-full items-center justify-center rounded-2xl border border-stone-200 bg-white px-4 text-sm font-bold text-ink sm:w-auto"
+                data-testid="history-show-more"
+              >
+                Показать ещё {hiddenOlder}
+              </button>
+            ) : null}
           </section>
         </>
       )}

@@ -42,6 +42,7 @@ export function SectorProposalSection({
   const [link, setLink] = useState("");
   const [crmDirectionId, setCrmDirectionId] = useState(directions[0]?.[0] ?? "");
   const [sending, setSending] = useState(false);
+  const [showAll, setShowAll] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const directionId = crmDirectionId || directions[0]?.[0] || "";
@@ -127,7 +128,7 @@ export function SectorProposalSection({
       )}
       {shown.length ? (
         <ul className="mt-5 divide-y divide-sky-100 border-t border-sky-100">
-          {shown.slice(0, 10).map((proposal) => (
+          {shown.slice(0, showAll ? shown.length : 3).map((proposal) => (
             <li key={proposal.id} className="flex items-start gap-3 py-3">
               {proposal.status === "accepted"
                 ? <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-emerald-600" />
@@ -144,6 +145,11 @@ export function SectorProposalSection({
             </li>
           ))}
         </ul>
+      ) : null}
+      {shown.length > 3 && !showAll ? (
+        <button type="button" onClick={() => setShowAll(true)} className="mt-3 inline-flex min-h-10 items-center text-xs font-bold text-sky-800 hover:underline" data-testid="proposals-show-all">
+          Показать все ({shown.length})
+        </button>
       ) : null}
     </section>
   );

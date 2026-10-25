@@ -215,7 +215,7 @@ function LeagueHistory() {
                 <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4">
                   <div><p className="font-display text-2xl">#{item.position}</p><p className="text-[11px] font-bold text-stone-400">место</p></div>
                   <div><p className="font-display text-2xl">{item.xp}</p><p className="text-[11px] font-bold text-stone-400">XP</p></div>
-                  <div><p className="font-display text-2xl">{item.coinsAwarded}</p><p className="text-[11px] font-bold text-stone-400">Coins</p></div>
+
                   <div><p className="font-display text-2xl">{item.streakWeeks}</p><p className="text-[11px] font-bold text-stone-400">недель серии</p></div>
                 </div>
               </summary>
@@ -398,7 +398,7 @@ export default function WeeklyLeaguePage() {
             <p className="mt-4 flex items-center gap-2 text-sm font-bold">
               {(me?.goalProgress ?? 0) >= 100 ? <CheckCircle2 size={17} className="text-emerald-400" /> : <Target size={17} className="text-gold-ink" />}
               {(me?.goalProgress ?? 0) >= 100
-                ? `Цель выполнена · +${data.prizes.personalGoal.coins} Coins`
+                ? "Цель недели выполнена"
                 : `До цели ещё ${Math.max(0, (me?.goalXp ?? 80) - (me?.xp ?? 0))} XP`}
             </p>
           </div>
@@ -406,7 +406,7 @@ export default function WeeklyLeaguePage() {
       </section>
 
       {/* ═══════════════════ 4 stat cards ═══════════════════ */}
-      <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="mt-5 grid grid-cols-3 gap-3">
         <div className="rounded-[20px] border border-stone-200 bg-paper p-4 shadow-soft text-center">
           <p className="font-display text-3xl text-ink">{me?.position ? `#${me.position}` : "—"}</p>
           <p className="mt-1 text-[11px] font-bold text-stone-500">{data.week.positionsFinal ? "итоговое место" : "текущее место"}</p>
@@ -416,10 +416,6 @@ export default function WeeklyLeaguePage() {
             {xpToTop3 > 0 ? xpToTop3 : <Trophy size={28} className="text-gold-ink" />} <span className="text-sm text-gold-ink">{xpToTop3 > 0 ? "XP" : ""}</span>
           </p>
           <p className="mt-1 text-[11px] font-bold text-stone-500">{xpToTop3 > 0 ? "до топ-3" : "в топ-3!"}</p>
-        </div>
-        <div className="rounded-[20px] border border-stone-200 bg-paper p-4 shadow-soft text-center">
-          <p className="font-display text-3xl text-ink">{me?.projectedRewardCoins ?? 0}</p>
-          <p className="mt-1 text-[11px] font-bold text-stone-500">Coins за неделю</p>
         </div>
         <div className="rounded-[20px] border border-stone-200 bg-paper p-4 shadow-soft text-center">
           <p className="font-display text-3xl text-ink">{me?.streakWeeks ?? 0}</p>
@@ -446,7 +442,7 @@ export default function WeeklyLeaguePage() {
                   <span className="min-w-0 flex-[1_1_calc(100%-3rem)] text-sm font-semibold sm:flex-1">{item.label}</span>
                   <span className="ml-12 shrink-0 text-xs font-black text-gold-ink sm:ml-0">
                     {rule ? `+${rule.xp}${rule.retryXp ? ` / +${rule.retryXp}` : ""} XP` : "XP"}
-                    {data.economyV2Enabled && item.sourceType === "offline_lesson" ? " · +50 Coins" : ""}
+
                   </span>
                   <Link href={item.href} className="shrink-0 rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-xs font-bold text-ink transition hover:border-gold hover:text-gold-ink">
                     {item.action}
@@ -463,6 +459,12 @@ export default function WeeklyLeaguePage() {
         </section>
       ) : null}
 
+      {/* Plan 5.3: place, goal and the next action stay open; the rest folds. */}
+      <details className="group mt-7" data-testid="league-details">
+        <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-white px-4 text-sm font-bold text-ink">
+          <span>Подробнее: таблица недели, серия, история и как считается XP</span>
+          <ChevronDown size={18} className="shrink-0 transition group-open:rotate-180" />
+        </summary>
       {me && data.economyV2Enabled ? (
         <section className="mt-7" data-testid="weekly-streak">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
@@ -485,7 +487,7 @@ export default function WeeklyLeaguePage() {
               >
                 <Award size={19} className={milestone.earned ? "text-gold-ink" : "text-stone-400"} />
                 <p className="font-display mt-4 text-2xl">{milestone.weeks}</p>
-                <p className="text-[11px] font-bold text-stone-500">недель · {milestone.coins} Coins</p>
+                <p className="text-[11px] font-bold text-stone-500">недель подряд</p>
               </article>
             ))}
           </div>
@@ -631,20 +633,7 @@ export default function WeeklyLeaguePage() {
         </div>
       </details>
 
-      {data.prizes.rewardsEnabled ? (
-        <section className="mt-5 flex flex-col gap-4 border-y border-stone-200 bg-paper px-1 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-          <div className="flex items-start gap-3">
-            <Trophy size={20} className="mt-0.5 shrink-0 text-gold-ink" />
-            <p className="text-sm leading-6 text-stone-600">
-              Топ-3 получает <strong className="text-ink">{data.prizes.placements.map((item) => item.coins).join(" / ")} Coins</strong>.
-              За личную цель {data.prizes.personalGoal.xp} XP — ещё <strong className="text-ink">+{data.prizes.personalGoal.coins} Coins</strong>.
-            </p>
-          </div>
-          <Link href="/rewards" className="inline-flex min-h-10 shrink-0 items-center gap-2 self-start text-sm font-bold text-ink hover:text-gold-ink sm:self-auto">
-            Награды за Coins <ArrowRight size={15} />
-          </Link>
-        </section>
-      ) : null}
+      </details>
     </>
   );
 }

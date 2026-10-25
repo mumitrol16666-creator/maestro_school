@@ -43,8 +43,11 @@ test("weekly XP shows only protected sources and exact limits", async ({ page, r
   await expect(page.getByText(/\d+\s*\/\s*80 XP/).first()).toBeVisible();
   await expect(page.getByText("Цель выполнена: +5 Coins")).toHaveCount(0);
   await expect(page.getByText(/15 \/ 10 \/ 7 Coins/)).toHaveCount(0);
-  await expect(page.getByText("+20 XP · +50 Coins")).toBeVisible();
-  await expect(page.getByText(/150 \/ 100 \/ 50 Coins/)).toBeVisible();
+  // Decision 24.10: Coins are not shown to students while the shop is closed.
+  await expect(page.getByText(/Coins/)).toHaveCount(0);
+  await expect(page.getByText("+20 XP", { exact: true }).first()).toBeVisible();
+  // Plan 5.3: the streak, table and history fold under «Подробнее».
+  await page.getByTestId("league-details").locator("> summary").click();
   await expect(page.getByTestId("weekly-streak")).toContainText(/\d+ недель подряд/);
   await expect(page.getByTestId("weekly-streak")).toContainText("4");
   const history = page.getByTestId("weekly-league-history");
@@ -62,7 +65,8 @@ test("previous week shows a finalized snapshot or the explicit finalization wind
   const finalizing = page.getByText("Подведение итогов");
   await expect(finalized.or(finalizing)).toBeVisible();
   await expect(page.getByText(/\d+\s*\/\s*80 XP/).first()).toBeVisible();
-  await expect(page.getByText("Coins за неделю", { exact: true })).toBeVisible();
+  await expect(page.getByText("Coins за неделю", { exact: true })).toHaveCount(0);
+  await page.getByTestId("league-details").locator("> summary").click();
 
   if (await finalizing.isVisible()) {
     await expect(page.getByText("Предварительный результат")).toBeVisible();
@@ -87,6 +91,8 @@ test("weekly league fits a phone and keeps actions in one column", async ({ page
   const box = await actionText.boundingBox();
   expect(box).not.toBeNull();
   expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(391);
+  // Plan 5.3: the table, streak and history fold under «Подробнее».
+  await page.getByTestId("league-details").locator("> summary").click();
   await expect(page.getByTestId("weekly-league-history")).toBeVisible();
 });
 

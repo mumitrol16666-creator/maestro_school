@@ -6,6 +6,7 @@ import { ErrorState } from "@/components/data-states";
 import { ProgressBar } from "@/components/progress-bar";
 import { SectorExamSummary } from "@/components/sector-exam-summary";
 import { SectorProposalSection, sectorProposalDirections } from "@/components/sector-proposals";
+import { StudentBanners } from "@/components/student-banners";
 import { UnifiedTaskCard } from "@/components/unified-task-card";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { learningTaskContext } from "@/lib/learning-overview";
@@ -36,7 +37,17 @@ export default function LearningWorkspacePage() {
   const partial = !tasks || tasks.partial || !home.school;
   const pendingCount = tasks?.counts.actionRequired ?? 0;
   const waitingCount = tasks?.counts.waitingReview ?? 0;
-  const otherTasks = (tasks?.items ?? []).filter((task) => task.id !== nextTask?.id).slice(0, 4);
+  // Plan 5.3: the same homework from two CRM lessons is one task to the child.
+  const seen = new Set<string>([nextTask ? `${nextTask.title}|${nextTask.descriptionPreview}` : ""]);
+  const otherTasks = (tasks?.items ?? [])
+    .filter((task) => task.id !== nextTask?.id)
+    .filter((task) => {
+      const key = `${task.title}|${task.descriptionPreview}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 4);
 
   return (
     <div className="mx-auto max-w-6xl" data-testid="learning-overview">
@@ -45,6 +56,8 @@ export default function LearningWorkspacePage() {
         <h1 className="font-display mt-2 text-4xl leading-tight text-ink">Обучение</h1>
         <p className="mt-2 text-sm leading-6 text-stone-600">Сектор, задания и твои предложения преподавателю.</p>
       </header>
+
+      <StudentBanners banners={home.banners ?? []} />
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
         <section className="flex min-w-0 flex-col rounded-xl border border-ink bg-ink p-5 text-white sm:p-7" aria-labelledby="learning-focus-title">
@@ -57,7 +70,7 @@ export default function LearningWorkspacePage() {
           {nextTask ? <TaskDetails task={nextTask} /> : (
             <p className="mt-3 text-sm leading-6 text-stone-300">
               {partial ? "Часть данных недоступна. Нельзя сказать, что все задания выполнены."
-                : waitingCount ? "Ответ отправлен. Результат появится после проверки преподавателем."
+                : waitingCount ? "Преподаватель проверит задания на уроке."
                 : "Когда появится новое задание, вы увидите его здесь."}
             </p>
           )}
@@ -83,7 +96,7 @@ export default function LearningWorkspacePage() {
                 {tasks && <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-700" data-testid="learning-task-count">
                   {pendingCount} незавершённых{partial ? " · данные неполные" : ""}
                 </span>}
-                {waitingCount > 0 && <span className="text-xs font-semibold text-blue-800">На проверке: {waitingCount}</span>}
+                {waitingCount > 0 && <span className="text-xs font-semibold text-blue-800">Проверит на уроке: {waitingCount}</span>}
               </div>
               <p className="mt-1 text-sm leading-6 text-stone-600">
                 {partial ? "Показаны только доступные задания. Полный список пока не загружен."

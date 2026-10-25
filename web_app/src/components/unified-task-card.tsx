@@ -30,7 +30,7 @@ export function UnifiedTaskCard({ task }: { task: UnifiedTask }) {
         <div className="grid min-w-0 flex-1 gap-4 xl:grid-cols-[minmax(0,1fr)_250px]">
           <div className="min-w-0">
             <h2 className="font-display break-words text-xl leading-snug sm:text-2xl">{task.title}</h2>
-            <span className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusColor}`}>{taskStatusLabel(task)}</span>
+            {taskStatusLabel(task) ? <span className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusColor}`}>{taskStatusLabel(task)}</span> : null}
             <p className="mt-2 break-words text-xs leading-5 text-stone-500">
               {sources[task.source].label}{assigned ? ` · ${assigned}` : ""}
               {task.source === "course" && task.context.primary ? ` · ${task.context.primary}` : ""}
