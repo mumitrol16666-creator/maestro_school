@@ -34,6 +34,7 @@ import {
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { LessonMaterialItems } from "@/components/student-lesson-materials";
+import { ShareAchievementButton } from "@/components/share-achievement";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
@@ -345,6 +346,7 @@ function LessonCard({
                             +{item.masteryPointsAwarded} учебных баллов
                           </span>
                         ) : null}
+                        {item.mastered ? <ShareAchievementButton kind="topic" title={item.title} date={item.occurredAt} compact /> : null}
                       </div>
                       {item.comment ? (
                         <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-stone-600">
@@ -372,8 +374,11 @@ function LessonCard({
                             Сектор закрыт
                           </p>
                         </div>
-                        <span className="shrink-0 self-start rounded-lg bg-gold/25 px-2.5 py-1 text-xs font-black text-amber-950 sm:self-auto">
-                          +{item.pointsAwarded} учебных баллов
+                        <span className="flex shrink-0 flex-wrap items-center gap-2 self-start sm:self-auto">
+                          <span className="rounded-lg bg-gold/25 px-2.5 py-1 text-xs font-black text-amber-950">
+                            +{item.pointsAwarded} учебных баллов
+                          </span>
+                          <ShareAchievementButton kind="sector" title={`Сектор${item.sequence ? ` ${item.sequence}` : ""} закрыт`} date={item.completedAt} sequence={item.sequence ?? null} compact />
                         </span>
                       </div>
                     </div>
