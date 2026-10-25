@@ -15,7 +15,7 @@ import {
 export async function lessonTemplateRoutes(app: FastifyInstance) {
   const teacher = [authenticate, requireTeacher, requirePermission("offline_school.read")];
   const admin = [authenticate, requireContentAdmin];
-  const kind = z.enum(["summary", "homework"]);
+  const kind = z.enum(["summary", "homework", "practice_reminder"]);
   const id = z.object({ id: z.string().uuid() });
 
   app.get("/teachers/me/lesson-templates", { preHandler: teacher }, async (request) => {

@@ -45,7 +45,8 @@ type CrmLesson = {
 };
 
 /** How many past lessons the parent sees (plan 3.2). */
-export const FAMILY_VISITS_LIMIT = 10;
+// Plan 5.4: the page shows five confirmed visits and folds the rest, so the read goes deeper.
+export const FAMILY_VISITS_LIMIT = 30;
 
 type FamilyVisibility = {
   showSchedule: boolean;

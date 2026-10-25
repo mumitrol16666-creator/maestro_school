@@ -10,6 +10,8 @@ import {
 import { calculateAggregateMonthlyPlanProgress } from "../../domain/monthly-plan.js";
 import { formatFio } from "../../domain/name.js";
 import { buildFamilyOfflineSummary } from "../../domain/family-view.js";
+import { buildFamilyWeekDigest, type DigestTopicMove } from "../../domain/family-digest.js";
+import { LearningTopicProgressSource } from "@prisma/client";
 import { isValidLogin, normalizeLogin } from "../../lib/login.js";
 import { isValidPhone, normalizePhoneDigits } from "../../lib/phone.js";
 import { getStudentSchoolOfflineSummary } from "./school-offline.service.js";
@@ -366,6 +368,7 @@ async function assertParentChildLink(parentUserId: string, studentUserId: string
       student: {
         select: {
           id: true,
+          crmStudentId: true,
           firstName: true,
           lastName: true,
           middleName: true,
@@ -414,6 +417,26 @@ export async function getParentChildOfflineSummary(
     crmStale: Boolean((offlineRead.value as { crmStale?: boolean } | null)?.crmStale),
     results,
   };
+  // Plan 5.4: the week in one card and one sentence to say to the child; topics only when the
+  // parent may see the sector.
+  const digestVisits = (visibility.showSchedule ? summary.visits : []) as Array<{
+    crmClassId: string | null; date: string | null; confirmed: boolean; attendance: string; topic: string | null; summary: string | null;
+  }>;
+  const confirmedIds = digestVisits.filter((visit) => visit.confirmed && visit.crmClassId).map((visit) => visit.crmClassId!);
+  const topicMoves: DigestTopicMove[] = visibility.showPlanProgress && confirmedIds.length
+    ? (await prisma.learningTopicProgress.findMany({
+        where: {
+          source: LearningTopicProgressSource.lesson,
+          OR: confirmedIds.map((crmClassId) => ({ sourceKey: { startsWith: `offline-lesson:${crmClassId}:topic:` } })),
+          topic: { OR: [{ crmStudentId: link.student.crmStudentId ?? "" }, { crmStudentId: null, crmGroupId: { not: null } }] },
+        },
+        select: { sourceKey: true, fromPercent: true, toPercent: true, topic: { select: { title: true } } },
+      })).flatMap((row) => {
+        const crmClassId = confirmedIds.find((id) => row.sourceKey.startsWith(`offline-lesson:${id}:topic:`));
+        return crmClassId ? [{ crmClassId, title: row.topic.title, fromPercent: row.fromPercent, toPercent: row.toPercent }] : [];
+      })
+    : [];
+  const weekDigest = buildFamilyWeekDigest({ childName: formatFio(link.student), visits: digestVisits, topicMoves });
   return {
     child: {
       id: link.student.id,
@@ -425,7 +448,7 @@ export async function getParentChildOfflineSummary(
       relationship: link.relationship,
     },
     visibility,
-    summary,
+    summary: { ...summary, weekDigest },
   };
 }
 

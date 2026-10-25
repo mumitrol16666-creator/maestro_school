@@ -14,6 +14,7 @@ import type { LessonTextTemplate } from "@/types/teacher-offline";
 const kinds: Array<{ value: LessonTextTemplate["kind"]; title: string; hint: string }> = [
   { value: "summary", title: "Итог урока", hint: "Что сделали на уроке" },
   { value: "homework", title: "Домашнее задание", hint: "Что задать на дом" },
+  { value: "practice_reminder", title: "Напоминания ученику", hint: "«Пора взять гитару» — дружески, с лёгкой подколкой; одна фраза в день" },
 ];
 
 /**
@@ -25,7 +26,7 @@ export default function LessonTemplatesPage() {
   const directions = useApiResource(() => cmsApi.directions("", 1, 100), []);
   const templates = useApiResource(() => lessonTemplatesApi.school(crmDirectionId || null), [crmDirectionId]);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const [newText, setNewText] = useState<Record<LessonTextTemplate["kind"], string>>({ summary: "", homework: "" });
+  const [newText, setNewText] = useState<Record<LessonTextTemplate["kind"], string>>({ summary: "", homework: "", practice_reminder: "" });
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const directionList = (directions.data?.data ?? []).filter((item) => item.crmDirectionId);
@@ -126,7 +127,7 @@ export default function LessonTemplatesPage() {
                   <input
                     aria-label={`Новая фраза: ${kind.title}`}
                     className={`${inputClass} min-w-0 flex-1`}
-                    placeholder={kind.value === "summary" ? "Например: Разобрали аккомпанемент" : "Например: Играть 15 минут в день"}
+                    placeholder={kind.value === "summary" ? "Например: Разобрали аккомпанемент" : kind.value === "homework" ? "Например: Играть 15 минут в день" : "Например: Струны сами не зазвучат"}
                     value={newText[kind.value]}
                     maxLength={500}
                     onChange={(event) => setNewText((current) => ({ ...current, [kind.value]: event.target.value }))}

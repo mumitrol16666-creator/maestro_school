@@ -2,6 +2,7 @@
 
 import { ArrowRight, CalendarDays, Flame, MonitorPlay, School } from "lucide-react";
 import Link from "next/link";
+import { PracticeCheckin } from "@/components/practice-checkin";
 import type { ApiStudentHome } from "@/types/api";
 
 /**
@@ -17,7 +18,7 @@ function when(lesson: NonNullable<ApiStudentHome["today"]["nextLesson"]>) {
   return `${label.charAt(0).toUpperCase()}${label.slice(1)} в ${lesson.startTime}`;
 }
 
-export function StudentTodayCard({ today, streakWeeks }: { today: ApiStudentHome["today"]; streakWeeks: number | null }) {
+export function StudentTodayCard({ today, streakWeeks, practice = null }: { today: ApiStudentHome["today"]; streakWeeks: number | null; practice?: ApiStudentHome["practice"] }) {
   const lesson = today.nextLesson;
   const [first, ...rest] = today.tasks;
   const LessonIcon = lesson?.deliveryFormat === "online" ? MonitorPlay : School;
@@ -80,6 +81,7 @@ export function StudentTodayCard({ today, streakWeeks }: { today: ApiStudentHome
       <Link href={cta.href} className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-gold px-4 text-sm font-black text-ink transition hover:bg-amber-400 sm:w-auto" data-testid="today-cta">
         {cta.label} <ArrowRight size={17} />
       </Link>
+      <PracticeCheckin practice={practice} />
     </section>
   );
 }

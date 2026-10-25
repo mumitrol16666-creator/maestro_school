@@ -11,6 +11,7 @@ import { registerRoutes } from "./presentation/routes/index.js";
 import { integrationRoutes } from "./presentation/routes/integration.routes.js";
 import { startOfflineReportReminderJob } from "./application/services/offline-report-reminder.service.js";
 import { startTeacherTodayReminderJob } from "./application/services/teacher-today-reminder.service.js";
+import { startPracticeReminderJob } from "./application/services/practice-reminder-job.service.js";
 import { startLessonReminderJob } from "./application/services/lesson-reminder.service.js";
 import { startWeeklyLeagueFinalizerJob } from "./application/services/weekly-league.service.js";
 import { getProductFeatureSnapshot } from "./config/product-features.js";
@@ -92,6 +93,7 @@ async function bootstrap() {
   await app.listen({ port: env.PORT, host: env.HOST });
   startOfflineReportReminderJob();
   startTeacherTodayReminderJob();
+  startPracticeReminderJob();
   startLessonReminderJob();
   startWeeklyLeagueFinalizerJob();
   if (productFeatureConfig.flags.lessonSyncV2) {

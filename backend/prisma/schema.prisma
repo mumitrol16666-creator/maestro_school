@@ -425,6 +425,9 @@ enum UserNotificationType {
   parent_balance_alert
   sector_exam_updated
   material_shared
+  /// Plan 5.6
+  practice_reminder
+  lesson_tomorrow
 }
 
 /// Plan 1.12: the school's shared library of materials — links with a caption and uploaded files.
@@ -473,6 +476,38 @@ model LessonTextTemplate {
 enum LessonTextTemplateKind {
   summary
   homework
+  /// Plan 5.6: a fun «time to practise» line for students.
+  practice_reminder
+}
+
+/// Plan 5.6: when a student wants to be reminded to practise — days of the week (0 = Sunday)
+/// and a time in Aqtobe.
+model PracticeReminder {
+  userId     String    @id @map("user_id") @db.Uuid
+  enabled    Boolean   @default(true)
+  time       String    @default("18:00") @db.VarChar(5)
+  days       Int[]     @default([0, 1, 2, 3, 4, 5, 6])
+  lastSentAt DateTime? @map("last_sent_at") @db.Timestamptz(6)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user User @relation("PracticeReminderUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("practice_reminders")
+}
+
+/// Plan 5.6: «позанимался» — one mark per Aqtobe day; no XP or Points, only the student's own streak.
+model PracticeCheckin {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  day       String   @db.VarChar(10)
+  source    String   @default("home") @db.VarChar(32)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation("PracticeCheckinUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, day])
+  @@map("practice_checkins")
 }
 
 enum MaterialKind {
@@ -608,6 +643,8 @@ model User {
   learningModerationActionsTargeted  LearningConversationModerationAction[] @relation("LearningModerationTargetUser")
   materialLibraryItems               MaterialLibraryItem[]                  @relation("MaterialLibraryAuthor")
   lessonTextTemplates                LessonTextTemplate[]                   @relation("LessonTextTemplateOwner")
+  practiceReminder                   PracticeReminder?                      @relation("PracticeReminderUser")
+  practiceCheckins                   PracticeCheckin[]                      @relation("PracticeCheckinUser")
   lessonSharesReceived               LessonShare[]                          @relation("LessonShareStudent")
   lessonSharesSent                   LessonShare[]                          @relation("LessonShareTeacher")
   learningConversationMemberEvents   LearningConversationMembershipEvent[]

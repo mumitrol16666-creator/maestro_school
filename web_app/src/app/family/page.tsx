@@ -16,6 +16,8 @@ import {
   UserRound,
   WalletCards,
   XCircle,
+  ChevronDown,
+  Lightbulb,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
@@ -172,6 +174,9 @@ function ChildOverview({ child }: { child: FamilyChild }) {
         </div>
       </section>
 
+      {summary.weekDigest ? <WeekDigest digest={summary.weekDigest} childName={child.firstName} /> : null}
+      <HowLearningWorks />
+
       {summary.crmUnavailable || summary.crmStale ? (
         <section className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm leading-6 text-amber-950" role="status" data-testid="family-crm-notice">
           <AlertTriangle size={18} className="mt-0.5 shrink-0" />
@@ -213,14 +218,96 @@ function ChildOverview({ child }: { child: FamilyChild }) {
   );
 }
 
+/** Plan 5.4: the balance in a normal voice — the figure, what it means, where to pay. */
 function Balance({ balance }: { balance: NonNullable<FamilySchoolSummary["financialBalance"]> }) {
   const debt = balance.signedAmountKzt < 0;
   return (
-    <div className={`w-full border-l-2 px-5 py-2 sm:w-auto sm:min-w-[240px] ${debt ? "border-red-400" : "border-gold"}`}>
-      <div className="flex items-center gap-2 text-white/50"><WalletCards size={16} /><span className="text-xs font-bold uppercase tracking-wider">Баланс</span></div>
-      <p className={`font-display mt-2 text-3xl ${debt ? "text-red-200" : "text-white"}`}>{signedMoney(balance.signedAmountKzt)}</p>
-      <p className="mt-1 text-xs text-white/45">{debt ? "задолженность" : balance.signedAmountKzt > 0 ? "внесено сверх оплаты" : "оплачено полностью"}</p>
+    <div className={`w-full border-l-2 px-5 py-2 sm:w-auto sm:min-w-[240px] ${debt ? "border-amber-300" : "border-gold"}`} data-testid="family-balance">
+      <div className="flex items-center gap-2 text-white/50"><WalletCards size={16} /><span className="text-xs font-bold uppercase tracking-wider">Оплата</span></div>
+      <p className="mt-2 text-lg font-bold text-white">
+        {debt ? `К оплате ${Math.abs(balance.signedAmountKzt).toLocaleString("ru-RU")} ₸` : balance.signedAmountKzt > 0 ? `Внесено сверх: ${balance.signedAmountKzt.toLocaleString("ru-RU")} ₸` : "Оплачено полностью"}
+      </p>
+      <p className="mt-1 text-xs text-white/55">{debt ? "Сумма по абонементу и проведённым урокам. Оплатить можно у администратора школы." : "Занятия оплачены, ничего делать не нужно."}</p>
     </div>
+  );
+}
+
+const explainerStorageKey = "maestro:family:how-learning-works:collapsed";
+
+/** Plan 5.4: how the learning is built — once, foldable, remembered in this browser. */
+function HowLearningWorks() {
+  const [open, setOpen] = useState(true);
+  useEffect(() => {
+    try {
+      if (window.localStorage.getItem(explainerStorageKey) === "1") setOpen(false);
+    } catch {
+      // storage can be unavailable; the card stays open
+    }
+  }, []);
+  function toggle(next: boolean) {
+    setOpen(next);
+    try {
+      window.localStorage.setItem(explainerStorageKey, next ? "0" : "1");
+    } catch {
+      // ignore
+    }
+  }
+  return (
+    <details
+      open={open}
+      className="group rounded-2xl border border-stone-200 bg-white"
+      data-testid="family-explainer"
+    >
+      <summary
+        className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-5 py-3 text-sm font-bold text-ink"
+        onClick={(event) => {
+          // The card is controlled: the choice is remembered in this browser.
+          event.preventDefault();
+          toggle(!open);
+        }}
+      >
+        <span className="inline-flex items-center gap-2"><Lightbulb size={17} className="text-gold-ink" /> Как устроено обучение</span>
+        <ChevronDown size={18} className="shrink-0 text-stone-400 transition group-open:rotate-180" />
+      </summary>
+      <div className="grid gap-3 px-5 pb-5 text-sm leading-6 text-stone-600 sm:grid-cols-2">
+        <p><strong className="text-ink">Сектор</strong> — ступень программы из 3–5 тем. Преподаватель открывает его ребёнку и ведёт по темам.</p>
+        <p><strong className="text-ink">Процент темы</strong> ставит преподаватель на каждом уроке. 100 % — ребёнок умеет это без подсказки.</p>
+        <p><strong className="text-ink">Экзамен сектора</strong> — практический урок в школе: ребёнок показывает все темы, и сектор закрывается.</p>
+        <p><strong className="text-ink">Баллы и уровень</strong> — за закрытые темы и секторы; это мерка роста, не оценка.</p>
+      </div>
+    </details>
+  );
+}
+
+/** Plan 5.4: the week in one card, a sentence to say to the child, one way to help today. */
+function WeekDigest({ digest, childName }: { digest: NonNullable<FamilySchoolSummary["weekDigest"]>; childName: string }) {
+  return (
+    <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 sm:p-6" data-testid="family-week-digest">
+      <p className="text-xs font-bold uppercase tracking-[0.17em] text-emerald-800">Эта неделя</p>
+      <h2 className="font-display mt-2 text-2xl text-emerald-950">
+        {digest.lessons === 0
+          ? "Подтверждённых уроков на этой неделе пока нет"
+          : `${digest.attended} из ${digest.lessons} ${digest.lessons === 1 ? "урока" : "уроков"} — ${childName} был${digest.attended === digest.lessons ? " на всех" : ""}`}
+      </h2>
+      {digest.topics.length ? (
+        <ul className="mt-3 flex flex-wrap gap-2" data-testid="family-week-topics">
+          {digest.topics.map((topic) => (
+            <li key={topic.title} className={`rounded-lg px-2.5 py-1 text-xs font-bold ${topic.mastered ? "bg-emerald-200 text-emerald-950" : "bg-white text-emerald-900"}`}>
+              {topic.title}: {topic.fromPercent ?? 0} → {topic.toPercent} %{topic.mastered ? " · освоена" : ""}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {digest.supportPhrase ? (
+        <p className="mt-4 rounded-xl bg-white px-4 py-3 text-sm font-semibold text-emerald-950" data-testid="family-support-phrase">
+          <span className="block text-[11px] font-black uppercase tracking-wider text-emerald-700">Скажите ребёнку</span>
+          {digest.supportPhrase}
+        </p>
+      ) : null}
+      <p className="mt-3 text-sm text-emerald-900" data-testid="family-support-tip">
+        <span className="font-bold">Как помочь сегодня:</span> {digest.tip}
+      </p>
+    </section>
   );
 }
 
@@ -424,17 +511,37 @@ const attendanceView: Record<FamilyVisit["attendance"], { label: string; classNa
   pending: { label: "Ждёт подтверждения школой", className: "bg-stone-100 text-stone-600", icon: Clock3 },
 };
 
-/** Plan 3.2: the last lessons — came or not, and what the school confirmed was done. */
+/** Plan 3.2 / 5.4: the last lessons — five confirmed ones, the unconfirmed folded into one line. */
 function Visits({ visits, highlightedClassId }: { visits: FamilyVisit[]; highlightedClassId?: string | null }) {
+  const [showAll, setShowAll] = useState(false);
+  const [showPending, setShowPending] = useState(false);
+  const pending = visits.filter((visit) => !visit.confirmed);
+  const confirmed = visits.filter((visit) => visit.confirmed);
+  const shown = [
+    ...(showPending ? pending : []),
+    ...(showAll ? confirmed : confirmed.slice(0, 5)),
+  ].filter((visit) => visit.confirmed || showPending || visit.crmClassId === highlightedClassId);
+  const hidden = confirmed.length - Math.min(confirmed.length, 5);
   return (
     <section id="family-visits" className="scroll-mt-24 border-t-2 border-stone-300 bg-paper p-5 shadow-soft sm:p-7" data-testid="family-visits">
       <div className="flex items-center justify-between gap-4">
         <div><p className="text-xs font-bold uppercase tracking-[0.17em] text-gold-ink">Последние уроки</p><h2 className="font-display mt-2 text-3xl">Посещения</h2></div>
         <CalendarCheck className="text-gold-ink" />
       </div>
-      {visits.length ? (
+      {pending.length ? (
+        <button
+          type="button"
+          onClick={() => setShowPending((value) => !value)}
+          className="mt-4 flex min-h-11 w-full items-center justify-between gap-3 rounded-xl border border-stone-200 bg-white px-4 text-left text-sm font-semibold text-stone-700"
+          data-testid="family-visits-pending"
+        >
+          <span>{pending.length} {pending.length === 1 ? "урок ждёт" : pending.length < 5 ? "урока ждут" : "уроков ждут"} подтверждения школой</span>
+          <span className="text-xs text-stone-500">{showPending ? "Скрыть" : "Показать"}</span>
+        </button>
+      ) : null}
+      {shown.length ? (
         <ul className="mt-5 divide-y divide-stone-200">
-          {visits.map((visit, index) => {
+          {shown.map((visit, index) => {
             const view = attendanceView[visit.attendance];
             const Icon = view.icon;
             const highlighted = Boolean(highlightedClassId && visit.crmClassId === highlightedClassId);
@@ -464,7 +571,12 @@ function Visits({ visits, highlightedClassId }: { visits: FamilyVisit[]; highlig
             );
           })}
         </ul>
-      ) : <p className="mt-5 text-sm text-stone-500">Прошедших уроков пока нет.</p>}
+      ) : <p className="mt-5 text-sm text-stone-500">{pending.length ? "Подтверждённых уроков пока нет." : "Прошедших уроков пока нет."}</p>}
+      {!showAll && hidden > 0 ? (
+        <button type="button" onClick={() => setShowAll(true)} className="mt-4 inline-flex min-h-11 items-center rounded-xl border border-stone-200 bg-white px-4 text-sm font-bold text-ink" data-testid="family-visits-more">
+          Показать ещё {hidden}
+        </button>
+      ) : null}
     </section>
   );
 }

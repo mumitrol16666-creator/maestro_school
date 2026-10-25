@@ -13,6 +13,7 @@ import { PageHeader } from "@/components/page-header";
 import { LevelSummary } from "@/components/level-summary";
 import { PwaInstallCard } from "@/components/pwa-install-card";
 import { PushNotificationsCard } from "@/components/push-notifications-card";
+import { PracticeReminderCard } from "@/components/practice-reminder-card";
 import { AndroidAppDownloadCard } from "@/components/android-app-download";
 import { ImprovementSuggestionCard } from "@/components/improvement-suggestion-card";
 import { useApiResource } from "@/hooks/use-api-resource";
@@ -205,6 +206,7 @@ export default function SettingsPage() {
               <AndroidAppDownloadCard />
               <PwaInstallCard />
               <PushNotificationsCard />
+          <PracticeReminderCard />
               <PasswordChangeCard />
               <ImprovementSuggestionCard />
             </>

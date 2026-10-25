@@ -319,6 +319,21 @@ export interface ApiStudentHome {
   /** Plan 5.2: unread notifications shown as banners until opened. */
   banners: Array<{ id: string; type: string; title: string; body: string; url: string | null; createdAt: string }>;
   streakWeeks: number | null;
+  /** Plan 5.6: today's practice mark, the streak of practice days and the reminder settings. */
+  practice: PracticeStatus | null;
+}
+
+export interface PracticeReminderSettings {
+  enabled: boolean;
+  time: string;
+  days: number[];
+}
+
+export interface PracticeStatus {
+  today: string;
+  checkedInToday: boolean;
+  streakDays: number;
+  reminder: PracticeReminderSettings;
 }
 
 export interface CompleteLessonResponse {

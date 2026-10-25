@@ -59,6 +59,16 @@ export type FamilySchoolSummary = {
   crmUnavailable: boolean;
   crmStale: boolean;
   crmSnapshotAt: string | null;
+  /** Plan 5.4: the week in one card and one sentence to say to the child. */
+  weekDigest?: {
+    from: string;
+    to: string;
+    lessons: number;
+    attended: number;
+    topics: Array<{ title: string; fromPercent: number | null; toPercent: number; mastered: boolean }>;
+    supportPhrase: string | null;
+    tip: string;
+  } | null;
 };
 
 /** Plan 3.1: a membership as the parent reads it. Prices and payments stay in CRM. */

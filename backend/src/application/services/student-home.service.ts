@@ -14,6 +14,7 @@ import { getStudentTasks } from "./student-tasks.service.js";
 import { getStudentAchievementsOverview } from "./achievement.service.js";
 import { listStudentSectorProposals } from "./sector-proposal.service.js";
 import { buildStudentToday, STUDENT_BANNER_TYPES, type TodayLesson } from "../../domain/student-today.js";
+import { getPracticeStatus } from "./practice-reminder.service.js";
 
 // Re-export pure domain functions so existing consumers keep working.
 export { buildOfflineHomework, offlineHomeworkStatus, selectOfflineHomeworks };
@@ -71,7 +72,7 @@ async function homeExtras(studentUserId: string) {
 
 /** Plan 5.2: unread notifications shown as banners; plan 5.1: the current streak for «Сегодня». */
 async function homeSignals(studentUserId: string) {
-  const [banners, streak] = await Promise.allSettled([
+  const [banners, streak, practice] = await Promise.allSettled([
     prisma.userNotification.findMany({
       where: { userId: studentUserId, readAt: null, type: { in: [...STUDENT_BANNER_TYPES] } },
       orderBy: { createdAt: "desc" },
@@ -79,10 +80,12 @@ async function homeSignals(studentUserId: string) {
       select: { id: true, type: true, title: true, body: true, url: true, createdAt: true },
     }),
     prisma.weeklyStreakState.findFirst({ where: { studentId: studentUserId }, orderBy: { updatedAt: "desc" }, select: { currentWeeks: true } }),
+    getPracticeStatus(studentUserId),
   ]);
   return {
     banners: banners.status === "fulfilled" ? banners.value : [],
     streakWeeks: streak.status === "fulfilled" ? streak.value?.currentWeeks ?? 0 : null,
+    practice: practice.status === "fulfilled" ? practice.value : null,
   };
 }
 

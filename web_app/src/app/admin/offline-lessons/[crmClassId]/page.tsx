@@ -1544,12 +1544,13 @@ export default function AdminOfflineLessonDetailPage() {
     const next = stepList[Math.min(stepList.length - 1, Math.max(0, index + direction))];
     if (next) setLessonStep(next.key);
   };
-  const ownTemplates = (kind: LessonTextTemplate["kind"]) => lessonTemplates.own.filter((item) => item.kind === kind);
-  const schoolPhrases = (kind: LessonTextTemplate["kind"]) => {
+  type LessonPhraseKind = keyof typeof fallbackSchoolPhrases;
+  const ownTemplates = (kind: LessonPhraseKind) => lessonTemplates.own.filter((item) => item.kind === kind);
+  const schoolPhrases = (kind: LessonPhraseKind) => {
     const school = lessonTemplates.school.filter((item) => item.kind === kind).map((item) => item.text);
     return school.length ? school : [...fallbackSchoolPhrases[kind]];
   };
-  async function saveOwnTemplate(kind: LessonTextTemplate["kind"], text: string) {
+  async function saveOwnTemplate(kind: LessonPhraseKind, text: string) {
     if (!text.trim()) return;
     try {
       const saved = await lessonTemplatesApi.addOwn(kind, text);

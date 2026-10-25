@@ -278,3 +278,12 @@ export const api = {
   preparedTestAdminPreview: (testId: string) =>
     apiRequest<PreparedTestAdminPreview>(`/admin/tests/${encodeURIComponent(testId)}/preview`),
 };
+
+/** Plan 5.6: practice reminders and «позанимался». */
+export const practiceApi = {
+  status: () => apiRequest<import("@/types/api").PracticeStatus>("/students/me/practice"),
+  saveReminder: (input: Partial<import("@/types/api").PracticeReminderSettings>) =>
+    apiRequest<import("@/types/api").PracticeReminderSettings>("/students/me/practice/reminder", { method: "PUT", body: JSON.stringify(input) }),
+  checkIn: () =>
+    apiRequest<import("@/types/api").PracticeStatus & { reply: string }>("/students/me/practice/checkin", { method: "POST", body: JSON.stringify({ source: "home" }) }),
+};

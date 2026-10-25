@@ -380,7 +380,7 @@ export type LessonStudentsOverview = {
 
 export type LessonTextTemplate = {
   id: string;
-  kind: "summary" | "homework";
+  kind: "summary" | "homework" | "practice_reminder";
   text: string;
   scope: "own" | "school";
   crmDirectionId: string | null;
