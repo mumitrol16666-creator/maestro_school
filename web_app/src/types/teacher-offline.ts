@@ -275,7 +275,17 @@ export type LearningLessonV2Context = {
       id: string;
       title: string;
       masteryCriteria: string;
+      /** 31.10: the percent after the earlier sent lesson is approved (see pendingFromLesson). */
       progressPercent: number;
+      /** 31.10: the percent the topic has now, before that approval. */
+      approvedPercent?: number;
+      /** 31.10: the earlier lesson whose sent, not yet approved report set progressPercent. */
+      pendingFromLesson?: {
+        crmClassId: string;
+        title: string | null;
+        date: string | null;
+        startTime: string | null;
+      } | null;
       masteredAt: string | null;
       planCompletionRewardPoints: number;
       /** Plan 1.14: materials the step template keeps for this topic. */
@@ -385,4 +395,14 @@ export type LessonTextTemplate = {
   scope: "own" | "school";
   crmDirectionId: string | null;
   sortOrder: number;
+};
+
+/** 31.10: an ended lesson of the teacher whose report must be sent before a new lesson starts. */
+export type OfflineLessonStartBlocker = {
+  crmClassId: string;
+  title: string;
+  date: string;
+  startTime: string;
+  status: string;
+  groupName: string | null;
 };

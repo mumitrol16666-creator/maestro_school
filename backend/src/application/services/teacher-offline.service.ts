@@ -1,5 +1,6 @@
 import { prisma } from "../../infrastructure/database/prisma.js";
-import { AppError, BadRequestError } from "../../domain/errors.js";
+import { AppError, BadRequestError, ConflictError } from "../../domain/errors.js";
+import { lessonsBlockingStart, OPEN_REPORT_LOOKBACK_DAYS } from "../../domain/teacher-today.js";
 import {
   fetchClassCard,
   fetchClassStudents,
@@ -44,6 +45,7 @@ import {
   withdrawOfflineLessonReport,
 } from "./offline-lesson-report.service.js";
 import { syncTeacherSubstitutions } from "./teacher-substitution.service.js";
+import { SENT_REPORT_STATUSES } from "./lesson-pending-topics.service.js";
 
 function lessonSyncV2Enabled() {
   return productFeatureConfig.flags.lessonSyncV2;
@@ -205,7 +207,99 @@ export async function getTeacherOfflineClassStudents(appUserId: string, crmClass
   };
 }
 
-export async function teacherOfflineStart(appUserId: string, crmClassId: string) {
+type StartRuleLesson = {
+  crmClassId?: unknown;
+  title?: unknown;
+  date?: unknown;
+  startTime?: unknown;
+  endTime?: unknown;
+  status?: unknown;
+  group?: { name?: unknown } | null;
+};
+
+export type OfflineLessonStartBlocker = {
+  crmClassId: string;
+  title: string;
+  date: string;
+  startTime: string;
+  status: string;
+  groupName: string | null;
+};
+
+const startBlockerDay = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long", timeZone: "Asia/Aqtobe" });
+
+function startBlockerLabel(blocker: OfflineLessonStartBlocker) {
+  const day = /^\d{4}-\d{2}-\d{2}$/.test(blocker.date)
+    ? startBlockerDay.format(new Date(`${blocker.date}T12:00:00+05:00`))
+    : blocker.date;
+  return `«${blocker.title}» (${[day, blocker.startTime].filter(Boolean).join(", ")})`;
+}
+
+export function offlineLessonStartBlockedMessage(blockers: readonly OfflineLessonStartBlocker[]) {
+  const [first, ...rest] = blockers;
+  if (!first) return "";
+  const shown = blockers.slice(0, 3).map(startBlockerLabel).join(", ");
+  const more = blockers.length > 3 ? ` и ещё ${blockers.length - 3}` : "";
+  return rest.length
+    ? `Сначала отправьте отчёты по прошлым урокам: ${shown}${more}. Пока они не отправлены, новый урок не начать: темы и проценты перепутаются. Урок, который не состоялся, отмените.`
+    : `Сначала отправьте отчёт по уроку ${startBlockerLabel(first)}. Пока он не отправлен, новый урок не начать: темы и проценты перепутаются. Если урок не состоялся, отмените его.`;
+}
+
+/**
+ * 31.10 (Vladislav): ended lessons of this teacher that still owe a report and must be sent
+ * (or cancelled) before this lesson starts. The window is the one «Сегодня» lists reports in.
+ * A failed schedule read blocks nothing: the rule guards topic percents, not the lesson itself.
+ */
+export async function teacherOfflineStartBlockers(
+  appUserId: string,
+  crmClassId: string,
+  now = new Date(),
+): Promise<{ blockers: OfflineLessonStartBlocker[] }> {
+  const lesson = await getTeacherOfflineClass(appUserId, crmClassId) as StartRuleLesson;
+  if (lesson.status !== "scheduled") return { blockers: [] };
+  const agenda = await getTeacherOfflineAgenda(appUserId, {
+    from: new Date(now.getTime() - OPEN_REPORT_LOOKBACK_DAYS * 86_400_000).toISOString(),
+    to: new Date(now.getTime() + 86_400_000).toISOString(),
+  }).catch(() => null);
+  if (!agenda) return { blockers: [] };
+  const classes = agenda.classes as StartRuleLesson[];
+  // A report sent from the app closes the lesson even while CRM has not received it yet.
+  const sent = await prisma.offlineLessonReport.findMany({
+    where: {
+      crmClassId: { in: classes.map((item) => String(item.crmClassId ?? "")).filter(Boolean) },
+      status: { in: [...SENT_REPORT_STATUSES] },
+    },
+    select: { crmClassId: true },
+  });
+  const blockers = lessonsBlockingStart(
+    { crmClassId, date: lesson.date, startTime: lesson.startTime },
+    classes,
+    now,
+    { sentCrmClassIds: new Set(sent.map((item) => item.crmClassId)) },
+  );
+  return {
+    blockers: blockers.map((item) => ({
+      crmClassId: String(item.crmClassId),
+      title: String(item.title ?? "Урок"),
+      date: String(item.date ?? "").slice(0, 10),
+      startTime: String(item.startTime ?? "").slice(0, 5),
+      status: String(item.status ?? ""),
+      groupName: typeof item.group?.name === "string" ? item.group.name : null,
+    })),
+  };
+}
+
+export async function teacherOfflineStart(appUserId: string, crmClassId: string, now = new Date()) {
+  const { blockers } = await teacherOfflineStartBlockers(appUserId, crmClassId, now)
+    .catch(() => ({ blockers: [] as OfflineLessonStartBlocker[] }));
+  if (blockers.length) {
+    throw new ConflictError(offlineLessonStartBlockedMessage(blockers), "PREVIOUS_LESSON_NOT_SUBMITTED");
+  }
+  return startOfflineLessonInCrm(appUserId, crmClassId);
+}
+
+/** The CRM start itself. Cancelling a lesson starts it too, and a cancel is never blocked. */
+async function startOfflineLessonInCrm(appUserId: string, crmClassId: string) {
   const crmTeacherId = await requireCrmTeacherId(appUserId);
   try {
     const result = await postTeacherStart(crmClassId, crmTeacherId);
@@ -299,7 +393,7 @@ export function offlineLessonStartsAt(date: string | Date, startTime: string) {
 }
 
 export async function teacherOfflineCancel(appUserId: string, crmClassId: string, reason?: string | null, now = new Date()) {
-  const lesson = await getTeacherOfflineClass(appUserId, crmClassId) as { status?: string | null; date?: string; startTime?: string; classType?: string | null };
+  const lesson = await getTeacherOfflineClass(appUserId, crmClassId) as { status?: string | null; date?: string; startTime?: string; endTime?: string; classType?: string | null };
   if (["completed", "cancelled", "pending_admin_review"].includes(String(lesson.status))) {
     throw new BadRequestError("Урок уже отправлен администратору или закрыт", "LESSON_ALREADY_CLOSED");
   }
@@ -307,11 +401,22 @@ export async function teacherOfflineCancel(appUserId: string, crmClassId: string
   if (lesson.date && lesson.startTime && now < offlineLessonStartsAt(lesson.date, lesson.startTime)) {
     throw new BadRequestError(`Отменить урок можно с ${lesson.startTime}, когда наступит время урока`, "LESSON_CANCEL_TOO_EARLY");
   }
-  if (lesson.status === "scheduled") await teacherOfflineStart(appUserId, crmClassId);
+  if (lesson.status === "scheduled") await startOfflineLessonInCrm(appUserId, crmClassId);
   const roster = await getTeacherOfflineClassStudents(appUserId, crmClassId) as { students?: Array<{ crmStudentId?: string }> };
   const studentIds = (roster.students ?? []).map((student) => student.crmStudentId).filter((id): id is string => Boolean(id));
-  if (!studentIds.length) throw new BadRequestError("В уроке нет учеников", "LESSON_HAS_NO_STUDENTS");
   const comment = reason?.trim() || undefined;
+  if (!studentIds.length) {
+    // 31.10: nobody to mark absent — the lesson closes as «не состоялся» (no charge), so an empty
+    // lesson never keeps the teacher from starting the next one. CRM takes it after the lesson end.
+    const endsAt = lesson.date && lesson.endTime ? offlineLessonStartsAt(lesson.date, lesson.endTime) : null;
+    if (endsAt && now < endsAt) {
+      throw new BadRequestError(
+        `В уроке нет учеников. Отметить, что урок не состоялся, можно после ${lesson.endTime}.`,
+        "LESSON_HAS_NO_STUDENTS",
+      );
+    }
+    return teacherOfflineMarkNotHeld(appUserId, crmClassId, comment ?? "Урок не состоялся: в уроке нет учеников");
+  }
   await teacherOfflineSetAttendanceBatch(appUserId, crmClassId, studentIds.map((studentId) => ({
     studentId,
     attendanceStatus: "unexcused_absence",

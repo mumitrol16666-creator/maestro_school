@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { startQaLessonForTeacher } from "./qa-start";
 import { expect, test, type APIRequestContext, type BrowserContext, type Page } from "@playwright/test";
 
 /**
@@ -190,8 +191,7 @@ test("a sector opened from the step brings the topic materials into the teacher'
   });
   expect(created.ok(), await created.text()).toBe(true);
   const crmClassId = (await created.json()).data.class.crmClassId as string;
-  const started = await request.post(`/api/v1/teachers/me/offline-lessons/${crmClassId}/start`, { headers: { Authorization: `Bearer ${teacher.token}` }, data: {} });
-  expect(started.ok(), await started.text()).toBe(true);
+  await startQaLessonForTeacher(request, crmClassId);
 
   await page.goto(`/admin/offline-lessons/${crmClassId}`);
   const nav = page.getByTestId("lesson-step-nav");

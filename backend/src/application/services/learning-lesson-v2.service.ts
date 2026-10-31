@@ -14,6 +14,7 @@ import {
   reviewLearningHomework,
 } from "./learning-homework-v2.service.js";
 import { updateLearningTopicProgressBatchFromLessonV2 } from "./learning-plan-v2.service.js";
+import { pendingTopicPercentsBefore } from "./lesson-pending-topics.service.js";
 import { requireCrmTeacherId } from "./teacher-students.service.js";
 import { previewOfflineLessonAttendanceXp } from "./weekly-league.service.js";
 import {
@@ -414,6 +415,41 @@ async function lessonPlans(scope: LessonScope) {
   });
 }
 
+/**
+ * 31.10 (Vladislav): a topic continues from the teacher's earlier lesson that is sent but not yet
+ * approved — `progressPercent` is what the topic will have after that approval, `approvedPercent`
+ * what it has now. The lesson's «было %» then matches the earlier report's «стало %».
+ */
+async function withPendingTopicPercents(
+  crmClassId: string,
+  lesson: LessonCard,
+  plans: Awaited<ReturnType<typeof lessonPlans>>,
+) {
+  const pending = await pendingTopicPercentsBefore(
+    { crmClassId, date: lesson.date, startTime: lesson.startTime },
+    plans.flatMap((plan) => plan.topics.map((topic) => topic.id)),
+  );
+  return plans.map((plan) => ({
+    ...plan,
+    topics: plan.topics.map((topic) => {
+      const waiting = pending.get(topic.id);
+      return {
+        ...topic,
+        approvedPercent: topic.progressPercent,
+        progressPercent: waiting?.percent ?? topic.progressPercent,
+        pendingFromLesson: waiting
+          ? {
+              crmClassId: waiting.crmClassId,
+              title: waiting.title,
+              date: waiting.date,
+              startTime: waiting.startTime,
+            }
+          : null,
+      };
+    }),
+  }));
+}
+
 /** Saved material lists (`[{title, url, …}]`) as plain links; anything without a URL is skipped. */
 export function lessonMaterialLinks(value: unknown): Array<{ title: string; url: string }> {
   if (!Array.isArray(value)) return [];
@@ -444,7 +480,7 @@ export async function getLearningLessonV2Context(actorUserId: string, crmClassId
       rewardPreview: [],
     };
   }
-  const plans = await lessonPlans(scope);
+  const plans = await withPendingTopicPercents(crmClassId, scope.lesson, await lessonPlans(scope));
   const topicIds = new Set(plans.flatMap((plan) => plan.topics.map((topic) => topic.id)));
   // Every open homework of the roster on the lesson's topics waits for the
   // teacher's check at the lesson, whether or not the student sent an answer.
@@ -612,6 +648,18 @@ export async function validateLearningLessonV2ResultsForSubmission(
       "Проверьте прошлое домашнее задание у всех присутствующих учеников.",
       "LESSON_HOMEWORK_REVIEW_REQUIRED",
     );
+  }
+  // 31.10: «было %» must be the topic's percent now, counting earlier sent lessons. A draft filled
+  // before an earlier report changed would otherwise reach approval and never apply.
+  const topicsNow = new Map(context.plans.flatMap((plan) => plan.topics.map((topic) => [topic.id, topic] as const)));
+  for (const update of input.topicUpdates) {
+    const topic = topicsNow.get(update.topicId);
+    if (topic && update.expectedPercent !== topic.progressPercent) {
+      throw new ConflictError(
+        `Процент темы «${topic.title}» изменился: теперь ${topic.progressPercent}%. Обновите «было» у темы в уроке и отправьте снова.`,
+        "LESSON_TOPIC_PERCENT_CHANGED",
+      );
+    }
   }
   return context;
 }

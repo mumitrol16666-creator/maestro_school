@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext, type BrowserContext } from "@playwright/test";
+import { startQaLessonForTeacher } from "./qa-start";
 
 /**
  * Plan item 1.8 (decisions of 19.10): early sector close, one bonus a week,
@@ -48,10 +49,7 @@ test("the next step does not repeat the previous lesson shown on step 1", async 
   });
   expect(created.ok(), await created.text()).toBe(true);
   const crmClassId = (await created.json()).data.class.crmClassId as string;
-  const started = await request.post(`/api/v1/teachers/me/offline-lessons/${crmClassId}/start`, {
-    headers: { Authorization: `Bearer ${token}` }, data: {},
-  });
-  expect(started.ok(), await started.text()).toBe(true);
+  await startQaLessonForTeacher(request, crmClassId);
 
   await page.goto(`/admin/offline-lessons/${crmClassId}`);
   await expect(page.getByTestId("lesson-context-step")).toContainText("Контекст прошлого урока");

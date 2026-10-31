@@ -63,6 +63,7 @@ import { teacherStudentsApi } from "@/lib/teacher-students-api";
 import { currentAqtobeMonth } from "@/lib/aqtobe-month";
 import { LessonBonusXp } from "@/components/league-bonus-form";
 import { MaterialLibraryPicker } from "@/components/material-library-picker";
+import { LessonStartBlockers } from "@/components/lesson-start-blockers";
 import type { CmsMedia } from "@/types/cms";
 import type {
   LessonStudentsOverview,
@@ -513,6 +514,15 @@ export default function AdminOfflineLessonDetailPage() {
       : teacherOfflineApi.reportVersions(crmClassId),
     [crmClassId, isAdmin],
   );
+  // 31.10 (Vladislav): a teacher starts a new lesson only after the earlier ones are sent.
+  const lessonStatus = lessonResource.data?.status;
+  const startBlockersResource = useApiResource(
+    () => !isAdmin && lessonStatus === "scheduled"
+      ? teacherOfflineApi.startBlockers(crmClassId)
+      : Promise.resolve({ blockers: [] }),
+    [crmClassId, isAdmin, lessonStatus],
+  );
+  const startBlockers = startBlockersResource.data?.blockers ?? [];
 
   const [topic, setTopic] = useState("");
   const [lessonGoals, setLessonGoals] = useState("");
@@ -1203,6 +1213,14 @@ export default function AdminOfflineLessonDetailPage() {
       }
       return true;
     } catch (reason) {
+      if (action === "start" && reason instanceof ApiError && reason.code === "PREVIOUS_LESSON_NOT_SUBMITTED") {
+        void startBlockersResource.reload();
+      }
+      if (reason instanceof ApiError && reason.code === "LESSON_TOPIC_PERCENT_CHANGED") {
+        // The earlier lesson's report changed: fresh percents show which topic to update.
+        setOverriddenLearningV2(null);
+        void studentsResource.reload();
+      }
       if (action === "start" && reason instanceof ApiError && reason.code === "NETWORK_ERROR") {
         const startState = await refreshStartedLesson();
         if (startState.started) return true;
@@ -2275,9 +2293,12 @@ export default function AdminOfflineLessonDetailPage() {
         </section>
 
         <aside className={`space-y-4 ${useLessonSteps ? "order-last" : "order-first xl:order-none"}`}>
+          {lesson.status === "scheduled" && !isAdmin && startBlockers.length ? (
+            <LessonStartBlockers blockers={startBlockers} />
+          ) : null}
           {lesson.status === "scheduled" && (!isAdmin || canActForTeacher) ? (
             <button
-              disabled={busy != null || !lesson.teacher?.crmTeacherId}
+              disabled={busy != null || !lesson.teacher?.crmTeacherId || (!isAdmin && startBlockers.length > 0)}
               onClick={() => void runAction(
                 "start",
                 () => canActForTeacher
@@ -2603,7 +2624,13 @@ export default function AdminOfflineLessonDetailPage() {
                 ))}
               </div>
 
-              {error ? (
+              {startBlockers.length ? (
+                <div className="mt-5 w-full">
+                  <LessonStartBlockers blockers={startBlockers} />
+                </div>
+              ) : null}
+              {/* The start refusal repeats the notice; any other error (a failed cancel) shows. */}
+              {error && !(startBlockers.length && error.startsWith("Сначала отправьте")) ? (
                 <div className="mt-5 w-full rounded-2xl border border-red-100 bg-red-50 p-3 text-left text-xs font-semibold text-red-700">
                   {error}
                 </div>
@@ -2611,7 +2638,7 @@ export default function AdminOfflineLessonDetailPage() {
 
               <div className="mt-6 flex flex-col gap-3 w-full">
                 <button
-                  disabled={busy != null}
+                  disabled={busy != null || startBlockers.length > 0}
                   onClick={() => void runAction("start", () => teacherOfflineApi.start(crmClassId))}
                   className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-700 px-5 py-4 text-sm font-bold text-white transition-colors hover:bg-emerald-800 disabled:opacity-50"
                 >

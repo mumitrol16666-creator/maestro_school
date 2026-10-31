@@ -22,6 +22,7 @@ import {
 } from "../../domain/product-economy-v2.js";
 import { awardSystemPoints } from "./points.service.js";
 import { aqtobeMonthKey } from "../../lib/aqtobe-month.js";
+import { pendingTopicPercentsBefore } from "./lesson-pending-topics.service.js";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -1147,6 +1148,25 @@ function validateLessonTopicProgressPercent(toPercent: number) {
   }
 }
 
+/**
+ * The earlier sent lesson whose report brings the topic to `expectedPercent`, as ««Название» (дата,
+ * время)», or null. Approval of a later lesson waits (and retries) until that one is applied.
+ */
+async function earlierLessonAwaitingApproval(crmClassId: string, topicId: string, expectedPercent: number | null) {
+  if (expectedPercent == null) return null;
+  const projection = await prisma.offlineLessonProjection.findUnique({
+    where: { crmClassId },
+    select: { lessonPayload: true },
+  });
+  const meta = (projection?.lessonPayload ?? {}) as { date?: unknown; startTime?: unknown };
+  const pending = (await pendingTopicPercentsBefore(
+    { crmClassId, date: meta.date, startTime: meta.startTime },
+    [topicId],
+  )).get(topicId);
+  if (!pending || pending.percent !== expectedPercent) return null;
+  return `«${pending.title ?? "Урок"}» (${[pending.date, pending.startTime].filter(Boolean).join(", ")})`;
+}
+
 export async function updateLearningTopicProgressBatchFromLessonV2(
   actorUserId: string,
   crmClassId: string,
@@ -1195,8 +1215,11 @@ export async function updateLearningTopicProgressBatchFromLessonV2(
       );
     }
     if (scoped.progressPercent !== update.expectedPercent) {
+      const earlier = await earlierLessonAwaitingApproval(crmClassId, update.topicId, update.expectedPercent);
       throw new ConflictError(
-        "Процент темы изменился. Обновите урок и повторите действие.",
+        earlier
+          ? `Тема продолжается с ${update.expectedPercent} % после урока ${earlier}: сначала подтвердите тот урок, этот применится следом.`
+          : "Процент темы изменился. Обновите урок и повторите действие.",
         "LEARNING_TOPIC_STALE_PROGRESS",
       );
     }

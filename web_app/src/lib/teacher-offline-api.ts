@@ -11,6 +11,7 @@ import type {
   OfflineLessonReportHistory,
   LessonStudentsOverview,
   LessonTextTemplate,
+  OfflineLessonStartBlocker,
 } from "@/types/teacher-offline";
 
 export const teacherOfflineApi = {
@@ -44,6 +45,10 @@ export const teacherOfflineApi = {
   reportVersions: (crmClassId: string) =>
     apiRequest<OfflineLessonReportHistory | null>(
       `/teachers/me/offline-lessons/${encodeURIComponent(crmClassId)}/report-versions`,
+    ),
+  startBlockers: (crmClassId: string) =>
+    apiRequest<{ blockers: OfflineLessonStartBlocker[] }>(
+      `/teachers/me/offline-lessons/${encodeURIComponent(crmClassId)}/start-blockers`,
     ),
   start: (crmClassId: string) =>
     apiRequest<Record<string, unknown>>(

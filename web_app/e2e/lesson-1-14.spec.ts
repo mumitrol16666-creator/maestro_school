@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext, type BrowserContext, type Page } from "@playwright/test";
+import { startQaLessonForTeacher } from "./qa-start";
 
 /**
  * Plan 1.14: the teacher's lesson — the student strip with every figure and «Статистика ученика»,
@@ -40,8 +41,7 @@ async function lesson(request: APIRequestContext, token: string, input: { studen
   expect(created.ok(), await created.text()).toBe(true);
   const crmClassId = (await created.json()).data.class.crmClassId as string;
   if (input.start) {
-    const started = await request.post(`/api/v1/teachers/me/offline-lessons/${crmClassId}/start`, { headers: { Authorization: `Bearer ${token}` }, data: {} });
-    expect(started.ok(), await started.text()).toBe(true);
+    await startQaLessonForTeacher(request, crmClassId);
   }
   return crmClassId;
 }

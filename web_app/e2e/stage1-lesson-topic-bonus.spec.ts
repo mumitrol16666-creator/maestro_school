@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext, type BrowserContext } from "@playwright/test";
+import { startQaLessonForTeacher } from "./qa-start";
 
 const PASSWORD = "QaMaestro2026!";
 const CRM_URL = process.env.QA_CRM_URL ?? "http://127.0.0.1:5002";
@@ -34,11 +35,7 @@ async function startedLesson(request: APIRequestContext, token: string) {
   });
   expect(created.ok(), await created.text()).toBe(true);
   const crmClassId = (await created.json()).data.class.crmClassId as string;
-  const started = await request.post(`/api/v1/teachers/me/offline-lessons/${crmClassId}/start`, {
-    headers: { Authorization: `Bearer ${token}` },
-    data: {},
-  });
-  expect(started.ok(), await started.text()).toBe(true);
+  await startQaLessonForTeacher(request, crmClassId);
   return crmClassId;
 }
 

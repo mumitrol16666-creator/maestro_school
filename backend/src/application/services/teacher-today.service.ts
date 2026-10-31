@@ -5,6 +5,7 @@ import {
   daysUntilBirthday,
   lessonPhase,
   openReport,
+  OPEN_REPORT_LOOKBACK_DAYS,
   proposalStale,
 } from "../../domain/teacher-today.js";
 import { fetchTeacherGroups, fetchTeacherStudents } from "../../infrastructure/crm/crm-client.js";
@@ -21,7 +22,7 @@ import { requireCrmTeacherId } from "./teacher-students.service.js";
  * Everything is read; nothing here changes data.
  */
 
-const AGENDA_LOOKBACK_DAYS = 7;
+const AGENDA_LOOKBACK_DAYS = OPEN_REPORT_LOOKBACK_DAYS;
 const MAX_PROPOSALS = 5;
 
 type AgendaClass = {

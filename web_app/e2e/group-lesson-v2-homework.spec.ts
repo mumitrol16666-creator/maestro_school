@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { startQaLessonForTeacher } from "./qa-start";
 
 /**
  * A V2 group lesson checks the previous homework with a percent on the topics step only; the old
@@ -19,8 +20,7 @@ test("a V2 group lesson has no old done / partly / not homework check", async ({
   });
   expect(created.ok(), await created.text()).toBe(true);
   const crmClassId = (await created.json()).data.class.crmClassId as string;
-  const started = await request.post(`/api/v1/teachers/me/offline-lessons/${crmClassId}/start`, { headers: { Authorization: `Bearer ${session.token}` }, data: {} });
-  expect(started.ok(), await started.text()).toBe(true);
+  await startQaLessonForTeacher(request, crmClassId);
 
   await context.addInitScript(({ token, user }) => {
     window.localStorage.setItem("maestro_access_token", token);

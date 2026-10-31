@@ -9,6 +9,7 @@ import {
   teacherOfflineMarkNotHeld,
   teacherOfflineWithdraw,
   teacherOfflineStart,
+  teacherOfflineStartBlockers,
   teacherOfflineSubmit,
   teacherOfflineSetAttendance,
   teacherOfflineSetAttendanceBatch,
@@ -544,6 +545,15 @@ export async function teacherOfflineRoutes(app: FastifyInstance) {
       const { crmClassId } = z.object({ crmClassId: z.string().min(1) }).parse(request.params);
       await getTeacherOfflineClass(request.user!.id, crmClassId);
       return { data: await listOfflineLessonReportVersions(crmClassId) };
+    },
+  );
+
+  app.get(
+    "/teachers/me/offline-lessons/:crmClassId/start-blockers",
+    { preHandler: readGuards },
+    async (request) => {
+      const { crmClassId } = z.object({ crmClassId: z.string().min(1) }).parse(request.params);
+      return { data: await teacherOfflineStartBlockers(request.user!.id, crmClassId) };
     },
   );
 

@@ -34,6 +34,15 @@ export type LearningLessonV2Draft = {
   homeworkDecisions: Record<string, LearningLessonHomeworkDecisionDraft>;
 };
 
+const pendingLessonDayFormat = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long", timeZone: "Asia/Aqtobe" });
+
+/** 31.10: «28 октября» for the earlier lesson whose report a topic continues from. */
+function pendingLessonDay(date: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(date)
+    ? pendingLessonDayFormat.format(new Date(`${date}T12:00:00+05:00`))
+    : date;
+}
+
 export function emptyLearningLessonV2Draft(): LearningLessonV2Draft {
   return {
     topicId: null,
@@ -307,6 +316,19 @@ export function LearningLessonV2Panel({
     ?? null;
   const pendingCount = pendingLearningHomeworkCount(context);
 
+  /** 31.10: the topic's percent changed after the draft was filled — start from the new one. */
+  function refreshTopicStart(topic: typeof topics[number]) {
+    const current = draft.topicProgress[topic.id];
+    if (!current) return;
+    const topicProgress = { ...draft.topicProgress };
+    if (current.toPercent === topic.progressPercent) {
+      delete topicProgress[topic.id];
+    } else {
+      topicProgress[topic.id] = { ...current, expectedPercent: topic.progressPercent };
+    }
+    onChange({ ...draft, topicProgress });
+  }
+
   function setTopicProgress(topic: typeof topics[number], toPercent: number) {
     const normalizedPercent = Math.max(0, Math.min(100, Math.round(toPercent)));
     const current = draft.topicProgress[topic.id];
@@ -435,6 +457,7 @@ export function LearningLessonV2Panel({
                     type="button"
                     disabled={disabled || topic.progressPercent === 100}
                     aria-pressed={selected}
+                    data-testid="lesson-topic-option"
                     onClick={() => {
                       onChange({
                         ...draft,
@@ -454,6 +477,15 @@ export function LearningLessonV2Panel({
                         ? `${topic.progressPercent}% → ${topicDraft.toPercent}%`
                         : `${topic.progressPercent}%`}
                     </span>
+                    {topicDraft && topicDraft.expectedPercent !== topic.progressPercent ? (
+                      <span className="mt-0.5 block text-[11px] font-semibold text-red-700">
+                        процент изменился
+                      </span>
+                    ) : topic.pendingFromLesson ? (
+                      <span className="mt-0.5 block text-[11px] font-semibold text-amber-700">
+                        ждёт подтверждения
+                      </span>
+                    ) : null}
                   </button>
                 );
               })}
@@ -466,6 +498,29 @@ export function LearningLessonV2Panel({
                     <p className="mt-1 text-xs font-semibold text-stone-500">
                       Было {selectedExpectedPercent ?? 0}% · будет {selectedToPercent ?? 0}%
                     </p>
+                    {selectedTopic.pendingFromLesson ? (
+                      <p className="mt-1 text-xs leading-5 text-amber-800" data-testid="topic-pending-from-lesson">
+                        {selectedTopic.progressPercent}% — по отчёту прошлого урока
+                        {selectedTopic.pendingFromLesson.date ? ` ${pendingLessonDay(selectedTopic.pendingFromLesson.date)}` : ""},
+                        он ждёт подтверждения админом. Сейчас в теме {selectedTopic.approvedPercent ?? 0}%.
+                      </p>
+                    ) : null}
+                    {selectedTopicProgress && selectedTopicProgress.expectedPercent !== selectedTopic.progressPercent ? (
+                      <div className="mt-2 rounded-lg border border-red-200 bg-red-50 p-3 text-xs leading-5 text-red-800" data-testid="topic-start-changed">
+                        <p>
+                          После заполнения прошлый урок по этой теме изменили: тема теперь начинается с{" "}
+                          {selectedTopic.progressPercent}%, а не с {selectedTopicProgress.expectedPercent ?? 0}%.
+                        </p>
+                        <button
+                          type="button"
+                          disabled={disabled}
+                          onClick={() => refreshTopicStart(selectedTopic)}
+                          className="mt-2 min-h-11 rounded-lg border border-red-300 bg-white px-3 py-2 font-bold text-red-800"
+                        >
+                          Начать с {selectedTopic.progressPercent}%
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
                   <input
                     type="number"

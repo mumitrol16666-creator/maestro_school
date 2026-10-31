@@ -7,6 +7,8 @@
 export const AQTOBE_OFFSET_MS = 5 * 60 * 60 * 1000;
 /** A report is overdue a day after the lesson ended. */
 export const REPORT_OVERDUE_MS = 24 * 60 * 60 * 1000;
+/** How far back «Сегодня» and the start rule look for reports the teacher still owes. */
+export const OPEN_REPORT_LOOKBACK_DAYS = 7;
 /** A student proposal waits for an answer at most three days. */
 export const PROPOSAL_STALE_MS = 3 * 24 * 60 * 60 * 1000;
 export const BIRTHDAY_WINDOW_DAYS = 7;
@@ -19,7 +21,10 @@ export function aqtobeDateKey(date: Date) {
 }
 
 export function aqtobeDateTime(dateValue: unknown, timeValue: unknown) {
-  const date = String(dateValue ?? "").slice(0, 10);
+  // CRM keeps the lesson day as a timestamp; its day is the Aqtobe day of that moment.
+  const raw = dateValue instanceof Date ? dateValue.toISOString() : String(dateValue ?? "");
+  const instant = raw.length > 10 ? new Date(raw) : null;
+  const date = instant && !Number.isNaN(instant.getTime()) ? aqtobeDateKey(instant) : raw.slice(0, 10);
   const time = String(timeValue ?? "").slice(0, 5);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time)) return null;
   const parsed = new Date(`${date}T${time}:00+05:00`);
@@ -50,6 +55,45 @@ export function openReport(
   if (!end || now < end) return null;
   const waitedMs = now.getTime() - end.getTime();
   return { endedAt: end, waitedMs, overdue: waitedMs >= REPORT_OVERDUE_MS };
+}
+
+/**
+ * 31.10 (Vladislav): a new lesson does not start while an earlier lesson of the
+ * same teacher has ended without a sent report — otherwise the next lesson
+ * starts from stale topic percents and the two reports collide at approval.
+ * Only lessons that started before the target count, so the earliest one can
+ * always be started late or cancelled and nothing waits on itself.
+ */
+export function lessonsBlockingStart<T extends {
+  crmClassId?: unknown;
+  date?: unknown;
+  startTime?: unknown;
+  endTime?: unknown;
+  status?: unknown;
+}>(
+  target: { crmClassId: string; date?: unknown; startTime?: unknown },
+  lessons: readonly T[],
+  now: Date,
+  options: {
+    /** Lessons whose report is already sent from the app, before CRM has it. */
+    sentCrmClassIds?: ReadonlySet<string>;
+    lookbackDays?: number;
+  } = {},
+): T[] {
+  const targetStart = aqtobeDateTime(target.date, target.startTime);
+  const windowStart = now.getTime() - (options.lookbackDays ?? OPEN_REPORT_LOOKBACK_DAYS) * 86_400_000;
+  return lessons
+    .flatMap((lesson) => {
+      const crmClassId = String(lesson.crmClassId ?? "");
+      if (crmClassId === target.crmClassId || options.sentCrmClassIds?.has(crmClassId)) return [];
+      const open = openReport(lesson, now);
+      if (!open || open.endedAt.getTime() < windowStart) return [];
+      const start = aqtobeDateTime(lesson.date, lesson.startTime);
+      if (!start || (targetStart && start >= targetStart)) return [];
+      return [{ lesson, start }];
+    })
+    .sort((left, right) => left.start.getTime() - right.start.getTime())
+    .map((item) => item.lesson);
 }
 
 export function proposalStale(createdAt: Date, now: Date) {
