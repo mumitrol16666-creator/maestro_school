@@ -104,10 +104,11 @@ export const adminOfflineApi = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-  notHeldForTeacher: (crmClassId: string, comment: string) =>
-    apiRequest(`/admin/offline-lessons/${encodeURIComponent(crmClassId)}/not-held-for-teacher`, {
+  /** 01.11: the admin cancels a lesson «за преподавателя» the same way the teacher does. */
+  cancelForTeacher: (crmClassId: string, reason?: string) =>
+    apiRequest(`/admin/offline-lessons/${encodeURIComponent(crmClassId)}/cancel-for-teacher`, {
       method: "POST",
-      body: JSON.stringify({ comment }),
+      body: JSON.stringify(reason ? { reason } : {}),
     }),
   attendance: (
     crmClassId: string,

@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import {
   adminOfflineMarkNotHeld,
+  adminOfflineCancel,
   adminOfflineReopen,
   adminOfflineReturn,
   adminOfflineSetAttendance,
@@ -251,6 +252,16 @@ export async function adminOfflineRoutes(app: FastifyInstance) {
       const { crmClassId } = z.object({ crmClassId: z.string().min(1) }).parse(request.params);
       const body = teacherReportSchema.parse(request.body ?? {});
       return { data: await adminOfflineSubmit(request.user!.id, crmClassId, body) };
+    },
+  );
+
+  app.post(
+    "/admin/offline-lessons/:crmClassId/cancel-for-teacher",
+    { preHandler: actForTeacherGuards },
+    async (request) => {
+      const { crmClassId } = z.object({ crmClassId: z.string().min(1) }).parse(request.params);
+      const body = z.object({ reason: z.string().trim().max(2000).optional() }).parse(request.body ?? {});
+      return { data: await adminOfflineCancel(request.user!.id, crmClassId, body.reason) };
     },
   );
 

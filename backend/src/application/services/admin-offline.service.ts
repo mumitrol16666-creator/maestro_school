@@ -20,6 +20,7 @@ import {
 } from "./offline-lesson-student-check.service.js";
 import { validateOfflineLessonSubmission } from "./offline-lesson-submission-policy.js";
 import { aqtobeMonthKey } from "../../lib/aqtobe-month.js";
+import { offlineLessonStartsAt } from "./teacher-offline.service.js";
 import {
   getLearningLessonV2Context,
   learningLessonV2ReferencedTopicIds,
@@ -33,6 +34,7 @@ import {
   getOfflineLessonSyncSummary,
   projectOfflineAgenda,
   withOfflineLessonSync,
+  updateProjectedOfflineLesson,
 } from "./offline-lesson-projection.service.js";
 import {
   enqueueCrmOutboxEvent,
@@ -219,6 +221,46 @@ export async function adminOfflineSubmit(
     });
   }
   return postTeacherSubmit(crmClassId, { ...fullPayload, crmTeacherId });
+}
+
+/**
+ * 01.11 (Vladislav): the admin «за преподавателя» cancels a lesson exactly as the teacher does —
+ * the lesson starts if needed, every student goes «Не пришёл», the report leaves as an absence
+ * and the admin decides the kind of absence in CRM. Without students the lesson closes as not held.
+ */
+export async function adminOfflineCancel(actorUserId: string, crmClassId: string, reason?: string | null, now = new Date()) {
+  const { lesson } = await getLessonWithAssignedTeacher(crmClassId);
+  const card = lesson as { status?: string | null; date?: string; startTime?: string; endTime?: string };
+  if (["completed", "cancelled", "pending_admin_review"].includes(String(card.status))) {
+    throw new BadRequestError("Урок уже отправлен администратору или закрыт", "LESSON_ALREADY_CLOSED");
+  }
+  if (card.date && card.startTime && now < offlineLessonStartsAt(card.date, card.startTime)) {
+    throw new BadRequestError(`Отменить урок можно с ${card.startTime}, когда наступит время урока`, "LESSON_CANCEL_TOO_EARLY");
+  }
+  if (card.status === "scheduled") {
+    // As for the teacher: a cancel is never blocked by CRM being down — the start lands in the projection.
+    await adminOfflineStart(crmClassId).catch(async (error) => {
+      if (!lessonSyncV2Enabled() || !(error instanceof AppError) || error.statusCode < 500) throw error;
+      await updateProjectedOfflineLesson(crmClassId, { status: "started", startedAt: now.toISOString() });
+    });
+  }
+  const roster = (await getAdminOfflineClassStudents(actorUserId, crmClassId)) as { students?: Array<{ crmStudentId?: string }> };
+  const studentIds = (roster.students ?? []).map((student) => student.crmStudentId).filter((id): id is string => Boolean(id));
+  const comment = reason?.trim() || undefined;
+  if (!studentIds.length) {
+    const endsAt = card.date && card.endTime ? offlineLessonStartsAt(card.date, card.endTime) : null;
+    if (endsAt && now < endsAt) {
+      throw new BadRequestError(
+        `В уроке нет учеников. Отметить, что урок не состоялся, можно после ${card.endTime}.`,
+        "LESSON_HAS_NO_STUDENTS",
+      );
+    }
+    return adminOfflineMarkNotHeld(actorUserId, crmClassId, comment ?? "Урок не состоялся: в уроке нет учеников");
+  }
+  for (const studentId of studentIds) {
+    await adminOfflineSetAttendance(crmClassId, studentId, "unexcused_absence", comment ?? "Урок отменён: ученик не пришёл");
+  }
+  return adminOfflineSubmit(actorUserId, crmClassId, { teacherOutcomeHint: "no_submission", comment });
 }
 
 export async function adminOfflineMarkNotHeld(actorUserId: string, crmClassId: string, comment: string) {

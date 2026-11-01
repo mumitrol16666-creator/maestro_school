@@ -22,7 +22,6 @@ import {
   ShieldCheck,
   Star,
   Target,
-  UserX,
   UsersRound,
   X,
   XCircle,
@@ -115,7 +114,7 @@ const attendanceLabels: Record<string, string> = {
   present: "Присутствовал",
   late: "Опоздал",
   excused_absence: "Уважительная причина",
-  unexcused_absence: "Пропуск",
+  unexcused_absence: "Не пришёл",
   emergency_freeze: "Экстренная заморозка",
 };
 
@@ -649,11 +648,7 @@ export default function AdminOfflineLessonDetailPage() {
         || (!lesson?.group && students.length === 1)
       ),
   );
-  const isCompactGroupLesson = Boolean(
-    !isTrialLesson
-      && !isIndividualLesson
-      && (lesson?.group || studentsResource.data?.group),
-  );
+  const isCompactGroupLesson = Boolean(!isTrialLesson && !isIndividualLesson);
   const previousGroupHomework = useMemo(
     () => isCompactGroupLesson
       ? studentsResource.data?.previousGroupHomework ?? previousGroupHomeworkFromRoster(students)
@@ -665,6 +660,13 @@ export default function AdminOfflineLessonDetailPage() {
       ?? studentLessonCheckDraft(student, isCompactGroupLesson ? previousGroupHomework : undefined);
     return isCompactGroupLesson ? alignDraftWithGroupHomework(draft, previousGroupHomework) : draft;
   };
+  // 01.11: in a lesson with checkboxes a student left unticked did not come; the kind of absence is
+  // the admin's call in CRM. The page itself keeps «не отмечен» until the teacher ticks somebody.
+  const sentAttendanceStatus = (draft: StudentLessonCheckDraft) => (
+    isCompactGroupLesson && draft.attendanceStatus === "unmarked" ? "unexcused_absence" : draft.attendanceStatus
+  );
+  const nobodyMarked = isCompactGroupLesson && students.length > 0
+    && !students.some((student) => ["present", "late"].includes(draftFor(student).attendanceStatus));
   const unmarkedCount = students.filter((student) => draftFor(student).attendanceStatus === "unmarked").length;
   const hasPreviousHomework = !isLearningLessonV2 && (isCompactGroupLesson
     ? Boolean(previousGroupHomework)
@@ -686,7 +688,8 @@ export default function AdminOfflineLessonDetailPage() {
       (homework) => learningV2Draft.homeworkDecisions[homework.recipientId]?.completionPercent == null,
     ).length;
   }, 0) ?? 0;
-  const allStudentsAbsent = students.length > 0 && students.every((student) => (
+  // A checkbox lesson with nobody present is not sent as an absence: the teacher cancels it instead.
+  const allStudentsAbsent = !isCompactGroupLesson && students.length > 0 && students.every((student) => (
     ["excused_absence", "unexcused_absence", "emergency_freeze"].includes(draftFor(student).attendanceStatus)
   ));
   const isAbsenceOnly = Boolean(isSubmittedAbsence || (canEditTeacherReport && allStudentsAbsent));
@@ -710,11 +713,12 @@ export default function AdminOfflineLessonDetailPage() {
       && lessonStartDateTime(lesson.date, lesson.startTime).getTime() - Date.now() <= 15 * 60 * 1000,
   );
   const draftHydrated = hydratedLessonDraftKey === lessonDraftKey;
-  // Plan 1.14: a started individual lesson means the student came; «Отменить урок» is the other way.
-  // An exam and the admin «за преподавателя» keep the attendance step: there the kind of absence matters.
-  const withAttendanceStep = !isIndividualLesson || lesson?.classType === "exam" || canActForTeacher;
+  // Plan 1.14 / 01.11: a started lesson with one student means the student came, for the exam and
+  // the admin «за преподавателя» too; «Отменить урок» is the other way. Several students — a
+  // checkbox each, an unticked student is «Не пришёл», the admin decides the kind of absence in CRM.
+  const withAttendanceStep = !isIndividualLesson;
   const autoPresent = Boolean(
-    canEditTeacherReport && !withAttendanceStep && isLearningLessonV2 && draftHydrated && lesson?.startedAt,
+    canEditTeacherReport && !withAttendanceStep && isLearningLessonV2 && draftHydrated,
   );
   // 1.3: cancelling before the lesson time would leave the lesson started and the absence rejected by CRM.
   const lessonStartsAt = lesson ? lessonStartDateTime(lesson.date, lesson.startTime).getTime() : null;
@@ -1180,11 +1184,6 @@ export default function AdminOfflineLessonDetailPage() {
           title: "Отсутствие передано администратору",
           description: "Отметка посещаемости сохранена. Отчёт по уроку и домашнее задание заполнять не нужно.",
         });
-      } else if (action === "not-held") {
-        setSuccess({
-          title: "Урок отмечен как несостоявшийся",
-          description: "Причина сохранена в истории. Администратор увидит отметку и проверит её.",
-        });
       } else if (action === "start") {
         setSuccess({
           title: "Урок начат",
@@ -1268,7 +1267,9 @@ export default function AdminOfflineLessonDetailPage() {
     if (!students.length) {
       return "В уроке не найден ученик. Обновите страницу или обратитесь к администратору.";
     }
-    if (unmarkedCount > 0) {
+    if (isCompactGroupLesson) {
+      if (nobodyMarked) return "Отметьте галочкой, кто пришёл. Если урок не состоялся — «Отменить урок».";
+    } else if (unmarkedCount > 0) {
       return `Отметьте посещаемость у всех учеников. Осталось: ${unmarkedCount}.`;
     }
     if (allStudentsAbsent) return null;
@@ -1313,7 +1314,7 @@ export default function AdminOfflineLessonDetailPage() {
         const attended = ["present", "late"].includes(draft.attendanceStatus);
         return {
           studentId: student.crmStudentId,
-          attendanceStatus: draft.attendanceStatus,
+          attendanceStatus: sentAttendanceStatus(draft),
           teacherNote: draft.teacherNote.trim() || undefined,
           homeworkReview: !isLearningLessonV2 && !isTrialLesson && attended
             ? draft.homeworkReview
@@ -1351,7 +1352,7 @@ export default function AdminOfflineLessonDetailPage() {
       const saveAttendance = () => adminOfflineApi.attendance(
             crmClassId,
             student.crmStudentId,
-            draft.attendanceStatus,
+            sentAttendanceStatus(draft),
             draft.teacherNote.trim() || undefined,
             homeworkReview,
             {
@@ -1486,13 +1487,13 @@ export default function AdminOfflineLessonDetailPage() {
 
   async function confirmNotHeld() {
     const reason = notHeldReason.trim();
-    if (canActForTeacher && reason.length < 3) return;
     setNotHeldOpen(false);
-    // Plan 1.14: the teacher cancels — every student «Не пришёл», the admin decides the absence kind.
+    // Plan 1.14 / 01.11: «Отменить урок» — every student «Не пришёл», the admin decides the absence
+    // kind in CRM; the admin «за преподавателя» does exactly the same.
     const submitted = await runAction(
-      canActForTeacher ? "not-held" : "cancel",
+      "cancel",
       () => canActForTeacher
-        ? adminOfflineApi.notHeldForTeacher(crmClassId, reason)
+        ? adminOfflineApi.cancelForTeacher(crmClassId, reason || undefined)
         : teacherOfflineApi.cancel(crmClassId, reason),
     );
     if (submitted) clearOfflineLessonDraft();
@@ -1520,7 +1521,7 @@ export default function AdminOfflineLessonDetailPage() {
     ? submissionTimingIssue ?? submissionValidationError()
     : null;
   const attendanceSummary = students.reduce((summary, student) => {
-    const status = draftFor(student).attendanceStatus;
+    const status = sentAttendanceStatus(draftFor(student));
     if (status === "present") summary.present += 1;
     else if (status === "late") summary.late += 1;
     else if (status !== "unmarked") summary.absent += 1;
@@ -1552,7 +1553,7 @@ export default function AdminOfflineLessonDetailPage() {
     { accepted: 0, notCompleted: 0 },
   );
   // The report is filled in short steps (02 §3.4, plan 1.14) when a learning lesson is edited:
-  // four for an individual lesson, five with attendance for groups, exams and the admin;
+  // four for a lesson with one student, five with attendance when there are several;
   // trial lessons and absence-only reports keep one page.
   const useLessonSteps = Boolean(canEditTeacherReport && isLearningLessonV2 && !isTrialLesson && !isAbsenceOnly);
   const showStep = (step: LessonStep) => !useLessonSteps || lessonStep === step;
@@ -1631,7 +1632,9 @@ export default function AdminOfflineLessonDetailPage() {
     }]);
   }
   const stepIssues: Partial<Record<LessonStep, string | null>> = {
-    2: unmarkedCount > 0 ? `Не отмечено: ${unmarkedCount}` : null,
+    2: isCompactGroupLesson
+      ? (nobodyMarked ? "Отметьте, кто пришёл" : null)
+      : unmarkedCount > 0 ? `Не отмечено: ${unmarkedCount}` : null,
     3: pendingLearningDecisions > 0 ? `Без решения по ДЗ: ${pendingLearningDecisions}` : null,
     5: teacherSubmissionIssue,
   };
@@ -1829,7 +1832,10 @@ export default function AdminOfflineLessonDetailPage() {
           </p>
           {autoPresent ? (
             <p className="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900" data-testid="lesson-auto-present">
-              Урок начат — ученик отмечен присутствующим. Если ученик не пришёл, нажмите «Отменить урок» внизу страницы.
+              {lesson.startedAt
+                ? "Урок начат — ученик отмечен присутствующим."
+                : "Урок не был начат вовремя — ученик отмечен присутствующим."}
+              {" "}Если ученик не пришёл, нажмите «Отменить урок» внизу страницы.
             </p>
           ) : null}
           <div className="mt-5 space-y-4">
@@ -1880,7 +1886,6 @@ export default function AdminOfflineLessonDetailPage() {
           compactGroup={isCompactGroupLesson}
           previousGroupHomework={previousGroupHomework}
           canManageAttendance={canManageAttendance}
-          canSetExcusedAbsence={isAdmin}
           canEdit={canEditReport}
           showHomeworkReview={hasPreviousHomework}
           showLearningResult={!isTrialLesson && !isLearningLessonV2}
@@ -2246,7 +2251,7 @@ export default function AdminOfflineLessonDetailPage() {
 
             {useLessonSteps && lessonStep === 5 ? (
               <LessonReportPreview
-                attendance={{ ...attendanceSummary, unmarked: unmarkedCount }}
+                attendance={{ ...attendanceSummary, unmarked: isCompactGroupLesson ? 0 : unmarkedCount }}
                 topic={topic}
                 lessonSummary={lessonSummary}
                 homework={homework}
@@ -2517,27 +2522,23 @@ export default function AdminOfflineLessonDetailPage() {
       {canEditTeacherReport ? (
         <section className="mt-8 flex flex-col gap-4 border-t border-stone-200 pt-7 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-sm font-bold text-stone-700">
-              {canActForTeacher ? "Урок не проводился по причине школы или преподавателя?" : "Ученик не пришёл или урок не проводится?"}
-            </p>
+            <p className="text-sm font-bold text-stone-700">Начали по ошибке или урок не состоялся?</p>
             <p className="mt-1 text-sm text-stone-500">
-              {canActForTeacher
-                ? "Если ученик не пришёл, отметьте «Не пришёл» в посещаемости. Это действие для других причин отмены."
-                : "Урок уйдёт администратору как отсутствие. Списывать ли занятие, администратор решит при подтверждении."}
+              Урок уйдёт администратору как отсутствие. Списывать ли занятие, администратор решит при подтверждении.
             </p>
           </div>
           <div className="flex flex-col items-end gap-1">
-            {!canActForTeacher && cancelAvailableFrom ? (
+            {cancelAvailableFrom ? (
               <span className="text-xs font-semibold text-stone-500" data-testid="lesson-cancel-from">Отменить можно с {cancelAvailableFrom}</span>
             ) : null}
             <button
               type="button"
-              disabled={busy != null || (!canActForTeacher && Boolean(cancelAvailableFrom))}
+              disabled={busy != null || Boolean(cancelAvailableFrom)}
               onClick={() => setNotHeldOpen(true)}
               className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-red-200 px-4 py-2.5 text-sm font-bold text-red-700 disabled:opacity-50"
             >
-              {["not-held", "cancel"].includes(busy ?? "") ? <LoaderCircle className="animate-spin" size={16} /> : <XCircle size={16} />}
-              {canActForTeacher ? "Урок не состоялся" : "Отменить урок"}
+              {busy === "cancel" ? <LoaderCircle className="animate-spin" size={16} /> : <XCircle size={16} />}
+              Отменить урок
             </button>
           </div>
         </section>
@@ -2575,10 +2576,9 @@ export default function AdminOfflineLessonDetailPage() {
 
       <NotHeldConfirmation
         open={notHeldOpen}
-        mode={canActForTeacher ? "not_held" : "cancel"}
         lesson={lesson}
         reason={notHeldReason}
-        busy={["not-held", "cancel"].includes(busy ?? "")}
+        busy={busy === "cancel"}
         onReasonChange={setNotHeldReason}
         onClose={() => {
           setNotHeldOpen(false);
@@ -2794,7 +2794,7 @@ function SubmitLessonConfirmation({
           </p>
           <p className="mt-3 inline-flex items-center gap-2 text-emerald-800">
             <CheckCircle2 size={16} />
-            Отмечено учеников: {studentsCount}
+            Учеников в уроке: {studentsCount}
           </p>
         </div>
         <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -2961,7 +2961,6 @@ function SubmitLessonConfirmation({
 
 function NotHeldConfirmation({
   open,
-  mode,
   lesson,
   reason,
   busy,
@@ -2970,8 +2969,6 @@ function NotHeldConfirmation({
   onConfirm,
 }: {
   open: boolean;
-  /** «cancel»: the teacher's «Отменить урок» (reason optional); «not_held»: the admin's old action. */
-  mode: "cancel" | "not_held";
   lesson: { title: string; date: string; startTime: string };
   reason: string;
   busy: boolean;
@@ -3006,7 +3003,7 @@ function NotHeldConfirmation({
           </span>
           <div className="min-w-0 flex-1">
             <p className="text-[10px] font-black uppercase tracking-[0.16em] text-red-700">Отмена урока</p>
-            <h2 id="not-held-title" className="font-display mt-1 text-2xl text-pretty sm:text-3xl">{mode === "cancel" ? "Отменить урок?" : "Урок не проводился?"}</h2>
+            <h2 id="not-held-title" className="font-display mt-1 text-2xl text-pretty sm:text-3xl">Отменить урок?</h2>
           </div>
           <button
             type="button"
@@ -3020,9 +3017,7 @@ function NotHeldConfirmation({
           </button>
         </div>
         <p id="not-held-description" className="mt-4 text-sm leading-6 text-stone-600">
-          {mode === "cancel"
-            ? "Ученики будут отмечены «Не пришёл», урок уйдёт администратору. При подтверждении он решит, списывать ли занятие: по умолчанию это прогул."
-            : "Это действие не списывает занятие ученику и не начисляет ставку преподавателю. Если ученик не пришёл, закройте окно и выберите «Не пришёл» в посещаемости."}
+          Ученики будут отмечены «Не пришёл», урок уйдёт администратору. При подтверждении он решит, списывать ли занятие: по умолчанию это прогул.
         </p>
         <p className="mt-4 text-sm font-bold text-ink">{lesson.title}</p>
         <p className="mt-1 text-sm text-stone-500">
@@ -3030,7 +3025,7 @@ function NotHeldConfirmation({
           {" · "}{lesson.startTime}
         </p>
         <label className="mt-5 block text-xs font-bold uppercase tracking-wider text-stone-500">
-          {mode === "cancel" ? "Причина (необязательно)" : "Что произошло?"}
+          Причина (необязательно)
           <textarea
             value={reason}
             name="notHeldReason"
@@ -3038,7 +3033,7 @@ function NotHeldConfirmation({
             disabled={busy}
             onChange={(event) => onReasonChange(event.target.value)}
             className="mt-2 min-h-24 w-full rounded-xl border border-stone-200 px-3 py-3 text-sm normal-case tracking-normal outline-none transition-colors focus:border-red-400 focus-visible:ring-2 focus-visible:ring-red-100"
-            placeholder={mode === "cancel" ? "Например: ученик не пришёл и не предупредил" : "Например: преподаватель заболел или школа отменила занятие…"}
+            placeholder="Например: ученик не пришёл и не предупредил"
           />
         </label>
         <div className="mt-6 grid grid-cols-2 gap-3">
@@ -3052,7 +3047,7 @@ function NotHeldConfirmation({
           </button>
           <button
             type="button"
-            disabled={busy || (mode === "not_held" && reason.trim().length < 3)}
+            disabled={busy}
             onClick={onConfirm}
             className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-red-700 px-3 text-sm font-bold text-white transition-colors hover:bg-red-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700 disabled:opacity-45"
           >
@@ -3334,7 +3329,6 @@ function StudentRoster({
   compactGroup,
   previousGroupHomework,
   canManageAttendance,
-  canSetExcusedAbsence,
   canEdit,
   showHomeworkReview,
   showLearningResult,
@@ -3350,7 +3344,6 @@ function StudentRoster({
   compactGroup: boolean;
   previousGroupHomework: PreviousHomeworkSource | null;
   canManageAttendance: boolean;
-  canSetExcusedAbsence: boolean;
   canEdit: boolean;
   showHomeworkReview: boolean;
   showLearningResult: boolean;
@@ -3405,7 +3398,6 @@ function StudentRoster({
           students={students}
           onOpenStudent={onOpenStudent}
           canEdit={canEdit && canManageAttendance}
-          canSetExcusedAbsence={canSetExcusedAbsence}
           showLearningResult={showLearningResult}
           // A V2 lesson checks homework with a percent on the topics step; the old CRM
           // group check (done / partly / not) is for lessons before V2 only.
@@ -3422,7 +3414,6 @@ function StudentRoster({
               key={student.crmStudentId}
               student={student}
               canEdit={canEdit && canManageAttendance}
-              canSetExcusedAbsence={canSetExcusedAbsence}
               showHomeworkReview={showHomeworkReview && Boolean(previousHomeworkLesson(student))}
               showLearningResult={showLearningResult}
               draft={drafts[student.crmStudentId] ?? studentLessonCheckDraft(student)}
@@ -3438,16 +3429,6 @@ function StudentRoster({
   );
 }
 
-const teacherGroupAttendanceExceptions = [
-  { value: "late", label: "Опоздал" },
-  { value: "unexcused_absence", label: "Не пришёл" },
-] as const;
-
-const adminGroupAttendanceExceptions = [
-  { value: "late", label: "Опоздал" },
-  { value: "excused_absence", label: "Уважительная — без списания" },
-  { value: "unexcused_absence", label: "Неуважительная — списать" },
-] as const;
 
 const groupHomeworkOptions = [
   { value: "completed", label: "Выполнено", icon: Check },
@@ -3489,7 +3470,6 @@ function GroupLessonRoster({
   students,
   onOpenStudent,
   canEdit,
-  canSetExcusedAbsence,
   showLearningResult,
   previousHomework,
   homeworkOnTopicsStep = false,
@@ -3499,7 +3479,6 @@ function GroupLessonRoster({
 }: {
   students: TeacherOfflineStudent[];
   canEdit: boolean;
-  canSetExcusedAbsence: boolean;
   showLearningResult: boolean;
   previousHomework: PreviousHomeworkSource | null;
   homeworkOnTopicsStep?: boolean;
@@ -3601,6 +3580,9 @@ function GroupLessonRoster({
               <Check size={14} />
               Все присутствуют
             </button>
+            <span className="self-center text-xs font-semibold text-stone-500">
+              Не отмечен — не пришёл. Списывать ли занятие, решит администратор при подтверждении.
+            </span>
             {previousHomework ? (
               <button
                 type="button"
@@ -3618,7 +3600,7 @@ function GroupLessonRoster({
 
       <div className="hidden grid-cols-[minmax(190px,1fr)_190px_minmax(260px,360px)_44px] gap-3 border-b border-stone-200 bg-stone-50/80 px-5 py-2.5 text-[10px] font-black uppercase tracking-[0.12em] text-stone-500 lg:grid">
         <span>Ученик</span>
-        <span>Исключение</span>
+        <span>Посещение</span>
         <span>{previousHomework ? "Проверка ДЗ" : "Домашнее задание"}</span>
         <span className="sr-only">Детали</span>
       </div>
@@ -3629,7 +3611,6 @@ function GroupLessonRoster({
             key={student.crmStudentId}
             student={student}
             canEdit={canEdit}
-            canSetExcusedAbsence={canSetExcusedAbsence}
             showLearningResult={showLearningResult}
             previousHomework={previousHomework}
             draft={drafts[student.crmStudentId]}
@@ -3646,7 +3627,6 @@ function GroupLessonRoster({
 function GroupStudentRow({
   student,
   canEdit,
-  canSetExcusedAbsence,
   showLearningResult,
   previousHomework,
   draft,
@@ -3656,7 +3636,6 @@ function GroupStudentRow({
 }: {
   student: TeacherOfflineStudent;
   canEdit: boolean;
-  canSetExcusedAbsence: boolean;
   showLearningResult: boolean;
   previousHomework: PreviousHomeworkSource | null;
   draft: StudentLessonCheckDraft;
@@ -3666,15 +3645,8 @@ function GroupStudentRow({
 }) {
   const [learningOpen, setLearningOpen] = useState(false);
   const attended = ["present", "late"].includes(draft.attendanceStatus);
-  const attendanceExceptions = canSetExcusedAbsence
-    ? adminGroupAttendanceExceptions
-    : teacherGroupAttendanceExceptions;
-  const exceptionStatus = attendanceExceptions.some((item) => item.value === draft.attendanceStatus)
-    ? draft.attendanceStatus
-    : "";
   const needsHomeworkDetails = attended
     && ["partial", "not_completed"].includes(draft.homeworkReview.status);
-  const needsAbsenceNote = ["excused_absence", "unexcused_absence"].includes(draft.attendanceStatus);
 
   return (
     <div className="px-4 py-3.5 sm:px-5">
@@ -3686,8 +3658,9 @@ function GroupStudentRow({
             disabled={!canEdit}
             onChange={(event) => onChange({
               ...draft,
-              attendanceStatus: event.target.checked ? "present" : "unmarked",
+              attendanceStatus: event.target.checked ? "present" : "unexcused_absence",
             })}
+            aria-label={`Пришёл: ${student.name}`}
             className="h-5 w-5 shrink-0 accent-emerald-600"
           />
           <span className="min-w-0">
@@ -3704,31 +3677,17 @@ function GroupStudentRow({
                 </button>
               ) : null}
             </span>
-            <span className={`mt-0.5 block text-xs font-semibold ${
-              draft.attendanceStatus === "unmarked" ? "text-stone-400" : "text-stone-600"
-            }`}>
-              {attendanceLabels[draft.attendanceStatus] ?? attendanceLabels.unmarked}
-            </span>
+            {["late", "excused_absence", "emergency_freeze"].includes(draft.attendanceStatus) ? (
+              <span className="mt-0.5 block text-xs font-semibold text-stone-600">
+                {attendanceLabels[draft.attendanceStatus]}
+              </span>
+            ) : null}
           </span>
         </label>
 
-        <select
-          value={exceptionStatus}
-          disabled={!canEdit}
-          aria-label={`Особый статус посещаемости для ${student.name}`}
-          onChange={(event) => onChange({
-            ...draft,
-            attendanceStatus: event.target.value
-              ? event.target.value as StudentLessonCheckDraft["attendanceStatus"]
-              : attended ? "present" : "unmarked",
-          })}
-          className="h-10 min-w-0 rounded-xl border border-stone-200 bg-white px-3 text-xs font-bold text-stone-700 outline-none focus:border-amber-400"
-        >
-          <option value="">{attended ? "Без исключений" : "Другой статус"}</option>
-          {attendanceExceptions.map((option) => (
-            <option key={option.value} value={option.value}>{option.label}</option>
-          ))}
-        </select>
+        <span className={`text-xs font-bold ${attended ? "text-emerald-800" : "text-stone-500"}`}>
+          {attended ? "Пришёл" : "Не пришёл"}
+        </span>
 
         {previousHomework ? (
           attended ? (
@@ -3836,20 +3795,6 @@ function GroupStudentRow({
         </div>
       ) : null}
 
-      {needsAbsenceNote ? (
-        <label className="mt-3 block text-xs font-bold text-stone-600 lg:ml-[202px]">
-          Причина отсутствия
-          <textarea
-            value={draft.teacherNote}
-            disabled={!canEdit}
-            onChange={(event) => onChange({ ...draft, teacherNote: event.target.value })}
-            rows={1}
-            className="mt-1.5 min-h-12 w-full rounded-xl border border-stone-200 px-3 py-2 text-xs"
-            placeholder="Что произошло?"
-          />
-        </label>
-      ) : null}
-
       {learningOpen && attended && showLearningResult ? (
         <div className="mt-3 border-t border-stone-200 pt-3 lg:ml-[202px]">
           <StudentLearningResultFields
@@ -3876,17 +3821,10 @@ function GroupStudentRow({
   );
 }
 
+// 01.11: two states only; the kind of absence («Опоздал», «Уважительная») is the admin's call in CRM.
 const teacherAttendanceOptions = [
   { value: "present", label: "Присутствовал", icon: Check, active: "border-emerald-500 bg-emerald-50 text-emerald-800" },
-  { value: "late", label: "Опоздал", icon: Clock3, active: "border-amber-500 bg-amber-50 text-amber-900" },
   { value: "unexcused_absence", label: "Не пришёл", icon: CircleSlash2, active: "border-red-500 bg-red-50 text-red-800" },
-] as const;
-
-const adminAttendanceOptions = [
-  { value: "present", label: "Присутствовал", icon: Check, active: "border-emerald-500 bg-emerald-50 text-emerald-800" },
-  { value: "late", label: "Опоздал", icon: Clock3, active: "border-amber-500 bg-amber-50 text-amber-900" },
-  { value: "excused_absence", label: "Уважительная", icon: UserX, active: "border-sky-500 bg-sky-50 text-sky-900" },
-  { value: "unexcused_absence", label: "Неуважительная", icon: CircleSlash2, active: "border-red-500 bg-red-50 text-red-800" },
 ] as const;
 
 const homeworkOptions = [
@@ -4138,7 +4076,6 @@ function StudentLearningResultFields({
 function StudentLessonCheckCard({
   student,
   canEdit,
-  canSetExcusedAbsence,
   showHomeworkReview,
   showLearningResult,
   draft,
@@ -4149,7 +4086,6 @@ function StudentLessonCheckCard({
 }: {
   student: TeacherOfflineStudent;
   canEdit: boolean;
-  canSetExcusedAbsence: boolean;
   showHomeworkReview: boolean;
   showLearningResult: boolean;
   draft: StudentLessonCheckDraft;
@@ -4163,9 +4099,6 @@ function StudentLessonCheckCard({
   const homeworkNeedsReason = homeworkReview.status === "not_completed";
   const homeworkNeedsDifficulties = homeworkReview.status === "partial";
   const disabled = !canEdit;
-  const availableAttendanceOptions = canSetExcusedAbsence
-    ? adminAttendanceOptions
-    : teacherAttendanceOptions;
   function chooseHomeworkStatus(status: OfflineHomeworkReview["status"]) {
     onChange(draftWithHomeworkStatus(draft, status));
   }
@@ -4211,8 +4144,8 @@ function StudentLessonCheckCard({
         <legend className="text-[11px] font-bold uppercase tracking-[0.14em] text-stone-500">
           Посещаемость
         </legend>
-        <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {availableAttendanceOptions.map(({ value, label, icon: Icon, active }) => {
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          {teacherAttendanceOptions.map(({ value, label, icon: Icon, active }) => {
             const selected = attendanceStatus === value;
             return (
               <button
@@ -4230,9 +4163,9 @@ function StudentLessonCheckCard({
             );
           })}
         </div>
-        {!canSetExcusedAbsence && canEdit ? (
+        {canEdit ? (
           <p className="mt-2 text-xs font-semibold text-stone-500">
-            «Не пришёл» — неуважительный пропуск: занятие списывается ученику, преподавателю начисляется ставка.
+            Списывать ли занятие за «Не пришёл», решит администратор при подтверждении.
           </p>
         ) : null}
       </fieldset>
