@@ -737,6 +737,22 @@ export default function AdminOfflineLessonDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoPresent, unmarkedCount]);
 
+  // 01.11: whichever way the step changes («Далее», «Назад», the stepper), the screen lands on the
+  // steps themselves, just under the sticky header — not at the page top and not mid-form.
+  const stepScrollSkipped = useRef(true);
+  useEffect(() => {
+    if (stepScrollSkipped.current) {
+      stepScrollSkipped.current = false;
+      return;
+    }
+    const stepper = document.querySelector<HTMLElement>('[data-testid="lesson-stepper"]');
+    if (!stepper) return;
+    const header = document.querySelector<HTMLElement>("header.sticky");
+    const offset = (header?.getBoundingClientRect().height ?? 80) + 12;
+    window.scrollTo({ top: Math.max(0, stepper.getBoundingClientRect().top + window.scrollY - offset), behavior: "smooth" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lessonStep]);
+
   const overviewEnabled = Boolean(canEditTeacherReport && !isAdmin && isLearningLessonV2 && !isTrialLesson);
   useEffect(() => {
     if (!overviewEnabled) return;
@@ -2300,10 +2316,7 @@ export default function AdminOfflineLessonDetailPage() {
               step={lessonStep}
               nextIssue={stepIssues[lessonStep] ?? null}
               onPrev={() => moveStep(-1)}
-              onNext={() => {
-                moveStep(1);
-                window.scrollTo({ top: 0, behavior: "smooth" });
-              }}
+              onNext={() => moveStep(1)}
             />
           ) : null}
         </section>
