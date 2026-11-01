@@ -93,9 +93,9 @@ test("an individual lesson: strip, four steps, phrases from the lesson, nothing 
   await expect(summary).toHaveValue("Отработали «Чистые переходы аккордов»: 0 → 30 %");
   if (await pendingHomework.count()) await expect(summaryHints).toContainText("Проверили домашнее задание: 70 %");
 
-  // Nothing hidden: materials, goal, next focus and the admin comment are on the step already.
+  // Nothing hidden: materials, next focus and the admin comment are on the step already.
   const details = page.getByTestId("lesson-details");
-  for (const label of ["Цель урока", "Фокус следующего урока", "Материалы и ссылки", "Комментарий для админа"]) {
+  for (const label of ["Фокус следующего урока", "Материалы и ссылки", "Комментарий для админа"]) {
     await expect(details.getByText(label, { exact: true })).toBeVisible();
   }
   await expect(page.getByText(/Дополнительные детали/)).toHaveCount(0);

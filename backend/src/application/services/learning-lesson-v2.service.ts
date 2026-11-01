@@ -15,6 +15,7 @@ import {
 } from "./learning-homework-v2.service.js";
 import { updateLearningTopicProgressBatchFromLessonV2 } from "./learning-plan-v2.service.js";
 import { pendingTopicPercentsBefore } from "./lesson-pending-topics.service.js";
+import { listHomeworkCheckHistory } from "./learning-homework-v2.service.js";
 import { requireCrmTeacherId } from "./teacher-students.service.js";
 import { previewOfflineLessonAttendanceXp } from "./weekly-league.service.js";
 import {
@@ -490,6 +491,40 @@ export async function getLearningLessonV2Context(actorUserId: string, crmClassId
         scope.roster.students.map((student) => student.crmStudentId),
         [...topicIds],
       );
+  // 01.11: the last checks of the student's homework, with the percent the teacher gave — shown
+  // on «Перед уроком» so the teacher sees how the student has been doing.
+  const RECENT_HOMEWORK = 3;
+  const homeworkHistory = scope.reportOnly
+    ? []
+    : await listHomeworkCheckHistory(scope.roster.students.map((student) => student.crmStudentId));
+  const recentHomeworkByStudent = new Map<string, Array<{
+    recipientId: string;
+    topicTitle: string;
+    instructions: string;
+    assignedAt: Date;
+    state: string;
+    decision: string | null;
+    completionPercent: number | null;
+    comment: string | null;
+    reviewedAt: Date | null;
+  }>>();
+  for (const item of homeworkHistory) {
+    const list = recentHomeworkByStudent.get(item.crmStudentId) ?? [];
+    if (list.length >= RECENT_HOMEWORK) continue;
+    const last = item.reviews[item.reviews.length - 1] ?? null;
+    list.push({
+      recipientId: item.recipientId,
+      topicTitle: item.topic.title,
+      instructions: item.instructions,
+      assignedAt: item.assignedAt,
+      state: item.state,
+      decision: last?.decision ?? null,
+      completionPercent: last?.completionPercent ?? null,
+      comment: last?.comment ?? null,
+      reviewedAt: last?.reviewedAt ?? null,
+    });
+    recentHomeworkByStudent.set(item.crmStudentId, list);
+  }
   const rewardsEnabled = productFeatureConfig.flags.rewardEconomyV2
     && rewardEconomyV2AppliesToEvent(scope.eventAt);
   const rewardPreview = await previewOfflineLessonAttendanceXp({
@@ -511,6 +546,7 @@ export async function getLearningLessonV2Context(actorUserId: string, crmClassId
       crmStudentId: student.crmStudentId,
       appUserId: student.appUserId ?? null,
       name: student.name ?? student.crmStudentId,
+      recentHomework: recentHomeworkByStudent.get(student.crmStudentId) ?? [],
       pendingHomework: pending
         .filter((item) => item.crmStudentId === student.crmStudentId)
         .map((item) => ({
@@ -755,6 +791,141 @@ export async function applyApprovedLearningLessonV2Results(
   // by an earlier partial attempt, so only snapshot-internal invariants are checked here.
   validateLearningLessonV2ResultDuplicates(input);
   return applyValidatedLearningLessonV2Results(actorUserId, crmClassId, input, context, approval);
+}
+
+/**
+ * 01.11 (Vladislav, answer 5в): a topic is renamed or removed right from the lesson. Like the
+ * quick topic, the change lands in a new published version of the sector (the draft copies it).
+ * A topic without progress is removed and archived; one with progress is deferred
+ * (`transferred`) so percents and Points stay; a mastered topic is not removed.
+ */
+export async function updateOfflineLessonTopic(
+  actorUserId: string,
+  crmClassId: string,
+  topicId: string,
+  change: { action: "rename"; title: string; masteryCriteria?: string } | { action: "remove" },
+) {
+  if (!learningLessonV2Enabled()) {
+    throw new BadRequestError("Функционал учебных планов V2 отключен", "LEARNING_LESSON_V2_DISABLED");
+  }
+  const scope = await resolveLessonScope(actorUserId, crmClassId);
+  if (!scope.canApply) {
+    throw new ConflictError("Урок уже отправлен или закрыт: темы сектора из него не меняются", "LESSON_NOT_EDITABLE");
+  }
+  const ownerWhere = scope.owner.kind === "student"
+    ? { crmStudentId: scope.owner.id, crmGroupId: null }
+    : { crmStudentId: null, crmGroupId: scope.owner.id };
+  const topic = await prisma.learningTopic.findFirst({ where: { id: topicId, ...ownerWhere, archivedAt: null } });
+  if (!topic) throw new BadRequestError("Тема не найдена в секторе этого урока", "LEARNING_TOPIC_NOT_FOUND");
+  const plan = await prisma.learningPlan.findFirst({
+    where: {
+      status: "active",
+      publishedVersionNumber: { not: null },
+      directionId: topic.directionId,
+      ...ownerWhere,
+    },
+    include: { versions: { include: { topics: { orderBy: { sortOrder: "asc" } } } } },
+    orderBy: [{ sequence: "desc" }, { updatedAt: "desc" }],
+  });
+  if (!plan || plan.publishedVersionNumber === null) {
+    throw new BadRequestError("Сектор с этой темой не опубликован", "QUICK_TOPIC_SECTOR_NOT_PUBLISHED");
+  }
+  if (plan.lockedAt) throw new ConflictError("Сектор завершён: его темы больше не меняются", "MONTHLY_PLAN_LOCKED");
+  const publishedVersionNumber = plan.publishedVersionNumber;
+  const published = plan.versions.find((version) => version.version === publishedVersionNumber);
+  if (!published) throw new ConflictError("Версия учебного плана не найдена", "MONTHLY_PLAN_VERSION_MISSING");
+  if (!published.topics.some((link) => link.topicId === topicId && link.state === LearningPlanTopicState.active)) {
+    throw new BadRequestError("Темы нет среди активных тем сектора", "LEARNING_TOPIC_NOT_FOUND");
+  }
+  const draft = plan.currentVersionNumber > publishedVersionNumber
+    ? plan.versions.find((version) => version.version === plan.currentVersionNumber) ?? null
+    : null;
+
+  const title = change.action === "rename" ? change.title.trim() : topic.title;
+  const masteryCriteria = change.action === "rename" ? (change.masteryCriteria ?? topic.masteryCriteria ?? "").trim() : topic.masteryCriteria;
+  if (change.action === "rename" && !title) throw new BadRequestError("Укажите название темы", "TOPIC_TITLE_REQUIRED");
+  if (change.action === "remove" && (topic.progressPercent ?? 0) >= 100) {
+    throw new ConflictError("Освоенная тема остаётся в секторе: за неё уже начислены баллы", "LEARNING_TOPIC_MASTERED_LOCKED");
+  }
+  let deferred = false;
+  if (change.action === "remove") {
+    // Homework on the topic is checked at a lesson; a removed topic would hide it from every lesson.
+    const openHomework = await prisma.learningHomeworkRecipient.count({
+      where: { assignment: { topicId, archivedAt: null }, state: { in: ["assigned", "waiting_review", "revision"] } },
+    });
+    if (openHomework > 0) {
+      throw new ConflictError(
+        "По этой теме есть непроверенное домашнее задание. Проверьте его на уроке, потом убирайте тему.",
+        "LEARNING_TOPIC_HAS_OPEN_HOMEWORK",
+      );
+    }
+    // A sent, not yet approved report that moves the topic must still apply, so the topic stays.
+    const pendingReport = await prisma.offlineLessonReport.findFirst({
+      where: {
+        status: { in: ["pending_sync", "pending_review", "approving", "conflict"] },
+        versions: { some: { state: "submitted", payload: { path: ["learningResultsV2", "topicUpdates"], array_contains: [{ topicId }] } } },
+      },
+      select: { crmClassId: true },
+    });
+    deferred = (topic.progressPercent ?? 0) > 0 || Boolean(pendingReport);
+  }
+
+  await prisma.$transaction(async (tx) => {
+    if (change.action === "rename") {
+      await tx.learningTopic.update({ where: { id: topicId }, data: { title, masteryCriteria } });
+    } else if (!deferred) {
+      await tx.learningTopic.update({ where: { id: topicId }, data: { archivedAt: new Date() } });
+    }
+    type Link = typeof published.topics[number];
+    const mapLinks = (links: Link[]) => links.flatMap((link, index) => {
+      if (link.topicId !== topicId) return [{ ...link, sortOrder: index }];
+      if (change.action === "rename") return [{ ...link, titleSnapshot: title, masteryCriteriaSnapshot: masteryCriteria, sortOrder: index }];
+      return deferred ? [{ ...link, state: LearningPlanTopicState.transferred, sortOrder: index }] : [];
+    }).map((link, index) => ({ ...link, sortOrder: index }));
+    const copyVersion = (version: typeof published, versionNumber: number, publishedAt: Date | null) => tx.learningPlanVersion.create({
+      data: {
+        planId: plan.id,
+        version: versionNumber,
+        goal: version.goal,
+        expectedResult: version.expectedResult,
+        skills: version.skills,
+        checkpoint: version.checkpoint,
+        note: version.note,
+        materials: version.materials ?? [],
+        publishedAt,
+        createdById: actorUserId,
+        topics: {
+          create: mapLinks(version.topics).map((link) => ({
+            topicId: link.topicId,
+            state: link.state,
+            sortOrder: link.sortOrder,
+            titleSnapshot: link.titleSnapshot,
+            masteryCriteriaSnapshot: link.masteryCriteriaSnapshot,
+            replacementTopicId: link.replacementTopicId,
+          })),
+        },
+      },
+    });
+    const nextPublished = plan.currentVersionNumber + 1;
+    await copyVersion(published, nextPublished, new Date());
+    const nextCurrent = draft ? nextPublished + 1 : nextPublished;
+    if (draft) await copyVersion(draft, nextCurrent, null);
+    const updated = await tx.learningPlan.updateMany({
+      where: { id: plan.id, currentVersionNumber: plan.currentVersionNumber, publishedVersionNumber, lockedAt: null },
+      data: { currentVersionNumber: nextCurrent, publishedVersionNumber: nextPublished },
+    });
+    if (updated.count !== 1) {
+      throw new ConflictError("Сектор только что изменился. Обновите страницу и повторите.", "MONTHLY_PLAN_STALE_DRAFT");
+    }
+  });
+
+  return {
+    success: true,
+    action: change.action,
+    deferred,
+    topic: { id: topicId, title, masteryCriteria },
+    learningV2: await getLearningLessonV2Context(actorUserId, crmClassId),
+  };
 }
 
 /**

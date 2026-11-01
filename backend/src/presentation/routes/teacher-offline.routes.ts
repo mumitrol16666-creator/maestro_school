@@ -28,6 +28,7 @@ import { authenticate, requirePermission, requireTeacher } from "../guards/auth.
 import {
   learningLessonResultsSchema,
   offlineLessonQuickTopicSchema,
+  offlineLessonTopicRenameSchema,
   offlineLessonStudentCheckSchema,
 } from "./offline-lesson.schemas.js";
 import {
@@ -48,7 +49,7 @@ import {
 import { listTeacherCrmDirections } from "../../application/services/crm-direction-projection.service.js";
 import { isSupportedMaterialUrl } from "../../domain/group-material.js";
 import { writeAuditLog } from "../../application/services/audit.service.js";
-import { quickAddOfflineLessonTopic } from "../../application/services/learning-lesson-v2.service.js";
+import { quickAddOfflineLessonTopic, updateOfflineLessonTopic } from "../../application/services/learning-lesson-v2.service.js";
 import {
   deleteOfflineLessonDraft,
   getOfflineLessonDraft,
@@ -458,6 +459,25 @@ export async function teacherOfflineRoutes(app: FastifyInstance) {
     },
   );
 
+
+  app.patch(
+    "/teachers/me/offline-lessons/:crmClassId/topics/:topicId",
+    { preHandler: writeGuards },
+    async (request) => {
+      const { crmClassId, topicId } = z.object({ crmClassId: z.string().min(1), topicId: z.string().uuid() }).parse(request.params);
+      const body = offlineLessonTopicRenameSchema.parse(request.body ?? {});
+      return { data: await updateOfflineLessonTopic(request.user!.id, crmClassId, topicId, { action: "rename", ...body }) };
+    },
+  );
+
+  app.delete(
+    "/teachers/me/offline-lessons/:crmClassId/topics/:topicId",
+    { preHandler: writeGuards },
+    async (request) => {
+      const { crmClassId, topicId } = z.object({ crmClassId: z.string().min(1), topicId: z.string().uuid() }).parse(request.params);
+      return { data: await updateOfflineLessonTopic(request.user!.id, crmClassId, topicId, { action: "remove" }) };
+    },
+  );
 
   app.post(
     "/teachers/me/offline-lessons/:crmClassId/quick-topic",

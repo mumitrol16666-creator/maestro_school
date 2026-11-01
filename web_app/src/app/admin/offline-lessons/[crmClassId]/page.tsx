@@ -108,6 +108,8 @@ const syncConflictLabels: Record<string, string> = {
 const REPORT_SUBMISSION_LEAD_MINUTES = 20;
 
 const teacherEditableLessonStatuses = new Set(["started", "not_filled"]);
+/** Draft value for homework the teacher sends without a sector topic (01.11, answer 4). */
+const NO_HOMEWORK_TOPIC = "__none__";
 
 const attendanceLabels: Record<string, string> = {
   unmarked: "Не отмечен",
@@ -346,7 +348,6 @@ type OfflineLessonFormDraft = {
   updatedAt: number;
   form: {
     topic: string;
-    lessonGoals: string;
     lessonSummary: string;
     homework: string;
     nextLessonFocus: string;
@@ -524,7 +525,6 @@ export default function AdminOfflineLessonDetailPage() {
   const startBlockers = startBlockersResource.data?.blockers ?? [];
 
   const [topic, setTopic] = useState("");
-  const [lessonGoals, setLessonGoals] = useState("");
   const [lessonSummary, setLessonSummary] = useState("");
   const [homework, setHomework] = useState("");
   const [nextLessonFocus, setNextLessonFocus] = useState("");
@@ -622,13 +622,16 @@ export default function AdminOfflineLessonDetailPage() {
     [canEditAdminReview, learningV2],
   );
   const hasLearningPlanTopics = allowedLearningReportTopicIds.size > 0;
-  const effectiveHomeworkTopicId = (
-    learningV2Draft.homeworkTopicId && allowedLearningReportTopicIds.has(learningV2Draft.homeworkTopicId)
-      ? learningV2Draft.homeworkTopicId
-      : (learningV2Draft.topicId && allowedLearningReportTopicIds.has(learningV2Draft.topicId)
-          ? learningV2Draft.topicId
-          : (allowedLearningReportTopicIds.size === 1 ? Array.from(allowedLearningReportTopicIds)[0] : null))
-  );
+  // 01.11 (answer 4): «без темы» chosen on purpose sends the homework as plain text to CRM.
+  const effectiveHomeworkTopicId = learningV2Draft.homeworkTopicId === NO_HOMEWORK_TOPIC
+    ? null
+    : (
+      learningV2Draft.homeworkTopicId && allowedLearningReportTopicIds.has(learningV2Draft.homeworkTopicId)
+        ? learningV2Draft.homeworkTopicId
+        : (learningV2Draft.topicId && allowedLearningReportTopicIds.has(learningV2Draft.topicId)
+            ? learningV2Draft.topicId
+            : (allowedLearningReportTopicIds.size === 1 ? Array.from(allowedLearningReportTopicIds)[0] : null))
+    );
   const hasValidLearningHomeworkTopic = Boolean(
     effectiveHomeworkTopicId
       && allowedLearningReportTopicIds.has(effectiveHomeworkTopicId),
@@ -777,7 +780,6 @@ export default function AdminOfflineLessonDetailPage() {
   useEffect(() => {
     if (!lesson) return;
     if (lesson.topic) setTopic(lesson.topic);
-    if (lesson.lessonGoals) setLessonGoals(lesson.lessonGoals);
     if (lesson.lessonSummary) setLessonSummary(lesson.lessonSummary);
     setHomework(learningResultsV2Homework(learningV2?.pendingResults, lesson.homeworkDraft));
     if (lesson.nextLessonFocus) setNextLessonFocus(lesson.nextLessonFocus);
@@ -894,7 +896,6 @@ export default function AdminOfflineLessonDetailPage() {
     if (savedDraft && savedDraftMatchesCurrentReport) {
       const saved = savedDraft.form;
       setTopic(saved.topic ?? "");
-      setLessonGoals(saved.lessonGoals ?? "");
       setLessonSummary(saved.lessonSummary ?? "");
       setHomework(saved.homework
         ?? learningResultsV2Homework(learningV2?.pendingResults, lesson.homeworkDraft));
@@ -950,7 +951,6 @@ export default function AdminOfflineLessonDetailPage() {
       setDraftSaveStatus({ kind: "restored", updatedAt: savedDraft.updatedAt });
     } else {
       setTopic(lesson.topic ?? "");
-      setLessonGoals(lesson.lessonGoals ?? "");
       setLessonSummary(lesson.lessonSummary ?? "");
       setHomework(learningResultsV2Homework(learningV2?.pendingResults, lesson.homeworkDraft));
       setNextLessonFocus(lesson.nextLessonFocus ?? "");
@@ -1008,7 +1008,6 @@ export default function AdminOfflineLessonDetailPage() {
 
     const form: OfflineLessonFormDraft["form"] = {
       topic,
-      lessonGoals,
       lessonSummary,
       homework,
       nextLessonFocus,
@@ -1070,7 +1069,6 @@ export default function AdminOfflineLessonDetailPage() {
     hydratedLessonDraftKey,
     lesson,
     lessonDraftKey,
-    lessonGoals,
     lessonSummary,
     isAdmin,
     integration?.report?.currentVersion,
@@ -1279,11 +1277,6 @@ export default function AdminOfflineLessonDetailPage() {
     if (pendingLearningDecisions > 0) {
       return `Проверьте ожидающие домашние задания присутствующих учеников. Осталось: ${pendingLearningDecisions}.`;
     }
-    if (isLearningLessonV2) {
-      if (homework.trim() && hasLearningPlanTopics && !hasValidLearningHomeworkTopic) {
-        return "Выберите тему, к которой относится новое домашнее задание.";
-      }
-    }
 
     for (const student of students) {
       const draft = draftFor(student);
@@ -1452,7 +1445,6 @@ export default function AdminOfflineLessonDetailPage() {
         setSubmissionProgress("Отметки сохранены. Отправляем отчёт администратору…");
         const payload = {
           topic: isTrialLesson || absenceOnly ? undefined : topic.trim(),
-          lessonGoals: absenceOnly ? undefined : lessonGoals.trim() || undefined,
           lessonSummary: isTrialLesson || absenceOnly ? undefined : lessonSummary.trim(),
           homeworkDraft: isTrialLesson || absenceOnly ? undefined : homework.trim(),
           nextLessonFocus: isTrialLesson || absenceOnly ? undefined : nextLessonFocus.trim() || undefined,
@@ -1862,11 +1854,34 @@ export default function AdminOfflineLessonDetailPage() {
                   <StudentPreviousContext
                     student={student}
                     showHomeworkStatus={!isLearningLessonV2 && Boolean(previousHomeworkLesson(student))}
-                    onSelectTopic={(selected) => {
-                      setTopic(selected);
-                      if (!lessonSummary) setLessonSummary(`Разобрали тему «${selected}»`);
-                    }}
                   />
+                  {(() => {
+                    const recent = learningV2?.students.find((item) => item.crmStudentId === student.crmStudentId)?.recentHomework ?? [];
+                    if (!recent.length) return null;
+                    return (
+                      <div className="mt-3 rounded-xl border border-stone-200 bg-stone-50 p-3" data-testid="lesson-recent-homework">
+                        <p className="text-[11px] font-black uppercase tracking-wider text-stone-500">Последние ДЗ</p>
+                        <ul className="mt-1.5 space-y-1">
+                          {recent.map((item) => (
+                            <li key={item.recipientId} className="flex flex-wrap items-center gap-x-2 text-xs text-stone-700">
+                              <span className="font-semibold text-ink">{item.topicTitle}</span>
+                              <span className="text-stone-500">{new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short" }).format(new Date(item.assignedAt))}</span>
+                              <span className={`rounded-md px-1.5 py-0.5 text-[11px] font-black ${
+                                item.completionPercent == null ? (item.decision ? "bg-emerald-50 text-emerald-800" : "bg-stone-200 text-stone-600")
+                                  : item.completionPercent >= 100 ? "bg-emerald-600 text-white"
+                                  : item.completionPercent > 0 ? "bg-amber-100 text-amber-900" : "bg-red-50 text-red-700"
+                              }`}>
+                                {item.completionPercent != null ? `${item.completionPercent}%`
+                                  : item.decision === "revision" ? "на доработку"
+                                  : item.decision ? "принято" : "ждёт урока"}
+                              </span>
+                              {item.comment ? <span className="text-stone-500">· {item.comment}</span> : null}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })}
@@ -1930,6 +1945,18 @@ export default function AdminOfflineLessonDetailPage() {
               void studentsResource.reload();
             }
             return res;
+          }}
+          onRenameTopic={async (topicId, input) => {
+            const api = isAdmin ? adminOfflineApi : teacherOfflineApi;
+            const res = await api.renameTopic(crmClassId, topicId, input);
+            if (res.learningV2) setOverriddenLearningV2(res.learningV2);
+            void studentsResource.reload();
+          }}
+          onRemoveTopic={async (topicId) => {
+            const api = isAdmin ? adminOfflineApi : teacherOfflineApi;
+            const res = await api.removeTopic(crmClassId, topicId);
+            if (res.learningV2) setOverriddenLearningV2(res.learningV2);
+            void studentsResource.reload();
           }}
         />
       ) : showStep(3) && learningV2 && !isTrialLesson ? (
@@ -2094,19 +2121,15 @@ export default function AdminOfflineLessonDetailPage() {
                       Тема нового домашнего задания
                       <select
                         id="learning-homework-topic"
-                        value={effectiveHomeworkTopicId ?? ""}
+                        value={effectiveHomeworkTopicId ?? NO_HOMEWORK_TOPIC}
                         disabled={!canEditReport}
-                        aria-invalid={Boolean(homework.trim() && hasLearningPlanTopics && !hasValidLearningHomeworkTopic)}
-                        aria-describedby={homework.trim() && hasLearningPlanTopics && !hasValidLearningHomeworkTopic
-                          ? "learning-homework-topic-error"
-                          : undefined}
                         onChange={(event) => setLearningV2Draft((current) => ({
                           ...current,
-                          homeworkTopicId: event.target.value || null,
+                          homeworkTopicId: event.target.value || NO_HOMEWORK_TOPIC,
                         }))}
                         className="mt-1.5 h-11 w-full rounded-xl border border-stone-200 bg-white px-3 text-sm font-semibold text-ink outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-200"
                       >
-                        <option value="">Выберите тему</option>
+                        <option value={NO_HOMEWORK_TOPIC}>Без темы — просто текст ученику</option>
                         {canEditAdminReview
                           && learningV2.pendingResults?.homeworkAssignment?.topicId
                           && !currentLearningTopicById.has(
@@ -2124,8 +2147,8 @@ export default function AdminOfflineLessonDetailPage() {
                         )))}
                       </select>
                       {homework.trim() && hasLearningPlanTopics && !hasValidLearningHomeworkTopic ? (
-                        <span id="learning-homework-topic-error" className="mt-1.5 block text-xs font-semibold text-red-700">
-                          Выберите тему перед отправкой домашнего задания.
+                        <span className="mt-1.5 block text-xs font-semibold text-stone-500" data-testid="learning-homework-no-topic">
+                          Без темы ученик увидит только текст; ДЗ к теме даёт ему процент и XP на следующем уроке.
                         </span>
                       ) : null}
                     </label>
@@ -2155,18 +2178,6 @@ export default function AdminOfflineLessonDetailPage() {
                   {/* Plan 1.14: nothing hidden — materials, goal, next focus and the admin comment are always in view. */}
                   {(
                     <div className="space-y-4">
-                      <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
-                        Цель урока
-                        <textarea
-                          value={lessonGoals}
-                          onChange={(event) => setLessonGoals(event.target.value)}
-                          disabled={!canEditReport}
-                          rows={2}
-                          className="mt-2 min-h-16 w-full rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm"
-                          placeholder="Что планировали освоить?"
-                        />
-                      </label>
-
                       <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
                         Фокус следующего урока
                         <textarea
@@ -3543,16 +3554,6 @@ function GroupLessonRoster({
                 {new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" }).format(new Date(previousHomework.date))}
               </p>
             </div>
-            {onSelectTopic && sourceTitle ? (
-              <button
-                type="button"
-                onClick={() => onSelectTopic(sourceTitle)}
-                className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-amber-300 bg-white px-3 text-xs font-bold text-amber-950 transition hover:bg-amber-100"
-              >
-                <Music size={14} />
-                Продолжить тему
-              </button>
-            ) : null}
           </div>
         </div>
       ) : homeworkOnTopicsStep ? null : (
@@ -3723,17 +3724,19 @@ function GroupStudentRow({
           <span className="text-xs font-semibold text-stone-400">—</span>
         )}
 
-        <button
-          type="button"
-          disabled={!attended || !showLearningResult}
-          onClick={() => setLearningOpen((current) => !current)}
-          aria-expanded={learningOpen}
-          aria-label={`Учебный результат: ${student.name}`}
-          title="Учебный результат"
-          className="grid h-10 w-10 place-items-center justify-self-end rounded-xl border border-stone-200 text-stone-600 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-35 lg:justify-self-auto"
-        >
-          {learningOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-        </button>
+        {showLearningResult ? (
+          <button
+            type="button"
+            disabled={!attended}
+            onClick={() => setLearningOpen((current) => !current)}
+            aria-expanded={learningOpen}
+            aria-label={`Учебный результат: ${student.name}`}
+            title="Учебный результат"
+            className="grid h-10 w-10 place-items-center justify-self-end rounded-xl border border-stone-200 text-stone-600 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-35 lg:justify-self-auto"
+          >
+            {learningOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+          </button>
+        ) : <span aria-hidden="true" />}
       </div>
 
       {needsHomeworkDetails ? (
@@ -4355,16 +4358,6 @@ function StudentPreviousContext({
             · {new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short" }).format(new Date(latest.date))}
           </span>
         </div>
-        {onSelectTopic && topicTitle ? (
-          <button
-            type="button"
-            onClick={() => onSelectTopic(topicTitle)}
-            className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-900 hover:text-amber-700 underline"
-          >
-            <Music size={12} />
-            Продолжить тему «{topicTitle}»
-          </button>
-        ) : null}
       </div>
 
       <p className="mt-1.5 text-sm font-bold text-ink">

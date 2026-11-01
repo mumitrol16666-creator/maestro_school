@@ -89,7 +89,6 @@ export const adminOfflineApi = {
     crmClassId: string,
     payload: {
       topic?: string;
-      lessonGoals?: string;
       lessonSummary?: string;
       homeworkDraft?: string;
       nextLessonFocus?: string;
@@ -140,6 +139,17 @@ export const adminOfflineApi = {
     apiRequest<Record<string, unknown>>(
       `/admin/offline-lessons/${encodeURIComponent(crmClassId)}/return-to-teacher`,
       { method: "POST", body: JSON.stringify({ reason }) },
+    ),
+  /** 01.11: a sector topic is renamed or removed right from the lesson. */
+  renameTopic: (crmClassId: string, topicId: string, data: { title: string; masteryCriteria?: string }) =>
+    apiRequest<{ success: boolean; learningV2: LearningLessonV2Context | null }>(
+      `/admin/offline-lessons/${encodeURIComponent(crmClassId)}/topics/${encodeURIComponent(topicId)}`,
+      { method: "PATCH", body: JSON.stringify(data) },
+    ),
+  removeTopic: (crmClassId: string, topicId: string) =>
+    apiRequest<{ success: boolean; deferred: boolean; learningV2: LearningLessonV2Context | null }>(
+      `/admin/offline-lessons/${encodeURIComponent(crmClassId)}/topics/${encodeURIComponent(topicId)}`,
+      { method: "DELETE" },
     ),
   quickAddTopic: (
     crmClassId: string,

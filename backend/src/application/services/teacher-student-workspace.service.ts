@@ -10,6 +10,7 @@ import { listPublishedLearningPlansV2 } from "./learning-plan-v2.service.js";
 import {
   learningHomeworkV2Enabled,
   listLearningHomeworkAssignmentsByCrmStudent,
+  listHomeworkCheckHistory,
 } from "./learning-homework-v2.service.js";
 
 /**
@@ -251,7 +252,24 @@ export async function getTeacherStudentWorkspace(
   const appUserId = appUser?.id ?? null;
   const limited = access.kind === "lesson";
 
-  const sectors = await listPublishedLearningPlansV2(crmStudentId, groupIds);
+  // 01.11: open sectors drive the card; closed ones are the «Секторы» history.
+  const allSectors = await listPublishedLearningPlansV2(crmStudentId, groupIds, { includeClosed: true });
+  const sectors = allSectors.filter((sector) => sector.status === "active");
+  const closedSectors = allSectors.filter((sector) => sector.status !== "active").map((sector) => ({
+    id: sector.id,
+    sequence: sector.sequence,
+    scope: sector.scope,
+    direction: sector.direction.title,
+    status: sector.status,
+    closedAt: sector.closedAt,
+    publishedAt: sector.publishedAt,
+    completed: sector.progress.completed,
+    total: sector.progress.total,
+    percent: sector.progress.percent,
+    exam: sector.exam ? { status: sector.exam.status, scheduledAt: sector.exam.scheduledAt, outcome: sector.exam.outcome } : null,
+    memberPass: sector.memberPass,
+    topics: sector.items.map((item) => ({ id: item.id, title: item.title, progressPercent: item.progressPercent, state: item.state ?? "active" })),
+  }));
 
   if (limited) {
     return {
@@ -266,6 +284,8 @@ export async function getTeacherStudentWorkspace(
       courses: [],
       weekXp: null,
       dynamics: null,
+      homeworkHistory: [],
+      closedSectors: [],
     };
   }
 
@@ -274,6 +294,7 @@ export async function getTeacherStudentWorkspace(
   const [
     proposals,
     assignments,
+    homeworkHistory,
     recentLessons,
     testAttempts,
     courseLessons,
@@ -288,6 +309,7 @@ export async function getTeacherStudentWorkspace(
       include: { direction: { select: { crmDirectionId: true, title: true } } },
     }),
     learningHomeworkV2Enabled() ? listLearningHomeworkAssignmentsByCrmStudent(crmStudentId) : Promise.resolve([]),
+    learningHomeworkV2Enabled() ? listHomeworkCheckHistory([crmStudentId]) : Promise.resolve([]),
     loadRecentLessons(appUserId, crmStudentId),
     appUserId
       ? prisma.preparedTestAttempt.findMany({
@@ -412,6 +434,17 @@ export async function getTeacherStudentWorkspace(
       bySource: [...bySource.entries()].map(([sourceType, amount]) => ({ sourceType, amount })),
       events: weekEvents.slice(0, 12),
     },
+    homeworkHistory: homeworkHistory.map((item) => ({
+      recipientId: item.recipientId,
+      assignmentId: item.assignmentId,
+      topic: item.topic,
+      instructions: item.instructions,
+      assignedAt: item.assignedAt,
+      sourceLessonId: item.sourceLessonId,
+      state: item.state,
+      reviews: item.reviews,
+    })),
+    closedSectors,
     dynamics: {
       attendance: {
         rate: recentAttendance.length ? Math.round((attendedCount / recentAttendance.length) * 100) : null,

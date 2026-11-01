@@ -23,10 +23,11 @@ import {
 import {
   learningLessonResultsSchema,
   offlineLessonQuickTopicSchema,
+  offlineLessonTopicRenameSchema,
   offlineLessonStudentCheckSchema,
 } from "./offline-lesson.schemas.js";
 import { writeAuditLog } from "../../application/services/audit.service.js";
-import { quickAddOfflineLessonTopic } from "../../application/services/learning-lesson-v2.service.js";
+import { quickAddOfflineLessonTopic, updateOfflineLessonTopic } from "../../application/services/learning-lesson-v2.service.js";
 import {
   listCrmSyncJournal,
   resolveCrmSyncConflict,
@@ -136,9 +137,28 @@ export async function adminOfflineRoutes(app: FastifyInstance) {
   );
 
 
+  app.patch(
+    "/admin/offline-lessons/:crmClassId/topics/:topicId",
+    { preHandler: actForTeacherGuards },
+    async (request) => {
+      const { crmClassId, topicId } = z.object({ crmClassId: z.string().min(1), topicId: z.string().uuid() }).parse(request.params);
+      const body = offlineLessonTopicRenameSchema.parse(request.body ?? {});
+      return { data: await updateOfflineLessonTopic(request.user!.id, crmClassId, topicId, { action: "rename", ...body }) };
+    },
+  );
+
+  app.delete(
+    "/admin/offline-lessons/:crmClassId/topics/:topicId",
+    { preHandler: actForTeacherGuards },
+    async (request) => {
+      const { crmClassId, topicId } = z.object({ crmClassId: z.string().min(1), topicId: z.string().uuid() }).parse(request.params);
+      return { data: await updateOfflineLessonTopic(request.user!.id, crmClassId, topicId, { action: "remove" }) };
+    },
+  );
+
   app.post(
     "/admin/offline-lessons/:crmClassId/quick-topic",
-    { preHandler: writeGuards },
+    { preHandler: actForTeacherGuards },
     async (request) => {
       const { crmClassId } = z.object({ crmClassId: z.string().min(1) }).parse(request.params);
       const body = offlineLessonQuickTopicSchema.parse(request.body ?? {});
