@@ -52,6 +52,14 @@ export async function updateUserPassword(userId: string, passwordHash: string) {
   });
 }
 
+/** The user's own change in the app: CRM learns its copy of the password is no longer current. */
+export async function updateOwnPassword(userId: string, passwordHash: string) {
+  return prisma.user.update({
+    where: { id: userId },
+    data: { passwordHash, passwordChangedInAppAt: new Date() },
+  });
+}
+
 export async function updateUserProfile(
   userId: string,
   params: {

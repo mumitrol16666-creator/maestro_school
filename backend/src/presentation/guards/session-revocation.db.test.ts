@@ -168,7 +168,7 @@ if (!process.env.TEST_DATABASE_URL) {
     assert.equal(exchange.json().data.user.role, "curator");
   });
 
-  test("self password change has no fallible CRM request after the password commit", async t => {
+  test("self password change does not depend on CRM after the password commit", async t => {
     const user = await makeUser("teacher", true);
     let calls = 0;
     t.mock.method(globalThis, "fetch", async () => {
@@ -182,7 +182,7 @@ if (!process.env.TEST_DATABASE_URL) {
     const result = await app.inject({ method: "PATCH", url: "/api/auth/me/password", headers: { authorization: `Bearer ${old}` },
       payload: { currentPassword: "previous-password", newPassword: "replacement-password" } });
     assert.equal(result.statusCode, 200, result.body);
-    assert.equal(calls, 1);
+    assert.equal(calls, 2, "the session check, then the password notice that fails without affecting the change");
     assert.ok(result.json().data.token);
     assert.equal((await get(old)).statusCode, 401);
     calls = 0;

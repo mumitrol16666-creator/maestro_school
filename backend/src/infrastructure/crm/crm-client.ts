@@ -189,6 +189,11 @@ export async function fetchTeacherStudents(crmTeacherId: string) {
   }>(`/api/integration/v1/teachers/${encodeURIComponent(crmTeacherId)}/students`);
 }
 
+/** The user changed the password in the app. No password is sent: CRM only forgets its copy. */
+export async function postPasswordChangedInApp(payload: { appUserId: string; crmUserId: string; changedAt: string }) {
+  return crmPost<{ cleared: boolean }>("/api/integration/v1/users/password-changed-in-app", payload);
+}
+
 /** Plan 3.6: the platform revoked a parent's access; CRM reopens the access step of an open enrollment. */
 export async function postParentLinkRevoked(payload: { crmStudentId: string; parentUserId: string }) {
   return crmPost<{ enrollments: number; reopened: number }>("/api/integration/v1/family/parent-link-revoked", payload);
