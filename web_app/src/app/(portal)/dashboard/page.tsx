@@ -99,7 +99,7 @@ export default function DashboardPage() {
       <StudentBanners banners={data.banners ?? []} />
 
       <div className="grid items-stretch gap-5 xl:grid-cols-[minmax(0,1.75fr)_minmax(280px,0.65fr)]">
-        <div className="order-1"><StudentTodayCard today={today} streakWeeks={data.streakWeeks ?? null} practice={data.practice ?? null} /></div>
+        <div className="order-1"><StudentTodayCard today={today} streakWeeks={data.streakWeeks ?? null} practice={data.practice ?? null} scheduleUnavailable={data.schoolStatus === "unavailable"} /></div>
         <div className="order-3 xl:order-2"><LeagueMiniWidget /></div>
       </div>
 

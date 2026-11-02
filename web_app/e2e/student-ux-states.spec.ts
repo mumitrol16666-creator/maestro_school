@@ -141,6 +141,25 @@ test("the CRM copy of the schedule is named in the strip", async ({ page, reques
   await expect(page.getByTestId("connection-banner")).toContainText("Нет связи со школой. Расписание на");
 });
 
+test("CRM down without a copy shows the strip; a student the school has not linked sees none", async ({ page, request, context }) => {
+  await signIn(context, await studentSession(request));
+  let schoolStatus = "unavailable";
+  await page.route("**/api/v1/students/me/home", async (route) => {
+    const response = await route.fetch();
+    const body = await response.json() as { data: Record<string, unknown> };
+    Object.assign(body.data, { school: null, schoolStatus, today: { ...(body.data.today as object), nextLesson: null } });
+    await route.fulfill({ response, json: body });
+  });
+  await page.goto("/dashboard");
+  await expect(page.getByTestId("connection-banner")).toHaveText("Нет связи со школой. Расписание сейчас не загрузилось");
+  await expect(page.getByTestId("today-lesson")).toContainText("Расписание не загрузилось");
+
+  schoolStatus = "not_linked";
+  await page.reload();
+  await expect(page.getByTestId("today-lesson")).toContainText("Ближайший урок пока не назначен");
+  await expect(page.getByTestId("connection-banner")).toHaveCount(0);
+});
+
 test("a profile save is confirmed by a toast; sign-out erases the saved home", async ({ page, request, context }) => {
   const session = await studentSession(request);
   await signIn(context, session);

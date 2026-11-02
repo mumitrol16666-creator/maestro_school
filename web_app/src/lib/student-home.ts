@@ -1,5 +1,5 @@
 import { api, ApiError, getStoredUser, isAnswerFromMemory } from "@/lib/api-client";
-import { reportApiUnreachable, reportSchoolFreshness } from "@/lib/connection-status";
+import { reportApiUnreachable, reportSchoolFreshness, reportSchoolUnavailable } from "@/lib/connection-status";
 import { readHomeSnapshot, saveHomeSnapshot } from "@/lib/offline-snapshot";
 import type { ApiStudentHome } from "@/types/api";
 
@@ -24,8 +24,10 @@ export function loadStudentHome(options: { fresh?: boolean } = {}) {
     (home) => {
       // В-18: the last live home is kept on the device for opening the app without network.
       if (userId && !isAnswerFromMemory(home)) saveHomeSnapshot(userId, home);
-      // The shell tells the student when the schedule is the server's last copy from CRM.
-      reportSchoolFreshness(home.school);
+      // The shell tells the student when the schedule is the server's last copy from CRM,
+      // or that CRM is down with no copy at all (a student the school has not linked sees nothing).
+      if (home.schoolStatus === "unavailable") reportSchoolUnavailable();
+      else reportSchoolFreshness(home.school);
       return home;
     },
     (reason: unknown) => {
