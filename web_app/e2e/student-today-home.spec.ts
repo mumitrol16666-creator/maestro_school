@@ -29,9 +29,19 @@ test("the home opens with «Сегодня», a banner for a new homework, and n
   await expect(today.getByTestId("today-cta")).toBeVisible();
   await expect(page.getByTestId("dashboard-coins-chip")).toHaveCount(0);
   await expect(page.getByText("Coins", { exact: true })).toHaveCount(0);
+  // В-1: a banner is compact and does not push «Сегодня» away; at most one is open until «Ещё N».
+  expect(await page.getByTestId("student-banner").count()).toBeLessThanOrEqual(1);
+  for (const box of await page.getByTestId("student-banner").evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().height))) {
+    expect(box).toBeLessThanOrEqual(90);
+  }
+  // The streak of weeks lives in the league now, not on the «Сегодня» card.
+  await expect(page.getByTestId("today-streak")).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Открыть сектор", exact: true })).toHaveCount(1);
 
   if (seeded) {
+    // В-1: one compact banner (the newest); the rest sit behind «Ещё N».
+    const more = page.getByTestId("student-banners-more");
+    if (await more.count() && !(await page.getByTestId("student-banner").filter({ hasText: "Переходы Am–E к четвергу" }).count())) await more.click();
     const banner = page.getByTestId("student-banner").filter({ hasText: "Переходы Am–E к четвергу" });
     await expect(banner).toBeVisible();
     await banner.getByRole("button", { name: /Открыть задание/ }).click();

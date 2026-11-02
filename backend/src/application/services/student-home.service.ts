@@ -86,21 +86,27 @@ async function homeExtras(studentUserId: string) {
   };
 }
 
-/** Plan 5.2: unread notifications shown as banners; plan 5.1: the current streak for «Сегодня». */
+/**
+ * Plan 5.2: unread notifications shown as banners (the newest five) and how many there are in all,
+ * so «Ещё N» on the home and the line on «Обучение» count every one. В-31: the weekly streak is
+ * no longer on the home, it lives in the league.
+ */
 async function homeSignals(studentUserId: string) {
-  const [banners, streak, practice] = await Promise.allSettled([
+  const bannerWhere = { userId: studentUserId, readAt: null, type: { in: [...STUDENT_BANNER_TYPES] } };
+  const [banners, bannersTotal, practice] = await Promise.allSettled([
     prisma.userNotification.findMany({
-      where: { userId: studentUserId, readAt: null, type: { in: [...STUDENT_BANNER_TYPES] } },
+      where: bannerWhere,
       orderBy: { createdAt: "desc" },
       take: 5,
       select: { id: true, type: true, title: true, body: true, url: true, createdAt: true },
     }),
-    prisma.weeklyStreakState.findFirst({ where: { studentId: studentUserId }, orderBy: { updatedAt: "desc" }, select: { currentWeeks: true } }),
+    prisma.userNotification.count({ where: bannerWhere }),
     getPracticeStatus(studentUserId),
   ]);
+  const shown = banners.status === "fulfilled" ? banners.value : [];
   return {
-    banners: banners.status === "fulfilled" ? banners.value : [],
-    streakWeeks: streak.status === "fulfilled" ? streak.value?.currentWeeks ?? 0 : null,
+    banners: shown,
+    bannersTotal: bannersTotal.status === "fulfilled" ? Math.max(bannersTotal.value, shown.length) : shown.length,
     practice: practice.status === "fulfilled" ? practice.value : null,
   };
 }

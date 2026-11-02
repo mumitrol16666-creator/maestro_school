@@ -148,7 +148,7 @@ export function LevelProgressDialog({
 
           <div className="mt-5 grid gap-3 rounded-xl border border-white/10 bg-white/[0.045] p-4 text-sm leading-6 text-white/65 sm:grid-cols-2">
             <p className="flex gap-2"><Star size={16} className="mt-1 shrink-0 text-gold-ink" />Баллы показывают постоянный результат обучения и не сгорают каждую неделю.</p>
-            <p className="flex gap-2"><Info size={16} className="mt-1 shrink-0 text-gold-ink" />Недельный XP считается отдельно для лиги, а Coins используются в магазине наград.</p>
+            <p className="flex gap-2"><Info size={16} className="mt-1 shrink-0 text-gold-ink" />Недельный XP считается отдельно — он нужен только для лиги.</p>
           </div>
 
           <div className="mt-6">

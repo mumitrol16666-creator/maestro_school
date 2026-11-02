@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, Coins, LogOut, Settings, Star } from "lucide-react";
+import { ChevronDown, LogOut, Settings, Star } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { formatCount } from "@/lib/plural";
@@ -80,10 +80,6 @@ export function UserMenu() {
                 <div className="flex items-center gap-2 rounded-xl bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
                   <Star size={14} className="text-gold-ink" fill="currentColor" />
                   {formatCount(user?.points ?? 0, ["балл", "балла", "баллов"])} Maestro
-                </div>
-                <div className="flex items-center gap-2 rounded-xl bg-stone-100 px-3 py-2 text-xs font-semibold text-stone-700">
-                  <Coins size={14} className="text-gold-ink" />
-                  {(user?.coins ?? 0).toLocaleString("ru-RU")} Maestro Coins
                 </div>
               </div>
             ) : null}
