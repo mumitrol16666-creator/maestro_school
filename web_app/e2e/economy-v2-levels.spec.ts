@@ -116,6 +116,8 @@ test("top Points is separate from weekly XP and preserves tied positions", async
     });
   });
   await page.goto("/league");
+  // Plan 5.3: the weekly table and the top Points fold under «Подробнее».
+  await page.getByTestId("league-details").locator("> summary").click();
 
   const leaderboard = page.getByTestId("points-leaderboard");
   await expect(leaderboard).toBeVisible();
@@ -140,6 +142,7 @@ test("LEVEL and top Points fit a phone viewport", async ({ page, request, contex
   await page.setViewportSize({ width: 390, height: 844 });
   await signInAsStudent(request, context);
   await page.goto("/league");
+  await page.getByTestId("league-details").locator("> summary").click();
 
   const leaderboard = page.getByTestId("points-leaderboard");
   await expect(leaderboard).toBeVisible();
