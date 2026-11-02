@@ -188,6 +188,33 @@ function unreachable<T, M>(method: string, path: string): ApiEnvelope<T, M> {
   throw new ApiError("Не удалось связаться с сервером Maestro", 0, "NETWORK_ERROR");
 }
 
+/**
+ * A file the server builds for the signed-in person (a table for Excel): the token goes in the
+ * header, so the file cannot be opened by a plain link. Returns the bytes and the file name.
+ */
+export async function apiDownload(path: string): Promise<{ blob: Blob; filename: string | null }> {
+  const token = getAccessToken();
+  const headers = new Headers();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${path}`, { headers, cache: "no-store" });
+  } catch {
+    throw new ApiError("Не удалось связаться с сервером Maestro", 0, "NETWORK_ERROR");
+  }
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as ApiErrorEnvelope;
+    throw new ApiError(
+      payload.error?.message ?? "Не удалось скачать файл",
+      response.status,
+      payload.error?.code ?? "API_ERROR",
+    );
+  }
+  const disposition = response.headers.get("Content-Disposition") ?? "";
+  const filename = /filename="?([^";]+)"?/i.exec(disposition)?.[1] ?? null;
+  return { blob: await response.blob(), filename };
+}
+
 export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   return (await apiRequestEnvelope<T>(path, init)).data;
 }

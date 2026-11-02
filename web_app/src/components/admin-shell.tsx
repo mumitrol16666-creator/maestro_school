@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, BookMarked, ChevronRight, ClipboardCheck, ClipboardPenLine, FolderKanban, Gift, GraduationCap, Layers3, LayoutDashboard, LibraryBig, ListChecks, LogOut, Megaphone, Menu, MessagesSquare, Presentation, Settings, Trophy, UserCog, UsersRound, X,
+import { ArrowRight, BookMarked, ChevronRight, ClipboardCheck, ClipboardPenLine, FolderKanban, Gift, GraduationCap, Layers3, LayoutDashboard, LibraryBig, ListChecks, LogOut, Megaphone, Menu, MessagesSquare, Presentation, Settings, Trophy, UserCog, UsersRound, WalletCards, X,
   MessageSquareText,
 } from "lucide-react";
 import Link from "next/link";
@@ -10,6 +10,7 @@ import { formatFio, initialsFromName } from "@/lib/name";
 import { isContentAdminRole, roleLabel } from "@/lib/role-labels";
 import { usePendingHomeworkCount } from "@/hooks/use-pending-homework-count";
 import { usePendingLessonQuestionsCount } from "@/hooks/use-pending-lesson-questions-count";
+import { usePendingCoursePaymentsCount } from "@/hooks/use-pending-course-payments-count";
 import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
 import { useMessageMailboxStatus } from "@/hooks/use-message-mailbox-status";
 import { teacherStudentsApi } from "@/lib/teacher-students-api";
@@ -44,6 +45,10 @@ const lessonNavigation = [
   { href: "/admin/offline-lessons", label: "Уроки", icon: Presentation },
 ];
 
+/** Stage 4: payments for paid courses, for people with the right to decide them. */
+const COURSE_PAYMENTS_PERMISSION = "course_payments.manage";
+const coursePaymentsNavigation = { href: "/admin/course-payments", label: "Оплаты курсов", icon: WalletCards };
+
 const teacherNavigation = [
   { href: "/admin", label: "Главная", icon: LayoutDashboard },
   { href: "/admin/my-students", label: "Мои ученики", icon: UsersRound },
@@ -69,6 +74,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     isContentAdmin || user?.role === "teacher",
   );
   const { count: pendingQuestionsCount, reload: reloadPendingQuestionsCount } = usePendingLessonQuestionsCount(60_000, isContentAdmin);
+  const canManageCoursePayments = Boolean(user?.permissions?.includes(COURSE_PAYMENTS_PERMISSION));
+  const { count: pendingCoursePayments } = usePendingCoursePaymentsCount(60_000, canManageCoursePayments);
   const { count: unreadNotifications, reload: reloadUnreadNotifications } = useUnreadNotifications();
   const learningDialogsV2 = Boolean(user?.productFeatures?.learningDialogsV2);
   const { count: unreadMessages } = useMessageMailboxStatus(
@@ -81,7 +88,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const journalNavigation = user?.productFeatures?.curatorWorkspaceV2
     ? [{ href: "/admin/journal", label: "Журнал", icon: ListChecks }]
     : [];
-  const navigation = isContentAdmin
+  const baseNavigation: Array<{ href: string; label: string; icon: typeof LayoutDashboard }> = isContentAdmin
     ? workspaceNavigationEnabled
       ? adminWorkspaceSections
       : [cmsNavigation[0], ...journalNavigation, ...cmsNavigation.slice(1), ...accessNavigation, ...teachingNavigation]
@@ -92,6 +99,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           { href: "/admin/sector-exams", label: "Экзамены секторов", icon: GraduationCap },
           { href: "/admin/materials", label: "Библиотека материалов", icon: LibraryBig },
         ];
+  const navigation = canManageCoursePayments && user?.role !== "teacher"
+    ? [...baseNavigation, coursePaymentsNavigation]
+    : baseNavigation;
   const sidebarTitle = isContentAdmin ? "Управление школой" : "Кабинет преподавателя";
   const displayName = (user ? formatFio(user) : "")
     || user?.login
@@ -182,6 +192,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           ? pendingHomeworkCount
           : workspaceSection?.id === "communications"
             ? learningDialogsV2 ? unreadMessages : pendingQuestionsCount
+            : href === coursePaymentsNavigation.href
+              ? pendingCoursePayments
             : href === "/admin/homework-review"
               ? pendingHomeworkCount
               : href === "/admin/lesson-questions"

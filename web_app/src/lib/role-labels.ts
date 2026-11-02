@@ -28,6 +28,7 @@ const PERMISSION_LABELS: Record<string, string> = {
   "offline_school.read": "Расписание школы",
   "offline_school.write": "Посещаемость и отчёты по урокам",
   "family.read": "Семейный кабинет",
+  "course_payments.manage": "Оплаты курсов и доступ к ним",
 };
 
 const ROLE_DESCRIPTIONS: Record<string, string> = {

@@ -9,6 +9,8 @@ import { LessonEditorForm } from "@/components/lesson-editor-form";
 import { LessonWorkspace, type LessonWorkspaceTab } from "@/components/lesson-workspace";
 import { CourseReadiness } from "@/components/course-readiness";
 import { CourseStructureTree } from "@/components/course-structure-tree";
+import { CourseTermsPanel } from "@/components/course-terms-panel";
+import { freeLessonIds } from "@/lib/course-payments-format";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
 import { normalizeTestQuestions, serializeTestQuestions } from "@/components/admin-test-builder";
 import { emptyLessonForm, lessonFormFromCms, serializeLessonForm } from "@/lib/lesson-form";
@@ -332,9 +334,14 @@ export default function CourseBuilderPage() {
       <div className="flex flex-wrap items-center gap-3"><SaveStatus state={saveState} /><PublishBadge published={tree.data.isPublished} archived={!!tree.data.deletedAt} /></div>
     </header>
     {operationError && <div className="mb-5 rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{operationError}</div>}
+    <CourseTermsPanel
+      courseId={courseId}
+      terms={{ priceKzt: tree.data.priceKzt, includedInSchool: tree.data.includedInSchool, freeLessonsCount: tree.data.freeLessonsCount }}
+      onSaved={tree.reload}
+    />
     <CourseReadiness modules={modules} onSelectLesson={selectLesson} />
     <div className="grid items-start gap-6 xl:grid-cols-[390px_minmax(0,1fr)]">
-      <CourseStructureTree modules={modules} query={query} expanded={expanded} selectedModuleId={selectedModuleId} selectedLessonId={selectedLessonId} onQueryChange={setQuery} onToggleModule={(id) => setExpanded((value) => { const next = new Set(value); if (next.has(id)) next.delete(id); else next.add(id); return next; })} onSelectModule={selectModule} onSelectLesson={selectLesson} onAddModule={startNewModule} onAddLesson={startNewLesson} />
+      <CourseStructureTree modules={modules} freeLessonIds={tree.data.priceKzt === null ? undefined : freeLessonIds(modules, tree.data.freeLessonsCount)} query={query} expanded={expanded} selectedModuleId={selectedModuleId} selectedLessonId={selectedLessonId} onQueryChange={setQuery} onToggleModule={(id) => setExpanded((value) => { const next = new Set(value); if (next.has(id)) next.delete(id); else next.add(id); return next; })} onSelectModule={selectModule} onSelectLesson={selectLesson} onAddModule={startNewModule} onAddLesson={startNewLesson} />
       <main className="min-w-0 rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft lg:p-8">
         {(editorMode === "new-module" || editorMode === "edit-module") ? moduleEditor(        ) : editorMode === "new-lesson" ? (
           <LessonEditorForm

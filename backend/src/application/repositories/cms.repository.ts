@@ -68,6 +68,9 @@ export async function getAdminCourseTree(id: string) {
       thumbnail: true,
       difficultyLevel: true,
       completionCoinsReward: true,
+      priceKzt: true,
+      includedInSchool: true,
+      freeLessonsCount: true,
       isPublished: true,
       deletedAt: true,
       direction: { select: { id: true, title: true } },
@@ -111,10 +114,10 @@ export async function getAdminCourseTree(id: string) {
   };
 }
 
-export const createCourse = (data: { directionId: string; title: string; description?: string | null; thumbnail?: string | null; difficultyLevel: DifficultyLevel; completionCoinsReward?: number; isPublished?: boolean }) =>
+export const createCourse = (data: { directionId: string; title: string; description?: string | null; thumbnail?: string | null; difficultyLevel: DifficultyLevel; completionCoinsReward?: number; priceKzt?: number | null; includedInSchool?: boolean; freeLessonsCount?: number; isPublished?: boolean }) =>
   prisma.course.create({ data });
 
-export async function updateCourse(id: string, data: { directionId?: string; title?: string; description?: string | null; thumbnail?: string | null; difficultyLevel?: DifficultyLevel; completionCoinsReward?: number; isPublished?: boolean; deletedAt?: Date | null }) {
+export async function updateCourse(id: string, data: { directionId?: string; title?: string; description?: string | null; thumbnail?: string | null; difficultyLevel?: DifficultyLevel; completionCoinsReward?: number; priceKzt?: number | null; includedInSchool?: boolean; freeLessonsCount?: number; isPublished?: boolean; deletedAt?: Date | null }) {
   await requireRecord(prisma.course.findUnique({ where: { id }, select: { id: true } }), "Course");
   return prisma.course.update({ where: { id }, data });
 }
