@@ -106,7 +106,7 @@ export default function SettingsPage() {
           </button>
         ))}
       </nav>
-      <div className={`grid gap-6 ${activeSection === "overview" ? "xl:grid-cols-[0.8fr_1.2fr]" : ""}`}>
+      <div className={`grid grid-cols-[minmax(0,1fr)] gap-6 ${activeSection === "overview" ? "xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]" : ""}`}>
         {activeSection === "overview" ? (
           <section
             className="self-start rounded-[30px] bg-ink p-7 text-white shadow-soft"
@@ -136,7 +136,7 @@ export default function SettingsPage() {
             </button>
           </section>
         ) : null}
-        <section className="space-y-5" data-testid={`profile-section-${activeSection}`}>
+        <section className="min-w-0 space-y-5" data-testid={`profile-section-${activeSection}`}>
           {activeSection === "overview" ? (
             <>
               {level ? <LevelSummary progress={level} /> : null}

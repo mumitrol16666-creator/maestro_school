@@ -174,7 +174,8 @@ test("open leads to canonical assignment detail, without creating another task",
   const { writes, errors } = await setup(page);
   await page.getByRole("link", { name: "Открыть: Аккорды Am–E", exact: true }).click();
   await expect(page).toHaveURL(/\/tasks\/school\/assignment$/);
-  await expect(page.getByText("Переходы под метроном, 80 BPM.", { exact: true })).toBeVisible();
+  // Since e8ad172 the instructions read as a goal and a list, so the sentence is one item of it.
+  await expect(page.getByTestId("homework-items").getByText(/Переходы под метроном, 80 BPM/)).toBeVisible();
   expect(writes).toEqual([]);
   expect(errors).toEqual([]);
 });

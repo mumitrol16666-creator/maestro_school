@@ -151,6 +151,7 @@ test("mobile task filters keep the screen stable and an offline task opens", asy
   await expect(taskLink).toBeVisible();
   await taskLink.click();
   await expect(page).toHaveURL(/\/tasks\/school\//);
-  await expect(page.getByRole("heading", { name: "Задание с преподавателем", exact: true })).toBeVisible();
+  // The homework screen of e8ad172 (release 02.11) is titled «Домашнее задание».
+  await expect(page.getByRole("heading", { name: "Домашнее задание", exact: true })).toBeVisible();
   await expect(page.getByText(/Application error/i)).toHaveCount(0);
 });

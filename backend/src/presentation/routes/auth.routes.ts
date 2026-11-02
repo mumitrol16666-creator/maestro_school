@@ -426,8 +426,11 @@ export async function authRoutes(app: FastifyInstance) {
     }
 
     const user = await findUserWithRoleById(authUser.id);
-    if (!user || !(await bcrypt.compare(body.currentPassword, user.passwordHash))) {
-      throw new UnauthorizedError("Текущий пароль указан неверно");
+    if (!user) throw new UnauthorizedError();
+    // В-41, З-1: a typo in the current password is a form error, not a lost session — 401 would
+    // make the app sign the student out.
+    if (!(await bcrypt.compare(body.currentPassword, user.passwordHash))) {
+      throw new BadRequestError("Текущий пароль указан неверно", "CURRENT_PASSWORD_INVALID");
     }
 
     const updated = await updateOwnPassword(authUser.id, await bcrypt.hash(body.newPassword, 10));
