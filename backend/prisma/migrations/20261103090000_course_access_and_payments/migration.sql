@@ -133,3 +133,8 @@ CROSS JOIN permissions p
 WHERE p.code = 'course_payments.manage'
   AND r.slug IN ('super_admin', 'owner', 'admin', 'branch_manager')
 ON CONFLICT (role_id, permission_id) DO NOTHING;
+
+-- A registration in the app whose lead has not reached CRM yet. Null = nothing to send. A job re-sends
+-- the lead with the same externalSourceId (CRM answers «already there»), and stops after seven days.
+-- Deliberately no unique index on users.phone_normalized: production may hold duplicate phones.
+ALTER TABLE "users" ADD COLUMN "crm_lead_pending_since" TIMESTAMPTZ(6);

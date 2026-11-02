@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "../../infrastructure/database/prisma.js";
 import { postAppRegistrationBooking } from "../../infrastructure/crm/crm-client.js";
 import { BadRequestError, ConflictError } from "../../domain/errors.js";
+import { createStudentUser } from "../repositories/auth.repository.js";
 import { isValidPhone, normalizePhoneDigits } from "../../lib/phone.js";
 
 /**
@@ -22,9 +23,65 @@ export async function reserveLogin(prefix: "s" | "p", phoneDigits: string): Prom
   return candidate;
 }
 
+type Tx = Prisma.TransactionClient;
+
+/**
+ * Takes a transaction-scoped advisory lock per phone, so two registrations on the same phone run one
+ * after the other and the second sees the first one's account. There is deliberately no unique index
+ * on the phone (production may hold duplicate phones, the migration would fail). Several phones are
+ * locked in one stable order, so two parent registrations can never wait for each other.
+ */
+async function lockRegistrationPhones(tx: Tx, phones: string[]) {
+  for (const phone of [...new Set(phones)].sort()) {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`register-phone:${phone}`}))`;
+  }
+}
+
+function duplicatePhone(label: string) {
+  return new ConflictError(
+    `${label} уже зарегистрирован. Войдите в аккаунт или укажите другой номер.`,
+    "PHONE_ALREADY_REGISTERED",
+  );
+}
+
+/** Refuses a phone that an active account already has. Must run after `lockRegistrationPhones`. */
+async function assertPhonesFree(tx: Tx, phones: Array<{ phone: string; label: string }>) {
+  const taken = await tx.user.findMany({
+    where: { phoneNormalized: { in: phones.map((item) => item.phone) }, deletedAt: null, isActive: true },
+    select: { phoneNormalized: true },
+  });
+  for (const item of phones) {
+    if (taken.some((row) => row.phoneNormalized === item.phone)) throw duplicatePhone(item.label);
+  }
+}
+
+/**
+ * Registration on the user's own (`POST /auth/register`): the student account with no CRM link, made
+ * in one transaction with the phone check, behind the phone lock. The lead is still to be sent, so the
+ * account is marked `crmLeadPendingSince`.
+ */
+export async function registerExternalStudent(input: {
+  login: string;
+  email: string | null;
+  phone: string;
+  passwordHash: string;
+  firstName: string;
+  lastName: string;
+  middleName?: string | null;
+}) {
+  const phone = normalizePhoneDigits(input.phone);
+  return prisma.$transaction(async (tx) => {
+    await lockRegistrationPhones(tx, [phone]);
+    await assertPhonesFree(tx, [{ phone, label: "Номер телефона" }]);
+    return createStudentUser({ ...input, phone, crmLeadPendingSince: new Date(), client: tx });
+  });
+}
+
 /**
  * Sends the lead to CRM. It never throws: CRM being down must not break a registration, the error
- * goes to the log (with the user id, so the lead can be added by hand).
+ * goes to the log (with the user id, so the lead can be added by hand). CRM accepting the lead — new or
+ * «already there» for the same externalSourceId — clears `crmLeadPendingSince`; a failure leaves it, and
+ * the job in `app-registration-lead-job.service.ts` sends the lead again.
  */
 export async function sendAppRegistrationLead(params: {
   userId: string;
@@ -32,6 +89,8 @@ export async function sendAppRegistrationLead(params: {
   lastName: string;
   phone: string;
   comment?: string;
+  /** The retry job passes false: a failed retry is not worth a line every ten minutes. */
+  logFailure?: boolean;
 }): Promise<boolean> {
   try {
     await postAppRegistrationBooking({
@@ -41,14 +100,22 @@ export async function sendAppRegistrationLead(params: {
       phone: params.phone,
       ...(params.comment ? { comment: params.comment } : {}),
     });
-    return true;
   } catch (error) {
-    console.error(
-      `[app-registration] ERROR CRM lead was not sent for user ${params.userId}:`,
-      error instanceof Error ? error.message : error,
-    );
+    if (params.logFailure !== false) {
+      console.error(
+        `[app-registration] ERROR CRM lead was not sent for user ${params.userId}:`,
+        error instanceof Error ? error.message : error,
+      );
+    }
     return false;
   }
+  try {
+    await prisma.user.updateMany({ where: { id: params.userId }, data: { crmLeadPendingSince: null } });
+  } catch (error) {
+    // The lead is in CRM; the flag stays and the job sends it once more, which CRM answers «already there».
+    console.error(`[app-registration] CRM lead sent, but the flag of user ${params.userId} was not cleared:`, error);
+  }
+  return true;
 }
 
 export interface ParentRegistrationPerson {
@@ -56,13 +123,6 @@ export interface ParentRegistrationPerson {
   lastName: string;
   phone: string;
   password: string;
-}
-
-function duplicatePhone(label: string) {
-  return new ConflictError(
-    `${label} уже зарегистрирован. Войдите в аккаунт или укажите другой номер.`,
-    "PHONE_ALREADY_REGISTERED",
-  );
 }
 
 /**
@@ -94,13 +154,6 @@ export async function registerParentWithChild(input: {
     throw new Error("Parent or student role is not configured. Run the production seed.");
   }
 
-  const taken = await prisma.user.findMany({
-    where: { phoneNormalized: { in: [parentPhone, childPhone] }, deletedAt: null, isActive: true },
-    select: { phoneNormalized: true },
-  });
-  if (taken.some((row) => row.phoneNormalized === parentPhone)) throw duplicatePhone("Номер телефона родителя");
-  if (taken.some((row) => row.phoneNormalized === childPhone)) throw duplicatePhone("Номер телефона ребёнка");
-
   const [parentLogin, childLogin, parentHash, childHash] = await Promise.all([
     reserveLogin("p", parentPhone),
     reserveLogin("s", childPhone),
@@ -110,6 +163,13 @@ export async function registerParentWithChild(input: {
 
   try {
     return await prisma.$transaction(async (tx) => {
+      // Both phones are locked and checked in the same transaction as the inserts: no registration can
+      // slip in between the check and the insert.
+      await lockRegistrationPhones(tx, [parentPhone, childPhone]);
+      await assertPhonesFree(tx, [
+        { phone: parentPhone, label: "Номер телефона родителя" },
+        { phone: childPhone, label: "Номер телефона ребёнка" },
+      ]);
       const parent = await tx.user.create({
         data: {
           login: parentLogin,
@@ -121,6 +181,8 @@ export async function registerParentWithChild(input: {
           lastName: input.parent.lastName.trim(),
           roleId: parentRole.id,
           leagueEligible: false,
+          // The one lead of this registration is the parent's.
+          crmLeadPendingSince: new Date(),
         },
       });
       const child = await tx.user.create({
@@ -147,7 +209,8 @@ export async function registerParentWithChild(input: {
       return { parent, child };
     });
   } catch (error) {
-    // A login or a phone taken by someone between the check and the insert.
+    // A login taken by someone between `reserveLogin` and the insert (logins have a unique index).
+    // Phones are not caught here: there is no unique index on them, the phone lock above covers them.
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       throw new ConflictError(
         "Не удалось создать аккаунты: логин или номер уже заняты. Попробуйте ещё раз.",

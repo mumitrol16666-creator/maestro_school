@@ -26,10 +26,13 @@ if (!process.env.TEST_DATABASE_URL) {
   const { catalogRoutes } = await import("./catalog.routes.js");
   const { learningRoutes } = await import("./learning.routes.js");
   const { coursePaymentsRoutes } = await import("./course-payments.routes.js");
+  const { familyRoutes } = await import("./family.routes.js");
   const { errorHandler } = await import("../middleware/error-handler.js");
   const { getLessonAccess } = await import("../../application/services/course-access.service.js");
   const { applyUserLink } = await import("../../application/repositories/user-link.repository.js");
   const weekly = await import("../../application/services/weekly-league.service.js");
+  const { retryPendingAppRegistrationLeads } = await import("../../application/services/app-registration-lead-job.service.js");
+  const { default: rateLimit } = await import("@fastify/rate-limit");
 
   const app = Fastify();
   const suffix = randomUUID().replace(/\D/g, "").padEnd(7, "7").slice(0, 7);
@@ -71,7 +74,7 @@ if (!process.env.TEST_DATABASE_URL) {
     await app.register(fastifyJwt, { secret: process.env.JWT_SECRET!, sign: { expiresIn: "7d" } });
     await app.register(multipart, { limits: { fileSize: 1024 * 1024, files: 1 } });
     app.setErrorHandler(errorHandler);
-    for (const plugin of [authRoutes, catalogRoutes, learningRoutes, coursePaymentsRoutes]) {
+    for (const plugin of [authRoutes, catalogRoutes, learningRoutes, coursePaymentsRoutes, familyRoutes]) {
       await app.register(plugin, { prefix: "/api/v1" });
     }
     await app.ready();
@@ -91,6 +94,17 @@ if (!process.env.TEST_DATABASE_URL) {
     const direction = await prisma.direction.create({ data: { title: `Регистрация ${suffix}`, slug: `register-${suffix}`, isPublished: true } });
     directionId = direction.id;
   });
+
+  /** The lead and its flag are written after the answer, without waiting: poll until the check holds. */
+  async function until(check: () => Promise<boolean>) {
+    for (let attempt = 0; attempt < 80; attempt += 1) {
+      if (await check()) return true;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    return false;
+  }
+  const pendingSince = async (id: string) => (await prisma.user.findUniqueOrThrow({ where: { id }, select: { crmLeadPendingSince: true } })).crmLeadPendingSince;
+  const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60 * 1000);
 
   test.beforeEach(() => {
     sent.length = 0;
@@ -154,6 +168,8 @@ if (!process.env.TEST_DATABASE_URL) {
       phone: number.replace(/\D/g, ""),
     });
     assert.ok(!sent.some((item) => item.url.includes("sync-from-app")));
+    // The flag is set at registration and cleared when CRM answers.
+    assert.ok(await until(async () => (await pendingSince(user.id)) === null), "CRM accepted the lead: the flag is cleared");
 
     // The same account on /auth/me.
     const me = await call(token, "GET", "/auth/me");
@@ -178,26 +194,58 @@ if (!process.env.TEST_DATABASE_URL) {
     assert.equal((await weekly.getWeeklyLeagueOverview(user.id)).currentStudent?.eligible, false);
   });
 
-  test("a student of the school who registers on their own stays external until CRM links them", async () => {
+  test("a phone that an active account already has is a 409 PHONE_ALREADY_REGISTERED; a deleted or switched-off account does not hold the phone", async () => {
     const number = phone();
+    const digits = number.replace(/\D/g, "");
     // The school already has this person: a student account linked to a CRM card on the same phone.
     const schoolRole = await prisma.role.findUniqueOrThrow({ where: { slug: "student" } });
     const school = await prisma.user.create({ data: {
-      login: `school_${suffix}`, phone: number.replace(/\D/g, ""), phoneNormalized: number.replace(/\D/g, ""),
+      login: `school_${suffix}`, phone: digits, phoneNormalized: digits,
       passwordHash: await bcrypt.hash("password-1234", 4), firstName: "Школьник", lastName: "Старый", roleId: schoolRole.id,
       crmStudentId: `crm-old-${suffix}`, externalLinkStatus: "linked", linkedAt: new Date(),
     } });
     userIds.push(school.id);
 
-    const answer = await register({ firstName: "Школьник", lastName: "Старый", phone: number, password: "password-5678" });
-    assert.equal(answer.statusCode, 201, answer.body);
-    const created = answer.json().data.user;
-    userIds.push(created.id);
-    assert.equal(created.audience, "external");
-    const row = await prisma.user.findUniqueOrThrow({ where: { id: created.id } });
-    assert.deepEqual([row.crmStudentId, row.leagueEligible], [null, false]);
-    await leads(1);
-    assert.deepEqual(sent.map((item) => item.url), [bookingUrl], "only a lead went to CRM, no link and no student");
+    const refused = await register({ firstName: "Школьник", lastName: "Старый", phone: number, password: "password-5678" });
+    assert.equal(refused.statusCode, 409, refused.body);
+    assert.equal(refused.json().error.code, "PHONE_ALREADY_REGISTERED");
+    // Any spelling of the same number is the same phone.
+    const spelled = await register({ firstName: "Школьник", lastName: "Старый", phone: number.replace("+7", "8"), password: "password-5678" });
+    assert.equal(spelled.statusCode, 409, spelled.body);
+    assert.equal(await prisma.user.count({ where: { phoneNormalized: digits } }), 1, "nothing was created");
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    assert.equal(sent.length, 0, "no lead for a refused registration");
+
+    // A deleted account, or a switched-off one, does not hold the phone.
+    await prisma.user.update({ where: { id: school.id }, data: { deletedAt: new Date() } });
+    const afterDelete = await register({ firstName: "Новый", lastName: "Владелец", phone: number, password: "password-5678" });
+    assert.equal(afterDelete.statusCode, 201, afterDelete.body);
+    userIds.push(afterDelete.json().data.user.id);
+    await prisma.user.update({ where: { id: afterDelete.json().data.user.id }, data: { isActive: false } });
+    const afterOff = await register({ firstName: "Ещё", lastName: "Владелец", phone: number, password: "password-5678" });
+    assert.equal(afterOff.statusCode, 201, afterOff.body);
+    userIds.push(afterOff.json().data.user.id);
+  });
+
+  test("two registrations on one phone at once: exactly one is created; same for the parent form and for crossed phones", async () => {
+    const solo = phone();
+    const results = await Promise.all([1, 2, 3, 4].map((n) => register({ firstName: `Гонка${n}`, lastName: "Один", phone: solo, password: "password-1234" })));
+    for (const r of results) if (r.statusCode === 201) userIds.push(r.json().data.user.id);
+    assert.deepEqual(results.map((r) => r.statusCode).sort(), [201, 409, 409, 409], results.map((r) => r.body).join("\n"));
+    assert.equal(await prisma.user.count({ where: { phoneNormalized: solo.replace(/\D/g, ""), deletedAt: null } }), 1);
+
+    // Two parent registrations that name the same two phones in opposite order: one wins, no deadlock.
+    const [first, second] = [phone(), phone()];
+    const person = (number: string, name: string) => ({ firstName: name, lastName: "Гонка", phone: number, password: "family-pass-1" });
+    const family = await Promise.all([
+      registerParent({ parent: person(first, "А"), child: person(second, "Б") }),
+      registerParent({ parent: person(second, "В"), child: person(first, "Г") }),
+      register({ firstName: "Д", lastName: "Гонка", phone: second, password: "password-1234" }),
+    ]);
+    for (const r of family) if (r.statusCode === 201) userIds.push(r.json().data.user.id, ...(r.json().data.child ? [r.json().data.child.id] : []));
+    assert.equal(family.filter((r) => r.statusCode === 201).length, 1, family.map((r) => `${r.statusCode} ${r.body}`).join("\n"));
+    assert.ok(family.every((r) => [201, 409].includes(r.statusCode)), "refusals are 409, not 500");
+    assert.equal(await prisma.user.count({ where: { phoneNormalized: { in: [first, second].map((value) => value.replace(/\D/g, "")) }, deletedAt: null } }), family.some((r) => r.statusCode === 201 && r.json().data.child) ? 2 : 1);
   });
 
   test("CRM down or failing: the registration still succeeds and the error is logged", async () => {
@@ -212,6 +260,121 @@ if (!process.env.TEST_DATABASE_URL) {
       for (let attempt = 0; attempt < 40 && !logged.some((line) => line.includes("[app-registration] ERROR")); attempt += 1) await new Promise((resolve) => setTimeout(resolve, 25));
       assert.ok(logged.some((line) => line.includes("[app-registration] ERROR") && line.includes(answer.json().data.user.id)), `${mode}: logged with the user id`);
       assert.equal((await prisma.user.count({ where: { id: answer.json().data.user.id } })), 1);
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      assert.ok(await pendingSince(answer.json().data.user.id), `${mode}: the lead is still to be sent, the flag stays`);
+    }
+  });
+
+  test("the retry job sends a lead that CRM did not take, with the same externalSourceId, once; the flag goes", async () => {
+    crmMode = "down";
+    const answer = await register({ firstName: "Повтор", lastName: "Заявки", phone: phone(), password: "password-1234" });
+    const id = answer.json().data.user.id as string;
+    userIds.push(id);
+    await leads(1);
+    assert.ok(await until(async () => logged.some((line) => line.includes(id))));
+    const firstAttempt = sent[0];
+    assert.equal(firstAttempt.body.externalSourceId, `app-registration:${id}`);
+    assert.ok(await pendingSince(id));
+
+    // A fresh registration is left alone: the first attempt may still be in flight.
+    sent.length = 0;
+    await retryPendingAppRegistrationLeads();
+    assert.equal(sent.filter((item) => item.body.externalSourceId === `app-registration:${id}`).length, 0, "younger than two minutes");
+
+    // CRM still down: tried, flag stays, nothing is logged for a failed retry.
+    await prisma.user.update({ where: { id }, data: { crmLeadPendingSince: minutesAgo(3) } });
+    logged.length = 0;
+    const failedRun = await retryPendingAppRegistrationLeads();
+    assert.ok(failedRun.failed >= 1);
+    assert.ok(await pendingSince(id), "CRM down: the flag stays");
+    assert.equal(logged.filter((line) => line.includes(id)).length, 0, "a failed retry is not logged every ten minutes");
+
+    // CRM is back: the lead goes with the same id and the flag is cleared; the next run sends nothing.
+    crmMode = "ok";
+    sent.length = 0;
+    const okRun = await retryPendingAppRegistrationLeads();
+    assert.ok(okRun.sent >= 1);
+    const mine = sent.filter((item) => item.body.externalSourceId === `app-registration:${id}`);
+    assert.equal(mine.length, 1);
+    assert.deepEqual(mine[0].body, firstAttempt.body, "the same request as the first time");
+    assert.equal(await pendingSince(id), null);
+    sent.length = 0;
+    await retryPendingAppRegistrationLeads();
+    assert.equal(sent.filter((item) => item.body.externalSourceId === `app-registration:${id}`).length, 0, "a sent lead is not sent again");
+  });
+
+  test("the retry job sends a parent's lead with the child in the comment; gives up after seven days with one log line; skips linked and deleted users", async () => {
+    crmMode = "down";
+    const childPhone = phone();
+    const answer = await registerParent({
+      parent: { firstName: "Мама", lastName: "Повтор", phone: phone(), password: "family-pass-1" },
+      child: { firstName: "Сын", lastName: "Повтор", phone: childPhone, password: "family-pass-1" },
+    });
+    const parentId = answer.json().data.user.id as string;
+    userIds.push(parentId, answer.json().data.child.id);
+    assert.ok(await pendingSince(parentId), "the flag is the parent's");
+    assert.equal(await pendingSince(answer.json().data.child.id), null, "the child has none");
+    await leads(1);
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    crmMode = "ok";
+    sent.length = 0;
+    await prisma.user.update({ where: { id: parentId }, data: { crmLeadPendingSince: minutesAgo(5) } });
+    await retryPendingAppRegistrationLeads();
+    const lead = sent.find((item) => item.body.externalSourceId === `app-registration:${parentId}`);
+    assert.ok(lead, "the parent's lead was re-sent");
+    assert.equal(lead.body.comment, `Ребёнок: Сын Повтор, телефон ${childPhone.replace(/\D/g, "")}`);
+    assert.equal(await pendingSince(parentId), null);
+
+    // Seven days without luck: stop, one line in the log naming the user, the flag cleared.
+    const old = await register({ firstName: "Давно", lastName: "Ждёт", phone: phone(), password: "password-1234" });
+    const oldId = old.json().data.user.id as string;
+    userIds.push(oldId);
+    await leads(1);
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    await prisma.user.update({ where: { id: oldId }, data: { crmLeadPendingSince: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000) } });
+    sent.length = 0;
+    logged.length = 0;
+    await retryPendingAppRegistrationLeads();
+    await retryPendingAppRegistrationLeads();
+    assert.equal(logged.filter((line) => line.includes(oldId)).length, 1, "logged once");
+    assert.equal(sent.filter((item) => item.body.externalSourceId === `app-registration:${oldId}`).length, 0, "not sent after seven days");
+    assert.equal(await pendingSince(oldId), null);
+
+    // Linked to a CRM student meanwhile, or deleted: nothing to send.
+    const linked = await register({ firstName: "Связан", lastName: "Позже", phone: phone(), password: "password-1234" });
+    const gone = await register({ firstName: "Удалён", lastName: "Позже", phone: phone(), password: "password-1234" });
+    const [linkedId, goneId] = [linked.json().data.user.id as string, gone.json().data.user.id as string];
+    userIds.push(linkedId, goneId);
+    await leads(2);
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    await prisma.user.update({ where: { id: linkedId }, data: { crmStudentId: `crm-late-${suffix}`, crmLeadPendingSince: minutesAgo(5) } });
+    await prisma.user.update({ where: { id: goneId }, data: { deletedAt: new Date(), crmLeadPendingSince: minutesAgo(5) } });
+    sent.length = 0;
+    await retryPendingAppRegistrationLeads();
+    assert.equal(sent.filter((item) => [linkedId, goneId].some((value) => item.body.externalSourceId === `app-registration:${value}`)).length, 0);
+    assert.equal(await pendingSince(linkedId), null);
+  });
+
+  test("both registration forms share one limit of 5 a minute per IP", async () => {
+    const limited = Fastify();
+    await limited.register(fastifyJwt, { secret: process.env.JWT_SECRET!, sign: { expiresIn: "7d" } });
+    await limited.register(rateLimit, { global: false });
+    limited.setErrorHandler(errorHandler);
+    await limited.register(authRoutes, { prefix: "/api/v1" });
+    await limited.ready();
+    // Invalid bodies: they are refused with 400 after the limiter has counted them.
+    const hit = (url: string, remoteAddress: string) => limited.inject({ method: "POST", url: `/api/v1${url}`, payload: {} as never, remoteAddress });
+    try {
+      const codes: number[] = [];
+      for (const url of ["/auth/register", "/auth/register/parent", "/auth/register", "/auth/register/parent", "/auth/register"]) {
+        codes.push((await hit(url, "10.9.0.1")).statusCode);
+      }
+      assert.deepEqual(codes, [400, 400, 400, 400, 400]);
+      assert.equal((await hit("/auth/register/parent", "10.9.0.1")).statusCode, 429, "the sixth, on the other form, is refused");
+      assert.equal((await hit("/auth/register", "10.9.0.1")).statusCode, 429);
+      assert.equal((await hit("/auth/register", "10.9.0.2")).statusCode, 400, "another IP has its own count");
+    } finally {
+      await limited.close();
     }
   });
 
@@ -242,6 +405,31 @@ if (!process.env.TEST_DATABASE_URL) {
     const entry = courses.json().data.find((item: { id: string }) => item.id === course.id);
     assert.deepEqual([entry.access.kind, entry.priceKzt], ["none", 15000]);
     assert.equal((await call(data.token, "GET", `/parents/me/children/${randomUUID()}/courses`)).statusCode, 404);
+
+    // The family page knows the child is external: no school overview, no apology, only courses. A child
+    // with a CRM link, added to the same parent, is a school child.
+    const schoolRole = await prisma.role.findUniqueOrThrow({ where: { slug: "student" } });
+    const schoolDigits = phone().replace(/\D/g, "");
+    const schoolChild = await prisma.user.create({ data: {
+      login: `fam_school_${suffix}`, phone: schoolDigits, phoneNormalized: schoolDigits, passwordHash: await bcrypt.hash("password-1234", 4),
+      firstName: "Школьник", lastName: "Петрова", roleId: schoolRole.id, crmStudentId: `crm-fam-${suffix}`, externalLinkStatus: "linked",
+    } });
+    userIds.push(schoolChild.id);
+    await prisma.parentStudentLink.create({ data: { parentUserId: parent.id, studentUserId: schoolChild.id, relationship: "guardian", createdById: parent.id } });
+    const family = await call(data.token, "GET", "/parents/me/children");
+    assert.equal(family.statusCode, 200, family.body);
+    assert.deepEqual(
+      family.json().data.map((item: { id: string; audience: string }) => [item.id, item.audience]),
+      [[child.id, "external"], [schoolChild.id, "school"]],
+    );
+    const overview = await call(data.token, "GET", `/parents/me/children/${child.id}/offline-summary`);
+    assert.equal(overview.statusCode, 200, overview.body);
+    assert.equal(overview.json().data.child.audience, "external");
+    assert.deepEqual(
+      [overview.json().data.summary.crmUnavailable, overview.json().data.summary.crmStale, overview.json().data.summary.financialBalance, overview.json().data.summary.visits],
+      [false, false, null, []],
+    );
+    assert.ok(!sent.some((item) => item.url.includes("/students/")), "the school was not asked about an external child");
 
     // The child signs in with their own phone and is an external student.
     const childLogin = await app.inject({ method: "POST", url: "/api/v1/auth/login", payload: { phone: childPhone, password: "child-pass-12", profile: "student" } });

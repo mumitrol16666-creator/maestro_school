@@ -12,6 +12,7 @@ import { integrationRoutes } from "./presentation/routes/integration.routes.js";
 import { startOfflineReportReminderJob } from "./application/services/offline-report-reminder.service.js";
 import { startTeacherTodayReminderJob } from "./application/services/teacher-today-reminder.service.js";
 import { startPracticeReminderJob } from "./application/services/practice-reminder-job.service.js";
+import { startAppRegistrationLeadJob } from "./application/services/app-registration-lead-job.service.js";
 import { startLessonReminderJob } from "./application/services/lesson-reminder.service.js";
 import { startWeeklyLeagueFinalizerJob } from "./application/services/weekly-league.service.js";
 import { getProductFeatureSnapshot } from "./config/product-features.js";
@@ -95,6 +96,7 @@ async function bootstrap() {
   startTeacherTodayReminderJob();
   startPracticeReminderJob();
   startLessonReminderJob();
+  startAppRegistrationLeadJob();
   startWeeklyLeagueFinalizerJob();
   if (productFeatureConfig.flags.lessonSyncV2) {
     startCrmOutboxWorker();

@@ -9,6 +9,7 @@ import {
 } from "../../domain/errors.js";
 import { calculateAggregateMonthlyPlanProgress } from "../../domain/monthly-plan.js";
 import { formatFio } from "../../domain/name.js";
+import { resolveAudience, type CourseAudience } from "../../domain/course-access.js";
 import { buildFamilyOfflineSummary } from "../../domain/family-view.js";
 import { buildFamilyWeekDigest, type DigestTopicMove } from "../../domain/family-digest.js";
 import { LearningTopicProgressSource } from "@prisma/client";
@@ -319,6 +320,15 @@ export async function resetLinkedParentPassword(params: {
   return { updated: true };
 }
 
+/**
+ * Stage 4: `audience` says what the family page shows for the child. `school` is a student with a CRM
+ * link (school overview and courses); `external` is a student who registered in the app and has no CRM
+ * link — there is no school data for them, only online courses.
+ */
+export function childAudience(student: { crmStudentId: string | null }): CourseAudience {
+  return resolveAudience({ roleSlug: "student", crmStudentId: student.crmStudentId });
+}
+
 export async function listParentChildren(parentUserId: string) {
   const links = await prisma.parentStudentLink.findMany({
     where: {
@@ -338,6 +348,7 @@ export async function listParentChildren(parentUserId: string) {
           lastName: true,
           middleName: true,
           avatar: true,
+          crmStudentId: true,
         },
       },
     },
@@ -352,6 +363,7 @@ export async function listParentChildren(parentUserId: string) {
     fullName: formatFio(link.student),
     avatar: link.student.avatar,
     relationship: link.relationship,
+    audience: childAudience(link.student),
   }));
 }
 
@@ -387,6 +399,29 @@ export async function getParentChildOfflineSummary(
 ) {
   const link = await assertParentChildLink(parentUserId, studentUserId);
   const visibility = await getParentVisibility(studentUserId);
+  const child = {
+    id: link.student.id,
+    firstName: link.student.firstName,
+    lastName: link.student.lastName,
+    middleName: link.student.middleName,
+    fullName: formatFio(link.student),
+    avatar: link.student.avatar,
+    relationship: link.relationship,
+    audience: childAudience(link.student),
+  };
+  if (child.audience === "external") {
+    // No CRM card, so nothing to ask the school for and nothing to apologise about: the family page
+    // shows only the child's online courses. The shape of the answer stays the same.
+    const summary = buildFamilyOfflineSummary(
+      { profile: { name: child.fullName, groups: [] }, balanceSnapshot: {}, upcomingLessons: [] },
+      { ...visibility, showBalance: false, showSchedule: false },
+    );
+    return {
+      child,
+      visibility,
+      summary: { ...summary, crmUnavailable: false, crmError: null, crmSnapshotAt: null, crmStale: false, results: null },
+    };
+  }
   const [offlineRead, results] = await Promise.all([
     getStudentSchoolOfflineSummary(studentUserId)
       .then((value) => ({ value, error: null as AppError | null }))
@@ -438,15 +473,7 @@ export async function getParentChildOfflineSummary(
     : [];
   const weekDigest = buildFamilyWeekDigest({ childName: formatFio(link.student), visits: digestVisits, topicMoves });
   return {
-    child: {
-      id: link.student.id,
-      firstName: link.student.firstName,
-      lastName: link.student.lastName,
-      middleName: link.student.middleName,
-      fullName: formatFio(link.student),
-      avatar: link.student.avatar,
-      relationship: link.relationship,
-    },
+    child,
     visibility,
     summary: { ...summary, weekDigest },
   };

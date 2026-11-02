@@ -3,9 +3,9 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { isSupportedMaterialLink } from "../../domain/group-material.js";
 import {
-  createCourse, createDirection, createHomework, createLesson, createMaterial, createModule, createNews,
+  courseTermsOf, createCourse, createDirection, createHomework, createLesson, createMaterial, createModule, createNews,
   deleteMaterial, getAdminCourse, getAdminCourseTree, getAdminLesson, listAdminCourses, listAdminDirections, listAdminNews, listHomeworks, listLessons,
-  listMaterials, listMaterialUsages, listModules, updateCourse, updateDirection, updateHomework, updateLesson,
+  listMaterials, listMaterialUsages, listModules, updateCourse, updateCourseWithTerms, updateDirection, updateHomework, updateLesson,
   updateMaterial, updateModule, updateNews,
 } from "../../application/repositories/cms.repository.js";
 import { writeAuditLog } from "../../application/services/audit.service.js";
@@ -148,16 +148,18 @@ export async function cmsRoutes(app: FastifyInstance) {
   });
   app.post("/admin/courses", { preHandler: catalogGuards() }, async (request, reply) => {
     const body = z.object({ directionId: z.string().uuid(), title: z.string().min(1).max(255), description: z.string().nullable().optional(), thumbnail: nullableUrl, difficultyLevel: difficulty.default("beginner"), completionCoinsReward: completionCoinsReward.default(0), priceKzt: coursePriceKzt.optional(), includedInSchool: z.boolean().optional(), freeLessonsCount: courseFreeLessonsCount.optional(), isPublished: z.boolean().optional() }).parse(request.body);
-    const item = await createCourse(body); await audit(request, "course", item.id, "create"); return reply.status(201).send({ data: item });
+    const item = await createCourse(body);
+    // The terms the course was created with (the price is a money setting): the log names them.
+    await audit(request, "course", item.id, "create", { terms: { before: null, after: courseTermsOf(item) } });
+    return reply.status(201).send({ data: item });
   });
   app.patch("/admin/courses/:id", { preHandler: catalogGuards() }, async (request) => {
     const { id } = idParams.parse(request.params);
     const body = z.object({ directionId: z.string().uuid().optional(), title: z.string().min(1).max(255).optional(), description: z.string().nullable().optional(), thumbnail: nullableUrl, difficultyLevel: difficulty.optional(), completionCoinsReward: completionCoinsReward.optional(), priceKzt: coursePriceKzt.optional(), includedInSchool: z.boolean().optional(), freeLessonsCount: courseFreeLessonsCount.optional() }).parse(request.body);
-    const item = await updateCourse(id, body);
-    // A price or access change is a money change: the new terms stay in the log.
-    const terms = { priceKzt: body.priceKzt, includedInSchool: body.includedInSchool, freeLessonsCount: body.freeLessonsCount };
-    const changedTerms = Object.fromEntries(Object.entries(terms).filter(([, value]) => value !== undefined)) as Record<string, number | boolean | null>;
-    await audit(request, "course", id, "update", Object.keys(changedTerms).length ? { terms: changedTerms } : undefined);
+    const { item, before, after } = await updateCourseWithTerms(id, body);
+    // A price or access change is a money change: the log names the previous and the new terms.
+    const changed = (Object.keys(after) as Array<keyof typeof after>).some((key) => before[key] !== after[key]);
+    await audit(request, "course", id, "update", changed ? { terms: { before, after } } : undefined);
     return { data: item };
   });
   app.post("/admin/courses/:id/publish", { preHandler: catalogGuards() }, async (request) => {

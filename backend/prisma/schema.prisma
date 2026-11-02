@@ -571,6 +571,9 @@ model User {
   phoneNormalized    String?   @map("phone_normalized") @db.VarChar(32)
   externalLinkStatus String?   @map("external_link_status") @db.VarChar(32)
   linkedAt           DateTime? @map("linked_at") @db.Timestamptz(6)
+  // Stage 4: set when a registration in the app has not yet reached CRM as a lead; cleared when CRM
+  // accepts it. A job re-sends the lead (same externalSourceId, so CRM never duplicates it).
+  crmLeadPendingSince DateTime? @map("crm_lead_pending_since") @db.Timestamptz(6)
 
   createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)

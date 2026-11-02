@@ -122,6 +122,28 @@ export async function updateCourse(id: string, data: { directionId?: string; tit
   return prisma.course.update({ where: { id }, data });
 }
 
+export type CourseTerms = { priceKzt: number | null; includedInSchool: boolean; freeLessonsCount: number };
+
+export const courseTermsOf = (course: CourseTerms): CourseTerms => ({
+  priceKzt: course.priceKzt,
+  includedInSchool: course.includedInSchool,
+  freeLessonsCount: course.freeLessonsCount,
+});
+
+/**
+ * Edits a course and returns the terms (price, school flag, free lessons) as they were just before
+ * and just after, read under a row lock in the same transaction — so the audit log of a price change
+ * names the real previous price even when two administrators save at once.
+ */
+export async function updateCourseWithTerms(id: string, data: Parameters<typeof updateCourse>[1]) {
+  return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM courses WHERE id = ${id}::uuid FOR UPDATE`;
+    const current = await requireRecord(tx.course.findUnique({ where: { id } }), "Course");
+    const item = await tx.course.update({ where: { id }, data });
+    return { item, before: courseTermsOf(current), after: courseTermsOf(item) };
+  });
+}
+
 export const listModules = (courseId: string) =>
   prisma.courseModule.findMany({ where: { courseId, deletedAt: null }, include: { _count: { select: { lessons: true } } }, orderBy: { sortOrder: "asc" } });
 

@@ -7,7 +7,6 @@ import { z } from "zod";
 import crypto from "node:crypto";
 import path from "node:path";
 import {
-  createStudentUser,
   findUserWithRoleByEmail,
   findUserWithRoleById,
   findUserWithRoleByLogin,
@@ -24,6 +23,7 @@ import { getStudentPointsBalance } from "../../application/services/points.servi
 import { authenticate } from "../guards/auth.guards.js";
 import {
   parentRegistrationLeadComment,
+  registerExternalStudent,
   registerParentWithChild,
   reserveLogin,
   sendAppRegistrationLead,
@@ -144,7 +144,19 @@ async function studentStats(userId: string, roleSlug: string) {
   return { points, coins };
 }
 
+/**
+ * One limit for both registration forms: 5 requests a minute per IP across `/auth/register` and
+ * `/auth/register/parent` together. A per-route `config.rateLimit` gets its own counter, so the two
+ * routes share one limiter created here and passed as `preHandler`. Without the rate-limit plugin
+ * (some tests) there is no limiter.
+ */
+export const REGISTRATION_RATE_LIMIT = { max: 5, timeWindow: "1 minute" } as const;
+
 export async function authRoutes(app: FastifyInstance) {
+  const registrationRateLimit = typeof app.rateLimit === "function"
+    ? [app.rateLimit({ ...REGISTRATION_RATE_LIMIT, keyGenerator: (request) => `register:${request.ip}` })]
+    : [];
+
   app.post("/auth/sso-exchange", { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } }, async (request, reply) => {
     const { token } = ssoExchangeSchema.parse(request.body);
     const { user, stats, session } = await exchangeSsoBridgeToken(token);
@@ -210,7 +222,7 @@ export async function authRoutes(app: FastifyInstance) {
     };
   });
 
-  app.post("/auth/register", { config: { rateLimit: { max: 5, timeWindow: "1 minute" } } }, async (request, reply) => {
+  app.post("/auth/register", { preHandler: registrationRateLimit }, async (request, reply) => {
     const body = registerSchema.parse(request.body);
     if (!isValidPhone(body.phone)) {
       throw new BadRequestError("Укажите корректный номер телефона");
@@ -242,10 +254,10 @@ export async function authRoutes(app: FastifyInstance) {
 
     let user;
     try {
-      user = await createStudentUser({
+      user = await registerExternalStudent({
         login,
         email,
-        phone: normalizePhoneDigits(body.phone),
+        phone: body.phone,
         passwordHash: await bcrypt.hash(body.password, 10),
         firstName: body.firstName,
         lastName: body.lastName,
@@ -285,7 +297,7 @@ export async function authRoutes(app: FastifyInstance) {
 
   // Stage 4, decision ★1: «Я родитель» registers the parent, the child and the link in one transaction.
   // The answer is the parent's session. The school gets one lead, from the parent, naming the child.
-  app.post("/auth/register/parent", { config: { rateLimit: { max: 5, timeWindow: "1 minute" } } }, async (request, reply) => {
+  app.post("/auth/register/parent", { preHandler: registrationRateLimit }, async (request, reply) => {
     const body = registerParentSchema.parse(request.body);
     const { parent, child } = await registerParentWithChild(body);
 

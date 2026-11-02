@@ -99,8 +99,19 @@ if (!process.env.TEST_DATABASE_URL) {
     assert.equal(freed.statusCode, 200, freed.body);
     assert.equal((await call("GET", `/admin/courses/${id}`)).json().data.priceKzt, null);
 
-    const logged = await prisma.auditLog.findMany({ where: { entityId: id, action: "update" }, orderBy: { createdAt: "asc" } });
-    assert.deepEqual((logged[0]?.payload as { terms?: unknown } | null)?.terms, { priceKzt: 12000, includedInSchool: true, freeLessonsCount: 3 });
+    // The log names the terms the course was created with, and for each change the previous and the new terms.
+    const terms = async (action: "create" | "update") => (await prisma.auditLog.findMany({ where: { entityId: id, action }, orderBy: { createdAt: "asc" } }))
+      .map((row) => (row.payload as { terms?: unknown } | null)?.terms);
+    assert.deepEqual(await terms("create"), [{ before: null, after: { priceKzt: null, includedInSchool: false, freeLessonsCount: 2 } }]);
+    // The rename without terms writes no terms; the price change and the price clearing each write one.
+    assert.deepEqual((await terms("update")).filter(Boolean), [
+      { before: { priceKzt: null, includedInSchool: false, freeLessonsCount: 2 }, after: { priceKzt: 12000, includedInSchool: true, freeLessonsCount: 3 } },
+      { before: { priceKzt: 12000, includedInSchool: true, freeLessonsCount: 3 }, after: { priceKzt: null, includedInSchool: true, freeLessonsCount: 3 } },
+    ]);
+
+    // Saving the same terms again changes nothing and logs no terms.
+    await call("PATCH", `/admin/courses/${id}`, { includedInSchool: true, freeLessonsCount: 3 });
+    assert.equal((await terms("update")).filter(Boolean).length, 2);
   });
 
   test("a price must be a whole number above zero and free lessons 0..50; nothing is saved on a refusal", async () => {
