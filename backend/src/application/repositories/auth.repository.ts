@@ -110,6 +110,8 @@ export async function createStudentUser(params: {
       lastName: params.lastName,
       middleName: params.middleName,
       roleId: studentRole.id,
+      // The league is for students of the school: a person without a CRM link starts outside it.
+      leagueEligible: Boolean(params.crmStudentId),
       ...(params.crmStudentId
         ? {
             crmStudentId: params.crmStudentId,

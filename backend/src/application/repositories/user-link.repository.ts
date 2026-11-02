@@ -93,7 +93,8 @@ export async function applyUserLink(params: {
       if (params.force) {
         await prisma.user.update({
           where: { id: existing.id },
-          data: { crmStudentId: null, externalLinkStatus: "unlinked", linkedAt: null },
+          // Without a CRM link the person leaves the league (the league is for students of the school).
+          data: { crmStudentId: null, externalLinkStatus: "unlinked", linkedAt: null, leagueEligible: false },
         });
       } else {
       await prisma.user.update({
@@ -129,7 +130,7 @@ export async function applyUserLink(params: {
     }
     await prisma.user.update({
       where: { id: user.id },
-      data: { crmStudentId: null, externalLinkStatus: "unlinked", linkedAt: null },
+      data: { crmStudentId: null, externalLinkStatus: "unlinked", linkedAt: null, leagueEligible: false },
     });
   }
 
@@ -150,7 +151,12 @@ export async function applyUserLink(params: {
     linkedAt: now,
   };
 
-  if (params.crmStudentId) data.crmStudentId = params.crmStudentId;
+  if (params.crmStudentId) {
+    data.crmStudentId = params.crmStudentId;
+    // A person who becomes a student of the school enters the league. A repeated link to the same
+    // card (a CRM resync) must not undo an exclusion the school made by hand.
+    if (user.crmStudentId !== params.crmStudentId) data.leagueEligible = true;
+  }
   if (params.crmTeacherId) data.crmTeacherId = params.crmTeacherId;
 
   const updated = await prisma.user.update({
@@ -176,22 +182,6 @@ export async function applyUserLink(params: {
       },
     },
   };
-}
-
-export async function linkUserToCrm(
-  userId: string,
-  crmStudentId: string,
-  phoneNormalized: string,
-) {
-  return prisma.user.update({
-    where: { id: userId },
-    data: {
-      crmStudentId,
-      phoneNormalized,
-      externalLinkStatus: "linked",
-      linkedAt: new Date(),
-    },
-  });
 }
 
 export async function getUserLinkStatus(phoneNormalized: string) {

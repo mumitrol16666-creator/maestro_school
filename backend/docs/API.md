@@ -145,6 +145,29 @@ Base URL: `http://localhost:4000/api/v1`
 }
 ```
 
+Ученик создаётся **без связи с CRM** (`audience: "external"`, вне лиги, `leagueEligible: false`).
+Школа узнаёт о регистрации как о заявке в CRM (`requestType: "app_registration"`), ученик CRM не
+создаётся; недоступная CRM регистрацию не ломает. Связь с CRM ставит администратор школы позже:
+тогда `leagueEligible` становится `true`, а прежняя сессия закрывается (нужен новый вход).
+
+### `POST /auth/register/parent`
+
+Регистрация родителя вместе с ребёнком в одной транзакции: аккаунт родителя (`parent`), аккаунт ребёнка
+(`student`, без связи с CRM, вне лиги) и связь родитель–ребёнок. Ребёнок входит по своему телефону и паролю.
+
+```json
+{
+  "parent": { "firstName": "Ольга", "lastName": "Петрова", "phone": "+7 700 000 00 01", "password": "parent-password" },
+  "child":  { "firstName": "Лена",  "lastName": "Петрова", "phone": "+7 700 000 00 02", "password": "child-password" }
+}
+```
+
+Ответ `201` — сессия родителя: `{ token, user, child: { id, firstName, lastName, login } }`.
+Ошибки: `400 CHILD_PHONE_SAME_AS_PARENT` (телефон ребёнка совпадает с телефоном родителя),
+`400 VALIDATION_ERROR` (нет телефона ребёнка и т.п.), `409 PHONE_ALREADY_REGISTERED` (номер уже занят;
+не создаётся ни один аккаунт). В CRM уходит одна заявка от родителя с комментарием
+`Ребёнок: <Имя Фамилия>, телефон <номер>`. Лимит как у `/auth/register`: 5 в минуту.
+
 ### `GET /auth/me`
 
 Требует JWT. Возвращает имя, фамилию, телефон, email, роль, permissions и баллы.

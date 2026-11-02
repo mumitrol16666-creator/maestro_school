@@ -22,7 +22,12 @@ import { isValidPhone, normalizePhoneDigits } from "../../lib/phone.js";
 import { getStudentCoins } from "../../application/services/coins.service.js";
 import { getStudentPointsBalance } from "../../application/services/points.service.js";
 import { authenticate } from "../guards/auth.guards.js";
-import { syncNewStudentToCrm } from "../../application/services/crm-sync.service.js";
+import {
+  parentRegistrationLeadComment,
+  registerParentWithChild,
+  reserveLogin,
+  sendAppRegistrationLead,
+} from "../../application/services/app-registration.service.js";
 import { postPasswordChangedInApp, postStudentAvatarToCrm } from "../../infrastructure/crm/crm-client.js";
 import {
   inferMimeType,
@@ -65,6 +70,19 @@ const registerSchema = z.object({
   email: z.string().trim().email().transform((value) => value.toLowerCase()).optional(),
   phone: z.string().trim().min(10).max(32),
   password: z.string().min(8).max(72),
+});
+
+const registerPerson = (who: "родителя" | "ребёнка") => z.object({
+  firstName: z.string().trim().min(1, `Укажите имя ${who}`).max(128),
+  lastName: z.string().trim().min(1, `Укажите фамилию ${who}`).max(128),
+  phone: z.string({ required_error: `Укажите телефон ${who}` }).trim().min(10, `Укажите телефон ${who}`).max(32),
+  password: z.string({ required_error: `Укажите пароль ${who}` }).min(8, "Пароль — не короче 8 символов").max(72),
+});
+
+/** A parent registers themselves and the child in one form: the child signs in with their own phone. */
+const registerParentSchema = z.object({
+  parent: registerPerson("родителя"),
+  child: registerPerson("ребёнка"),
 });
 
 const profileUpdateSchema = z.object({
@@ -210,14 +228,7 @@ export async function authRoutes(app: FastifyInstance) {
         throw new ConflictError("Этот логин уже занят", "LOGIN_ALREADY_EXISTS");
       }
     } else {
-      const digits = normalizePhoneDigits(body.phone);
-      let candidate = `s_${digits.slice(-10)}`.slice(0, 32);
-      let suffix = 0;
-      while (await findUserWithRoleByLogin(candidate)) {
-        suffix += 1;
-        candidate = `s_${digits.slice(-10)}_${suffix}`.slice(0, 32);
-      }
-      login = candidate;
+      login = await reserveLogin("s", normalizePhoneDigits(body.phone));
     }
 
     // Use provided email or null
@@ -252,26 +263,50 @@ export async function authRoutes(app: FastifyInstance) {
     }
     await recordStudentLogin(user.id, "registration").catch(() => undefined);
 
-    await syncNewStudentToCrm({
-      appUserId: user.id,
-      phone: user.phone,
+    // The school learns about the registration as a lead in CRM, not as a CRM student. Sent after the
+    // account is stored and not awaited: CRM being down never fails or delays the registration.
+    void sendAppRegistrationLead({
+      userId: user.id,
       firstName: user.firstName,
       lastName: user.lastName,
-      middleName: user.middleName,
-      email: user.email ?? "",
+      phone: user.phone,
     });
 
-    // Linking updates the account revision. Issue against that completed state,
-    // but never turn a concurrent password reset into a new authenticated login.
-    const linkedUser = await findUserWithRoleById(user.id);
-    if (!linkedUser || linkedUser.passwordHash !== user.passwordHash) throw new UnauthorizedError();
-    const token = await reply.jwtSign(await sessionClaims(linkedUser), { expiresIn: "7d" });
+    const token = await reply.jwtSign(await sessionClaims(user), { expiresIn: "7d" });
     reply.header("Set-Cookie", mediaCookieHeader(token, request));
 
     return reply.status(201).send({
       data: {
         token,
         user: profile(user, { points: 0, coins: 0 }),
+      },
+    });
+  });
+
+  // Stage 4, decision ★1: «Я родитель» registers the parent, the child and the link in one transaction.
+  // The answer is the parent's session. The school gets one lead, from the parent, naming the child.
+  app.post("/auth/register/parent", { config: { rateLimit: { max: 5, timeWindow: "1 minute" } } }, async (request, reply) => {
+    const body = registerParentSchema.parse(request.body);
+    const { parent, child } = await registerParentWithChild(body);
+
+    void sendAppRegistrationLead({
+      userId: parent.id,
+      firstName: parent.firstName,
+      lastName: parent.lastName,
+      phone: parent.phone,
+      comment: parentRegistrationLeadComment(child),
+    });
+
+    const parentWithRole = await findUserWithRoleById(parent.id);
+    if (!parentWithRole) throw new UnauthorizedError();
+    const token = await reply.jwtSign(await sessionClaims(parentWithRole), { expiresIn: "7d" });
+    reply.header("Set-Cookie", mediaCookieHeader(token, request));
+
+    return reply.status(201).send({
+      data: {
+        token,
+        user: profile(parentWithRole, { points: 0, coins: 0 }),
+        child: { id: child.id, firstName: child.firstName, lastName: child.lastName, login: child.login },
       },
     });
   });
