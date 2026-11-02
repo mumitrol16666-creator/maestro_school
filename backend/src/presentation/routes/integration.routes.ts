@@ -1,3 +1,4 @@
+import { sessionLifetimeSeconds } from "../../application/services/account-session.service.js";
 import { getCrmFamilyAccess, previewCrmParent, provisionCrmParent } from "../../application/services/crm-family-access.service.js";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
@@ -395,7 +396,7 @@ export async function integrationRoutes(app: FastifyInstance) {
   app.post("/auth/sso-exchange", async (request, reply) => {
     const { token } = ssoExchangeSchema.parse(request.body);
     const { user, crmStudentId, session } = await exchangeSsoBridgeToken(token);
-    const sessionToken = await reply.jwtSign(session, { expiresIn: "7d" });
+    const sessionToken = await reply.jwtSign(session, { expiresIn: sessionLifetimeSeconds(user.role.slug) });
     if (user.role.slug === "student") {
       await recordStudentLogin(user.id, "sso").catch(() => undefined);
     }

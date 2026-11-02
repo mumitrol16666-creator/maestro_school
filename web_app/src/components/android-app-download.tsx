@@ -1,8 +1,22 @@
+"use client";
+
 import { Download, ShieldCheck, Smartphone } from "lucide-react";
+import { usePlatform } from "@/lib/platform";
 
 export const ANDROID_APK_URL = "/downloads/maestro-school.apk";
 
+/**
+ * The APK is for Android only: on iPhone and iPad it would be a dead end (В-40), and inside the
+ * installed app (the Android app is the same app, its display mode is standalone) it is pointless.
+ */
+function useShowApk() {
+  const platform = usePlatform();
+  return platform !== null && platform.os !== "ios" && !platform.installed;
+}
+
 export function AndroidAppDownloadCard() {
+  const show = useShowApk();
+  if (!show) return null;
   return (
     <section className="rounded-[30px] border border-emerald-200 bg-emerald-50 p-6 shadow-soft sm:p-8">
       <div className="flex items-start gap-4">
@@ -36,6 +50,8 @@ export function AndroidAppDownloadCard() {
 }
 
 export function AndroidAppDownloadLink() {
+  const show = useShowApk();
+  if (!show) return null;
   return (
     <a
       href={ANDROID_APK_URL}

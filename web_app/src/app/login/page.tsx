@@ -17,6 +17,7 @@ import { Brand } from "@/components/brand";
 import { useAuth } from "@/components/auth-provider";
 import { ApiError } from "@/lib/api-client";
 import { getConnectionStatus, subscribeConnectionStatus } from "@/lib/connection-status";
+import { whatsAppUrl } from "@/lib/phone";
 import { homePathForRole, isStaffRole } from "@/lib/role-labels";
 
 function safeNextPath(next: string | null, role?: string | null) {
@@ -51,6 +52,17 @@ function loginErrorText(reason: unknown, fallback: string) {
 
 const TRIAL_LANDING_URL =
   process.env.NEXT_PUBLIC_TRIAL_LANDING_URL ?? "https://app-maestro-school.duckdns.org/trial.html";
+
+// The school's WhatsApp number is not in the code; it comes from the environment (В-41).
+const SCHOOL_WHATSAPP_URL = whatsAppUrl(process.env.NEXT_PUBLIC_SCHOOL_WHATSAPP);
+
+/** Student «ты», parent and staff «вы». Staff also write here when they have no access at all. */
+function forgotPasswordLine(profile: "student" | "parent" | "staff", withWhatsApp: boolean) {
+  const to = withWhatsApp ? "администратору в WhatsApp" : "администратору школы";
+  if (profile === "student") return `Забыл пароль? Напиши ${to}`;
+  if (profile === "staff") return `Забыли пароль или нет доступа? Напишите ${to}`;
+  return `Забыли пароль? Напишите ${to}`;
+}
 
 const LOGIN_COPY = {
   student: {
@@ -264,16 +276,23 @@ export default function LoginPage() {
             </button>
           </form>
 
+          <div className="mt-5 rounded-2xl border border-stone-200 bg-stone-50 p-4" data-testid="forgot-password">
+            <p className="text-sm font-semibold leading-6 text-stone-700">{forgotPasswordLine(profile, SCHOOL_WHATSAPP_URL !== null)}</p>
+            {SCHOOL_WHATSAPP_URL ? (
+              <a
+                href={SCHOOL_WHATSAPP_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="brand-button-secondary mt-3 min-h-11 w-full"
+              >
+                Написать в WhatsApp
+              </a>
+            ) : null}
+          </div>
+
           <AndroidAppDownloadLink />
 
-          {profile === "staff" ? (
-            <div className="mt-6 border-t border-stone-200 pt-5">
-              <p className="text-sm font-bold text-ink">Нет доступа к рабочему кабинету?</p>
-              <p className="mt-2 text-sm leading-6 text-stone-500">
-                Обратитесь к администратору школы, чтобы проверить учётную запись и назначенную роль.
-              </p>
-            </div>
-          ) : (
+          {profile !== "staff" ? (
             <div className="mt-6 border-t border-stone-200 pt-5">
               <p className="text-sm font-bold text-ink">Хотите стать учеником Maestro?</p>
               <p className="mt-2 text-sm leading-6 text-stone-500">
@@ -286,7 +305,7 @@ export default function LoginPage() {
                 Записаться на пробный урок <ArrowRight size={15} />
               </a>
             </div>
-          )}
+          ) : null}
         </div>
       </section>
     </main>

@@ -10,7 +10,7 @@ import { authenticate } from "./auth.guards.js";
  */
 export const MEDIA_COOKIE = "maestro_media";
 const MEDIA_COOKIE_PATH = "/api/v1/media";
-const MEDIA_COOKIE_MAX_AGE = 7 * 24 * 60 * 60;
+const MEDIA_COOKIE_FALLBACK_MAX_AGE = 7 * 24 * 60 * 60;
 
 function isHttps(request: FastifyRequest) {
   const forwarded = request.headers["x-forwarded-proto"];
@@ -18,13 +18,26 @@ function isHttps(request: FastifyRequest) {
   return scheme === "https";
 }
 
-export function mediaCookieHeader(token: string, request: FastifyRequest) {
+/** The cookie lives as long as the session token: seconds left until its `exp`. */
+export function tokenRemainingSeconds(token: string): number {
+  try {
+    const payload = JSON.parse(Buffer.from(token.split(".")[1] ?? "", "base64url").toString("utf8")) as { exp?: unknown };
+    if (typeof payload.exp === "number" && Number.isFinite(payload.exp)) {
+      return Math.max(0, Math.floor(payload.exp - Date.now() / 1000));
+    }
+  } catch {
+    // Fall through to the default.
+  }
+  return MEDIA_COOKIE_FALLBACK_MAX_AGE;
+}
+
+export function mediaCookieHeader(token: string, request: FastifyRequest, maxAgeSeconds: number) {
   return [
     `${MEDIA_COOKIE}=${encodeURIComponent(token)}`,
     `Path=${MEDIA_COOKIE_PATH}`,
     "HttpOnly",
     "SameSite=Lax",
-    `Max-Age=${MEDIA_COOKIE_MAX_AGE}`,
+    `Max-Age=${maxAgeSeconds}`,
     ...(isHttps(request) ? ["Secure"] : []),
   ].join("; ");
 }

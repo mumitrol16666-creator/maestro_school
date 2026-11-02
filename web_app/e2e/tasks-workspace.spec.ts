@@ -41,8 +41,10 @@ async function setup(page: Page, options: Options = {}, url = "/tasks") {
     const url = new URL(route.request().url());
     const path = url.pathname.replace(/^.*\/api\/v1/, "");
     // Analytics is intercepted too; reject any unexpected business mutation.
-    // The media cookie refresh (plan 1.12) is part of signing in, not a write of task data.
-    if (route.request().method() !== "GET" && path !== "/usage/events" && path !== "/auth/media-session") writes.push(path);
+    // The media cookie refresh (plan 1.12) and the renewal of the student's sign-in (В-41) belong to
+    // the session, not to task data.
+    const sessionPaths = ["/usage/events", "/auth/media-session", "/auth/refresh"];
+    if (route.request().method() !== "GET" && !sessionPaths.includes(path)) writes.push(path);
     if (path === "/auth/me") return route.fulfill({ json: { data: user } });
     if (path === "/students/me/tasks") {
       if (options.delay) await new Promise(resolve => setTimeout(resolve, options.delay));

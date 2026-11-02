@@ -8,6 +8,7 @@ import {
   isPushSupportedOnDevice,
   subscribeToPushNotifications,
 } from "@/lib/push-notifications";
+import { useInstallPromptOpen } from "@/lib/floating-prompts";
 
 const DISMISS_FOR_MS = 24 * 60 * 60 * 1000;
 
@@ -26,6 +27,7 @@ export function PushNotificationPrompt({
   const [busy, setBusy] = useState(false);
   const [enabled, setEnabled] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const installPromptOpen = useInstallPromptOpen();
 
   useEffect(() => {
     let active = true;
@@ -76,7 +78,8 @@ export function PushNotificationPrompt({
     }
   }
 
-  if (!visible) return null;
+  // З-22: the install hint goes first; this one appears when it is closed or not needed.
+  if (!visible || installPromptOpen) return null;
 
   const teacher = audience === "teacher";
   const parent = audience === "parent";

@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { BadRequestError } from "../../domain/errors.js";
 import { formatFio } from "../../domain/name.js";
 import { prisma } from "../../infrastructure/database/prisma.js";
+import { REFRESH_LOGIN_EVENT_KEY_PREFIX } from "./app-usage.service.js";
 import { aqtobeMonthKey } from "../../lib/aqtobe-month.js";
 
 const AQTOBE_OFFSET_MS = 5 * 60 * 60 * 1_000;
@@ -68,7 +69,7 @@ async function periodMetricsSeries(months: string[]) {
       SELECT
         TO_CHAR("occurred_at" AT TIME ZONE 'Asia/Aqtobe', 'YYYY-MM') AS "month",
         COUNT(DISTINCT "user_id") AS "activeStudents",
-        COUNT(*) FILTER (WHERE "event_type" = 'login') AS "logins",
+        COUNT(*) FILTER (WHERE "event_type" = 'login' AND "event_key" NOT LIKE ${`${REFRESH_LOGIN_EVENT_KEY_PREFIX}%`}) AS "logins",
         COUNT(DISTINCT "session_id") FILTER (WHERE "session_id" IS NOT NULL) AS "sessions",
         COUNT(*) FILTER (WHERE "event_type" = 'page_view') AS "pageViews",
         COUNT(*) FILTER (WHERE "event_type" = 'page_view' AND "section" = 'homework') AS "homeworkViews"
@@ -191,6 +192,7 @@ function emptyStudentUsage() {
 
 function aggregateStudentUsage(events: Array<{
   userId: string;
+  eventKey: string;
   eventType: string;
   section: string;
   sessionId: string | null;
@@ -201,7 +203,7 @@ function aggregateStudentUsage(events: Array<{
     const row = result.get(event.userId);
     if (!row) continue;
     row.activeDays.add(usageDay(event.occurredAt));
-    if (event.eventType === "login") row.logins += 1;
+    if (event.eventType === "login" && !event.eventKey.startsWith(REFRESH_LOGIN_EVENT_KEY_PREFIX)) row.logins += 1;
     if (event.sessionId) row.sessions.add(event.sessionId);
     if (event.eventType === "page_view") {
       row.pageViews += 1;
@@ -311,7 +313,7 @@ export async function getAppAnalytics(params: {
   const [usageEvents, currentOutcomes, previousOutcomes, latestEvents, recentEvents] = await Promise.all([
     prisma.appUsageEvent.findMany({
       where: { userId: { in: studentIds }, occurredAt: { gte: previous.start, lt: current.end } },
-      select: { userId: true, eventType: true, section: true, sessionId: true, occurredAt: true },
+      select: { userId: true, eventKey: true, eventType: true, section: true, sessionId: true, occurredAt: true },
     }),
     studentOutcomeMap(studentIds, current),
     studentOutcomeMap(studentIds, previous),

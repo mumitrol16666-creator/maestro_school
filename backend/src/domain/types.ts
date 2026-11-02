@@ -3,6 +3,8 @@ export interface AuthUser {
   email: string | null;
   roleSlug: string;
   permissions: string[];
+  /** The account revision `authenticate` just verified; refresh compares it with the one it signs. */
+  sessionVersion?: number;
   crmSessionVersion?: number;
 }
 

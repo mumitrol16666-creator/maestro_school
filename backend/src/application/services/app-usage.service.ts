@@ -69,7 +69,13 @@ export async function recordAppUsageEvent(params: {
   return event;
 }
 
-export async function recordStudentLogin(userId: string, source: "password" | "sso" | "registration") {
+/**
+ * A renewal of a signed-in student (POST /auth/refresh). It keeps «последний вход» current, but
+ * it is not a new sign-in: the statistics of «Входов» leave these events out.
+ */
+export const REFRESH_LOGIN_EVENT_KEY_PREFIX = "student-login:refresh:";
+
+export async function recordStudentLogin(userId: string, source: "password" | "sso" | "registration" | "refresh") {
   return recordAppUsageEvent({
     eventKey: `student-login:${source}:${randomUUID()}`,
     userId,

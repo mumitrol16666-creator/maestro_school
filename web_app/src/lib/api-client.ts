@@ -118,8 +118,33 @@ export function storeSession(token: string, user: ApiAuthUser) {
   window.localStorage.setItem(USER_KEY, JSON.stringify(user));
 }
 
+// В-41: a signed-in student stays in for 30 days if every visit renews the session. The app asks
+// for a new token when it opens, at most once in 12 hours.
+const RENEWED_AT_KEY = "maestro_session_renewed_at";
+const SESSION_RENEW_INTERVAL_MS = 12 * 60 * 60 * 1000;
+
+export function sessionRenewalDue(now = Date.now()) {
+  if (typeof window === "undefined") return false;
+  try {
+    const renewedAt = Number(window.localStorage.getItem(RENEWED_AT_KEY) || 0);
+    return !Number.isFinite(renewedAt) || now - renewedAt >= SESSION_RENEW_INTERVAL_MS || renewedAt > now;
+  } catch {
+    return true;
+  }
+}
+
+/** Call whenever a fresh token was issued: a sign-in, a renewal, a password change. */
+export function markSessionRenewed(now = Date.now()) {
+  try {
+    window.localStorage.setItem(RENEWED_AT_KEY, String(now));
+  } catch {
+    // Without storage the app renews at every opening, which is harmless.
+  }
+}
+
 export function clearSession() {
   if (typeof window === "undefined") return;
+  try { window.localStorage.removeItem(RENEWED_AT_KEY); } catch { /* nothing to forget */ }
   savedReads.clear();
   clearHomeSnapshots();
   resetConnectionStatus();
@@ -202,6 +227,7 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ phone, password, profile }),
     }),
+  refreshSession: () => apiRequest<LoginResponse>("/auth/refresh", { method: "POST" }),
   ssoExchange: (token: string) =>
     apiRequest<LoginResponse>("/auth/sso-exchange", {
       method: "POST",
@@ -245,7 +271,10 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify({ currentPassword, newPassword }),
     });
-    if (typeof window !== "undefined") localStorage.setItem(TOKEN_KEY, result.token);
+    if (typeof window !== "undefined") {
+      localStorage.setItem(TOKEN_KEY, result.token);
+      markSessionRenewed();
+    }
     return result;
   },
   directions: () => apiRequest<ApiDirection[]>("/directions"),
