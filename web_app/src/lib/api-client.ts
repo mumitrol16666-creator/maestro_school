@@ -33,6 +33,7 @@ import type {
   PreparedTestsResponse,
 } from "@/types/prepared-tests";
 import { reportApiReachable, reportApiUnreachable } from "@/lib/connection-status";
+import { clearHomeSnapshots, isFreshSavedAnswer } from "@/lib/offline-snapshot";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "/api/v1";
 const TOKEN_KEY = "maestro_access_token";
@@ -41,10 +42,13 @@ const USER_KEY = "maestro_auth_user";
 /**
  * В-18: in the student app the last answer of every read stays in this tab's memory, so a
  * screen opened again without network shows what was already loaded (the shell shows
- * «Нет связи»). Nothing is written to the device; logout and a new session drop it.
+ * «Нет связи»), if it is younger than 12 hours. Nothing is written to the device here;
+ * logout and a new session drop it.
  */
 const SAVED_READS_LIMIT = 80;
-const savedReads = new Map<string, unknown>();
+const savedReads = new Map<string, { at: number; payload: unknown }>();
+/** Answers handed out from memory while offline; their data must not be saved again as fresh. */
+const answersServedFromMemory = new WeakSet<object>();
 let savedReadsEnabled = false;
 
 /** Only the student shell turns this on: staff and family screens have no «Нет связи» strip. */
@@ -52,9 +56,13 @@ export function setSavedReadsEnabled(enabled: boolean) {
   savedReadsEnabled = enabled;
 }
 
+export function isAnswerFromMemory(data: unknown) {
+  return typeof data === "object" && data !== null && answersServedFromMemory.has(data);
+}
+
 function keepSavedRead(path: string, payload: unknown) {
   savedReads.delete(path);
-  savedReads.set(path, payload);
+  savedReads.set(path, { at: Date.now(), payload });
   if (savedReads.size > SAVED_READS_LIMIT) {
     const oldest = savedReads.keys().next().value;
     if (oldest !== undefined) savedReads.delete(oldest);
@@ -108,6 +116,7 @@ export function storeSession(token: string, user: ApiAuthUser) {
 export function clearSession() {
   if (typeof window === "undefined") return;
   savedReads.clear();
+  clearHomeSnapshots();
   window.localStorage.removeItem(TOKEN_KEY);
   window.localStorage.removeItem(USER_KEY);
 }
@@ -160,8 +169,13 @@ export async function apiRequestEnvelope<T, M = unknown>(path: string, init: Req
 
 function unreachable<T, M>(method: string, path: string): ApiEnvelope<T, M> {
   const saved = method === "GET" && savedReadsEnabled ? savedReads.get(path) : undefined;
-  reportApiUnreachable({ servedSaved: saved !== undefined });
-  if (saved !== undefined) return saved as ApiEnvelope<T, M>;
+  if (saved && isFreshSavedAnswer(saved.at)) {
+    reportApiUnreachable({ servedSavedAt: saved.at });
+    const envelope = saved.payload as ApiEnvelope<T, M>;
+    if (typeof envelope.data === "object" && envelope.data !== null) answersServedFromMemory.add(envelope.data);
+    return envelope;
+  }
+  reportApiUnreachable();
   throw new ApiError("Не удалось связаться с сервером Maestro", 0, "NETWORK_ERROR");
 }
 

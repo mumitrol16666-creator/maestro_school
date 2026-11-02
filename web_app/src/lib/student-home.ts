@@ -1,5 +1,6 @@
-import { api } from "@/lib/api-client";
-import { reportSchoolFreshness } from "@/lib/connection-status";
+import { api, ApiError, getStoredUser, isAnswerFromMemory } from "@/lib/api-client";
+import { reportApiUnreachable, reportSchoolFreshness } from "@/lib/connection-status";
+import { readHomeSnapshot, saveHomeSnapshot } from "@/lib/offline-snapshot";
 import type { ApiStudentHome } from "@/types/api";
 
 /**
@@ -11,15 +12,27 @@ let cached: { at: number; promise: Promise<ApiStudentHome> } | null = null;
 
 export function loadStudentHome(options: { fresh?: boolean } = {}) {
   if (!options.fresh && cached && Date.now() - cached.at < HOME_TTL_MS) return cached.promise;
-  const promise = api.studentHome();
-  cached = { at: Date.now(), promise };
-  promise.then(
-    // В-18: the shell tells the student when the schedule is the server's last copy from CRM.
-    (home) => reportSchoolFreshness(home.school),
-    () => {
+  const userId = getStoredUser()?.id ?? null;
+  const promise: Promise<ApiStudentHome> = api.studentHome().then(
+    (home) => {
+      // В-18: the last live home is kept on the device for opening the app without network.
+      if (userId && !isAnswerFromMemory(home)) saveHomeSnapshot(userId, home);
+      // The shell tells the student when the schedule is the server's last copy from CRM.
+      reportSchoolFreshness(home.school);
+      return home;
+    },
+    (reason: unknown) => {
       if (cached?.promise === promise) cached = null;
+      // Decision of 02.11: without network the saved home is shown if it is younger than 12 hours.
+      const saved = reason instanceof ApiError && reason.code === "NETWORK_ERROR" && userId
+        ? readHomeSnapshot<ApiStudentHome>(userId)
+        : null;
+      if (!saved) throw reason;
+      reportApiUnreachable({ servedSavedAt: saved.savedAt });
+      return saved.home;
     },
   );
+  cached = { at: Date.now(), promise };
   return promise;
 }
 

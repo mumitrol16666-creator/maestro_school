@@ -5,8 +5,8 @@ import { useEffect, useSyncExternalStore } from "react";
 import { setSavedReadsEnabled } from "@/lib/api-client";
 import { getConnectionStatus, subscribeConnectionStatus, type ConnectionStatus } from "@/lib/connection-status";
 
-function snapshotTime(value: string | null) {
-  if (!value) return null;
+function snapshotTime(value: string | number | null) {
+  if (value == null) return null;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
   const time = new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit" }).format(date);
@@ -20,7 +20,10 @@ function snapshotTime(value: string | null) {
 }
 
 function bannerText(status: ConnectionStatus) {
-  if (status.offline) return { icon: WifiOff, text: "Нет связи. Показываем сохранённое" };
+  if (status.offline) {
+    const at = snapshotTime(status.savedAt);
+    return { icon: WifiOff, text: at ? `Нет связи. Показываем сохранённое на ${at}` : "Нет связи" };
+  }
   if (status.school.stale) {
     const at = snapshotTime(status.school.snapshotAt);
     return { icon: CloudOff, text: at ? `Нет связи со школой. Расписание на ${at}` : "Нет связи со школой. Показываем сохранённое расписание" };

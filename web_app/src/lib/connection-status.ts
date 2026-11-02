@@ -10,6 +10,8 @@ export type ConnectionStatus = {
   offline: boolean;
   /** A screen is showing an answer kept in memory because the request did not go through. */
   servedSaved: boolean;
+  /** While offline: when the data on screen was received (the oldest saved answer shown, else the last answer). */
+  savedAt: number | null;
   school: SchoolFreshness;
 };
 
@@ -18,17 +20,25 @@ const NO_SCHOOL_ISSUE: SchoolFreshness = { stale: false, unavailable: false, sna
 let browserOffline = false;
 let apiUnreachable = false;
 let servedSaved = false;
+let servedSavedAt: number | null = null;
+let lastAnswerAt: number | null = null;
 let school: SchoolFreshness = NO_SCHOOL_ISSUE;
-let snapshot: ConnectionStatus = { offline: false, servedSaved: false, school };
+let snapshot: ConnectionStatus = { offline: false, servedSaved: false, savedAt: null, school };
 const listeners = new Set<() => void>();
 let browserListenersAttached = false;
 
 function publish() {
   const offline = browserOffline || apiUnreachable;
-  const next: ConnectionStatus = { offline, servedSaved: offline && servedSaved, school };
+  const next: ConnectionStatus = {
+    offline,
+    servedSaved: offline && servedSaved,
+    savedAt: offline ? servedSavedAt ?? lastAnswerAt : null,
+    school,
+  };
   if (
     next.offline === snapshot.offline
     && next.servedSaved === snapshot.servedSaved
+    && next.savedAt === snapshot.savedAt
     && next.school === snapshot.school
   ) return;
   snapshot = next;
@@ -40,6 +50,7 @@ function onBrowserOnline() {
   // The next request decides whether the server is back; until then trust the browser.
   apiUnreachable = false;
   servedSaved = false;
+  servedSavedAt = null;
   publish();
 }
 
@@ -67,15 +78,21 @@ export function getConnectionStatus() {
 }
 
 export function reportApiReachable() {
+  lastAnswerAt = Date.now();
   if (!apiUnreachable && !servedSaved) return;
   apiUnreachable = false;
   servedSaved = false;
+  servedSavedAt = null;
   publish();
 }
 
-export function reportApiUnreachable(options: { servedSaved?: boolean } = {}) {
+/** `servedSavedAt`: a saved answer received at that moment was shown instead of a live one. */
+export function reportApiUnreachable(options: { servedSavedAt?: number } = {}) {
   apiUnreachable = true;
-  if (options.servedSaved) servedSaved = true;
+  if (options.servedSavedAt != null) {
+    servedSaved = true;
+    servedSavedAt = servedSavedAt == null ? options.servedSavedAt : Math.min(servedSavedAt, options.servedSavedAt);
+  }
   publish();
 }
 
