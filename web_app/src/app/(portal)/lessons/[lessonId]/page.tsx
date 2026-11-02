@@ -2,7 +2,6 @@
 
 import { submitCourseHomeworkWithFile } from "@/lib/learning-homework-api";
 import {
-  ArrowLeft,
   ArrowRight,
   CheckCircle2,
   Download,
@@ -24,6 +23,7 @@ import { HomeworkTestForm } from "@/components/homework-test-form";
 import { HomeworkTestResult } from "@/components/homework-test-result";
 import { LessonEndActions } from "@/components/lesson-end-actions";
 import { LessonVideoPlayer } from "@/components/lesson-video-player";
+import { usePageBackTarget } from "@/components/back-button";
 import { StatusBadge } from "@/components/status-badge";
 import { MarkdownContent } from "@/components/markdown-content";
 import { useApiResource } from "@/hooks/use-api-resource";
@@ -32,8 +32,11 @@ import { ApiError, api } from "@/lib/api-client";
 import { lessonStatusHints, testLessonStatusHints } from "@/lib/homework-ui";
 import { lessonStatusLabels } from "@/lib/ui";
 import { triggerFileDownload } from "@/lib/file-download";
+import { formatOutOf, type PluralForms } from "@/lib/plural";
 import type { HomeworkAttachmentType } from "@/types/homework";
 import type { Lesson } from "@/types";
+
+const CORRECT_OF: PluralForms = ["правильного", "правильных", "правильных"];
 
 function materialIcon(type: string) {
   if (type === "image") return <FileImage size={19} />;
@@ -71,6 +74,8 @@ export default function LessonPage() {
     return {
       detail,
       lesson: toLesson(detail, progressItem?.status),
+      // В-26: «Урок N» is the position in the course (sort_order starts from 0 in the data).
+      lessonNumber: currentIndex >= 0 ? currentIndex + 1 : null,
       attempts,
       nextLesson,
       points: progress.points,
@@ -83,6 +88,11 @@ export default function LessonPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [showStartPrompt, setShowStartPrompt] = useState(false);
+
+  // В-7: the header «назад» leads from a lesson to its own course, not to the course list.
+  usePageBackTarget(resource.data
+    ? { href: `/courses/${resource.data.detail.courseId}`, label: resource.data.detail.course.title }
+    : null);
 
   useEffect(() => {
     const attempts = resource.data?.attempts ?? [];
@@ -102,7 +112,7 @@ export default function LessonPage() {
   if (resource.error) return <ErrorState message={resource.error} retry={resource.reload} />;
   if (!resource.data) return <EmptyState title="Урок не найден" description="Возможно, урок больше недоступен." />;
 
-  const { detail, lesson, attempts, nextLesson } = resource.data;
+  const { detail, lesson, lessonNumber, attempts, nextLesson } = resource.data;
   const isTestHomework = detail.homework?.type === "test";
   const testQuestions = detail.homework?.testQuestions ?? [];
   const passingScore = detail.homework?.passingScore ?? 70;
@@ -155,8 +165,8 @@ export default function LessonPage() {
       if (result.testResult) {
         setSuccess(
           result.testPassed
-            ? `Тест пройден: ${result.testResult.score}% (${result.testResult.correctAnswers} из ${result.testResult.totalQuestions} правильных). Урок завершён.`
-            : `Набрано ${result.testResult.score}% (${result.testResult.correctAnswers} из ${result.testResult.totalQuestions} правильных). Нужно не менее ${passingScore}%. Попробуйте ещё раз.`,
+            ? `Тест пройден: ${result.testResult.score}% (${formatOutOf(result.testResult.correctAnswers, result.testResult.totalQuestions, CORRECT_OF)}). Урок завершён.`
+            : `Набрано ${result.testResult.score}% (${formatOutOf(result.testResult.correctAnswers, result.testResult.totalQuestions, CORRECT_OF)}). Нужно не менее ${passingScore}%. Попробуйте ещё раз.`,
         );
       } else {
         setSuccess("Работа отправлена на проверку.");
@@ -198,7 +208,7 @@ export default function LessonPage() {
           <div className="w-full max-w-xl rounded-[32px] border border-white/10 bg-paper p-6 shadow-soft sm:p-8">
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
-                <p className="text-xs font-bold uppercase tracking-[0.2em] text-gold-ink">Урок готов</p>
+                <p className="text-xs font-bold uppercase tracking-wide text-gold-ink">Урок готов</p>
                 <h2 className="font-display mt-3 text-3xl leading-tight text-ink sm:text-4xl">{lesson.title}</h2>
               </div>
               <StatusBadge status={lesson.status} />
@@ -216,7 +226,7 @@ export default function LessonPage() {
               <button
                 type="button"
                 onClick={() => setShowStartPrompt(false)}
-                className="rounded-2xl border border-stone-200 px-5 py-3 text-sm font-bold text-stone-600"
+                className="min-h-11 rounded-2xl border border-stone-200 px-5 py-3 text-sm font-bold text-stone-600"
               >
                 Сначала посмотреть описание
               </button>
@@ -224,7 +234,7 @@ export default function LessonPage() {
                 type="button"
                 onClick={handleStart}
                 disabled={starting}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-ink px-6 py-3 text-sm font-bold text-white disabled:opacity-60"
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-ink px-6 py-3 text-sm font-bold text-white disabled:opacity-60"
               >
                 {starting ? <LoaderCircle size={16} className="animate-spin" /> : <Play size={16} fill="currentColor" />}
                 Начать урок
@@ -234,17 +244,10 @@ export default function LessonPage() {
         </div>
       )}
 
-      <Link
-        href={`/courses/${detail.courseId}`}
-        className="mb-6 inline-flex items-center gap-2 text-sm font-bold text-stone-500"
-      >
-        <ArrowLeft size={16} /> {detail.course.title}
-      </Link>
-
       <div className="grid gap-7 xl:grid-cols-[1fr_360px]">
         <div>
           <div className="mb-6 flex flex-wrap items-center gap-3">
-            <span className="text-xs font-bold uppercase tracking-[0.2em] text-gold-ink">Урок {lesson.order}</span>
+            <span className="text-xs font-bold uppercase tracking-wide text-gold-ink">{lessonNumber ? `Урок ${lessonNumber}` : "Урок"}</span>
             <StatusBadge status={lesson.status} />
           </div>
 
@@ -324,7 +327,7 @@ export default function LessonPage() {
                 type="button"
                 onClick={() => void handleCompleteWithoutHomework()}
                 disabled={completing}
-                className="mt-5 inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-700 px-5 py-3 text-sm font-bold text-white disabled:opacity-60"
+                className="mt-5 inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-emerald-700 px-5 py-3 text-sm font-bold text-white disabled:opacity-60"
               >
                 {completing ? <LoaderCircle size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
                 {completing ? "Завершаем…" : "Урок изучен"}
@@ -444,7 +447,7 @@ export default function LessonPage() {
               <button
                 onClick={handleStart}
                 disabled={starting}
-                className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-ink px-4 py-3 text-sm font-bold text-white"
+                className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl bg-ink px-4 py-3 text-sm font-bold text-white"
               >
                 {starting ? <LoaderCircle size={16} className="animate-spin" /> : <Play size={16} />}
                 Начать урок

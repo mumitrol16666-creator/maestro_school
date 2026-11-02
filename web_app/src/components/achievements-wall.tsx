@@ -60,7 +60,7 @@ export function AchievementsWall({ achievements, compact = false }: Achievements
               <p className="text-sm font-bold text-ink">{item.title}</p>
               <p className="mt-1 text-xs leading-5 text-stone-500">{item.description}</p>
               {item.earned && item.earnedAt && (
-                <p className="mt-2 text-[11px] font-bold uppercase tracking-wider text-emerald-700">
+                <p className="mt-2 text-xs font-bold uppercase tracking-wide text-emerald-700">
                   Получено {new Intl.DateTimeFormat("ru-RU", { dateStyle: "medium" }).format(new Date(item.earnedAt))}
                 </p>
               )}
@@ -72,7 +72,7 @@ export function AchievementsWall({ achievements, compact = false }: Achievements
                       style={{ width: `${item.progressPercent}%` }}
                     />
                   </div>
-                  <p className="mt-1 text-[11px] text-stone-400">{item.progressLabel}</p>
+                  <p className="mt-1 text-xs text-stone-500">{item.progressLabel}</p>
                 </div>
               )}
             </div>

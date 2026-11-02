@@ -1,7 +1,6 @@
 "use client";
 
-import { ArrowLeft, Download, ExternalLink, LoaderCircle, RotateCcw, Send } from "lucide-react";
-import Link from "next/link";
+import { Download, ExternalLink, LoaderCircle, RotateCcw, Send } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
@@ -87,10 +86,6 @@ export default function OnlineLessonDetailPage() {
 
   return (
     <>
-      <Link href="/online-lessons" className="mb-6 inline-flex items-center gap-2 text-sm font-bold text-stone-500">
-        <ArrowLeft size={16} /> Все онлайн-уроки
-      </Link>
-
       <div className="rounded-[30px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
@@ -113,7 +108,7 @@ export default function OnlineLessonDetailPage() {
             <p className="mt-2 text-sm font-semibold text-indigo-900">
               {new Intl.DateTimeFormat("ru-RU", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }).format(new Date(item.scheduledAt))}
             </p>
-            <a href={item.zoomUrl} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-2 rounded-2xl bg-ink px-5 py-3 text-sm font-bold text-white">
+            <a href={item.zoomUrl} target="_blank" rel="noreferrer" className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-2xl bg-ink px-5 py-3 text-sm font-bold text-white">
               Открыть Zoom <ExternalLink size={14} />
             </a>
           </div>
@@ -168,7 +163,7 @@ export default function OnlineLessonDetailPage() {
                           e.stopPropagation();
                           void triggerFileDownload(material.url!, material.title || "material");
                         }}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-xs font-bold text-ink hover:bg-amber-50 transition"
+                        className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-stone-200 bg-white px-3 text-xs font-bold text-ink hover:bg-amber-50 transition"
                       >
                         <Download size={13} className="text-gold-ink" />
                         <span>Скачать</span>
@@ -177,7 +172,8 @@ export default function OnlineLessonDetailPage() {
                         href={material.url}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-flex items-center gap-1 rounded-lg border border-stone-200 bg-white px-2.5 py-1.5 text-xs font-bold text-stone-600 hover:text-ink transition"
+                        aria-label="Открыть материал"
+                        className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1 rounded-lg border border-stone-200 bg-white px-2.5 text-xs font-bold text-stone-600 hover:text-ink transition"
                       >
                         <ExternalLink size={13} />
                       </a>
@@ -203,13 +199,13 @@ export default function OnlineLessonDetailPage() {
               </p>
               {latestSubmission.reviewComment && (
                 <div className={`mt-3 rounded-xl p-3 ${needsRevision ? "bg-white/70" : "bg-white"}`}>
-                  <p className="text-[10px] font-black uppercase tracking-wider text-stone-400">Комментарий преподавателя</p>
+                  <p className="text-xs font-black uppercase tracking-wide text-stone-500">Комментарий преподавателя</p>
                   <p className="mt-1 whitespace-pre-wrap leading-6">{latestSubmission.reviewComment}</p>
                 </div>
               )}
               {needsRevision && latestSubmission.comment ? (
                 <div className="mt-3">
-                  <p className="text-[10px] font-black uppercase tracking-wider text-red-700/70">Предыдущий ответ</p>
+                  <p className="text-xs font-black uppercase tracking-wide text-red-700/70">Предыдущий ответ</p>
                   <p className="mt-1 whitespace-pre-wrap leading-6 text-red-900/80">{latestSubmission.comment}</p>
                 </div>
               ) : null}
@@ -218,7 +214,7 @@ export default function OnlineLessonDetailPage() {
                   href={latestSubmission.attachmentUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="mt-3 inline-flex items-center gap-1.5 font-bold text-red-800 underline underline-offset-4"
+                  className="mt-3 inline-flex min-h-11 items-center gap-1.5 font-bold text-red-800 underline underline-offset-4"
                 >
                   Предыдущий материал <ExternalLink size={13} />
                 </a>
@@ -252,12 +248,12 @@ export default function OnlineLessonDetailPage() {
                   type="url"
                   value={attachmentUrl}
                   onChange={(event) => setAttachmentUrl(event.target.value)}
-                  className="w-full rounded-2xl border border-stone-200 px-4 py-3 text-sm"
+                  className="min-h-11 w-full rounded-2xl border border-stone-200 px-4 py-3 text-sm"
                   placeholder="Ссылка на материал"
                   required
                 />
               )}
-              <button disabled={submitting} className="inline-flex items-center gap-2 rounded-2xl bg-ink px-5 py-3 text-sm font-bold text-white disabled:opacity-50">
+              <button disabled={submitting} className="inline-flex min-h-11 items-center gap-2 rounded-2xl bg-ink px-5 py-3 text-sm font-bold text-white disabled:opacity-50">
                 {submitting ? <LoaderCircle className="animate-spin" size={16} /> : <Send size={16} />}
                 {needsRevision ? "Отправить исправленную работу" : "Сдать задание"}
               </button>

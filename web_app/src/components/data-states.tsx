@@ -20,7 +20,7 @@ export function LoadingState({ label = "Загружаем данные Maestro"
           <Music2 className="maestro-loading-note" size={18} strokeWidth={2.3} />
         </div>
 
-        <p className="mt-7 text-[10px] font-black uppercase tracking-[0.24em] text-gold-ink">
+        <p className="mt-7 text-xs font-black uppercase tracking-[0.24em] text-gold-ink">
           Цифровая школа Maestro
         </p>
         <h2 className="font-display mt-3 text-2xl leading-tight sm:text-3xl">{label}</h2>

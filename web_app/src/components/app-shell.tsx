@@ -4,6 +4,8 @@ import { Menu, X, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { BackButton, BackTargetContext, type BackTargetOverride } from "./back-button";
+import { studentBackTarget } from "@/lib/student-back";
 import { useStudentSchoolAlerts } from "@/hooks/use-student-school-alerts";
 import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
 import { useMessageMailboxStatus } from "@/hooks/use-message-mailbox-status";
@@ -31,6 +33,8 @@ type ShellNavigationItem = {
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  // A screen whose parent depends on its data (a lesson → its course) names it here; see usePageBackTarget.
+  const [backOverride, setBackOverride] = useState<BackTargetOverride>(null);
   const { user } = useAuth();
   const student = isStudentRole(user?.role);
   const staff = isStaffRole(user?.role);
@@ -50,6 +54,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const primaryNavigation: ShellNavigationItem[] = studentWorkspaceNavigation;
   const mobileNavigation: ShellNavigationItem[] = studentWorkspaceNavigation;
   const messagesAvailable = student || hasMessageAccess;
+  // В-7: one «назад» in the header of every student screen that is not a section root.
+  const back = student
+    ? (backOverride?.pathname === pathname ? backOverride.target : studentBackTarget(pathname))
+    : null;
 
   function activeNavigationItem(item: ShellNavigationItem) {
     return item.pathPrefixes
@@ -70,7 +78,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <Brand />
         <button
           type="button"
-          className="grid h-10 w-10 place-items-center rounded-xl border border-white/10 bg-white/5 text-white/70 transition hover:bg-white/10 hover:text-white lg:hidden"
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/5 text-white/70 transition hover:bg-white/10 hover:text-white lg:hidden"
           onClick={() => setOpen(false)}
           aria-label="Закрыть меню"
         >
@@ -119,6 +127,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   );
 
   return (
+    <BackTargetContext.Provider value={setBackOverride}>
     <div className="min-h-screen bg-cream">
       <a className="brand-skip-link" href="#main-content">Перейти к содержимому</a>
       <div className="fixed inset-y-0 left-0 hidden w-[272px] lg:block print:hidden">{sidebar}</div>
@@ -127,22 +136,28 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="lg:pl-[272px] print:pl-0">
         <header className="sticky top-0 z-30 flex h-[calc(80px+env(safe-area-inset-top,0px))] items-center gap-3 border-b border-stone-200/70 bg-cream/90 px-4 pt-[env(safe-area-inset-top,0px)] backdrop-blur-xl sm:px-8 print:hidden">
           {student ? (
-            <div className="flex items-center gap-2 lg:hidden">
-              <Brand compact />
-              <button
-                type="button"
-                onClick={() => setOpen(true)}
-                className="grid h-10 w-10 place-items-center rounded-xl border border-stone-200/80 bg-white shadow-sm transition hover:border-gold/30"
-                aria-label="Открыть все разделы"
-                title="Все разделы"
-              >
-                <Menu size={19} />
-              </button>
-            </div>
+            back ? (
+              <div className="min-w-0 flex-1">
+                <BackButton href={back.href} label={back.label} />
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 lg:hidden">
+                <Brand compact />
+                <button
+                  type="button"
+                  onClick={() => setOpen(true)}
+                  className="grid h-11 w-11 place-items-center rounded-xl border border-stone-200/80 bg-white shadow-sm transition hover:border-gold/30"
+                  aria-label="Открыть все разделы"
+                  title="Все разделы"
+                >
+                  <Menu size={19} />
+                </button>
+              </div>
+            )
           ) : (
             <button onClick={() => setOpen(true)} className="grid h-10 w-10 place-items-center rounded-xl border border-stone-200/80 bg-white shadow-sm transition hover:border-gold/30 lg:hidden" aria-label="Открыть меню"><Menu size={20} /></button>
           )}
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex shrink-0 items-center gap-2">
             {user ? (
               <NotificationCenter
                 userId={user.id}
@@ -171,7 +186,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <nav
           data-testid="student-mobile-navigation"
           data-mobile-app-navigation
-          className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-stone-200/90 bg-paper/95 px-2 pb-[env(safe-area-inset-bottom,0px)] shadow-[0_-12px_35px_rgba(37,33,25,0.08)] backdrop-blur-xl lg:hidden print:hidden"
+          className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-stone-200/90 bg-paper/95 px-0.5 pb-[env(safe-area-inset-bottom,0px)] shadow-[0_-12px_35px_rgba(37,33,25,0.08)] backdrop-blur-xl lg:hidden print:hidden"
           aria-label="Основная навигация"
         >
           {mobileNavigation.filter((item) => !item.messagesOnly || messagesAvailable).map(({ href, label, icon: Icon }) => {
@@ -183,8 +198,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 key={href}
                 href={href}
                 aria-current={active ? "page" : undefined}
-                className={`relative flex min-w-0 flex-col items-center justify-center gap-1 px-1 py-2 text-[10px] font-bold transition ${
-                  active ? "text-ink" : "text-stone-400"
+                className={`relative flex min-h-14 min-w-0 flex-col items-center justify-center gap-0.5 px-0.5 py-1.5 text-xs font-bold transition ${
+                  active ? "text-ink" : "text-stone-600"
                 }`}
               >
                 <span className={`relative grid h-9 w-11 place-items-center rounded-xl ${
@@ -192,7 +207,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 }`}>
                   <Icon size={19} strokeWidth={2.15} />
                   {badge != null && badge > 0 ? (
-                    <span className="absolute -right-0.5 -top-0.5 grid min-h-4 min-w-4 place-items-center rounded-full bg-gold px-1 text-[9px] font-black leading-none text-ink">
+                    <span className="absolute -right-0.5 -top-0.5 grid min-h-5 min-w-5 place-items-center rounded-full bg-gold px-1 text-xs font-black leading-none text-ink">
                       {badge > 99 ? "99+" : badge}
                     </span>
                   ) : null}
@@ -210,5 +225,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </>
       ) : null}
     </div>
+    </BackTargetContext.Provider>
   );
 }

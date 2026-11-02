@@ -50,13 +50,13 @@ test("the lesson result shows what was earned, the sector step, the homework che
   await expect(earned).toContainText("+100 баллов");
   await expect(earned).toContainText("+20 XP");
   await expect(earned).toContainText("бонус от преподавателя +3 XP");
-  await expect(earned).toContainText("серия 3 нед.");
+  await expect(earned).toContainText("серия 3 недели");
   await expect(earned).not.toContainText("Coin");
 
   const sector = page.getByTestId("lesson-sector-progress");
   await expect(sector).toContainText("Сектор 1 · Гитара");
   await expect(sector).toContainText("25 % → 50 %");
-  await expect(sector).toContainText("Освоено тем: 2 из 4");
+  await expect(sector).toContainText("Освоено: 2 из 4 тем");
 
   const checks = page.getByTestId("lesson-homework-checks");
   await expect(checks).toContainText("Переходы между аккордами");

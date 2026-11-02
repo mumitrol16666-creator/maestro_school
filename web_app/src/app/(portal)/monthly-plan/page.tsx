@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  ArrowLeft,
   CheckCircle2,
   Circle,
   CircleDot,
@@ -27,6 +26,9 @@ import { sectorTitle } from "@/lib/sector-label";
 import { SectorProposalSection, sectorProposalDirections } from "@/components/sector-proposals";
 import { sameSiteMediaUrl } from "@/lib/media-url";
 import { materialsApi } from "@/lib/materials-api";
+import { formatOutOf } from "@/lib/plural";
+
+const TOPICS_GENITIVE = ["темы", "тем", "тем"] as const;
 
 const itemStatus = {
   planned: { label: "Запланировано", icon: Circle, className: "text-stone-500" },
@@ -75,10 +77,7 @@ export default function SectorPage() {
     <div className="mx-auto max-w-5xl">
       <header className="flex flex-wrap items-end justify-between gap-5 border-b border-stone-200 pb-6">
         <div>
-          <Link href="/dashboard" className="inline-flex items-center gap-2 text-sm font-bold text-stone-500 hover:text-ink">
-            <ArrowLeft size={16} /> Главная
-          </Link>
-          <p className="mt-6 text-xs font-black uppercase tracking-[0.18em] text-gold-ink">Учебный маршрут</p>
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-gold-ink">Учебный маршрут</p>
           <h1 className="font-display mt-2 text-4xl leading-tight sm:text-5xl">
             {active.length === 1 ? sectorTitle(active[0]!, "student") : active.length > 1 ? "Мои сектора" : "Мой сектор"}
           </h1>
@@ -88,7 +87,7 @@ export default function SectorPage() {
             <>
               <div className="flex items-end justify-between gap-4">
                 <span className="text-sm font-bold text-stone-600">
-                  {aggregateProgress.completed} из {aggregateProgress.total} тем закрыто
+                  {formatOutOf(aggregateProgress.completed, aggregateProgress.total, TOPICS_GENITIVE)} закрыто
                 </span>
                 <strong className="text-2xl text-ink">{aggregateProgress.percent}%</strong>
               </div>
@@ -98,7 +97,7 @@ export default function SectorPage() {
           <button
             type="button"
             onClick={() => setShowHistory((value) => !value)}
-            className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-stone-500 hover:text-ink"
+            className="mt-1 inline-flex min-h-11 items-center gap-1.5 text-xs font-bold text-stone-500 hover:text-ink"
           >
             <History size={14} /> {showHistory ? "Скрыть закрытые секторы" : "Закрытые секторы"}
           </button>
@@ -143,7 +142,7 @@ export default function SectorPage() {
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-bold text-ink">{plan.goal}</p>
                       <p className="text-xs text-stone-500">
-                        {plan.scope === "group" ? `${sectorTitle(plan, "student")} · ` : ""}{plan.direction?.title ? `${plan.direction.title} · ` : ""}{plan.progress.completed} из {plan.progress.total} тем
+                        {plan.scope === "group" ? `${sectorTitle(plan, "student")} · ` : ""}{plan.direction?.title ? `${plan.direction.title} · ` : ""}{formatOutOf(plan.progress.completed, plan.progress.total, TOPICS_GENITIVE)}
                         {plan.closedAt ? ` · закрыт ${formatDate(plan.closedAt)}` : ""}
                       </p>
                     </div>
@@ -192,7 +191,7 @@ function SectorDetails({ plan }: { plan: StudentHomeMonthlyPlan }) {
       <div className="mt-5">
         <ProgressBar value={plan.progress.percent} />
         <p className="mt-2 text-xs font-semibold text-stone-500">
-          Закрыто {plan.progress.completed} из {plan.progress.total} тем
+          Закрыто {formatOutOf(plan.progress.completed, plan.progress.total, TOPICS_GENITIVE)}
           {plan.progress.inProgress ? `, в работе ${plan.progress.inProgress}` : ""}
         </p>
       </div>
@@ -202,7 +201,7 @@ function SectorDetails({ plan }: { plan: StudentHomeMonthlyPlan }) {
 
       {plan.expectedResult ? (
         <div className="mt-5 rounded-lg bg-stone-50 px-4 py-3">
-          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-stone-400">Результат сектора</p>
+          <p className="text-xs font-black uppercase tracking-wide text-stone-500">Результат сектора</p>
           <p className="mt-1 text-sm font-semibold leading-6 text-stone-700">{plan.expectedResult}</p>
         </div>
       ) : null}
@@ -258,7 +257,7 @@ function PlanMaterial({
   material: NonNullable<StudentHomeMonthlyPlan["materials"]>[number];
 }) {
   const href = supportedMaterialUrl(material.url);
-  const className = "flex min-w-0 items-center gap-3 rounded-lg border border-stone-200 px-3 py-3 text-sm font-bold text-stone-700";
+  const className = "flex min-h-11 min-w-0 items-center gap-3 rounded-lg border border-stone-200 px-3 py-3 text-sm font-bold text-stone-700";
   const content = (
     <>
       <span className="min-w-0 flex-1 truncate">{material.title || material.note || "Материал"}</span>
@@ -287,7 +286,7 @@ function SharedLessonsSection() {
     <section className="mt-8" data-testid="sector-shared-lessons">
       <div className="flex flex-wrap items-end justify-between gap-2">
         <h2 className="font-display text-2xl text-ink">Уроки от преподавателя</h2>
-        <Link href="/shared-lessons" className="text-sm font-bold text-gold-ink hover:underline">Все</Link>
+        <Link href="/shared-lessons" className="inline-flex min-h-11 min-w-11 items-center justify-center text-sm font-bold text-gold-ink hover:underline">Все</Link>
       </div>
       <ul className="mt-3 grid gap-2">
         {items.slice(0, 3).map((share) => (
@@ -297,7 +296,7 @@ function SharedLessonsSection() {
                 <span className="block truncate text-sm font-bold text-ink">{share.lesson.title}</span>
                 <span className="block truncate text-xs text-stone-500">{share.lesson.courseTitle}</span>
               </span>
-              {!share.viewedAt ? <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black text-amber-900">новое</span> : null}
+              {!share.viewedAt ? <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-black text-amber-900">новое</span> : null}
             </Link>
           </li>
         ))}

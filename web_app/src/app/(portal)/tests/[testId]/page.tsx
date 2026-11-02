@@ -5,7 +5,6 @@ import {
   ArrowRight,
   Check,
   CheckCircle2,
-  ChevronLeft,
   ChevronRight,
   Clock3,
   Flame,
@@ -24,6 +23,7 @@ import { PageHeader } from "@/components/page-header";
 import { PreparedTheoryMaterialView } from "@/components/prepared-theory-material";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { api } from "@/lib/api-client";
+import { formatOutOf } from "@/lib/plural";
 import type { PreparedTestAttemptResponse, PreparedTestReviewItem } from "@/types/prepared-tests";
 
 type SaveState = "idle" | "saving" | "saved" | "error";
@@ -157,14 +157,6 @@ export default function PreparedTestPage() {
         eyebrow={`Тест ${test.order} из ${test.totalTests}`}
         title={test.title}
         description={test.description}
-        action={
-          <Link
-            href="/tests"
-            className="inline-flex items-center gap-2 rounded-full border border-stone-200 bg-paper px-4 py-2.5 text-sm font-bold"
-          >
-            <ChevronLeft size={16} /> Все тесты
-          </Link>
-        }
       />
 
       {completed ? (
@@ -217,7 +209,7 @@ export default function PreparedTestPage() {
                             ? "Уже учтён"
                             : "Не начислен"}
                       </span>
-                ) : <span className="text-xl">{completed.attemptsRemaining} из {test.dailyRules.attemptLimit} сегодня</span>}
+                ) : <span className="text-xl">Осталось сегодня: {formatOutOf(completed.attemptsRemaining ?? 0, test.dailyRules.attemptLimit, ["попытки", "попыток", "попыток"])}</span>}
               </p>
             </div>
           </div>
@@ -268,7 +260,7 @@ export default function PreparedTestPage() {
             {completed.nextTest ? (
               <Link
                 href={`/tests/${completed.nextTest.id}`}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-ink px-5 py-3.5 text-sm font-bold text-white transition hover:bg-gold hover:text-ink"
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-ink px-5 py-3.5 text-sm font-bold text-white transition hover:bg-gold hover:text-ink"
               >
                 {completed.nextTestAvailableToday ? "Следующий тест" : "Следующий урок"}
                 <ChevronRight size={16} />
@@ -278,19 +270,19 @@ export default function PreparedTestPage() {
               <button
                 type="button"
                 onClick={retry}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-stone-300 bg-white px-5 py-3.5 text-sm font-bold transition hover:border-gold"
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-stone-300 bg-white px-5 py-3.5 text-sm font-bold transition hover:border-gold"
               >
                 <RotateCcw size={16} /> Повторить материал и тест
               </button>
             ) : null}
             {test.theory ? (
-              <button type="button" onClick={() => { setResult(null); setView("theory"); }} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-stone-300 bg-white px-5 py-3.5 text-sm font-bold transition hover:border-gold">
+              <button type="button" onClick={() => { setResult(null); setView("theory"); }} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-stone-300 bg-white px-5 py-3.5 text-sm font-bold transition hover:border-gold">
                 <BookOpen size={16} /> Открыть материал
               </button>
             ) : null}
             <Link
               href="/tests"
-              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-stone-300 bg-white px-5 py-3.5 text-sm font-bold"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-stone-300 bg-white px-5 py-3.5 text-sm font-bold"
             >
               Вернуться к тестам
             </Link>
@@ -309,7 +301,7 @@ export default function PreparedTestPage() {
           <TriangleAlert className="text-amber-700" size={28} />
           <h2 className="mt-4 font-display text-3xl">Тест пока недоступен</h2>
           <p className="mt-2 text-stone-700">{blockedMessage}</p>
-          <Link href="/tests" className="mt-5 inline-flex rounded-2xl bg-ink px-5 py-3 text-sm font-bold text-white">К списку тестов</Link>
+          <Link href="/tests" className="mt-5 inline-flex min-h-11 items-center rounded-2xl bg-ink px-5 py-3 text-sm font-bold text-white">К списку тестов</Link>
         </section>
       ) : (
         <>
@@ -379,7 +371,7 @@ export default function PreparedTestPage() {
               type="button"
               onClick={() => setCurrentQuestion((value) => Math.max(0, value - 1))}
               disabled={currentQuestion === 0}
-              className="inline-flex items-center gap-2 rounded-2xl border border-stone-200 bg-paper px-4 py-3 text-sm font-bold disabled:opacity-40"
+              className="inline-flex min-h-11 items-center gap-2 rounded-2xl border border-stone-200 bg-paper px-4 py-3 text-sm font-bold disabled:opacity-40"
             >
               <ArrowLeft size={17} /> Назад
             </button>
@@ -391,7 +383,7 @@ export default function PreparedTestPage() {
                 type="button"
                 onClick={() => setCurrentQuestion((value) => value + 1)}
                 disabled={!selectedOptionId}
-                className="inline-flex items-center gap-2 rounded-2xl bg-ink px-5 py-3 text-sm font-bold text-white transition hover:bg-gold hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
+                className="inline-flex min-h-11 items-center gap-2 rounded-2xl bg-ink px-5 py-3 text-sm font-bold text-white transition hover:bg-gold hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Дальше <ArrowRight size={17} />
               </button>
@@ -400,7 +392,7 @@ export default function PreparedTestPage() {
                 type="button"
                 onClick={submit}
                 disabled={submitting || !test.available || answeredCount < test.questionCount}
-                className="inline-flex items-center gap-2 rounded-2xl bg-ink px-5 py-3 text-sm font-bold text-white transition hover:bg-gold hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
+                className="inline-flex min-h-11 items-center gap-2 rounded-2xl bg-ink px-5 py-3 text-sm font-bold text-white transition hover:bg-gold hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <Send size={16} /> {submitting ? "Проверяем…" : "Завершить"}
               </button>

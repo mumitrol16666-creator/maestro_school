@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect } from "react";
 import { useAuth } from "@/components/auth-provider";
@@ -40,12 +39,6 @@ export default function SchoolTaskPage() {
 
   return (
     <div className="mx-auto max-w-3xl">
-      <Link
-        href="/tasks?source=offline"
-        className="mb-3 inline-flex min-h-11 items-center rounded-lg text-sm font-semibold text-stone-600 focus-visible:ring-2 focus-visible:ring-gold"
-      >
-        ← Все задания
-      </Link>
       <h1 className="mb-4 text-2xl font-bold">Задание с преподавателем</h1>
       {homework.loading ? (
         <LoadingState label="Загружаем задание" />

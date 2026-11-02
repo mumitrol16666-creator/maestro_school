@@ -39,7 +39,7 @@ export const studentWorkspaceNavigation: StudentWorkspaceNavigationItem[] = [
     href: "/learning",
     label: "Обучение",
     icon: GraduationCap,
-    pathPrefixes: ["/learning", "/tasks", "/monthly-plan", "/courses", "/lessons", "/tests", "/progress"],
+    pathPrefixes: ["/learning", "/tasks", "/monthly-plan", "/courses", "/lessons", "/tests", "/progress", "/shared-lessons"],
   },
   {
     id: "schedule",
@@ -118,8 +118,8 @@ export function StudentWorkspaceContextNavigation() {
               key={href}
               href={href}
               aria-current={active ? "page" : undefined}
-              className={`flex min-h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-md px-1 text-[10px] font-bold transition sm:min-h-11 sm:flex-row sm:gap-1.5 sm:px-2 sm:text-sm ${
-                active ? "bg-ink text-white" : "text-stone-500 hover:bg-stone-50 hover:text-ink"
+              className={`flex min-h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-md px-0.5 text-xs font-bold transition sm:min-h-11 sm:flex-row sm:gap-1.5 sm:px-2 sm:text-sm ${
+                active ? "bg-ink text-white" : "text-stone-600 hover:bg-stone-50 hover:text-ink"
               }`}
             >
               <Icon size={16} className="shrink-0" />
@@ -134,8 +134,8 @@ export function StudentWorkspaceContextNavigation() {
             aria-expanded={moreOpen}
             aria-haspopup="menu"
             aria-current={moreActive ? "page" : undefined}
-            className={`flex min-h-12 w-full min-w-0 flex-col items-center justify-center gap-0.5 rounded-md px-1 text-[10px] font-bold transition sm:min-h-11 sm:flex-row sm:gap-1.5 sm:px-2 sm:text-sm ${
-              moreActive ? "bg-ink text-white" : "text-stone-500 hover:bg-stone-50 hover:text-ink"
+            className={`flex min-h-12 w-full min-w-0 flex-col items-center justify-center gap-0.5 rounded-md px-0.5 text-xs font-bold transition sm:min-h-11 sm:flex-row sm:gap-1.5 sm:px-2 sm:text-sm ${
+              moreActive ? "bg-ink text-white" : "text-stone-600 hover:bg-stone-50 hover:text-ink"
             }`}
           >
             <Ellipsis size={17} className="shrink-0" />

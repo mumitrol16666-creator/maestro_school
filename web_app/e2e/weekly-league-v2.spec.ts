@@ -48,7 +48,7 @@ test("weekly XP shows only protected sources and exact limits", async ({ page, r
   await expect(page.getByText("+20 XP", { exact: true }).first()).toBeVisible();
   // Plan 5.3: the streak, table and history fold under «Подробнее».
   await page.getByTestId("league-details").locator("> summary").click();
-  await expect(page.getByTestId("weekly-streak")).toContainText(/\d+ недель подряд/);
+  await expect(page.getByTestId("weekly-streak")).toContainText(/\d+ (неделя|недели|недель) подряд/);
   await expect(page.getByTestId("weekly-streak")).toContainText("4");
   const history = page.getByTestId("weekly-league-history");
   await expect(history).toBeVisible();

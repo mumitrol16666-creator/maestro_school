@@ -33,7 +33,7 @@ export function PwaInstallCard() {
             <button
               type="button"
               onClick={() => void install()}
-              className="mt-5 inline-flex items-center gap-2 rounded-full bg-ink px-5 py-3 text-sm font-bold text-white"
+              className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-full bg-ink px-5 py-3 text-sm font-bold text-white"
             >
               <Download size={16} />
               Установить приложение

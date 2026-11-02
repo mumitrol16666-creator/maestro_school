@@ -66,7 +66,7 @@ function TasksContent() {
   return (
     <div className="mx-auto max-w-6xl" data-testid="tasks-workspace">
       <header className="mb-6">
-        <p className="text-[11px] font-black uppercase tracking-[0.16em] text-amber-800">Моё обучение</p>
+        <p className="text-xs font-black uppercase tracking-wide text-amber-800">Моё обучение</p>
         <h1 className="font-display mt-2 text-4xl leading-tight text-ink">Задания</h1>
         <p className="mt-2 text-sm leading-6 text-stone-600">Подготовка к урокам и задания из курсов.</p>
       </header>
@@ -103,7 +103,7 @@ function TasksContent() {
               <div className="space-y-3">
                 {current.map(task => <UnifiedTaskCard key={task.id} task={task} />)}
                 {historical.length > 0 && <section aria-label="Из прошлых уроков" className={current.length ? "pt-3" : ""}>
-                  <h2 className="mb-1 text-[11px] font-black uppercase tracking-[0.13em] text-amber-800">Из прошлых уроков</h2>
+                  <h2 className="mb-1 text-xs font-black uppercase tracking-wide text-amber-800">Из прошлых уроков</h2>
                   <p className="mb-3 text-xs leading-5 text-stone-600">Задания и оценки из отчётов по занятиям. Это не новые назначения.</p>
                   <div className="space-y-3">{historical.map(task => <UnifiedTaskCard key={task.id} task={task} />)}</div>
                 </section>}

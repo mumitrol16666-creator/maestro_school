@@ -25,7 +25,7 @@ test("student entry stays uninterrupted and notifications open on demand", async
   await expect(page.getByRole("dialog", { name: "Пока вас не было" })).toHaveCount(0);
   await page.getByRole("button", { name: /Уведомления/ }).click();
 
-  const dialog = page.getByRole("dialog", { name: /новых|Всё просмотрено/ });
+  const dialog = page.getByRole("dialog", { name: /нов(ое|ых)|Всё просмотрено/ });
   await expect(dialog).toBeVisible();
   await expect(dialog.locator("time").first()).toBeVisible();
   await expect(dialog.getByText(/Открыть|Проверить|Посмотреть|Отметить/).first()).toBeVisible();
@@ -40,7 +40,7 @@ test("notification center is a bottom sheet without horizontal overflow on a pho
   await page.goto("/dashboard");
   await page.getByRole("button", { name: /Уведомления/ }).click();
 
-  const dialog = page.getByRole("dialog", { name: /новых|Всё просмотрено/ });
+  const dialog = page.getByRole("dialog", { name: /нов(ое|ых)|Всё просмотрено/ });
   await expect(dialog).toBeVisible();
   const box = await dialog.boundingBox();
   expect(box).not.toBeNull();
@@ -86,5 +86,5 @@ test("notification action opens the exact homework screen", async ({ page }) => 
   await notification.click();
 
   await expect(page).toHaveURL(/\/tasks\/school\/QA-CLASS-IND-PREVIOUS$/);
-  await expect(page.getByRole("dialog", { name: /новых|Всё просмотрено/ })).toHaveCount(0);
+  await expect(page.getByRole("dialog", { name: /нов(ое|ых)|Всё просмотрено/ })).toHaveCount(0);
 });

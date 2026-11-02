@@ -66,7 +66,6 @@ export function toCourseLesson(
     moduleId,
     title: lesson.title,
     description: lesson.description ?? "",
-    order: lesson.sortOrder,
     status: normalizeLessonStatus(progress?.status),
     pointsReward: lesson.pointsReward,
     materials: [],
@@ -87,7 +86,6 @@ export function toLesson(detail: ApiLessonDetail, status?: string): Lesson {
     moduleId: detail.moduleId,
     title: detail.title,
     description: detail.description ?? "",
-    order: detail.sortOrder,
     status: normalizeLessonStatus(status),
     pointsReward: detail.pointsReward,
     materials: detail.materials.map((material) => ({

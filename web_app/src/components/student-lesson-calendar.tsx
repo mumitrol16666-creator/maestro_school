@@ -155,7 +155,7 @@ export function StudentLessonCalendar({
   return (
     <section
       aria-label="Календарь уроков"
-      className="min-w-0 rounded-2xl border border-stone-200 bg-white p-4 sm:p-5"
+      className="min-w-0 rounded-2xl border border-stone-200 bg-white p-3 sm:p-5"
     >
       <div className="flex items-center justify-between gap-2">
         <h2 className="flex items-center gap-2 text-base font-bold">
@@ -193,7 +193,9 @@ export function StudentLessonCalendar({
           <ChevronRight size={18} />
         </button>
       </div>
-      <div className="mt-1 grid grid-cols-7 gap-1 text-center">
+      {/* Seven days of at least 44 px do not fit a 320 px phone: the strip scrolls inside itself, the page does not. */}
+      <div className="-mx-1 overflow-x-auto px-1 py-1">
+      <div className="grid min-w-[322px] grid-cols-7 gap-0.5 text-center">
         {weekdays.map((day) => (
           <span key={day} className="py-1 text-xs text-stone-500">
             {day}
@@ -222,6 +224,7 @@ export function StudentLessonCalendar({
           );
         })}
       </div>
+      </div>
       <div className="mt-1 flex flex-wrap items-center justify-between gap-x-3 text-xs text-stone-500">
         <span className="inline-flex items-center gap-1.5">
           <span
@@ -230,11 +233,11 @@ export function StudentLessonCalendar({
           />
           Есть занятие
         </span>
-        <div className="flex gap-3">
+        <div className="flex gap-2">
           <button
             type="button"
             onClick={() => setSelection(today)}
-            className={`min-h-9 rounded font-medium hover:text-ink ${focus}`}
+            className={`min-h-11 min-w-11 rounded px-2 font-medium hover:text-ink ${focus}`}
           >
             Сегодня
           </button>
@@ -242,7 +245,7 @@ export function StudentLessonCalendar({
             <button
               type="button"
               onClick={() => setSelection(nearest.date.slice(0, 10))}
-              className={`min-h-9 rounded font-medium text-amber-800 ${focus}`}
+              className={`min-h-11 rounded px-2 font-medium text-amber-800 ${focus}`}
             >
               Ближайший урок
             </button>

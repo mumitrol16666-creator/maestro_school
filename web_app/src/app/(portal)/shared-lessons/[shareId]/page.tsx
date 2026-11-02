@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ErrorState, LoadingState } from "@/components/data-states";
 import { LessonVideoPlayer } from "@/components/lesson-video-player";
@@ -18,7 +17,6 @@ export default function SharedLessonPage() {
   const data = share.data;
   return (
     <article className="grid min-w-0 gap-5" data-testid="shared-lesson">
-      <Link href="/shared-lessons" className="text-sm font-bold text-gold-ink hover:underline">← Все уроки от преподавателя</Link>
       <header className="min-w-0">
         <p className="text-xs font-black uppercase tracking-[0.14em] text-stone-500">{data.lesson.courseTitle} · {data.lesson.moduleTitle}</p>
         <h1 className="font-display mt-2 break-words text-3xl leading-tight text-ink">{data.lesson.title}</h1>

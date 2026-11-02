@@ -93,7 +93,7 @@ export function LessonEndActions({
           <button
             type="button"
             onClick={() => setQuestionOpen((value) => !value)}
-            className="inline-flex items-center gap-2 rounded-2xl border border-stone-200 bg-white px-5 py-3 text-sm font-bold text-ink transition hover:border-ink"
+            className="inline-flex min-h-11 items-center gap-2 rounded-2xl border border-stone-200 bg-white px-5 py-3 text-sm font-bold text-ink transition hover:border-ink"
           >
             <MessageCircleQuestion size={16} />
             Задать вопрос преподавателю
@@ -104,7 +104,7 @@ export function LessonEndActions({
           endActions.signup.mode === "course" && endActions.signup.alreadyEnrolled ? (
             <Link
               href={`/courses/${endActions.signup.courseId}`}
-              className="inline-flex items-center gap-2 rounded-2xl bg-ink px-5 py-3 text-sm font-bold text-white"
+              className="inline-flex min-h-11 items-center gap-2 rounded-2xl bg-ink px-5 py-3 text-sm font-bold text-white"
             >
               <CalendarPlus size={16} />
               Открыть курс «{endActions.signup.courseTitle}»
@@ -114,7 +114,7 @@ export function LessonEndActions({
               type="button"
               disabled={submittingSignup}
               onClick={() => void handleSignup()}
-              className="inline-flex items-center gap-2 rounded-2xl bg-ink px-5 py-3 text-sm font-bold text-white disabled:opacity-50"
+              className="inline-flex min-h-11 items-center gap-2 rounded-2xl bg-ink px-5 py-3 text-sm font-bold text-white disabled:opacity-50"
             >
               {submittingSignup ? <LoaderCircle size={16} className="animate-spin" /> : <CalendarPlus size={16} />}
               {endActions.signup.label}
@@ -144,7 +144,7 @@ export function LessonEndActions({
           <button
             type="submit"
             disabled={submittingQuestion || !question.trim()}
-            className="mt-4 inline-flex items-center gap-2 rounded-2xl bg-ink px-5 py-3 text-sm font-bold text-white disabled:opacity-50"
+            className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-2xl bg-ink px-5 py-3 text-sm font-bold text-white disabled:opacity-50"
           >
             {submittingQuestion ? <LoaderCircle size={16} className="animate-spin" /> : <Send size={16} />}
             Отправить вопрос

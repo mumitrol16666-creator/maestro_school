@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  ArrowLeft,
   ChevronRight,
   Inbox,
   LoaderCircle,
@@ -12,7 +11,9 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { BackButton } from "@/components/back-button";
 import { ErrorState, LoadingState } from "@/components/data-states";
+import { formatCount } from "@/lib/plural";
 import { ApiError } from "@/lib/api-client";
 import { messagesApi, notifyMessagesUpdated } from "@/lib/messages-api";
 import type {
@@ -222,9 +223,9 @@ export function MessageMailbox({ role }: { role: "student" | "teacher" }) {
           <aside className={`${active ? "hidden md:flex" : "flex"} min-w-0 flex-col border-stone-200 md:border-r`}>
             <div className="flex items-center justify-between gap-3 border-b border-stone-200 p-4">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-stone-400">Переписка</p>
+                <p className="text-xs font-black uppercase tracking-wide text-stone-500">Переписка</p>
                 <p className="mt-1 text-sm font-bold text-ink">
-                  {conversations.length ? `Диалогов: ${conversations.length}` : "Пока пусто"}
+                  {conversations.length ? formatCount(conversations.length, ["диалог", "диалога", "диалогов"]) : "Пока пусто"}
                 </p>
               </div>
               <button
@@ -234,7 +235,7 @@ export function MessageMailbox({ role }: { role: "student" | "teacher" }) {
                   setComposeOpen(true);
                 }}
                 disabled={!contacts.length}
-                className="grid h-10 w-10 place-items-center rounded-xl bg-ink text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-35"
+                className="grid h-11 w-11 place-items-center rounded-xl bg-ink text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-35"
                 aria-label={role === "student" ? "Создать обращение" : "Новое сообщение"}
                 title={role === "student" ? "Создать обращение" : "Новое сообщение"}
               >
@@ -255,14 +256,14 @@ export function MessageMailbox({ role }: { role: "student" | "teacher" }) {
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center gap-2">
                         <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">{conversation.counterpart.name}</span>
-                        <span className="shrink-0 text-[10px] text-stone-400">{formatTime(conversation.lastMessageAt)}</span>
+                        <span className="shrink-0 text-xs text-stone-500">{formatTime(conversation.lastMessageAt)}</span>
                       </span>
                       <span className="mt-1 flex items-center gap-2">
                         <span className={`min-w-0 flex-1 truncate text-xs ${conversation.unreadCount ? "font-bold text-ink" : "text-stone-500"}`}>
                           {conversation.lastMessage?.body ?? "Диалог создан"}
                         </span>
                         {conversation.unreadCount > 0 ? (
-                          <span className="grid min-h-5 min-w-5 shrink-0 place-items-center rounded-full bg-gold px-1 text-[10px] font-black text-ink">
+                          <span className="grid min-h-5 min-w-5 shrink-0 place-items-center rounded-full bg-gold px-1 text-xs font-black text-ink">
                             {conversation.unreadCount > 9 ? "9+" : conversation.unreadCount}
                           </span>
                         ) : null}
@@ -293,7 +294,7 @@ export function MessageMailbox({ role }: { role: "student" | "teacher" }) {
                         setComposeContactId(contacts[0].id);
                         setComposeOpen(true);
                       }}
-                      className="mt-5 inline-flex items-center gap-2 rounded-full bg-ink px-5 py-3 text-xs font-bold text-white"
+                      className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-full bg-ink px-5 py-3 text-xs font-bold text-white"
                     >
                       <MailPlus size={15} />
                       {role === "student" ? "Создать обращение" : "Новое сообщение"}
@@ -312,14 +313,7 @@ export function MessageMailbox({ role }: { role: "student" | "teacher" }) {
             ) : active ? (
               <>
                 <header className="flex min-h-[73px] items-center gap-3 border-b border-stone-200 bg-white px-4 py-3 sm:px-5">
-                  <button
-                    type="button"
-                    onClick={closeThread}
-                    className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-stone-200 text-stone-600 md:hidden"
-                    aria-label="К списку диалогов"
-                  >
-                    <ArrowLeft size={18} />
-                  </button>
+                  <BackButton onClick={closeThread} label="К списку диалогов" hideLabel className="md:hidden" />
                   <Avatar name={active.counterpart.name} avatar={active.counterpart.avatar} size="small" />
                   <div className="min-w-0">
                     <p className="truncate text-sm font-bold text-ink">{active.counterpart.name}</p>
@@ -338,7 +332,7 @@ export function MessageMailbox({ role }: { role: "student" | "teacher" }) {
                           : "rounded-bl-md border border-stone-200 bg-white text-ink"
                       }`}>
                         <p className="whitespace-pre-wrap break-words text-sm leading-6">{message.body}</p>
-                        <p className={`mt-1.5 text-right text-[10px] ${message.mine ? "text-white/45" : "text-stone-400"}`}>
+                        <p className={`mt-1.5 text-right text-xs ${message.mine ? "text-white/70" : "text-stone-500"}`}>
                           {formatMessageTime(message.createdAt)}
                         </p>
                       </div>
@@ -397,7 +391,7 @@ export function MessageMailbox({ role }: { role: "student" | "teacher" }) {
           <section role="dialog" aria-modal="true" aria-labelledby="compose-title" className="w-full max-w-lg rounded-[26px] bg-white p-5 shadow-2xl sm:p-7">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-gold-ink">Новое сообщение</p>
+                <p className="text-xs font-black uppercase tracking-wide text-gold-ink">Новое сообщение</p>
                 <h2 id="compose-title" className="font-display mt-2 text-3xl">
                   {role === "student" ? "Создать обращение" : "Написать ученику"}
                 </h2>
@@ -405,7 +399,7 @@ export function MessageMailbox({ role }: { role: "student" | "teacher" }) {
               <button
                 type="button"
                 onClick={() => setComposeOpen(false)}
-                className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-stone-200 text-stone-500"
+                className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-stone-200 text-stone-500"
                 aria-label="Закрыть"
               >
                 <X size={18} />
@@ -451,7 +445,7 @@ export function MessageMailbox({ role }: { role: "student" | "teacher" }) {
                             setContactPickerOpen(false);
                             setContactQuery("");
                           }}
-                          className={`w-full rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${contact.id === composeContactId ? "bg-blue-500 text-white" : "text-ink hover:bg-stone-100"}`}
+                          className={`min-h-11 w-full rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${contact.id === composeContactId ? "bg-blue-500 text-white" : "text-ink hover:bg-stone-100"}`}
                         >
                           {contact.name}
                         </button>

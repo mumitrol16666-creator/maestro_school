@@ -3,6 +3,7 @@
 import { ChevronDown, Coins, LogOut, Settings, Star } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { formatCount } from "@/lib/plural";
 import { formatFio, initialsFromName } from "@/lib/name";
 import { isStudentRole, roleLabel, settingsPathForRole } from "@/lib/role-labels";
 import { useAuth } from "./auth-provider";
@@ -41,14 +42,14 @@ export function UserMenu() {
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
         aria-haspopup="menu"
-        className="flex items-center gap-2.5 rounded-full border border-stone-200/90 bg-white py-1.5 pl-1.5 pr-3 shadow-sm transition hover:border-gold/35 hover:shadow-soft sm:gap-3"
+        className="flex min-h-11 min-w-11 items-center gap-2.5 rounded-full border border-stone-200/90 bg-white p-1 shadow-sm transition hover:border-gold/35 hover:shadow-soft sm:gap-3 sm:py-1.5 sm:pl-1.5 sm:pr-3"
       >
         <span className="grid h-9 w-9 place-items-center rounded-full bg-ink text-xs font-bold text-gold-ink ring-2 ring-gold/15">
           {initials}
         </span>
         <span className="hidden text-left sm:block">
           <span className="block text-sm font-bold leading-tight">{fullName}</span>
-          <span className="block text-[11px] text-stone-400">{roleLabel(user?.role)}</span>
+          <span className="block text-xs text-stone-500">{roleLabel(user?.role)}</span>
         </span>
         <ChevronDown size={14} className={`hidden text-stone-400 transition sm:block ${open ? "rotate-180" : ""}`} />
       </button>
@@ -69,7 +70,7 @@ export function UserMenu() {
               href={settingsHref}
               role="menuitem"
               onClick={() => setOpen(false)}
-              className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-stone-700 transition hover:bg-stone-100"
+              className="flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-stone-700 transition hover:bg-stone-100"
             >
               <Settings size={16} className="text-gold-ink" />
               {student ? "Профиль и настройки" : "Настройки аккаунта"}
@@ -78,7 +79,7 @@ export function UserMenu() {
               <div className="mx-1 space-y-1">
                 <div className="flex items-center gap-2 rounded-xl bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
                   <Star size={14} className="text-gold-ink" fill="currentColor" />
-                  {(user?.points ?? 0).toLocaleString("ru-RU")} баллов Maestro
+                  {formatCount(user?.points ?? 0, ["балл", "балла", "баллов"])} Maestro
                 </div>
                 <div className="flex items-center gap-2 rounded-xl bg-stone-100 px-3 py-2 text-xs font-semibold text-stone-700">
                   <Coins size={14} className="text-gold-ink" />
@@ -93,7 +94,7 @@ export function UserMenu() {
               type="button"
               role="menuitem"
               onClick={() => { setOpen(false); logout(); }}
-              className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-red-700 transition hover:bg-red-50"
+              className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-red-700 transition hover:bg-red-50"
             >
               <LogOut size={16} />
               Выйти из кабинета

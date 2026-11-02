@@ -1,4 +1,5 @@
 import { expect, test, type BrowserContext, type APIRequestContext } from "@playwright/test";
+import { formatCount } from "../src/lib/plural";
 
 const PASSWORD = "QaMaestro2026!";
 
@@ -44,10 +45,10 @@ test("LEVEL uses the current epoch and replaces the legacy rank", async ({ page,
   expect(economyRequests).toBeGreaterThanOrEqual(2);
   expect(economyRequests).toBeLessThanOrEqual(3);
   await expect(level.getByRole("heading", { name: economyData.level.level.title })).toBeVisible();
-  await expect(level).toContainText(`${economyData.points.toLocaleString("ru-RU")} баллов`);
+  await expect(level).toContainText(formatCount(economyData.points, ["балл", "балла", "баллов"]));
   if (economyData.level.next) {
     await expect(level).toContainText(
-      `${economyData.level.pointsToNext.toLocaleString("ru-RU")} баллов до ${economyData.level.next.title}`,
+      `${formatCount(economyData.level.pointsToNext, ["балл", "балла", "баллов"])} до ${economyData.level.next.title}`,
     );
   }
   await expect(page.getByText("Первые струны")).toHaveCount(0);
