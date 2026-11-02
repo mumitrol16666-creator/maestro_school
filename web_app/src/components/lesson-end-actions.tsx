@@ -4,7 +4,7 @@ import { CalendarPlus, LoaderCircle, MessageCircleQuestion, Send } from "lucide-
 import Link from "next/link";
 import { FormEvent, useState } from "react";
 import type { ApiLessonEndActions } from "@/types/api";
-import { ApiError, api } from "@/lib/api-client";
+import { api } from "@/lib/api-client";
 import { useAuth } from "@/components/auth-provider";
 import { toast } from "@/components/toast";
 import { errorToastText } from "@/lib/error-text";
@@ -16,7 +16,6 @@ interface LessonEndActionsProps {
   endActions: ApiLessonEndActions;
   onQuestionSent?: () => void;
   onSignupComplete?: (message: string) => void;
-  onError?: (message: string) => void;
 }
 
 export function LessonEndActions({
@@ -25,7 +24,6 @@ export function LessonEndActions({
   endActions,
   onQuestionSent,
   onSignupComplete,
-  onError,
 }: LessonEndActionsProps) {
   const { user } = useAuth();
   const [questionOpen, setQuestionOpen] = useState(false);
@@ -51,7 +49,6 @@ export function LessonEndActions({
       toast.success("Вопрос отправлен преподавателю");
       onQuestionSent?.();
     } catch (reason) {
-      onError?.(reason instanceof ApiError ? reason.message : "Не удалось отправить вопрос");
       toast.error(errorToastText(reason, "Не получилось отправить вопрос. Попробуй ещё раз"));
     } finally {
       setSubmittingQuestion(false);
@@ -71,12 +68,11 @@ export function LessonEndActions({
       if (result.mode === "course") {
         onSignupComplete?.(
           result.alreadyEnrolled
-            ? `Вы уже записаны на курс «${result.courseTitle}».`
-            : `Вы записаны на курс «${result.courseTitle}».`,
+            ? `Курс «${result.courseTitle}» уже в твоём обучении`
+            : `Курс «${result.courseTitle}» добавлен в обучение`,
         );
       }
     } catch (reason) {
-      onError?.(reason instanceof ApiError ? reason.message : "Не удалось выполнить запись");
       toast.error(errorToastText(reason, "Не получилось записаться. Попробуй ещё раз"));
     } finally {
       setSubmittingSignup(false);
@@ -88,7 +84,7 @@ export function LessonEndActions({
       <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold-ink">После урока</p>
       <h2 className="font-display mt-3 text-3xl">Нужна помощь или следующий шаг?</h2>
       <p className="mt-3 max-w-2xl text-sm leading-6 text-stone-500">
-        Задайте вопрос по уроку «{lessonTitle}» или запишитесь на следующий этап обучения.
+        Задай вопрос по уроку «{lessonTitle}» или запишись на следующий этап обучения.
       </p>
 
       <div className="mt-6 flex flex-wrap gap-3">
@@ -129,13 +125,13 @@ export function LessonEndActions({
       {questionOpen && (
         <form onSubmit={handleQuestionSubmit} className="mt-5 rounded-2xl border border-stone-200 bg-stone-50 p-5">
           <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
-            Ваш вопрос
+            Твой вопрос
             <textarea
               required
               value={question}
               onChange={(event) => setQuestion(event.target.value)}
               className="mt-2 min-h-32 w-full rounded-2xl border border-stone-200 bg-white px-4 py-3 text-sm"
-              placeholder="Напишите, что осталось непонятным по уроку"
+              placeholder="Напиши, что осталось непонятным по уроку"
             />
           </label>
           <button

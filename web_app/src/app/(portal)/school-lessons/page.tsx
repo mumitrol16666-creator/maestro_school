@@ -42,6 +42,8 @@ import { EmptyState } from "@/components/data-states";
 import { ScreenSkeleton } from "@/components/screen-skeleton";
 import { PageHeader } from "@/components/page-header";
 import { useApiResource } from "@/hooks/use-api-resource";
+import { ApiError } from "@/lib/api-client";
+import { isCrmUnavailableCode } from "@/lib/connection-status";
 import { loadStudentOfflineSummary } from "@/lib/school-offline-summary";
 import { currentAqtobeMonth } from "@/lib/aqtobe-month";
 import {
@@ -739,10 +741,17 @@ function SchoolSchedule() {
     setRefreshing(true);
     setRefreshError(null);
     try {
-      resource.setData(await loadStudentOfflineSummary());
+      resource.setData(await loadStudentOfflineSummary({ live: true }));
       setLastRefreshedAt(new Date());
-    } catch {
-      setRefreshError("Не удалось обновить данные школы");
+    } catch (reason) {
+      const code = reason instanceof ApiError ? reason.code : null;
+      setRefreshError(
+        code === "NETWORK_ERROR"
+          ? "Нет связи. Расписание не обновилось"
+          : isCrmUnavailableCode(code)
+            ? "Школа сейчас не отвечает. Показываем расписание, которое было"
+            : "Не получилось обновить расписание",
+      );
     } finally {
       setRefreshing(false);
     }

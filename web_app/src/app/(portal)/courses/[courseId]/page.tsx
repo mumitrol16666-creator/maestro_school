@@ -13,18 +13,19 @@ import { toast } from "@/components/toast";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { difficultyLabel, flattenCourseLessons } from "@/lib/adapters";
 import { api } from "@/lib/api-client";
-import { ApiError } from "@/lib/api-client";
+import { errorToastText } from "@/lib/error-text";
 import { useState } from "react";
+
+async function loadCourse(courseId: string) {
+  const course = await api.course(courseId);
+  const progress = course.enrollmentStatus ? await api.progress(courseId) : null;
+  return { course, progress, lessons: flattenCourseLessons(course, progress?.lessons ?? []) };
+}
 
 export default function CourseDetailPage() {
   const { courseId } = useParams<{ courseId: string }>();
-  const resource = useApiResource(async () => {
-    const course = await api.course(courseId);
-    const progress = course.enrollmentStatus ? await api.progress(courseId) : null;
-    return { course, progress, lessons: flattenCourseLessons(course, progress?.lessons ?? []) };
-  }, [courseId]);
+  const resource = useApiResource(() => loadCourse(courseId), [courseId]);
   const [enrolling, setEnrolling] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
 
   if (resource.loading && !resource.data) return <ScreenSkeleton variant="detail" label="Открываем курс" />;
   if (resource.error && !resource.data) return <ScreenError message={resource.error} code={resource.errorCode} retry={resource.reload} />;
@@ -37,13 +38,17 @@ export default function CourseDetailPage() {
 
   async function handleEnroll() {
     setEnrolling(true);
-    setActionError(null);
     try {
       await api.enroll(courseId);
-      await resource.reload();
-      toast.success("Курс добавлен в обучение");
+      try {
+        resource.setData(await loadCourse(courseId));
+        toast.success("Курс добавлен в обучение");
+      } catch {
+        // Enrolled, but the screen could not be re-read: say so instead of keeping the old state silently.
+        toast.error("Нет связи. Обнови экран, когда появится интернет");
+      }
     } catch (reason) {
-      setActionError(reason instanceof ApiError ? reason.message : "Не удалось начать обучение");
+      toast.error(errorToastText(reason, "Не получилось начать обучение. Попробуй ещё раз"));
     } finally {
       setEnrolling(false);
     }
@@ -83,7 +88,6 @@ export default function CourseDetailPage() {
           </div>
         </div>
       </section>
-      {actionError && <p className="mt-5 rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{actionError}</p>}
 
       {course.modules.length ? course.modules.map((module) => {
         const moduleLessons = lessons.filter((lesson) => lesson.moduleId === module.id);

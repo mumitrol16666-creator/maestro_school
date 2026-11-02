@@ -4,6 +4,7 @@ import { BellRing, LoaderCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "@/components/toast";
 import { practiceApi } from "@/lib/api-client";
+import { errorToastText } from "@/lib/error-text";
 import type { PracticeReminderSettings } from "@/types/api";
 
 const weekdays = [
@@ -14,23 +15,26 @@ const weekdays = [
 /** Plan 5.6: when to remind «пора взять гитару» — days and time; off until the student turns it on. */
 export function PracticeReminderCard() {
   const [settings, setSettings] = useState<PracticeReminderSettings | null>(null);
-  const [status, setStatus] = useState<"idle" | "saving" | "error">("idle");
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     practiceApi.status().then((data) => setSettings(data.reminder)).catch(() => setSettings({ enabled: false, time: "18:00", days: [0, 1, 2, 3, 4, 5, 6] }));
   }, []);
 
   async function save(next: PracticeReminderSettings) {
+    const previous = settings;
     setSettings(next);
-    setStatus("saving");
+    setSaving(true);
     try {
       const saved = await practiceApi.saveReminder(next);
       setSettings(saved);
-      setStatus("idle");
       toast.success("Напоминание сохранено");
-    } catch {
-      setStatus("error");
-      toast.error("Не получилось сохранить напоминание. Попробуй ещё раз");
+    } catch (reason) {
+      // Not saved: show what is really stored, not the unsaved choice.
+      setSettings(previous);
+      toast.error(errorToastText(reason, "Не получилось сохранить напоминание. Попробуй ещё раз"));
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -82,7 +86,7 @@ export function PracticeReminderCard() {
                     if (!days.length) return;
                     void save({ ...settings, days });
                   }}
-                  className={`min-h-10 min-w-11 rounded-xl border px-3 text-sm font-bold ${on ? "border-amber-600 bg-amber-50 text-amber-950" : "border-stone-200 bg-white text-stone-500"}`}
+                  className={`min-h-11 min-w-11 rounded-xl border px-3 text-sm font-bold ${on ? "border-amber-600 bg-amber-50 text-amber-950" : "border-stone-200 bg-white text-stone-500"}`}
                 >
                   {day.label}
                 </button>
@@ -92,8 +96,8 @@ export function PracticeReminderCard() {
         </div>
       </div>
       <p className="mt-3 text-xs font-semibold text-stone-500" role="status">
-        {status === "saving" ? <span className="inline-flex items-center gap-1"><LoaderCircle size={12} className="animate-spin" /> Сохраняем…</span>
-          : status === "error" ? "Не удалось сохранить" : "В день урока напоминание не приходит."}
+        {saving ? <span className="inline-flex items-center gap-1"><LoaderCircle size={12} className="animate-spin" /> Сохраняем…</span>
+          : "В день урока напоминание не приходит."}
       </p>
     </section>
   );

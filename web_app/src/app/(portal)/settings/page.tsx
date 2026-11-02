@@ -7,7 +7,6 @@ import { FormEvent, useEffect, useState, type ChangeEvent } from "react";
 import { StudentMemberships } from "@/components/student-memberships";
 import { AchievementsWall } from "@/components/achievements-wall";
 import { useAuth } from "@/components/auth-provider";
-import { ApiError } from "@/lib/api-client";
 import { ScreenError } from "@/components/app-error-screen";
 import { PageHeader } from "@/components/page-header";
 import { ScreenSkeleton } from "@/components/screen-skeleton";
@@ -233,7 +232,6 @@ function ParentVisibilityRequestCard() {
   const [requested, setRequested] = useState<ParentVisibility | null>(null);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (resource.data) setRequested(resource.data.pendingRequest?.requested ?? resource.data.policy);
@@ -250,14 +248,17 @@ function ParentVisibilityRequestCard() {
   async function submit() {
     if (!requested || pending) return;
     setBusy(true);
-    setMessage(null);
     try {
       await familyApi.requestVisibility(requested, note);
       setNote("");
       toast.success("Запрос отправлен администратору");
-      await resource.reload();
+      try {
+        resource.setData(await familyApi.myVisibility());
+      } catch {
+        // The request is sent, but the screen could not be re-read: say so instead of keeping the old state silently.
+        toast.error("Нет связи. Обнови экран, когда появится интернет");
+      }
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Не удалось отправить запрос");
       toast.error(errorToastText(error, "Не получилось отправить запрос. Попробуй ещё раз"));
     } finally {
       setBusy(false);
@@ -307,7 +308,6 @@ function ParentVisibilityRequestCard() {
           <button type="button" disabled={busy || unchanged} onClick={() => void submit()} className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-ink px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-gold hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold disabled:opacity-50 sm:w-fit"><Send size={16} />{unchanged ? "Изменений нет" : "Отправить запрос"}</button>
         </div>
       )}
-      {message ? <p aria-live="polite" className="mt-3 text-sm font-semibold text-stone-600">{message}</p> : null}
     </section>
   );
 }
@@ -423,7 +423,6 @@ function ProfileEditCard({
   const [phone, setPhone] = useState(profile.phone ?? "");
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setFirstName(profile.firstName ?? "");
@@ -435,16 +434,15 @@ function ProfileEditCard({
   async function handleAvatarChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
-    setError(null);
 
     if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
-      setError("Загрузите JPG, PNG или WebP");
-      toast.error("Загрузите JPG, PNG или WebP");
+      toast.error("Подойдёт фото JPG, PNG или WebP");
+      event.target.value = "";
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      setError("Фото должно быть до 5 МБ");
       toast.error("Фото должно быть до 5 МБ");
+      event.target.value = "";
       return;
     }
 
@@ -460,7 +458,6 @@ function ProfileEditCard({
         ? "Фото сохранено. В школьном профиле обновится позже"
         : "Фото сохранено");
     } catch (reason) {
-      setError(reason instanceof ApiError ? reason.message : "Не удалось загрузить фото");
       toast.error(errorToastText(reason, "Не получилось загрузить фото. Попробуй ещё раз"));
     } finally {
       setUploadingAvatar(false);
@@ -470,7 +467,6 @@ function ProfileEditCard({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setError(null);
     setSaving(true);
     try {
       await api.updateProfile({
@@ -482,7 +478,7 @@ function ProfileEditCard({
       await onSaved();
       toast.success("Профиль сохранён");
     } catch (reason) {
-      setError(reason instanceof ApiError ? reason.message : "Не удалось сохранить профиль");
+      toast.error(errorToastText(reason, "Не получилось сохранить профиль. Попробуй ещё раз"));
     } finally {
       setSaving(false);
     }
@@ -518,7 +514,6 @@ function ProfileEditCard({
         <p className="-mt-2 text-xs leading-5 text-stone-400">
           Эти данные используются в приложении. Фото также обновится в основной карточке ученика.
         </p>
-        {error && <p role="alert" className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</p>}
         <button
           disabled={saving || uploadingAvatar}
           className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-ink px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-gold hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold disabled:opacity-60 sm:w-fit"
@@ -594,7 +589,7 @@ function PasswordChangeCard() {
       setNewPassword("");
       setConfirmPassword("");
     } catch (reason) {
-      setError(reason instanceof ApiError ? reason.message : "Не удалось сменить пароль");
+      toast.error(errorToastText(reason, "Не получилось сменить пароль. Попробуй ещё раз"));
     } finally {
       setSubmitting(false);
     }

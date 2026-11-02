@@ -59,33 +59,36 @@ function submitDisabledReason(lesson: Lesson, isTest: boolean) {
   return undefined;
 }
 
+const STALE_SCREEN_TOAST = "Нет связи. Обнови экран, когда появится интернет";
+
+async function loadLesson(lessonId: string) {
+  const detail = await api.lesson(lessonId);
+  const [progress, course, attempts] = await Promise.all([
+    api.progress(detail.courseId),
+    api.course(detail.courseId),
+    detail.homework?.id ? api.myHomeworkSubmissions(detail.homework.id) : Promise.resolve([]),
+  ]);
+  const progressItem = progress.lessons.find((item) => item.lessonId === lessonId);
+  const lessons = flattenCourseLessons(course, progress.lessons);
+  const currentIndex = lessons.findIndex((lesson) => lesson.id === lessonId);
+  const nextLesson = lessons.slice(currentIndex + 1).find((lesson) => lesson.status !== "locked") ?? null;
+  return {
+    detail,
+    lesson: toLesson(detail, progressItem?.status),
+    attempts,
+    nextLesson,
+    points: progress.points,
+  };
+}
+
 export default function LessonPage() {
   const { lessonId } = useParams<{ lessonId: string }>();
-  const resource = useApiResource(async () => {
-    const detail = await api.lesson(lessonId);
-    const [progress, course, attempts] = await Promise.all([
-      api.progress(detail.courseId),
-      api.course(detail.courseId),
-      detail.homework?.id ? api.myHomeworkSubmissions(detail.homework.id) : Promise.resolve([]),
-    ]);
-    const progressItem = progress.lessons.find((item) => item.lessonId === lessonId);
-    const lessons = flattenCourseLessons(course, progress.lessons);
-    const currentIndex = lessons.findIndex((lesson) => lesson.id === lessonId);
-    const nextLesson = lessons.slice(currentIndex + 1).find((lesson) => lesson.status !== "locked") ?? null;
-    return {
-      detail,
-      lesson: toLesson(detail, progressItem?.status),
-      attempts,
-      nextLesson,
-      points: progress.points,
-    };
-  }, [lessonId]);
+  const resource = useApiResource(() => loadLesson(lessonId), [lessonId]);
 
   const [starting, setStarting] = useState(false);
   const [completing, setCompleting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  const [testNote, setTestNote] = useState<{ text: string; passed: boolean } | null>(null);
   const [showStartPrompt, setShowStartPrompt] = useState(false);
 
   useEffect(() => {
@@ -116,16 +119,25 @@ export default function LessonPage() {
   const lessonStarted = !locked && (lesson.status !== "available" || needsRevision);
   const statusHints = isTestHomework ? testLessonStatusHints : lessonStatusHints;
 
+  // After a successful action the screen must show the new state: re-read it, and if that fails
+  // (no connection), say so instead of silently keeping the old screen.
+  async function refreshLesson() {
+    try {
+      resource.setData(await loadLesson(lessonId));
+      return true;
+    } catch {
+      toast.error(STALE_SCREEN_TOAST);
+      return false;
+    }
+  }
+
   async function handleStart() {
     setStarting(true);
-    setActionError(null);
     try {
       await api.startLesson(lessonId);
-      await resource.reload();
       setShowStartPrompt(false);
-      toast.success("Урок начат");
+      if (await refreshLesson()) toast.success("Урок начат");
     } catch (reason) {
-      setActionError(reason instanceof ApiError ? reason.message : "Не удалось начать урок");
       toast.error(errorToastText(reason, "Не получилось начать урок. Попробуй ещё раз"));
     } finally {
       setStarting(false);
@@ -141,34 +153,34 @@ export default function LessonPage() {
   }) {
     if (!lesson.homeworkId) return;
     setSubmitting(true);
-    setActionError(null);
-    setSuccess(null);
+    setTestNote(null);
     try {
       const result = payload.file
         ? await submitCourseHomeworkWithFile(lesson.homeworkId, { comment: payload.comment, file: payload.file })
         : await api.submitHomework(lesson.homeworkId, payload);
-      const freshAttempts = await api.myHomeworkSubmissions(lesson.homeworkId);
-      resource.setData((current) =>
-        current
-          ? {
-              ...current,
-              lesson: { ...current.lesson, status: normalizeLessonStatus(result.lessonProgress) },
-              attempts: freshAttempts,
-            }
-          : current,
-      );
       if (result.testResult) {
-        setSuccess(
+        setTestNote(
           result.testPassed
-            ? `Тест пройден: ${result.testResult.score}% (${result.testResult.correctAnswers} из ${result.testResult.totalQuestions} правильных). Урок завершён.`
-            : `Набрано ${result.testResult.score}% (${result.testResult.correctAnswers} из ${result.testResult.totalQuestions} правильных). Нужно не менее ${passingScore}%. Попробуйте ещё раз.`,
+            ? {
+                passed: true,
+                text: `Тест пройден: ${result.testResult.score}% (${result.testResult.correctAnswers} из ${result.testResult.totalQuestions} правильных). Урок завершён.`,
+              }
+            : {
+                passed: false,
+                text: `Набрано ${result.testResult.score}% (${result.testResult.correctAnswers} из ${result.testResult.totalQuestions} правильных). Нужно не менее ${passingScore}%. Попробуй ещё раз.`,
+              },
         );
-        toast.success("Ответы отправлены");
       } else {
         toast.success("Задание отправлено на проверку");
       }
+      const refreshed = await refreshLesson();
+      if (!refreshed) {
+        // The answer is saved but the screen could not be re-read: at least move the status.
+        resource.setData((current) =>
+          current ? { ...current, lesson: { ...current.lesson, status: normalizeLessonStatus(result.lessonProgress) } } : current,
+        );
+      }
     } catch (reason) {
-      setActionError(reason instanceof ApiError ? reason.message : "Не удалось отправить домашнее задание");
       toast.error(errorToastText(reason, "Не получилось отправить задание. Попробуй ещё раз"));
     } finally {
       setSubmitting(false);
@@ -178,17 +190,16 @@ export default function LessonPage() {
   async function handleCompleteWithoutHomework() {
     if (completing) return;
     setCompleting(true);
-    setActionError(null);
-    setSuccess(null);
+    setTestNote(null);
     try {
       const result = await api.completeLesson(lessonId);
-      await resource.reload();
-      toast.success(result.courseCompleted ? "Курс завершён" : "Урок завершён. Следующий урок открыт");
+      if (await refreshLesson()) {
+        toast.success(result.courseCompleted ? "Курс завершён" : "Урок завершён. Следующий урок открыт");
+      }
     } catch (reason) {
       if (reason instanceof ApiError && reason.code === "LESSON_REQUIRES_HOMEWORK") {
-        await resource.reload();
+        await refreshLesson();
       }
-      setActionError(reason instanceof ApiError ? reason.message : "Не удалось завершить урок");
       toast.error(errorToastText(reason, "Не получилось завершить урок. Попробуй ещё раз"));
     } finally {
       setCompleting(false);
@@ -211,10 +222,6 @@ export default function LessonPage() {
             <div className="rounded-[24px] border border-amber-100 bg-amber-50 p-5 text-sm leading-6 text-amber-900">
               Нажмите «Начать урок», чтобы открыть видео, материалы и домашнее задание.
             </div>
-
-            {actionError && (
-              <p className="mt-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{actionError}</p>
-            )}
 
             <div className="mt-6 grid gap-3 sm:grid-cols-[1fr_auto]">
               <button
@@ -424,12 +431,8 @@ export default function LessonPage() {
               lessonTitle={lesson.title}
               endActions={detail.endActions}
               onSignupComplete={(message) => {
-                setActionError(null);
                 toast.success(message);
-              }}
-              onError={(message) => {
-                setSuccess(null);
-                setActionError(message);
+                void refreshLesson();
               }}
             />
           )}
@@ -456,15 +459,15 @@ export default function LessonPage() {
             )}
           </div>
 
-          {success && (
-            <div className="rounded-[24px] border border-emerald-100 bg-emerald-50 p-5 text-sm font-bold text-emerald-800">
-              <CheckCircle2 className="mb-2" size={18} />
-              {success}
-            </div>
-          )}
-          {actionError && (
-            <div className="rounded-[24px] border border-red-100 bg-red-50 p-5 text-sm font-bold text-red-700">
-              {actionError}
+          {testNote && (
+            <div
+              role="status"
+              className={`rounded-[24px] border p-5 text-sm font-bold ${
+                testNote.passed ? "border-emerald-100 bg-emerald-50 text-emerald-800" : "border-amber-100 bg-amber-50 text-amber-900"
+              }`}
+            >
+              {testNote.passed ? <CheckCircle2 className="mb-2" size={18} /> : <RotateCcw className="mb-2" size={18} />}
+              {testNote.text}
             </div>
           )}
 

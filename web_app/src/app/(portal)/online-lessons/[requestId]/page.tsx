@@ -9,7 +9,6 @@ import { EmptyState } from "@/components/data-states";
 import { ScreenSkeleton } from "@/components/screen-skeleton";
 import { toast } from "@/components/toast";
 import { useApiResource } from "@/hooks/use-api-resource";
-import { ApiError } from "@/lib/api-client";
 import { errorToastText } from "@/lib/error-text";
 import { attachmentTypeLabels } from "@/lib/homework-ui";
 import { onlineLessonStatusClasses, onlineLessonStatusLabels } from "@/lib/online-lessons-ui";
@@ -24,7 +23,6 @@ export default function OnlineLessonDetailPage() {
   const [comment, setComment] = useState("");
   const [attachmentUrl, setAttachmentUrl] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const currentSubmission = resource.data?.assignment?.submissions[0] ?? null;
 
   useEffect(() => {
@@ -69,7 +67,6 @@ export default function OnlineLessonDetailPage() {
     event.preventDefault();
     if (!assignment) return;
     setSubmitting(true);
-    setError(null);
     try {
       await onlineLessonsApi.submitAssignment(requestId, {
         comment: comment.trim() || undefined,
@@ -79,9 +76,13 @@ export default function OnlineLessonDetailPage() {
       toast.success(needsRevision ? "Исправленная работа отправлена" : "Задание отправлено на проверку");
       setComment("");
       setAttachmentUrl("");
-      await resource.reload();
+      try {
+        resource.setData(await onlineLessonsApi.myRequest(requestId));
+      } catch {
+        // The work is sent, but the screen could not be re-read: say so instead of keeping the old state silently.
+        toast.error("Нет связи. Обнови экран, когда появится интернет");
+      }
     } catch (reason) {
-      setError(reason instanceof ApiError ? reason.message : "Не удалось отправить задание");
       toast.error(errorToastText(reason, "Не получилось отправить задание. Попробуй ещё раз"));
     } finally {
       setSubmitting(false);
@@ -238,7 +239,6 @@ export default function OnlineLessonDetailPage() {
 
           {canSubmit && (
             <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-              {error && <p className="rounded-2xl bg-red-50 p-4 text-sm font-semibold text-red-700">{error}</p>}
               <p className="text-xs font-bold uppercase tracking-wider text-stone-400">
                 {needsRevision ? "Исправленная работа" : "Новая работа"} · формат: {attachmentTypeLabels[assignment.submissionFormat as HomeworkAttachmentType]}
               </p>
@@ -246,7 +246,7 @@ export default function OnlineLessonDetailPage() {
                 value={comment}
                 onChange={(event) => setComment(event.target.value)}
                 className="min-h-32 w-full rounded-2xl border border-stone-200 px-4 py-3 text-sm"
-                placeholder="Ваш ответ или комментарий"
+                placeholder="Твой ответ или комментарий"
                 required={assignment.submissionFormat === "text"}
               />
               {assignment.submissionFormat !== "text" && (

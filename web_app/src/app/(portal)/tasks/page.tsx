@@ -129,11 +129,10 @@ function TasksContent() {
   );
 }
 
-function Notice({ title, description, retry }: { title: string; description: string; retry?: () => void }) {
+function Notice({ title, description }: { title: string; description: string }) {
   return <section className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-5" role="alert">
     <AlertTriangle className="mt-1 shrink-0 text-amber-800" aria-hidden="true" />
     <div><h2 className="font-display text-2xl">{title}</h2><p className="mt-2 text-sm leading-6 text-stone-600">{description}</p>
-      {retry && <button type="button" onClick={retry} className={`mt-3 min-h-11 rounded-lg border border-amber-300 px-4 text-sm font-bold ${focus}`}>Повторить</button>}
     </div>
   </section>;
 }
