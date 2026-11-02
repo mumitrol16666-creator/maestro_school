@@ -39,6 +39,12 @@ async function serverUnreachable(page: Page) {
   await page.route("**/api/v1/**", (route) => route.abort("internetdisconnected"));
 }
 
+// A change of the school state makes the screens read again; a read still in a route handler when
+// the test ends must not fail it on the closed page.
+test.afterEach(async ({ page }) => {
+  await page.unrouteAll({ behavior: "ignoreErrors" });
+});
+
 test("an unknown address is the app's own Russian page with two ways out", async ({ page, request, context }) => {
   await page.goto("/net-takogo-adresa");
   await expect(page.getByRole("heading", { name: "Такой страницы нет" })).toBeVisible();
