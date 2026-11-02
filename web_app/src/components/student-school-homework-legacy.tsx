@@ -2,6 +2,7 @@
 import { ChevronDown, RotateCcw } from "lucide-react";
 import { useState } from "react";
 import { LessonMaterialItems } from "@/components/student-lesson-materials";
+import { pluralize } from "@/lib/plural";
 import {
   schoolDateLabel as formatLessonDate,
   studentLessonTitle,
@@ -68,7 +69,7 @@ function HomeworkPoints({ lesson }: { lesson: SchoolOfflineLesson }) {
         {lesson.lessonPointsAwarded > 0 ? "+" : ""}
         {lesson.lessonPointsAwarded}
       </span>
-      <span>баллов за занятие</span>
+      <span>{pluralize(lesson.lessonPointsAwarded, ["балл", "балла", "баллов"])} за занятие</span>
     </span>
   );
 }
@@ -108,7 +109,7 @@ export function LegacySchoolHomework({
                 type="button"
                 onClick={() => setOpen(!open)}
                 aria-expanded={open}
-                className="rounded text-left focus-visible:ring-2 focus-visible:ring-gold"
+                className="inline-flex min-h-11 items-center rounded text-left focus-visible:ring-2 focus-visible:ring-gold"
               >
                 {displayTitle}
               </button>

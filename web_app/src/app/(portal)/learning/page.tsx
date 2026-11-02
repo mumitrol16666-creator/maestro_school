@@ -2,14 +2,16 @@
 
 import { ArrowRight, BookOpenCheck, ListTodo, Target } from "lucide-react";
 import Link from "next/link";
-import { ErrorState } from "@/components/data-states";
+import { ScreenError } from "@/components/app-error-screen";
 import { ProgressBar } from "@/components/progress-bar";
+import { ScreenSkeleton } from "@/components/screen-skeleton";
 import { SectorExamSummary } from "@/components/sector-exam-summary";
 import { SectorProposalSection, sectorProposalDirections } from "@/components/sector-proposals";
 import { StudentBanners } from "@/components/student-banners";
 import { UnifiedTaskCard } from "@/components/unified-task-card";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { learningTaskContext } from "@/lib/learning-overview";
+import { formatOutOf, pluralize } from "@/lib/plural";
 import { sectorTitle } from "@/lib/sector-label";
 import { invalidateStudentHome, loadStudentHome } from "@/lib/student-home";
 import type { StudentHomeMonthlyPlan } from "@/types/api";
@@ -21,20 +23,21 @@ export default function LearningWorkspacePage() {
   // Plan 2.1: «Обучение» reads the same home as «Сейчас»: sector, tasks and proposals in one request.
   const resource = useApiResource(() => loadStudentHome(), []);
 
-  if (resource.loading) return (
-    <div className="mx-auto max-w-6xl py-8" role="status" aria-live="polite" aria-busy="true">
-      <p className="text-sm text-stone-600">Загружаем сектор и задания…</p>
-    </div>
-  );
-  if (resource.error || !resource.data) {
-    return <ErrorState message={resource.error ?? "Не удалось загрузить обучение"} retry={() => { invalidateStudentHome(); return resource.reload(); }} />;
+  if (resource.loading && !resource.data) return <ScreenSkeleton variant="list" label="Загружаем сектор и задания" />;
+  if (!resource.data) {
+    return <ScreenError message={resource.error} code={resource.errorCode} retry={() => { invalidateStudentHome(); return resource.reload(); }} />;
   }
 
   const home = resource.data;
   const tasks = home.tasks;
   const plans = home.monthlyPlans;
   const nextTask = tasks?.items.find((task) => task.actionRequired) ?? null;
-  const partial = !tasks || tasks.partial || !home.school;
+  // A student the school has not linked has no school data to miss. A home saved on the phone
+  // before this field (up to 12 hours) or an older server only says `school: null`.
+  const schoolMissing = home.schoolStatus
+    ? home.schoolStatus === "unavailable" || home.schoolStatus === "failed"
+    : !home.school;
+  const partial = !tasks || tasks.partial || schoolMissing;
   const pendingCount = tasks?.counts.actionRequired ?? 0;
   const waitingCount = tasks?.counts.waitingReview ?? 0;
   // Plan 5.3: the same homework from two CRM lessons is one task to the child.
@@ -52,7 +55,7 @@ export default function LearningWorkspacePage() {
   return (
     <div className="mx-auto max-w-6xl" data-testid="learning-overview">
       <header className="mb-6">
-        <p className="text-[11px] font-black uppercase tracking-[0.16em] text-amber-800">Моё обучение</p>
+        <p className="text-xs font-black uppercase tracking-wide text-amber-800">Моё обучение</p>
         <h1 className="font-display mt-2 text-4xl leading-tight text-ink">Обучение</h1>
         <p className="mt-2 text-sm leading-6 text-stone-600">Сектор, задания и твои предложения преподавателю.</p>
       </header>
@@ -61,7 +64,7 @@ export default function LearningWorkspacePage() {
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
         <section className="flex min-w-0 flex-col rounded-xl border border-ink bg-ink p-5 text-white sm:p-7" aria-labelledby="learning-focus-title">
-          <p className="inline-flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.13em] text-gold-ink">
+          <p className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-wide text-gold-ink">
             <BookOpenCheck size={17} aria-hidden="true" /> {nextTask ? "Задание" : "Задания"}
           </p>
           <h2 id="learning-focus-title" className="font-display mt-4 break-words text-2xl leading-tight sm:text-3xl">
@@ -94,7 +97,7 @@ export default function LearningWorkspacePage() {
               <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                 <h2 id="learning-tasks-title" className="font-display text-2xl text-ink">Задания</h2>
                 {tasks && <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-700" data-testid="learning-task-count">
-                  {pendingCount} незавершённых{partial ? " · данные неполные" : ""}
+                  {pendingCount} {pluralize(pendingCount, ["незавершённое", "незавершённых", "незавершённых"])}{partial ? " · данные неполные" : ""}
                 </span>}
                 {waitingCount > 0 && <span className="text-xs font-semibold text-blue-800">Проверит на уроке: {waitingCount}</span>}
               </div>
@@ -138,16 +141,16 @@ function SectorCard({ plans }: { plans: StudentHomeMonthlyPlan[] }) {
   const percent = total ? Math.round((completed / total) * 100) : 0;
   return (
     <section className="flex min-w-0 flex-col rounded-xl border border-stone-200 bg-white p-5 sm:p-7" aria-labelledby="learning-plan-title" data-testid="learning-sector-card">
-      <p className="inline-flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.13em] text-amber-800">
+      <p className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-wide text-amber-800">
         <Target size={17} aria-hidden="true" /> {active.length === 1 ? sectorTitle(first!, "student") : active.length ? "Мои сектора" : "Сектор"}
       </p>
       <h2 id="learning-plan-title" className="font-display mt-4 break-words text-2xl leading-tight sm:text-3xl">
-        {first ? (active.length === 1 ? first.goal || "Темы сектора" : `${active.length} открытых сектора`) : "Сектор ещё не открыт"}
+        {first ? (active.length === 1 ? first.goal || "Темы сектора" : `${active.length} ${pluralize(active.length, ["открытый сектор", "открытых сектора", "открытых секторов"])}`) : "Сектор ещё не открыт"}
       </h2>
       {first ? (
         <div className="mt-4">
           <ProgressBar value={percent} />
-          <p className="mt-2 text-xs font-semibold text-stone-500">{completed} из {total} тем закрыто</p>
+          <p className="mt-2 text-xs font-semibold text-stone-500">{formatOutOf(completed, total, ["темы", "тем", "тем"])} закрыто</p>
         </div>
       ) : <p className="mt-3 text-sm leading-6 text-stone-600">Темы появятся, когда преподаватель откроет сектор.</p>}
       {active.map((plan) => plan.exam ? <SectorExamSummary key={plan.id} exam={plan.exam} /> : null)}

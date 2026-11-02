@@ -298,6 +298,18 @@ export type LearningLessonV2Context = {
     crmStudentId: string;
     appUserId: string | null;
     name: string;
+    /** 01.11: the last checks of the student's homework with the teacher's percent. */
+    recentHomework?: Array<{
+      recipientId: string;
+      topicTitle: string;
+      instructions: string;
+      assignedAt: string;
+      state: string;
+      decision: string | null;
+      completionPercent: number | null;
+      comment: string | null;
+      reviewedAt: string | null;
+    }>;
     pendingHomework: LearningLessonV2Homework[];
   }>;
   rewardPreview: Array<{

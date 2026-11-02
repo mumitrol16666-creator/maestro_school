@@ -721,6 +721,55 @@ export async function listLearningHomeworkAssignmentsByCrmStudent(crmStudentId: 
   return recipients.map(studentAssignmentDto);
 }
 
+export type HomeworkCheckHistoryItem = {
+  recipientId: string;
+  assignmentId: string;
+  crmStudentId: string;
+  topic: { id: string; title: string };
+  instructions: string;
+  assignedAt: Date;
+  sourceLessonId: string | null;
+  state: string;
+  reviews: Array<{
+    cycleNumber: number;
+    decision: string;
+    completionPercent: number | null;
+    comment: string | null;
+    reviewedAt: Date;
+  }>;
+};
+
+/**
+ * 01.11 (Vladislav): every homework of the student with the percent of each check — the
+ * «История ДЗ» the lesson and the student card show. Newest assignment first.
+ */
+export async function listHomeworkCheckHistory(
+  crmStudentIds: readonly string[],
+  options: { take?: number } = {},
+): Promise<HomeworkCheckHistoryItem[]> {
+  if (!crmStudentIds.length) return [];
+  const recipients = await prisma.learningHomeworkRecipient.findMany({
+    where: { crmStudentId: { in: [...crmStudentIds] }, assignment: { archivedAt: null } },
+    include: {
+      assignment: { select: { id: true, instructions: true, assignedAt: true, sourceLessonId: true, topic: { select: { id: true, title: true } } } },
+      reviews: { orderBy: { reviewedAt: "asc" }, select: { cycleNumber: true, decision: true, completionPercent: true, comment: true, reviewedAt: true } },
+    },
+    orderBy: { assignment: { assignedAt: "desc" } },
+    ...(options.take ? { take: options.take } : {}),
+  });
+  return recipients.map((recipient) => ({
+    recipientId: recipient.id,
+    assignmentId: recipient.assignment.id,
+    crmStudentId: recipient.crmStudentId,
+    topic: recipient.assignment.topic,
+    instructions: recipient.assignment.instructions,
+    assignedAt: recipient.assignment.assignedAt,
+    sourceLessonId: recipient.assignment.sourceLessonId,
+    state: recipient.state,
+    reviews: recipient.reviews,
+  }));
+}
+
 async function requireStudentRecipient(assignmentId: string, studentUserId: string) {
   const crmStudentId = await requireStudentCrmProfile(studentUserId);
   const recipient = await prisma.learningHomeworkRecipient.findUnique({

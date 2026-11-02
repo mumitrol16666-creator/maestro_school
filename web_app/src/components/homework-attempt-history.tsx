@@ -51,7 +51,7 @@ export function HomeworkAttemptHistory({ attempts, title = "История по�
             )}
 
             {attempt.attachmentUrl && (
-              <HomeworkAttachmentLink url={attempt.attachmentUrl} className="mt-3 inline-flex items-center gap-2 text-sm font-bold text-gold-ink" />
+              <HomeworkAttachmentLink url={attempt.attachmentUrl} className="mt-3 inline-flex min-h-11 items-center gap-2 text-sm font-bold text-gold-ink" />
             )}
 
             {attempt.reviewComment && (

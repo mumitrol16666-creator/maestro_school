@@ -38,7 +38,7 @@ export function HomeworkTestForm({
       <p className="mt-4 text-sm font-semibold text-stone-500">
         Для прохождения нужно набрать не менее {passingScore}%. Результат проверяется сразу после сдачи.
       </p>
-      <p className="mt-2 text-xs text-stone-400">
+      <p className="mt-2 text-xs text-stone-500">
         Отвечено: {answeredCount} из {questions.length}
       </p>
 
@@ -54,7 +54,7 @@ export function HomeworkTestForm({
                 return (
                   <label
                     key={option.id}
-                    className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 text-sm font-semibold ${
+                    className={`flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border p-3 text-sm font-semibold ${
                       selected ? "border-ink bg-ink text-white" : "border-stone-200 bg-white text-stone-700"
                     }`}
                   >
@@ -81,7 +81,7 @@ export function HomeworkTestForm({
 
       <button
         disabled={!complete || submitting}
-        className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-ink px-5 py-4 text-sm font-bold text-white disabled:opacity-50"
+        className="mt-6 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl bg-ink px-5 py-4 text-sm font-bold text-white disabled:opacity-50"
       >
         {submitting ? <LoaderCircle className="animate-spin" size={16} /> : <Send size={16} />}
         {complete ? "Сдать тест" : `Ответьте на все вопросы (${answeredCount}/${questions.length})`}

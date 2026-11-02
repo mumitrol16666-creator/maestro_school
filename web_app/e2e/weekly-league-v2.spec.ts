@@ -24,7 +24,16 @@ async function signInAsAdmin(request: APIRequestContext, context: BrowserContext
     window.localStorage.setItem("maestro_access_token", token);
     window.localStorage.setItem("maestro_auth_user", JSON.stringify(user));
   }, payload.data);
+  return payload.data as { token: string };
 }
+
+type AdminLeagueStudent = {
+  fullName: string;
+  effectiveEligible: boolean;
+  xp: number;
+  position: number | null;
+  streakProtection: unknown;
+};
 
 test("weekly XP shows only protected sources and exact limits", async ({ page, request, context }) => {
   await signInAsStudent(request, context);
@@ -48,7 +57,7 @@ test("weekly XP shows only protected sources and exact limits", async ({ page, r
   await expect(page.getByText("+20 XP", { exact: true }).first()).toBeVisible();
   // Plan 5.3: the streak, table and history fold under «Подробнее».
   await page.getByTestId("league-details").locator("> summary").click();
-  await expect(page.getByTestId("weekly-streak")).toContainText(/\d+ недель подряд/);
+  await expect(page.getByTestId("weekly-streak")).toContainText(/\d+ (неделя|недели|недель) подряд/);
   await expect(page.getByTestId("weekly-streak")).toContainText("4");
   const history = page.getByTestId("weekly-league-history");
   await expect(history).toBeVisible();
@@ -97,10 +106,21 @@ test("weekly league fits a phone and keeps actions in one column", async ({ page
 });
 
 test("curator protects a week from the admin league without a duplicate action", async ({ page, request, context }) => {
-  await signInAsAdmin(request, context);
+  const { token } = await signInAsAdmin(request, context);
+  // A week with confirmed activity cannot be protected, and QA runs give students lessons and homework
+  // in the current week. Take a student whose week is already protected (a repeated run) or who has no
+  // XP this week: the first lesson, homework or test of a week always brings XP.
+  const overviewResponse = await request.get("/api/v1/admin/weekly-league?weekOffset=0", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  expect(overviewResponse.ok()).toBe(true);
+  const students = (await overviewResponse.json()).data.students as AdminLeagueStudent[];
+  const target = students.find((student) => student.streakProtection)
+    ?? students.find((student) => student.effectiveEligible && !student.position && student.xp === 0);
+  expect(target, "a QA student without confirmed activity in the current week").toBeTruthy();
   await page.goto("/admin/league");
 
-  const studentCard = page.getByRole("article").filter({ hasText: "Максим Ахметов" });
+  const studentCard = page.getByRole("article").filter({ hasText: target!.fullName });
   await expect(studentCard).toBeVisible();
   const protectButton = studentCard.getByRole("button", { name: "Защитить серию" });
   if (await protectButton.count()) {

@@ -3,13 +3,7 @@
 import { useState } from "react";
 import { homeworkPercentTone } from "@/lib/homework-ui";
 
-import {
-  ClipboardCheck,
-  Target,
-  Plus,
-  LoaderCircle,
-  Sparkles,
-} from "lucide-react";
+import { ClipboardCheck, LoaderCircle, MoreHorizontal, Plus, Sparkles, Target } from "lucide-react";
 import type {
   LearningLessonV2Context,
   LearningLessonV2Homework,
@@ -233,19 +227,28 @@ export function LearningLessonV2Panel({
   draft,
   disabled,
   onChange,
-  onTopicTitleChange,
   onQuickAddTopic,
+  onRenameTopic,
+  onRemoveTopic,
   onOpenSector,
 }: {
   context: LearningLessonV2Context;
   draft: LearningLessonV2Draft;
   disabled: boolean;
   onChange: (draft: LearningLessonV2Draft) => void;
-  onTopicTitleChange?: (title: string) => void;
   onQuickAddTopic?: (input: { title: string; masteryCriteria?: string; directionId: string }) => Promise<void | { success: boolean; topic?: { id: string; title: string } }>;
+  /** 01.11 (5в): the topic's own menu — rename or take it out of the sector right here. */
+  onRenameTopic?: (topicId: string, input: { title: string; masteryCriteria?: string }) => Promise<unknown>;
+  onRemoveTopic?: (topicId: string) => Promise<unknown>;
   /** Plan 1.14: opens the sector editor over the lesson when there is no published sector yet. */
   onOpenSector?: () => void;
 }) {
+  const [topicMenuId, setTopicMenuId] = useState<string | null>(null);
+  const [renameTopicId, setRenameTopicId] = useState<string | null>(null);
+  const [renameTitle, setRenameTitle] = useState("");
+  const [renameCriteria, setRenameCriteria] = useState("");
+  const [topicBusy, setTopicBusy] = useState(false);
+  const [topicError, setTopicError] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [quickTitle, setQuickTitle] = useState("");
   const [quickCriteria, setQuickCriteria] = useState("");
@@ -278,7 +281,6 @@ export function LearningLessonV2Panel({
       setShowAddForm(false);
       if (res && res.topic) {
         onChange({ ...draft, topicId: res.topic.id });
-        onTopicTitleChange?.(res.topic.title);
       }
     } catch (err: any) {
       setAddError(err?.message || "Не удалось сохранить тему в план");
@@ -452,8 +454,8 @@ export function LearningLessonV2Panel({
                 const selected = topic.id === draft.topicId;
                 const topicDraft = draft.topicProgress[topic.id];
                 return (
+                  <div key={topic.id} className="relative inline-flex items-stretch">
                   <button
-                    key={topic.id}
                     type="button"
                     disabled={disabled || topic.progressPercent === 100}
                     aria-pressed={selected}
@@ -463,7 +465,6 @@ export function LearningLessonV2Panel({
                         ...draft,
                         topicId: topic.id,
                       });
-                      onTopicTitleChange?.(topic.title);
                     }}
                     className={`rounded-lg border px-3 py-2 text-left text-sm font-bold transition disabled:opacity-50 ${
                       selected
@@ -487,9 +488,121 @@ export function LearningLessonV2Panel({
                       </span>
                     ) : null}
                   </button>
+                  {onRenameTopic || onRemoveTopic ? (
+                    <button
+                      type="button"
+                      disabled={disabled || topicBusy}
+                      aria-label={`Действия с темой «${topic.title}»`}
+                      aria-expanded={topicMenuId === topic.id}
+                      onClick={() => { setTopicMenuId(topicMenuId === topic.id ? null : topic.id); setTopicError(null); }}
+                      className="ml-1 grid w-8 place-items-center self-center rounded-lg border border-stone-200 bg-white text-stone-500 hover:border-amber-400 hover:text-ink disabled:opacity-50"
+                    >
+                      <MoreHorizontal size={16} />
+                    </button>
+                  ) : null}
+                  {topicMenuId === topic.id ? (
+                    <div role="menu" className="absolute left-0 top-full z-20 mt-1 w-52 rounded-xl border border-stone-200 bg-white p-1 shadow-lg" data-testid="lesson-topic-menu">
+                      {onRenameTopic ? (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            setRenameTopicId(topic.id);
+                            setRenameTitle(topic.title);
+                            setRenameCriteria(topic.masteryCriteria ?? "");
+                            setTopicMenuId(null);
+                          }}
+                          className="block w-full rounded-lg px-3 py-2 text-left text-sm font-semibold text-ink hover:bg-stone-50"
+                        >
+                          Переименовать
+                        </button>
+                      ) : null}
+                      {onRemoveTopic ? (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          disabled={topic.progressPercent === 100}
+                          onClick={async () => {
+                            const progress = topic.approvedPercent ?? topic.progressPercent;
+                            const question = progress > 0
+                              ? `Убрать тему «${topic.title}» из сектора? У неё уже ${progress}% — тема отложится, проценты и баллы останутся.`
+                              : `Убрать тему «${topic.title}» из сектора?`;
+                            if (!window.confirm(question)) return;
+                            setTopicMenuId(null);
+                            setTopicBusy(true);
+                            setTopicError(null);
+                            try {
+                              await onRemoveTopic(topic.id);
+                              if (draft.topicId === topic.id) {
+                                const topicProgress = { ...draft.topicProgress };
+                                delete topicProgress[topic.id];
+                                onChange({ ...draft, topicId: null, topicProgress });
+                              }
+                            } catch (reason) {
+                              setTopicError(reason instanceof Error ? reason.message : "Не удалось убрать тему");
+                            } finally {
+                              setTopicBusy(false);
+                            }
+                          }}
+                          className="block w-full rounded-lg px-3 py-2 text-left text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
+                        >
+                          Убрать из сектора
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  </div>
                 );
               })}
             </div>
+            {topicError ? <p className="mt-2 text-xs font-semibold text-red-700" role="alert">{topicError}</p> : null}
+            {renameTopicId && onRenameTopic ? (
+              <form
+                className="mt-3 rounded-2xl border border-stone-200 bg-stone-50 p-4"
+                data-testid="lesson-topic-rename"
+                onSubmit={async (event) => {
+                  event.preventDefault();
+                  if (!renameTitle.trim()) return;
+                  setTopicBusy(true);
+                  setTopicError(null);
+                  try {
+                    await onRenameTopic(renameTopicId, { title: renameTitle.trim(), masteryCriteria: renameCriteria.trim() });
+                    setRenameTopicId(null);
+                  } catch (reason) {
+                    setTopicError(reason instanceof Error ? reason.message : "Не удалось переименовать тему");
+                  } finally {
+                    setTopicBusy(false);
+                  }
+                }}
+              >
+                <p className="text-xs font-bold uppercase tracking-wider text-stone-600">Переименовать тему</p>
+                <input
+                  type="text"
+                  aria-label="Название темы"
+                  value={renameTitle}
+                  disabled={topicBusy}
+                  onChange={(event) => setRenameTitle(event.target.value)}
+                  className="mt-2 h-10 w-full rounded-xl border border-stone-300 bg-white px-3 text-sm font-medium text-ink focus:border-amber-500 focus:outline-none"
+                />
+                <input
+                  type="text"
+                  aria-label="Критерий освоения"
+                  placeholder="Критерий освоения"
+                  value={renameCriteria}
+                  disabled={topicBusy}
+                  onChange={(event) => setRenameCriteria(event.target.value)}
+                  className="mt-2 h-10 w-full rounded-xl border border-stone-300 bg-white px-3 text-sm font-medium text-ink placeholder:text-stone-400 focus:border-amber-500 focus:outline-none"
+                />
+                <div className="mt-3 flex gap-2">
+                  <button type="submit" disabled={topicBusy || !renameTitle.trim()} className="min-h-10 rounded-xl bg-ink px-4 text-sm font-bold text-white disabled:opacity-50">
+                    Сохранить
+                  </button>
+                  <button type="button" disabled={topicBusy} onClick={() => setRenameTopicId(null)} className="min-h-10 rounded-xl border border-stone-200 bg-white px-4 text-sm font-bold text-stone-700">
+                    Отмена
+                  </button>
+                </div>
+              </form>
+            ) : null}
             {selectedTopic ? (
               <div className="mt-4 rounded-lg bg-stone-50 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">

@@ -89,18 +89,18 @@ export function PushNotificationPrompt({
       <button
         type="button"
         onClick={dismiss}
-        className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full bg-white/10 text-white/60 transition hover:bg-white/20 hover:text-white"
+        className="absolute right-2 top-2 grid h-11 w-11 place-items-center rounded-full bg-white/10 text-white/60 transition hover:bg-white/20 hover:text-white"
         aria-label="Напомнить позже"
       >
-        <X size={16} />
+        <X size={18} />
       </button>
 
-      <div className="flex items-start gap-3 pr-8">
+      <div className="flex items-start gap-3 pr-10">
         <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gold text-ink">
           <BellRing size={20} />
         </span>
         <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gold-ink">Уведомления на телефон</p>
+          <p className="text-xs font-black uppercase tracking-wide text-gold-ink">Уведомления на телефон</p>
           <h2 className="mt-1 text-lg font-black">
             {enabled
               ? "Уведомления включены"

@@ -43,7 +43,7 @@ test("one home read; a proposal from «Обучение»; theory tests in the t
   await page.getByRole("button", { name: "Песня", exact: true }).click();
   await page.getByPlaceholder(/Например: «Кукла колдуна»/).fill(proposal);
   await page.getByRole("button", { name: /Отправить преподавателю/ }).click();
-  await expect(page.getByText("Отправлено", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("app-toast")).toContainText("Предложение отправлено преподавателю");
   await expect(page.getByText(proposal)).toBeVisible();
   await expect(page.getByText("Ждёт ответа преподавателя").first()).toBeVisible();
 

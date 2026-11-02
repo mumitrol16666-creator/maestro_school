@@ -21,6 +21,14 @@ async function installStudentSession(context: BrowserContext) {
   }));
 }
 
+// Plan 5.3: «Прошедшие» opens on the last two weeks, so the lessons are dated three days back.
+const lessonDay = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+const LESSON_DATE = [
+  lessonDay.getFullYear(),
+  String(lessonDay.getMonth() + 1).padStart(2, "0"),
+  String(lessonDay.getDate()).padStart(2, "0"),
+].join("-");
+
 function lesson(
   crmClassId: string,
   title: string,
@@ -30,7 +38,7 @@ function lesson(
   return {
     crmClassId,
     title,
-    date: "2026-09-05",
+    date: LESSON_DATE,
     startTime: "10:00",
     endTime: "10:45",
     status: "completed",
@@ -98,15 +106,15 @@ test("история показывает V2-прогресс темы и тол
               fromPercent: 75,
               toPercent: 100,
               comment: "Переходы сыграны без остановок.",
-              occurredAt: "2026-09-05T08:00:00.000Z",
+              occurredAt: `${LESSON_DATE}T08:00:00.000Z`,
               mastered: true,
               masteryPointsAwarded: 100,
             }],
             [{
-              planId: "plan-september",
-              month: "2026-09",
+              planId: "plan-current",
+              month: LESSON_DATE.slice(0, 7),
               sequence: 1,
-              completedAt: "2026-09-05T08:00:00.000Z",
+              completedAt: `${LESSON_DATE}T08:00:00.000Z`,
               pointsAwarded: 250,
             }],
           ),
@@ -116,7 +124,7 @@ test("история показывает V2-прогресс темы и тол
             fromPercent: 45,
             toPercent: 75,
             comment: null,
-            occurredAt: "2026-09-05T09:00:00.000Z",
+            occurredAt: `${LESSON_DATE}T09:00:00.000Z`,
             mastered: false,
             masteryPointsAwarded: 0,
           }]),

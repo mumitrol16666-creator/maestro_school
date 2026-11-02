@@ -108,3 +108,9 @@ export const offlineLessonQuickTopicSchema = z.object({
   masteryCriteria: z.string().trim().max(5000).optional().default(""),
   directionId: z.string({ required_error: "Выберите направление сектора" }).uuid("Выберите направление сектора"),
 });
+
+/** 01.11: renaming a sector topic from the lesson. */
+export const offlineLessonTopicRenameSchema = z.object({
+  title: z.string().trim().min(1, "Укажите название темы").max(1000, "Название темы слишком длинное"),
+  masteryCriteria: z.string().trim().max(5000).optional(),
+});

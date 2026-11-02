@@ -1,4 +1,4 @@
-import { BadRequestError } from "../../domain/errors.js";
+import { AppError, BadRequestError } from "../../domain/errors.js";
 import {
   buildOfflineHomework,
   offlineHomeworkStatus,
@@ -47,6 +47,22 @@ type StudentSchoolSummary = {
 };
 
 export const HOME_TASKS_LIMIT = 6;
+
+/**
+ * Package 3 (В-18): `school: null` alone cannot tell a student the school has not linked yet from
+ * a school read that failed; the home names which one it is. `unavailable`: CRM did not answer and
+ * the server kept no copy; `failed`: CRM answered with a refusal or an error of its own (student
+ * not found, a rejected secret, a CRM 500) or the summary could not be built.
+ */
+export type StudentHomeSchoolStatus = "linked" | "not_linked" | "unavailable" | "failed";
+
+/**
+ * CRM did not answer at all — the codes «Расписание» names «Нет связи со школой» by, so the strip
+ * on the home and the schedule screen say the same. A CRM that answers 500 is `failed` on both.
+ */
+function isCrmOutage(reason: unknown) {
+  return reason instanceof AppError && (reason.code === "CRM_UNAVAILABLE" || reason.code === "CRM_TIMEOUT");
+}
 
 /**
  * Plan 2.1: everything the student's «Сейчас», «Обучение» and the header need, in one read.
@@ -111,6 +127,7 @@ async function getStudentHomeBase(studentUserId: string) {
       generatedAt: new Date().toISOString(),
       dashboard,
       school: null,
+      schoolStatus: "not_linked" as StudentHomeSchoolStatus,
       monthlyPlans: [],
     };
   }
@@ -127,6 +144,14 @@ async function getStudentHomeBase(studentUserId: string) {
         nextAvailableLesson: null,
       };
   if (schoolResult.status === "rejected") {
+    const schoolStatus: StudentHomeSchoolStatus = isCrmOutage(schoolResult.reason) ? "unavailable" : "failed";
+    if (schoolStatus === "failed") {
+      console.error("[student-home] school summary refused", {
+        studentUserId,
+        code: schoolResult.reason instanceof AppError ? schoolResult.reason.code : undefined,
+        message: schoolResult.reason instanceof Error ? schoolResult.reason.message : String(schoolResult.reason),
+      });
+    }
     const monthlyPlans = await listPublishedMonthlyPlansAdapted(
       user.crmStudentId,
       [],
@@ -135,7 +160,13 @@ async function getStudentHomeBase(studentUserId: string) {
     if (dashboardResult.status === "rejected" && !monthlyPlans.length) {
       throw new BadRequestError("Не удалось собрать учебную главную", "STUDENT_HOME_UNAVAILABLE");
     }
-    return { generatedAt: new Date().toISOString(), dashboard, school: null, monthlyPlans };
+    return {
+      generatedAt: new Date().toISOString(),
+      dashboard,
+      school: null,
+      schoolStatus,
+      monthlyPlans,
+    };
   }
 
   const school = schoolResult.value as unknown as {
@@ -153,6 +184,7 @@ async function getStudentHomeBase(studentUserId: string) {
     generatedAt: new Date().toISOString(),
     dashboard,
     school,
+    schoolStatus: "linked" as StudentHomeSchoolStatus,
     monthlyPlans,
   };
 }

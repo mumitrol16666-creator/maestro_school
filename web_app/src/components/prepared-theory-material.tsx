@@ -82,13 +82,13 @@ export function PreparedTheoryMaterialView({
         </div>
 
         <div data-print-hide className="flex flex-col gap-3 border-t border-stone-200 pt-6 sm:flex-row sm:items-center sm:justify-between">
-          <button type="button" onClick={() => window.print()} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-stone-300 bg-white px-5 py-3.5 text-sm font-bold hover:border-gold">
+          <button type="button" onClick={() => window.print()} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-stone-300 bg-white px-5 py-3.5 text-sm font-bold hover:border-gold">
             <Printer size={17} /> Распечатать урок
           </button>
           <div className="sm:text-right">
             {disabledMessage ? <p className="mb-2 text-sm font-semibold text-amber-800">{disabledMessage}</p> : null}
             {onContinue ? (
-              <button type="button" onClick={onContinue} disabled={continueDisabled} className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-ink px-6 py-3.5 text-sm font-bold text-white transition hover:bg-gold hover:text-ink disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto">
+              <button type="button" onClick={onContinue} disabled={continueDisabled} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl bg-ink px-6 py-3.5 text-sm font-bold text-white transition hover:bg-gold hover:text-ink disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto">
                 {continueLabel} <ArrowRight size={17} />
               </button>
             ) : null}

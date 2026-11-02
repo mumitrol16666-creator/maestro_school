@@ -105,6 +105,9 @@ export type StudentOfflineSummary = {
   streakWeeks?: number | null;
   externalLinkStatus?: string | null;
   linkStatus?: string;
+  /** CRM did not answer; the server served its last copy taken at `crmSnapshotAt` (З-88). */
+  crmStale?: boolean;
+  crmSnapshotAt?: string | null;
   profile: {
     name: string;
     phone: string;

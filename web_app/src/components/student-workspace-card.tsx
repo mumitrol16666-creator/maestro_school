@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   ClipboardCheck,
   ExternalLink,
+  History,
   LoaderCircle,
   MessageSquare,
   Pencil,
@@ -43,6 +44,8 @@ const tabs: Array<{ key: WorkspaceTab; label: string; icon: typeof Target }> = [
   { key: "activity", label: "Активность", icon: Activity },
   { key: "dynamics", label: "Динамика", icon: TrendingUp },
   { key: "tasks", label: "Задания", icon: ClipboardCheck },
+  { key: "history", label: "История ДЗ", icon: History },
+  { key: "sectors", label: "Секторы", icon: Target },
   { key: "dialog", label: "Диалог", icon: MessageSquare },
 ];
 
@@ -204,6 +207,8 @@ export function StudentWorkspaceCard({
         {tab === "activity" ? <ActivityTab data={data} /> : null}
         {tab === "dynamics" ? <DynamicsTab data={data} /> : null}
         {tab === "tasks" ? <TasksTab data={data} crmStudentId={crmStudentId} /> : null}
+        {tab === "history" ? <HomeworkHistoryTab data={data} /> : null}
+        {tab === "sectors" ? <SectorsTab data={data} /> : null}
         {tab === "dialog" ? <DialogTab data={data} /> : null}
       </div>
     </div>
@@ -698,6 +703,105 @@ function TasksTab({ data, crmStudentId }: { data: TeacherStudentWorkspace; crmSt
       <Link href={`/admin/my-students/student/${encodeURIComponent(crmStudentId)}/tasks`} className={`${control} justify-self-start border border-stone-200 bg-white text-stone-700`}>
         Все задания, включая старые отчёты <ExternalLink size={14} />
       </Link>
+    </div>
+  );
+}
+
+/* ─── История ДЗ (01.11) ──────────────────────────────────────────────── */
+
+function percentTone(percent: number | null) {
+  if (percent == null) return "bg-stone-100 text-stone-600";
+  if (percent >= 100) return "bg-emerald-600 text-white";
+  if (percent > 0) return "bg-amber-100 text-amber-900";
+  return "bg-red-50 text-red-700";
+}
+
+function HomeworkHistoryTab({ data }: { data: TeacherStudentWorkspace }) {
+  const items = data.homeworkHistory;
+  return (
+    <div className="grid min-w-0 grid-cols-1 gap-4" data-testid="homework-history">
+      <section className="rounded-2xl border border-stone-200 bg-white p-4">
+        <p className="inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-stone-600"><History size={14} /> Все домашние задания · {items.length}</p>
+        <p className="mt-1 text-[11px] text-stone-500">Процент ставит преподаватель на уроке; у одного задания может быть несколько проверок.</p>
+        {!items.length ? <p className="mt-2 text-xs text-stone-500">Заданий к темам пока не было.</p> : (
+          <ul className="mt-2 divide-y divide-stone-100">
+            {items.map((item) => {
+              const last = item.reviews[item.reviews.length - 1] ?? null;
+              return (
+                <li key={item.recipientId} className="py-2.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">{item.topic.title}</p>
+                    <span className={`rounded-md px-2 py-0.5 text-[11px] font-black ${percentTone(last?.completionPercent ?? null)}`}>
+                      {last ? (last.completionPercent == null ? (last.decision === "revision" ? "на доработку" : "принято") : `${last.completionPercent}%`) : homeworkStateLabels[item.state] ?? "ждёт урока"}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-[11px] text-stone-500">Задано {formatDate(item.assignedAt)}{item.instructions ? ` · ${item.instructions}` : ""}</p>
+                  {item.reviews.length ? (
+                    <ul className="mt-1 space-y-0.5">
+                      {item.reviews.map((review) => (
+                        <li key={`${item.recipientId}-${review.cycleNumber}-${review.reviewedAt}`} className="text-[11px] text-stone-600">
+                          {formatDate(review.reviewedAt)} · {review.completionPercent == null ? (review.decision === "revision" ? "на доработку" : "принято") : `${review.completionPercent}%`}
+                          {review.comment ? ` · ${review.comment}` : ""}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+    </div>
+  );
+}
+
+/* ─── Секторы (01.11) ─────────────────────────────────────────────────── */
+
+function SectorsTab({ data }: { data: TeacherStudentWorkspace }) {
+  const open = data.dynamics?.sectors ?? [];
+  const closed = data.closedSectors;
+  return (
+    <div className="grid min-w-0 grid-cols-1 gap-4" data-testid="sectors-history">
+      <section className="rounded-2xl border border-stone-200 bg-white p-4">
+        <p className="inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-stone-600"><Target size={14} /> Открытые</p>
+        {!open.length ? <p className="mt-2 text-xs text-stone-500">Открытых секторов нет.</p> : (
+          <ul className="mt-2 divide-y divide-stone-100">
+            {open.map((sector) => (
+              <li key={sector.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+                <span className="font-semibold text-ink">{sector.scope === "group" ? "Сектор группы" : "Сектор"} {sector.sequence} · {sector.direction}</span>
+                <span className="text-xs text-stone-500">{sector.completed}/{sector.total} тем · {sector.percent}%</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+      <section className="rounded-2xl border border-stone-200 bg-white p-4">
+        <p className="inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-stone-600"><CheckCircle2 size={14} /> Пройденные · {closed.length}</p>
+        {!closed.length ? <p className="mt-2 text-xs text-stone-500">Закрытых секторов пока нет.</p> : (
+          <ul className="mt-2 divide-y divide-stone-100">
+            {closed.map((sector) => (
+              <li key={sector.id} className="py-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                  <span className="font-semibold text-ink">{sector.scope === "group" ? "Сектор группы" : "Сектор"} {sector.sequence} · {sector.direction}</span>
+                  <span className="text-xs text-stone-500">
+                    {sector.closedAt ? `закрыт ${formatDate(sector.closedAt)}` : sector.status}
+                    {sector.exam?.status === "completed" ? ` · экзамен${sector.exam.outcome ? ` (${sector.exam.outcome})` : ""}` : ""}
+                    {sector.memberPass ? ` · ${sector.memberPass.method === "exam" ? "сдал на экзамене" : "зачтено без экзамена"}, ${sector.memberPass.points} баллов` : ""}
+                  </span>
+                </div>
+                <p className="mt-1 flex flex-wrap gap-1">
+                  {sector.topics.map((topic) => (
+                    <span key={topic.id} className={`rounded-md px-2 py-0.5 text-[10px] font-bold ${topic.state !== "active" ? "bg-stone-100 text-stone-500 line-through" : percentTone(topic.progressPercent)}`}>
+                      {topic.title} · {topic.progressPercent}%
+                    </span>
+                  ))}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </div>
   );
 }

@@ -2,7 +2,9 @@
 
 import { CheckCircle2, Circle, CircleDot, Lightbulb, LoaderCircle, Send } from "lucide-react";
 import { useState } from "react";
-import { api, ApiError } from "@/lib/api-client";
+import { toast } from "@/components/toast";
+import { api } from "@/lib/api-client";
+import { errorToastText } from "@/lib/error-text";
 import type { StudentHomeMonthlyPlan } from "@/types/api";
 import type { SectorProposal } from "@/types/teacher-students";
 
@@ -43,23 +45,20 @@ export function SectorProposalSection({
   const [crmDirectionId, setCrmDirectionId] = useState(directions[0]?.[0] ?? "");
   const [sending, setSending] = useState(false);
   const [showAll, setShowAll] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState(false);
   const directionId = crmDirectionId || directions[0]?.[0] || "";
 
   async function submit() {
     if (!text.trim() || !directionId || sending) return;
     setSending(true);
-    setError(null);
     try {
       const created = await api.createSectorProposal({ crmDirectionId: directionId, kind, text: text.trim(), link: link.trim() || null });
       setSent((current) => [created, ...current]);
       setText("");
       setLink("");
-      setDone(true);
+      toast.success("Предложение отправлено преподавателю");
       onCreated?.(created);
     } catch (reason) {
-      setError(reason instanceof ApiError ? reason.message : "Не удалось отправить предложение");
+      toast.error(errorToastText(reason, "Не получилось отправить предложение. Попробуй ещё раз"));
     } finally {
       setSending(false);
     }
@@ -83,7 +82,7 @@ export function SectorProposalSection({
                 key={option.value}
                 type="button"
                 onClick={() => setKind(option.value)}
-                className={`rounded-full border px-3 py-1.5 text-xs font-bold ${kind === option.value ? "border-sky-700 bg-sky-700 text-white" : "border-stone-300 bg-white text-stone-700"}`}
+                className={`min-h-11 rounded-full border px-4 py-1.5 text-xs font-bold ${kind === option.value ? "border-sky-700 bg-sky-700 text-white" : "border-stone-300 bg-white text-stone-700"}`}
               >
                 {option.label}
               </button>
@@ -92,7 +91,7 @@ export function SectorProposalSection({
               <select
                 value={directionId}
                 onChange={(event) => setCrmDirectionId(event.target.value)}
-                className="ml-auto h-9 rounded-lg border border-stone-300 bg-white px-2 text-xs font-bold"
+                className="ml-auto h-11 rounded-lg border border-stone-300 bg-white px-2 text-xs font-bold"
               >
                 {directions.map(([id, direction]) => <option key={id} value={id}>{direction.title}</option>)}
               </select>
@@ -100,7 +99,7 @@ export function SectorProposalSection({
           </div>
           <textarea
             value={text}
-            onChange={(event) => { setText(event.target.value); setDone(false); }}
+            onChange={(event) => setText(event.target.value)}
             rows={3}
             maxLength={2000}
             placeholder={kind === "song" ? "Например: «Кукла колдуна» — Король и Шут" : kind === "goal" ? "Например: научиться играть перебором" : "Например: баррэ на F"}
@@ -110,7 +109,7 @@ export function SectorProposalSection({
             value={link}
             onChange={(event) => setLink(event.target.value)}
             placeholder="Ссылка на видео или разбор (необязательно)"
-            className="h-10 w-full rounded-lg border border-stone-200 bg-white px-3 text-sm outline-none focus:border-sky-400"
+            className="h-11 w-full rounded-lg border border-stone-200 bg-white px-3 text-sm outline-none focus:border-sky-400"
           />
           <div className="flex flex-wrap items-center gap-3">
             <button
@@ -121,8 +120,6 @@ export function SectorProposalSection({
             >
               {sending ? <LoaderCircle size={16} className="animate-spin" /> : <Send size={16} />} Отправить преподавателю
             </button>
-            {done ? <span className="text-xs font-bold text-emerald-700">Отправлено</span> : null}
-            {error ? <span className="text-xs font-bold text-red-700">{error}</span> : null}
           </div>
         </div>
       )}
@@ -147,7 +144,7 @@ export function SectorProposalSection({
         </ul>
       ) : null}
       {shown.length > 3 && !showAll ? (
-        <button type="button" onClick={() => setShowAll(true)} className="mt-3 inline-flex min-h-10 items-center text-xs font-bold text-sky-800 hover:underline" data-testid="proposals-show-all">
+        <button type="button" onClick={() => setShowAll(true)} className="mt-3 inline-flex min-h-11 items-center text-xs font-bold text-sky-800 hover:underline" data-testid="proposals-show-all">
           Показать все ({shown.length})
         </button>
       ) : null}

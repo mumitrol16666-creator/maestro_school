@@ -27,10 +27,12 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { ErrorState, LoadingState } from "@/components/data-states";
+import { ScreenError } from "@/components/app-error-screen";
+import { ScreenSkeleton } from "@/components/screen-skeleton";
 import { LevelBadge } from "@/components/level-summary";
 import { PageHeader } from "@/components/page-header";
 import { useApiResource } from "@/hooks/use-api-resource";
+import { formatCount, pluralize } from "@/lib/plural";
 import { weeklyLeagueApi } from "@/lib/weekly-league-api";
 import type {
   LeagueXpSourceType,
@@ -56,6 +58,8 @@ const sourceIcons: Record<LeagueXpSourceType, typeof School> = {
   teacher_bonus: Star,
 };
 
+const POINTS_FORMS = ["балл", "балла", "баллов"] as const;
+
 function countdownLabel(seconds: number) {
   const safe = Math.max(0, seconds);
   const days = Math.floor(safe / 86_400);
@@ -67,16 +71,7 @@ function countdownLabel(seconds: number) {
 }
 
 function participantCountLabel(count: number) {
-  const mod100 = count % 100;
-  const mod10 = count % 10;
-  const word = mod100 >= 11 && mod100 <= 14
-    ? "участников"
-    : mod10 === 1
-      ? "участник"
-      : mod10 >= 2 && mod10 <= 4
-        ? "участника"
-        : "участников";
-  return `${count} ${word}`;
+  return formatCount(count, ["участник", "участника", "участников"]);
 }
 
 function RankMovement({ delta }: { delta: number | null }) {
@@ -94,7 +89,7 @@ function PodiumCard({ entry, index }: { entry: WeeklyLeagueStanding; index: numb
           <Award size={22} />
         </span>
         <span className="rounded-full bg-white/80 px-3 py-1.5 text-xs font-black text-stone-500">
-          {entry.eventCount} действий
+          {formatCount(entry.eventCount, ["действие", "действия", "действий"])}
         </span>
       </div>
       <p className="mt-6 text-xs font-black uppercase tracking-[0.16em] text-stone-400">{entry.position} место</p>
@@ -146,7 +141,7 @@ function PointsLeaderboard({ data }: { data: PointsLeaderboardOverview }) {
               <p className="mt-1 text-xs font-semibold text-stone-400">{entry.level.title}</p>
             </div>
             <strong className="whitespace-nowrap text-sm sm:text-base">
-              {entry.points.toLocaleString("ru-RU")} <span className="text-xs text-emerald-700">баллов</span>
+              {entry.points.toLocaleString("ru-RU")} <span className="text-xs text-emerald-700">{pluralize(entry.points, POINTS_FORMS)}</span>
             </strong>
           </div>
         ))}
@@ -161,7 +156,7 @@ function PointsLeaderboard({ data }: { data: PointsLeaderboardOverview }) {
             <p className="mt-1 text-xs font-semibold text-stone-500">{data.currentStudent.level.title}</p>
           </div>
           <strong className="whitespace-nowrap text-sm sm:text-base">
-            {data.currentStudent.points.toLocaleString("ru-RU")} <span className="text-xs text-emerald-700">баллов</span>
+            {data.currentStudent.points.toLocaleString("ru-RU")} <span className="text-xs text-emerald-700">{pluralize(data.currentStudent.points, POINTS_FORMS)}</span>
           </strong>
         </div>
       ) : null}
@@ -187,8 +182,8 @@ function LeagueHistory() {
     setNextCursor(resource.data?.nextCursor ?? null);
   }, [resource.data]);
 
-  if (resource.loading && !resource.data) return <LoadingState label="Загружаем историю недель" />;
-  if (resource.error) return <ErrorState message={resource.error} retry={resource.reload} />;
+  if (resource.loading && !resource.data) return <ScreenSkeleton variant="section" label="Загружаем историю недель" />;
+  if (resource.error && !resource.data) return <ScreenError message={resource.error} code={resource.errorCode} retry={resource.reload} />;
   if (!resource.data?.economyV2Enabled) return null;
 
   return (
@@ -208,19 +203,19 @@ function LeagueHistory() {
                 <div className="flex items-start gap-3">
                   <div className="min-w-0 flex-1">
                     <p className="font-bold text-ink">{item.week.label}</p>
-                    <p className="mt-1 text-xs text-stone-400">Итог сохранён {new Intl.DateTimeFormat("ru-RU", { dateStyle: "medium" }).format(new Date(item.week.finalizedAt))}</p>
+                    <p className="mt-1 text-xs text-stone-500">Итог сохранён {new Intl.DateTimeFormat("ru-RU", { dateStyle: "medium" }).format(new Date(item.week.finalizedAt))}</p>
                   </div>
                   <ChevronDown size={18} className="mt-1 shrink-0 text-stone-400 transition group-open:rotate-180" />
                 </div>
                 <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4">
-                  <div><p className="font-display text-2xl">#{item.position}</p><p className="text-[11px] font-bold text-stone-400">место</p></div>
-                  <div><p className="font-display text-2xl">{item.xp}</p><p className="text-[11px] font-bold text-stone-400">XP</p></div>
+                  <div><p className="font-display text-2xl">#{item.position}</p><p className="text-xs font-bold text-stone-500">место</p></div>
+                  <div><p className="font-display text-2xl">{item.xp}</p><p className="text-xs font-bold text-stone-500">XP</p></div>
 
-                  <div><p className="font-display text-2xl">{item.streakWeeks}</p><p className="text-[11px] font-bold text-stone-400">недель серии</p></div>
+                  <div><p className="font-display text-2xl">{item.streakWeeks}</p><p className="text-xs font-bold text-stone-500">{pluralize(item.streakWeeks, ["неделя серии", "недели серии", "недель серии"])}</p></div>
                 </div>
               </summary>
               <div className="border-t border-stone-100 bg-stone-50 px-4 py-5 sm:px-6">
-                <div className="grid gap-6 lg:grid-cols-2">
+                <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-2">
                   <div>
                     <p className="text-xs font-black uppercase tracking-wider text-stone-400">Ваш результат</p>
                     <p className="mt-3 text-sm font-bold">{streakOutcomeLabel(item.streakOutcome)}{item.goalMet ? ` · цель ${item.goalXp} XP выполнена` : ""}</p>
@@ -323,8 +318,8 @@ export default function WeeklyLeaguePage() {
   const podium = useMemo(() => resource.data?.standings.slice(0, 3) ?? [], [resource.data]);
   const table = useMemo(() => resource.data?.standings.slice(3) ?? [], [resource.data]);
 
-  if (resource.loading && !resource.data) return <LoadingState label="Считаем места в лиге" />;
-  if (resource.error) return <ErrorState message={resource.error} retry={resource.reload} />;
+  if (resource.loading && !resource.data) return <ScreenSkeleton variant="list" label="Считаем места в лиге" />;
+  if (resource.error && !resource.data) return <ScreenError message={resource.error} code={resource.errorCode} retry={resource.reload} />;
   if (!resource.data) return null;
   const data = resource.data;
   const me = data.currentStudent;
@@ -341,18 +336,18 @@ export default function WeeklyLeaguePage() {
         title="Недельная лига"
         description="XP показывает учебную активность этой недели. В понедельник начинается новый счёт."
         action={(
-          <div className="inline-flex rounded-2xl border border-stone-200 bg-white p-1 shadow-sm">
+          <div className="inline-flex gap-2 rounded-2xl border border-stone-200 bg-white p-1 shadow-sm">
             <button
               type="button"
               onClick={() => setWeekOffset(0)}
-              className={`min-h-10 rounded-xl px-4 text-xs font-black transition ${weekOffset === 0 ? "bg-ink text-white" : "text-stone-500"}`}
+              className={`min-h-11 rounded-xl px-4 text-xs font-black transition ${weekOffset === 0 ? "bg-ink text-white" : "text-stone-500"}`}
             >
               Эта неделя
             </button>
             <button
               type="button"
               onClick={() => setWeekOffset(1)}
-              className={`min-h-10 rounded-xl px-4 text-xs font-black transition ${weekOffset === 1 ? "bg-ink text-white" : "text-stone-500"}`}
+              className={`min-h-11 rounded-xl px-4 text-xs font-black transition ${weekOffset === 1 ? "bg-ink text-white" : "text-stone-500"}`}
             >
               Прошлая
             </button>
@@ -409,17 +404,17 @@ export default function WeeklyLeaguePage() {
       <div className="mt-5 grid grid-cols-3 gap-3">
         <div className="rounded-[20px] border border-stone-200 bg-paper p-4 shadow-soft text-center">
           <p className="font-display text-3xl text-ink">{me?.position ? `#${me.position}` : "—"}</p>
-          <p className="mt-1 text-[11px] font-bold text-stone-500">{data.week.positionsFinal ? "итоговое место" : "текущее место"}</p>
+          <p className="mt-1 text-xs font-bold text-stone-500">{data.week.positionsFinal ? "итоговое место" : "текущее место"}</p>
         </div>
         <div className="rounded-[20px] border border-stone-200 bg-paper p-4 shadow-soft text-center">
           <p className="font-display flex min-h-9 items-center justify-center gap-1 text-3xl text-ink">
             {xpToTop3 > 0 ? xpToTop3 : <Trophy size={28} className="text-gold-ink" />} <span className="text-sm text-gold-ink">{xpToTop3 > 0 ? "XP" : ""}</span>
           </p>
-          <p className="mt-1 text-[11px] font-bold text-stone-500">{xpToTop3 > 0 ? "до топ-3" : "в топ-3!"}</p>
+          <p className="mt-1 text-xs font-bold text-stone-500">{xpToTop3 > 0 ? "до топ-3" : "в топ-3!"}</p>
         </div>
         <div className="rounded-[20px] border border-stone-200 bg-paper p-4 shadow-soft text-center">
           <p className="font-display text-3xl text-ink">{me?.streakWeeks ?? 0}</p>
-          <p className="mt-1 text-[11px] font-bold text-stone-500">недель в серии</p>
+          <p className="mt-1 text-xs font-bold text-stone-500">{pluralize(me?.streakWeeks ?? 0, ["неделя в серии", "недели в серии", "недель в серии"])}</p>
         </div>
       </div>
 
@@ -444,7 +439,7 @@ export default function WeeklyLeaguePage() {
                     {rule ? `+${rule.xp}${rule.retryXp ? ` / +${rule.retryXp}` : ""} XP` : "XP"}
 
                   </span>
-                  <Link href={item.href} className="shrink-0 rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-xs font-bold text-ink transition hover:border-gold hover:text-gold-ink">
+                  <Link href={item.href} className="inline-flex min-h-11 shrink-0 items-center rounded-xl border border-stone-200 bg-white px-4 text-sm font-bold text-ink transition hover:border-gold hover:text-gold-ink">
                     {item.action}
                   </Link>
                 </div>
@@ -470,7 +465,7 @@ export default function WeeklyLeaguePage() {
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-gold-ink"><Flame size={15} /> Серия активности</p>
-              <h2 className="font-display mt-2 text-3xl">{me.streakWeeks} недель подряд</h2>
+              <h2 className="font-display mt-2 text-3xl">{formatCount(me.streakWeeks, ["неделя", "недели", "недель"])} подряд</h2>
             </div>
             <p className="text-sm font-bold text-stone-500">Лучшая серия: {me.bestStreakWeeks}</p>
           </div>
@@ -487,7 +482,7 @@ export default function WeeklyLeaguePage() {
               >
                 <Award size={19} className={milestone.earned ? "text-gold-ink" : "text-stone-400"} />
                 <p className="font-display mt-4 text-2xl">{milestone.weeks}</p>
-                <p className="text-[11px] font-bold text-stone-500">недель подряд</p>
+                <p className="text-xs font-bold text-stone-500">{pluralize(milestone.weeks, ["неделя подряд", "недели подряд", "недель подряд"])}</p>
               </article>
             ))}
           </div>
@@ -517,7 +512,7 @@ export default function WeeklyLeaguePage() {
         </div>
 
         {podium.length ? (
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-3">
             {podium.map((entry, index) => <PodiumCard key={`${entry.position}-${entry.displayName}`} entry={entry} index={index} />)}
           </div>
         ) : (
@@ -559,7 +554,7 @@ export default function WeeklyLeaguePage() {
       {pointsResource.error ? (
         <section className="mt-9 rounded-2xl border border-stone-200 bg-white p-5 text-sm text-stone-600">
           Топ по баллам временно не загрузился. {" "}
-          <button type="button" onClick={pointsResource.reload} className="font-bold text-emerald-800 hover:underline">Повторить</button>
+          <button type="button" onClick={pointsResource.reload} className="inline-flex min-h-11 items-center font-bold text-emerald-800 hover:underline">Повторить</button>
         </section>
       ) : null}
 
@@ -574,8 +569,8 @@ export default function WeeklyLeaguePage() {
           </div>
           <ChevronDown size={20} className="shrink-0 text-stone-400 transition-transform group-open:rotate-180" />
         </summary>
-        <div className="grid gap-5 pb-5 lg:grid-cols-2">
-        <section className="rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-5 pb-5 lg:grid-cols-2">
+        <section className="min-w-0 rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft">
           <div className="flex items-center justify-between gap-4">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.18em] text-gold-ink">За что начислено</p>
@@ -602,7 +597,7 @@ export default function WeeklyLeaguePage() {
         </section>
 
         {/* Recent XP history */}
-        <section className="rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft">
+        <section className="min-w-0 rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft">
           <div className="flex items-center justify-between gap-4">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.18em] text-gold-ink">История XP</p>
@@ -619,7 +614,7 @@ export default function WeeklyLeaguePage() {
                     <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-emerald-50 text-emerald-700"><Icon size={15} /></span>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold">{ev.description}</p>
-                      <p className="text-[11px] text-stone-400">{timeAgo(ev.createdAt)}</p>
+                      <p className="text-xs text-stone-500">{timeAgo(ev.createdAt)}</p>
                     </div>
                     <strong className="shrink-0 text-sm text-emerald-700">+{ev.xp} XP</strong>
                   </div>

@@ -3,8 +3,8 @@ import { expect, test } from "@playwright/test";
 /**
  * Plan 2.7: a confirmed lesson tells the student what it gave (Points, XP, the teacher's bonus of
  * the day, the streak), how the sector moved, how the previous homework was checked, and when the
- * next lesson is. The figures are injected into the summary response, so the test does not depend
- * on which QA lesson was rewarded.
+ * next lesson is. The figures and the upcoming lessons are injected into the summary response, so the
+ * test does not depend on which QA lesson was rewarded or which lessons are scheduled.
  */
 const PASSWORD = "QaMaestro2026!";
 
@@ -35,9 +35,9 @@ test("the lesson result shows what was earned, the sector step, the homework che
       homeworkChecks: [{ topicTitle: "Переходы между аккордами", completionPercent: 70, comment: "Переходы чище, темп держи", reviewedAt: "2026-10-22T05:00:00.000Z" }],
     });
     body.data.streakWeeks = 3;
+    // The whole list is replaced: a real QA lesson nearer than 30.12 would otherwise become «Следующий урок».
     body.data.upcomingLessons = [
       { crmClassId: "NEXT-1", title: "Индивидуальный урок", date: "2026-12-30T07:00:00.000Z", startTime: "12:00", endTime: "13:00", status: "scheduled", groupName: null, teacherName: "Сидоров Владислав", roomName: "QA кабинет", topic: null, lessonGoals: null, lessonSummary: null, homework: null, nextLessonFocus: null, materials: [], attended: null },
-      ...(body.data.upcomingLessons as unknown[]),
     ];
     await route.fulfill({ response, json: body });
   });
@@ -50,13 +50,13 @@ test("the lesson result shows what was earned, the sector step, the homework che
   await expect(earned).toContainText("+100 баллов");
   await expect(earned).toContainText("+20 XP");
   await expect(earned).toContainText("бонус от преподавателя +3 XP");
-  await expect(earned).toContainText("серия 3 нед.");
+  await expect(earned).toContainText("серия 3 недели");
   await expect(earned).not.toContainText("Coin");
 
   const sector = page.getByTestId("lesson-sector-progress");
   await expect(sector).toContainText("Сектор 1 · Гитара");
   await expect(sector).toContainText("25 % → 50 %");
-  await expect(sector).toContainText("Освоено тем: 2 из 4");
+  await expect(sector).toContainText("Освоено: 2 из 4 тем");
 
   const checks = page.getByTestId("lesson-homework-checks");
   await expect(checks).toContainText("Переходы между аккордами");

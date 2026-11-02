@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { LoadingState } from "@/components/data-states";
+import { ScreenSkeleton } from "@/components/screen-skeleton";
 
 /** Decision 24.10: Coins are not shown to students until the shop opens; the old link goes home. */
 export default function RewardsPage() {
@@ -10,5 +10,5 @@ export default function RewardsPage() {
   useEffect(() => {
     router.replace("/dashboard");
   }, [router]);
-  return <LoadingState label="Открываем главную" />;
+  return <ScreenSkeleton variant="page" label="Открываем главную" />;
 }

@@ -42,8 +42,8 @@ export function RefreshAppButton({ compact = false, onBeforeRefresh }: RefreshAp
       aria-label="Обновить"
       title="Обновить"
       className={compact
-        ? "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-stone-700 transition hover:bg-stone-100 disabled:opacity-60"
-        : "inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-stone-200 bg-white px-3 text-xs font-bold text-stone-600 transition hover:border-gold/30 hover:bg-amber-50 hover:text-amber-900 disabled:opacity-60 sm:rounded-full sm:px-4"}
+        ? "flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-stone-700 transition hover:bg-stone-100 disabled:opacity-60"
+        : "inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-stone-200 bg-white px-3 text-xs font-bold text-stone-600 transition hover:border-gold/30 hover:bg-amber-50 hover:text-amber-900 disabled:opacity-60 sm:rounded-full sm:px-4"}
     >
       <RefreshCw size={compact ? 16 : 14} className={refreshing ? "animate-spin" : ""} />
       <span className={compact ? "" : "hidden sm:inline"}>{refreshing ? "Обновляем…" : "Обновить"}</span>

@@ -13,13 +13,15 @@ import {
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { useAuth } from "@/components/auth-provider";
-import { ErrorState, LoadingState } from "@/components/data-states";
+import { ScreenError } from "@/components/app-error-screen";
 import { LevelBadge, LevelProgressDialog } from "@/components/level-summary";
 import { ProgressBar } from "@/components/progress-bar";
+import { ScreenSkeleton } from "@/components/screen-skeleton";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { StudentBanners } from "@/components/student-banners";
 import { StudentTodayCard } from "@/components/student-today-card";
 import { invalidateStudentHome, loadStudentHome } from "@/lib/student-home";
+import { formatCount, formatOutOf, pluralize } from "@/lib/plural";
 import { weeklyLeagueApi } from "@/lib/weekly-league-api";
 import type { SchoolOfflineLesson } from "@/types/school-offline";
 import type { StudentHomeMonthlyPlan, StudentMonthlyPlansResponse } from "@/types/api";
@@ -41,11 +43,11 @@ export default function DashboardPage() {
   const [levelDialogOpen, setLevelDialogOpen] = useState(false);
   // Plan 2.1: «Сейчас» is one read of the student's home; the header shares it.
   const resource = useApiResource(() => loadStudentHome(), []);
-  if (resource.loading) {
-    return <LoadingState label="Собираем вашу учебную главную" />;
+  if (resource.loading && !resource.data) {
+    return <ScreenSkeleton variant="home" label="Собираем твою учебную главную" />;
   }
-  if (resource.error || !resource.data) {
-    return <ErrorState message={resource.error ?? "Не удалось загрузить главную"} retry={() => { invalidateStudentHome(); return resource.reload(); }} />;
+  if (!resource.data) {
+    return <ScreenError message={resource.error} code={resource.errorCode} retry={() => { invalidateStudentHome(); return resource.reload(); }} />;
   }
 
   const data = resource.data;
@@ -59,8 +61,11 @@ export default function DashboardPage() {
   const visibleUpcoming = upcoming
     .filter((lesson) => lesson.crmClassId !== today.nextLesson?.crmClassId)
     .slice(0, 3);
+  const scheduleIssue = data.schoolStatus === "unavailable" || data.schoolStatus === "failed" ? data.schoolStatus : null;
+  // «Пока всё тихо» says there are no lessons; with the schedule unread that is not known.
   const hasLearningData = Boolean(
-    today.nextLesson
+    scheduleIssue
+    || today.nextLesson
     || plans.length
     || data.dashboard.currentCourse
     || actionTasks.length,
@@ -70,7 +75,7 @@ export default function DashboardPage() {
     <div className="mx-auto max-w-[1400px]">
       <header className="mb-4 flex flex-wrap items-center justify-between gap-3 sm:mb-5 sm:gap-4">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gold-ink sm:text-xs">Твоя учебная неделя</p>
+          <p className="text-xs font-black uppercase tracking-wide text-gold-ink">Твоя учебная неделя</p>
           <h1 className="font-display mt-1.5 text-[32px] leading-tight sm:mt-2 sm:text-4xl">
             Привет, {user?.firstName || "ученик"}!
           </h1>
@@ -87,7 +92,7 @@ export default function DashboardPage() {
               testId="dashboard-level-chip"
             />
           ) : null}
-          <MetricChip icon={Star} value={data.dashboard.points.toLocaleString("ru-RU")} label="баллов" onClick={data.dashboard.level ? () => setLevelDialogOpen(true) : undefined} testId="dashboard-points-chip" />
+          <MetricChip icon={Star} value={data.dashboard.points.toLocaleString("ru-RU")} label={pluralize(data.dashboard.points, ["балл", "балла", "баллов"])} onClick={data.dashboard.level ? () => setLevelDialogOpen(true) : undefined} testId="dashboard-points-chip" />
         </div>
       </header>
 
@@ -97,13 +102,13 @@ export default function DashboardPage() {
 
       <StudentBanners banners={data.banners ?? []} />
 
-      <div className="grid items-stretch gap-5 xl:grid-cols-[minmax(0,1.75fr)_minmax(280px,0.65fr)]">
-        <div className="order-1"><StudentTodayCard today={today} streakWeeks={data.streakWeeks ?? null} practice={data.practice ?? null} /></div>
-        <div className="order-3 xl:order-2"><LeagueMiniWidget /></div>
+      <div className="grid grid-cols-[minmax(0,1fr)] items-stretch gap-5 xl:grid-cols-[minmax(0,1.75fr)_minmax(280px,0.65fr)]">
+        <div className="order-1 min-w-0"><StudentTodayCard today={today} streakWeeks={data.streakWeeks ?? null} practice={data.practice ?? null} scheduleIssue={scheduleIssue} /></div>
+        <div className="order-3 min-w-0 xl:order-2"><LeagueMiniWidget /></div>
       </div>
 
       {(plans.length || data.tasks || visibleUpcoming.length) ? (
-        <div className={`mt-5 grid items-start gap-5 ${visibleUpcoming.length ? "lg:grid-cols-2" : ""}`}>
+        <div className={`mt-5 grid grid-cols-[minmax(0,1fr)] items-start gap-5 ${visibleUpcoming.length ? "lg:grid-cols-2" : ""}`}>
           <LearningSummary
             actionCount={data.tasks?.counts.actionRequired ?? null}
             plans={plans}
@@ -117,10 +122,10 @@ export default function DashboardPage() {
         <section className="mt-6 rounded-[26px] border border-stone-200 bg-white p-5 shadow-soft sm:p-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-stone-400">Самостоятельный курс</p>
+              <p className="text-xs font-black uppercase tracking-wide text-stone-500">Самостоятельный курс</p>
               <h2 className="font-display mt-2 text-2xl">{data.dashboard.currentCourse.title}</h2>
               <p className="mt-2 text-sm text-stone-500">
-                {data.dashboard.completedLessonsCount} из {data.dashboard.totalLessonsCount} уроков · {data.dashboard.progressPercent}%
+                {formatOutOf(data.dashboard.completedLessonsCount, data.dashboard.totalLessonsCount, ["урока", "уроков", "уроков"])} · {data.dashboard.progressPercent}%
               </p>
             </div>
             <Link
@@ -162,13 +167,13 @@ function LearningSummary({
   planProgress: StudentMonthlyPlansResponse["aggregateProgress"];
 }) {
   return (
-    <section className="rounded-[28px] border border-stone-200 bg-white p-6 shadow-soft sm:p-7" data-testid="dashboard-learning-summary">
-      <p className="text-xs font-black uppercase tracking-[0.2em] text-gold-ink">Обучение</p>
+    <section className="min-w-0 rounded-[28px] border border-stone-200 bg-white p-6 shadow-soft sm:p-7" data-testid="dashboard-learning-summary">
+      <p className="text-xs font-black uppercase tracking-wide text-gold-ink">Обучение</p>
       <h2 className="font-display mt-2 text-3xl leading-tight text-ink">
         {actionCount == null
           ? "Задания и сектор"
           : actionCount > 0
-            ? `${actionCount} ${actionCount === 1 ? "задание ждёт" : actionCount < 5 ? "задания ждут" : "заданий ждут"}`
+            ? `${formatCount(actionCount, ["задание", "задания", "заданий"])} ${pluralize(actionCount, ["ждёт", "ждут", "ждут"])}`
             : "Все задания сделаны"}
       </h2>
       {plans.length ? (
@@ -177,7 +182,7 @@ function LearningSummary({
             {plans.length === 1 ? sectorTitle(plans[0]!, "student") : "Мои сектора"} · {planProgress.percent}%
           </p>
           <div className="mt-2"><ProgressBar value={planProgress.percent} /></div>
-          <p className="mt-2 text-xs font-semibold text-stone-500">{planProgress.completed} из {planProgress.total} тем закрыто</p>
+          <p className="mt-2 text-xs font-semibold text-stone-500">{formatOutOf(planProgress.completed, planProgress.total, ["темы", "тем", "тем"])} закрыто</p>
         </div>
       ) : null}
       <div className="mt-5 flex flex-wrap gap-2">
@@ -217,7 +222,7 @@ function MetricChip({
   const content = (
     <>
       {leading ?? (Icon ? <Icon size={17} className="shrink-0 text-gold-ink" /> : null)}
-      <span className="min-w-0 text-[10px] text-stone-500 sm:text-xs">
+      <span className="min-w-0 text-xs text-stone-500">
         <strong className="mr-1 text-sm text-ink sm:text-base">{value}</strong>
         <span className="break-words">{label}</span>
       </span>
@@ -249,7 +254,7 @@ function LeagueMiniWidget() {
             <Trophy size={18} />
           </span>
           <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-gold-ink">Недельная лига</p>
+            <p className="text-xs font-black uppercase tracking-wide text-gold-ink">Недельная лига</p>
             <h3 className="font-display text-base sm:text-lg">Лидеры недели</h3>
           </div>
         </div>
@@ -257,7 +262,7 @@ function LeagueMiniWidget() {
           href="/league"
           aria-label="Открыть таблицу недельной лиги"
           title="Таблица лиги"
-          className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/5 text-white/80 transition hover:bg-white/10 hover:text-white"
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/5 text-white/80 transition hover:bg-white/10 hover:text-white"
         >
           <ChevronRight size={18} />
         </Link>
@@ -322,7 +327,7 @@ function UpcomingLessons({ lessons }: { lessons: SchoolOfflineLesson[] }) {
           href="/school-lessons?tab=schedule"
           aria-label="Открыть все уроки"
           title="Все уроки"
-          className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-stone-200 text-stone-500 transition hover:border-gold/40 hover:text-gold-ink"
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-stone-200 text-stone-500 transition hover:border-gold/40 hover:text-gold-ink"
         >
           <ChevronRight size={18} />
         </Link>

@@ -61,5 +61,5 @@ test("a notification link to a lesson older than the history says so", async ({ 
     window.localStorage.setItem("maestro_auth_user", JSON.stringify(user));
   }, session);
   await page.goto("/school-lessons?tab=history&lesson=QA-CLASS-THAT-FELL-OUT");
-  await expect(page.getByTestId("history-lesson-missing")).toContainText("старше последних");
+  await expect(page.getByTestId("history-lesson-missing")).toContainText("а этот урок старше или был перенесён");
 });

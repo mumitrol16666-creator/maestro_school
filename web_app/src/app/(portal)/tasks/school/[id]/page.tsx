@@ -1,16 +1,16 @@
 "use client";
 
-import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect } from "react";
 import { useAuth } from "@/components/auth-provider";
-import { ErrorState, LoadingState } from "@/components/data-states";
+import { ScreenError } from "@/components/app-error-screen";
 import { LearningHomeworkCard } from "@/components/learning-homework-card";
 import { LegacySchoolHomework } from "@/components/student-school-homework-legacy";
+import { ScreenSkeleton } from "@/components/screen-skeleton";
 import { useApiResource } from "@/hooks/use-api-resource";
-import { api } from "@/lib/api-client";
 import { learningHomeworkApi } from "@/lib/learning-homework-api";
 import { schoolHomeworkReviewState } from "@/lib/school-homework-state";
+import { loadStudentOfflineSummary } from "@/lib/school-offline-summary";
 import { markSchoolAlertsSeen } from "@/lib/student-school-alerts";
 
 // The task list owns discovery; this route owns the assignment, materials and submission.
@@ -21,7 +21,7 @@ export default function SchoolTaskPage() {
     () => learningHomeworkApi.studentAssignments(),
     [],
   );
-  const school = useApiResource(() => api.studentOfflineSummary(), []);
+  const school = useApiResource(() => loadStudentOfflineSummary(), []);
   const assignments = homework.data?.assignments ?? [];
   const exact = assignments.find((item) => item.id === id);
   const related = exact
@@ -40,17 +40,11 @@ export default function SchoolTaskPage() {
 
   return (
     <div className="mx-auto max-w-3xl">
-      <Link
-        href="/tasks?source=offline"
-        className="mb-3 inline-flex min-h-11 items-center rounded-lg text-sm font-semibold text-stone-600 focus-visible:ring-2 focus-visible:ring-gold"
-      >
-        ← Все задания
-      </Link>
-      <h1 className="mb-4 font-display text-3xl text-ink">Домашнее задание</h1>
-      {homework.loading ? (
-        <LoadingState label="Загружаем задание" />
-      ) : homework.error ? (
-        <ErrorState message={homework.error} retry={homework.reload} />
+      <h1 className="mb-4 text-2xl font-bold">Домашнее задание</h1>
+      {homework.loading && !homework.data ? (
+        <ScreenSkeleton variant="detail" label="Загружаем задание" />
+      ) : homework.error && !homework.data ? (
+        <ScreenError message={homework.error} code={homework.errorCode} retry={homework.reload} />
       ) : related.length ? (
         <div className="space-y-3">
           {related.map((assignment) => (
@@ -62,10 +56,10 @@ export default function SchoolTaskPage() {
             />
           ))}
         </div>
-      ) : school.loading ? (
-        <LoadingState label="Загружаем задание из урока" />
-      ) : school.error ? (
-        <ErrorState message={school.error} retry={school.reload} />
+      ) : school.loading && !school.data ? (
+        <ScreenSkeleton variant="detail" label="Загружаем задание из урока" />
+      ) : school.error && !school.data ? (
+        <ScreenError message={school.error} code={school.errorCode} retry={school.reload} />
       ) : legacy ? (
         <LegacySchoolHomework
           key={legacy.crmClassId}

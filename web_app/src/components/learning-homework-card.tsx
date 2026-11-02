@@ -105,14 +105,14 @@ function HomeworkMaterialAction({
         {material.title || "Материал"}
       </span>
       {material.sizeBytes ? (
-        <span className="shrink-0 text-[10px] text-stone-400">
+        <span className="shrink-0 text-xs text-stone-500">
           {formatBytes(material.sizeBytes)}
         </span>
       ) : null}
     </>
   );
   const className =
-    "inline-flex min-h-9 max-w-full items-center gap-1.5 rounded-xl border border-stone-200 bg-stone-50 px-3 text-xs font-bold text-ink hover:border-amber-300";
+    "inline-flex min-h-11 max-w-full items-center gap-1.5 rounded-xl border border-stone-200 bg-stone-50 px-3 text-xs font-bold text-ink hover:border-amber-300";
   if (material.privateFile) {
     return (
       <button
@@ -232,7 +232,7 @@ export function LearningHomeworkCard({
           <div className="flex min-w-0 items-start gap-2">
             <BookOpen size={17} className="mt-1 shrink-0 text-gold-ink" />
             <div className="min-w-0">
-              <p className="text-[10px] font-black uppercase text-stone-400">
+              <p className="text-xs font-black uppercase tracking-wide text-stone-500">
                 {assignment.topic.direction.title} ·{" "}
                 {assignment.topic.scope === "group"
                   ? "Группа"
@@ -329,7 +329,7 @@ export function LearningHomeworkCard({
               : "border-emerald-100 bg-emerald-50 text-emerald-950"
           }`}
         >
-          <p className="text-[10px] font-black uppercase">
+          <p className="text-xs font-black uppercase tracking-wide">
             Комментарий преподавателя
           </p>
           <p className="mt-1 whitespace-pre-wrap break-words leading-6">

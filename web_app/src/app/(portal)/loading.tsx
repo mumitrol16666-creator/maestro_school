@@ -1,5 +1,5 @@
-import { LoadingState } from "@/components/data-states";
+import { ScreenSkeleton } from "@/components/screen-skeleton";
 
 export default function PortalLoading() {
-  return <LoadingState label="Открываем раздел" />;
+  return <ScreenSkeleton label="Открываем раздел" />;
 }

@@ -7,9 +7,10 @@ import { FormEvent, useEffect, useState, type ChangeEvent } from "react";
 import { StudentMemberships } from "@/components/student-memberships";
 import { AchievementsWall } from "@/components/achievements-wall";
 import { useAuth } from "@/components/auth-provider";
-import { ApiError } from "@/lib/api-client";
-import { ErrorState, LoadingState } from "@/components/data-states";
+import { ScreenError } from "@/components/app-error-screen";
 import { PageHeader } from "@/components/page-header";
+import { ScreenSkeleton } from "@/components/screen-skeleton";
+import { toast } from "@/components/toast";
 import { LevelSummary } from "@/components/level-summary";
 import { PwaInstallCard } from "@/components/pwa-install-card";
 import { PushNotificationsCard } from "@/components/push-notifications-card";
@@ -18,9 +19,12 @@ import { AndroidAppDownloadCard } from "@/components/android-app-download";
 import { ImprovementSuggestionCard } from "@/components/improvement-suggestion-card";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { api } from "@/lib/api-client";
+import { errorToastText } from "@/lib/error-text";
 import { formatFio, initialsFromName } from "@/lib/name";
 import { isStudentRole, roleLabel, settingsPathForRole } from "@/lib/role-labels";
+import { pluralize } from "@/lib/plural";
 import { familyApi } from "@/lib/family-api";
+import { loadStudentOfflineSummary } from "@/lib/school-offline-summary";
 import type { ParentVisibility } from "@/types/family";
 
 export default function SettingsPage() {
@@ -32,7 +36,7 @@ export default function SettingsPage() {
     const [directionsResult, progressResult, schoolResult, economyResult, achievementsResult] = await Promise.allSettled([
       api.directions(),
       api.progress(),
-      api.studentOfflineSummary(),
+      loadStudentOfflineSummary(),
       api.studentEconomyProfile(),
       api.achievements(),
     ]);
@@ -58,11 +62,11 @@ export default function SettingsPage() {
   }, [router, user]);
 
   if (!user || !isStudentRole(user.role)) {
-    return <LoadingState label="Открываем профиль" />;
+    return <ScreenSkeleton variant="profile" label="Открываем профиль" />;
   }
 
-  if (resource.loading) return <LoadingState label="Загружаем профиль" />;
-  if (resource.error) return <ErrorState message={resource.error} retry={resource.reload} />;
+  if (resource.loading && !resource.data) return <ScreenSkeleton variant="profile" label="Загружаем профиль" />;
+  if (resource.error && !resource.data) return <ScreenError message={resource.error} code={resource.errorCode} retry={resource.reload} />;
 
   const profile = { ...user, ...resource.data?.profile };
   const fullName = formatFio(profile) || "Пользователь Maestro";
@@ -205,10 +209,10 @@ export default function SettingsPage() {
             <>
               <AndroidAppDownloadCard />
               <PwaInstallCard />
-              <PushNotificationsCard />
+              <PushNotificationsCard confirm="toast" />
           <PracticeReminderCard />
               <PasswordChangeCard />
-              <ImprovementSuggestionCard />
+              <ImprovementSuggestionCard confirm="toast" />
             </>
           ) : null}
         </section>
@@ -229,14 +233,13 @@ function ParentVisibilityRequestCard() {
   const [requested, setRequested] = useState<ParentVisibility | null>(null);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (resource.data) setRequested(resource.data.pendingRequest?.requested ?? resource.data.policy);
   }, [resource.data]);
 
-  if (resource.loading) return <LoadingState label="Загружаем семейный доступ" />;
-  if (resource.error) return <ErrorState message={resource.error} retry={resource.reload} />;
+  if (resource.loading && !resource.data) return <ScreenSkeleton variant="section" label="Загружаем семейный доступ" />;
+  if (resource.error && !resource.data) return <ScreenError message={resource.error} code={resource.errorCode} retry={resource.reload} />;
   if (!requested) return null;
 
   const pending = resource.data?.pendingRequest;
@@ -246,14 +249,18 @@ function ParentVisibilityRequestCard() {
   async function submit() {
     if (!requested || pending) return;
     setBusy(true);
-    setMessage(null);
     try {
       await familyApi.requestVisibility(requested, note);
       setNote("");
-      setMessage("Запрос отправлен администратору");
-      await resource.reload();
+      toast.success("Запрос отправлен администратору");
+      try {
+        resource.setData(await familyApi.myVisibility());
+      } catch {
+        // The request is sent, but the screen could not be re-read: say so instead of keeping the old state silently.
+        toast.error("Нет связи. Обнови экран, когда появится интернет");
+      }
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Не удалось отправить запрос");
+      toast.error(errorToastText(error, "Не получилось отправить запрос. Попробуй ещё раз"));
     } finally {
       setBusy(false);
     }
@@ -302,7 +309,6 @@ function ParentVisibilityRequestCard() {
           <button type="button" disabled={busy || unchanged} onClick={() => void submit()} className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-ink px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-gold hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold disabled:opacity-50 sm:w-fit"><Send size={16} />{unchanged ? "Изменений нет" : "Отправить запрос"}</button>
         </div>
       )}
-      {message ? <p aria-live="polite" className="mt-3 text-sm font-semibold text-stone-600">{message}</p> : null}
     </section>
   );
 }
@@ -320,7 +326,7 @@ function EconomyProfileSummary({
           <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold-ink">Активность</p>
           <h3 className="font-display mt-2 text-3xl">Серия и медали</h3>
         </div>
-        <Link href="/league" className="text-sm font-bold text-stone-600 hover:text-gold-ink">Открыть лигу</Link>
+        <Link href="/league" className="inline-flex min-h-11 items-center text-sm font-bold text-stone-600 hover:text-gold-ink">Открыть лигу</Link>
       </div>
       <div className="mt-6 grid divide-y divide-stone-200 border-y border-stone-200 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
         <div className="py-4 sm:px-4 sm:first:pl-0">
@@ -343,7 +349,7 @@ function EconomyProfileSummary({
         {economy.milestones.map((milestone) => (
           <div key={milestone.weeks} className={`min-w-0 border-t-2 pt-3 text-center ${milestone.earned ? "border-gold text-ink" : "border-stone-200 text-stone-400"}`}>
             <p className="font-display text-xl">{milestone.weeks}</p>
-            <p className="mt-1 truncate text-[10px] font-bold">недель</p>
+            <p className="mt-1 truncate text-xs font-bold">{pluralize(milestone.weeks, ["неделя", "недели", "недель"])}</p>
           </div>
         ))}
       </div>
@@ -362,7 +368,7 @@ function ProfileAchievements({
   const totalCount = achievements.meta?.totalCount ?? achievements.data.length;
 
   return (
-    <section id="achievements" className="scroll-mt-24 rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8" data-testid="profile-achievements">
+    <section id="achievements" className="scroll-mt-32 rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8" data-testid="profile-achievements">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold-ink">Учебный путь</p>
@@ -373,7 +379,7 @@ function ProfileAchievements({
           <button
             type="button"
             onClick={() => setShowAll((current) => !current)}
-            className="min-h-10 text-sm font-bold text-stone-600 hover:text-gold-ink"
+            className="min-h-11 px-2 text-sm font-bold text-stone-600 hover:text-gold-ink"
             aria-expanded={showAll}
           >
             {showAll ? "Свернуть" : "Показать все"}
@@ -418,9 +424,6 @@ function ProfileEditCard({
   const [phone, setPhone] = useState(profile.phone ?? "");
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
-  const [avatarSyncNotice, setAvatarSyncNotice] = useState<string | null>(null);
 
   useEffect(() => {
     setFirstName(profile.firstName ?? "");
@@ -432,16 +435,15 @@ function ProfileEditCard({
   async function handleAvatarChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
-    setError(null);
-    setSuccess(false);
-    setAvatarSyncNotice(null);
 
     if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
-      setError("Загрузите JPG, PNG или WebP");
+      toast.error("Подойдёт фото JPG, PNG или WebP");
+      event.target.value = "";
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      setError("Фото должно быть до 5 МБ");
+      toast.error("Фото должно быть до 5 МБ");
+      event.target.value = "";
       return;
     }
 
@@ -453,16 +455,11 @@ function ProfileEditCard({
         base64: await fileToBase64(file),
       });
       await onSaved();
-      setSuccess(true);
-      if (updated.avatarSyncStatus === "failed") {
-        setAvatarSyncNotice("Фото сохранено. В школьном профиле оно обновится позже.");
-      } else if (updated.avatarSyncStatus === "not_linked") {
-        setAvatarSyncNotice("Фото профиля сохранено.");
-      } else {
-        setAvatarSyncNotice("Фото профиля обновлено.");
-      }
+      toast.success(updated.avatarSyncStatus === "failed"
+        ? "Фото сохранено. В школьном профиле обновится позже"
+        : "Фото сохранено");
     } catch (reason) {
-      setError(reason instanceof ApiError ? reason.message : "Не удалось загрузить фото");
+      toast.error(errorToastText(reason, "Не получилось загрузить фото. Попробуй ещё раз"));
     } finally {
       setUploadingAvatar(false);
       event.target.value = "";
@@ -471,8 +468,6 @@ function ProfileEditCard({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setError(null);
-    setSuccess(false);
     setSaving(true);
     try {
       await api.updateProfile({
@@ -482,9 +477,9 @@ function ProfileEditCard({
         phone,
       });
       await onSaved();
-      setSuccess(true);
+      toast.success("Профиль сохранён");
     } catch (reason) {
-      setError(reason instanceof ApiError ? reason.message : "Не удалось сохранить профиль");
+      toast.error(errorToastText(reason, "Не получилось сохранить профиль. Попробуй ещё раз"));
     } finally {
       setSaving(false);
     }
@@ -520,9 +515,6 @@ function ProfileEditCard({
         <p className="-mt-2 text-xs leading-5 text-stone-400">
           Эти данные используются в приложении. Фото также обновится в основной карточке ученика.
         </p>
-        {error && <p role="alert" className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</p>}
-        {avatarSyncNotice && <p aria-live="polite" className="rounded-2xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">{avatarSyncNotice}</p>}
-        {success && <p role="status" className="rounded-2xl bg-green-50 px-4 py-3 text-sm font-semibold text-green-700">Профиль сохранён</p>}
         <button
           disabled={saving || uploadingAvatar}
           className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-ink px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-gold hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold disabled:opacity-60 sm:w-fit"
@@ -576,12 +568,10 @@ function PasswordChangeCard() {
   const [showNew, setShowNew] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
-    setSuccess(false);
 
     if (newPassword.length < 8) {
       setError("Новый пароль должен содержать минимум 8 символов");
@@ -595,12 +585,12 @@ function PasswordChangeCard() {
     setSubmitting(true);
     try {
       await api.changePassword(currentPassword, newPassword);
-      setSuccess(true);
+      toast.success("Пароль изменён");
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
     } catch (reason) {
-      setError(reason instanceof ApiError ? reason.message : "Не удалось сменить пароль");
+      toast.error(errorToastText(reason, "Не получилось сменить пароль. Попробуй ещё раз"));
     } finally {
       setSubmitting(false);
     }
@@ -625,7 +615,7 @@ function PasswordChangeCard() {
               onChange={(event) => setCurrentPassword(event.target.value)}
               className="min-w-0 flex-1 rounded-2xl px-4 py-3 text-sm outline-none"
             />
-            <button type="button" onClick={() => setShowCurrent((c) => !c)} aria-label={showCurrent ? "Скрыть пароль" : "Показать пароль"} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-stone-400 transition-colors hover:bg-stone-100 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold">
+            <button type="button" onClick={() => setShowCurrent((c) => !c)} aria-label={showCurrent ? "Скрыть пароль" : "Показать пароль"} className="grid h-11 w-11 shrink-0 place-items-center rounded-xl text-stone-500 transition-colors hover:bg-stone-100 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold">
               {showCurrent ? <EyeOff size={17} /> : <Eye size={17} />}
             </button>
           </span>
@@ -644,7 +634,7 @@ function PasswordChangeCard() {
               onChange={(event) => setNewPassword(event.target.value)}
               className="min-w-0 flex-1 rounded-2xl px-4 py-3 text-sm outline-none"
             />
-            <button type="button" onClick={() => setShowNew((c) => !c)} aria-label={showNew ? "Скрыть пароль" : "Показать пароль"} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-stone-400 transition-colors hover:bg-stone-100 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold">
+            <button type="button" onClick={() => setShowNew((c) => !c)} aria-label={showNew ? "Скрыть пароль" : "Показать пароль"} className="grid h-11 w-11 shrink-0 place-items-center rounded-xl text-stone-500 transition-colors hover:bg-stone-100 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold">
               {showNew ? <EyeOff size={17} /> : <Eye size={17} />}
             </button>
           </span>
@@ -665,7 +655,6 @@ function PasswordChangeCard() {
           />
         </label>
         {error && <p role="alert" className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</p>}
-        {success && <p role="status" className="rounded-2xl bg-green-50 px-4 py-3 text-sm font-semibold text-green-700">Пароль успешно изменён</p>}
         <button
           disabled={submitting}
           className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-ink px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-gold hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold disabled:opacity-60"

@@ -3,6 +3,7 @@
 import { ArrowRight, CalendarDays, Flame, MonitorPlay, School } from "lucide-react";
 import Link from "next/link";
 import { PracticeCheckin } from "@/components/practice-checkin";
+import { formatCount } from "@/lib/plural";
 import type { ApiStudentHome } from "@/types/api";
 
 /**
@@ -18,7 +19,7 @@ function when(lesson: NonNullable<ApiStudentHome["today"]["nextLesson"]>) {
   return `${label.charAt(0).toUpperCase()}${label.slice(1)} в ${lesson.startTime}`;
 }
 
-export function StudentTodayCard({ today, streakWeeks, practice = null }: { today: ApiStudentHome["today"]; streakWeeks: number | null; practice?: ApiStudentHome["practice"] }) {
+export function StudentTodayCard({ today, streakWeeks, practice = null, scheduleIssue = null }: { today: ApiStudentHome["today"]; streakWeeks: number | null; practice?: ApiStudentHome["practice"]; scheduleIssue?: "unavailable" | "failed" | null }) {
   const lesson = today.nextLesson;
   const [first, ...rest] = today.tasks;
   const LessonIcon = lesson?.deliveryFormat === "online" ? MonitorPlay : School;
@@ -31,10 +32,10 @@ export function StudentTodayCard({ today, streakWeeks, practice = null }: { toda
   return (
     <section className="rounded-[24px] border border-white/10 bg-charcoal p-5 text-white shadow-soft sm:p-6" data-testid="student-today">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-gold-ink sm:text-xs">Сегодня</p>
+        <p className="text-xs font-black uppercase tracking-wide text-gold-ink">Сегодня</p>
         {streakWeeks ? (
-          <span className="inline-flex items-center gap-1 rounded-md bg-orange-400/20 px-2 py-0.5 text-[11px] font-black text-orange-100" data-testid="today-streak">
-            <Flame size={12} /> {streakWeeks} нед. подряд
+          <span className="inline-flex items-center gap-1 rounded-md bg-orange-400/20 px-2 py-0.5 text-xs font-black text-orange-100" data-testid="today-streak">
+            <Flame size={12} /> {formatCount(streakWeeks, ["неделя", "недели", "недель"])} подряд
           </span>
         ) : null}
       </div>
@@ -53,8 +54,15 @@ export function StudentTodayCard({ today, streakWeeks, practice = null }: { toda
         <div className="mt-3 flex items-start gap-3" data-testid="today-lesson">
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/10 text-gold-ink"><CalendarDays size={20} /></span>
           <div>
-            <h2 className="font-display text-2xl leading-tight sm:text-[28px]">Ближайший урок пока не назначен</h2>
-            <p className="mt-1 text-sm text-white/70">Как только школа поставит урок, он появится здесь.</p>
+            {/* В-18: the school read failed, so an empty schedule says nothing about lessons. */}
+            <h2 className="font-display text-2xl leading-tight sm:text-[28px]">{scheduleIssue ? "Расписание не загрузилось" : "Ближайший урок пока не назначен"}</h2>
+            <p className="mt-1 text-sm text-white/70">
+              {scheduleIssue === "unavailable"
+                ? "Школа сейчас не отвечает. Ближайший урок появится здесь, когда связь вернётся."
+                : scheduleIssue === "failed"
+                  ? "Открой «Расписание» позже. Если так и останется, напиши в школу."
+                  : "Как только школа поставит урок, он появится здесь."}
+            </p>
           </div>
         </div>
       )}
@@ -62,7 +70,7 @@ export function StudentTodayCard({ today, streakWeeks, practice = null }: { toda
       <div className="mt-4 rounded-2xl bg-white/[0.06] p-4" data-testid="today-tasks">
         {first ? (
           <>
-            <p className="text-[11px] font-black uppercase tracking-wider text-white/50">{lesson ? "К уроку" : "Задание"}</p>
+            <p className="text-xs font-black uppercase tracking-wide text-white/60">{lesson ? "К уроку" : "Задание"}</p>
             <p className="mt-1 break-words text-base font-bold">{first.title}</p>
             {first.descriptionPreview ? <p className="mt-1 line-clamp-2 text-sm text-white/70">{first.descriptionPreview}</p> : null}
             {rest.length || today.tasksTotal > today.tasks.length ? (

@@ -54,8 +54,9 @@ body {
     @apply min-h-11 w-full rounded-xl border border-stone-300 bg-paper px-4 py-3 text-sm text-ink transition-colors placeholder:text-stone-500 focus:border-gold;
   }
   .brand-card { @apply rounded-2xl border border-stone-200 bg-paper shadow-soft; }
+  /* A 44 px link parked above the top edge; a keyboard focus slides it in. */
   .brand-skip-link {
-    @apply sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[120] focus:rounded-xl focus:bg-charcoal focus:px-4 focus:py-3 focus:text-white;
+    @apply fixed left-4 top-4 z-[120] inline-flex min-h-11 -translate-y-[150%] items-center rounded-xl bg-charcoal px-4 text-sm font-bold text-white transition-transform focus:translate-y-0;
   }
 }
 
@@ -438,4 +439,25 @@ button.card-hover:focus-visible {
     inset: 0;
     width: 100%;
   }
+}
+
+/* В-15: placeholders of the cards while a student screen loads. */
+.maestro-skeleton {
+  background: #e2ddd2;
+  animation: maestro-skeleton-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes maestro-skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+/* В-22: the confirmation slides up above the bottom navigation. */
+.maestro-toast {
+  animation: maestro-toast-in 160ms ease-out;
+}
+
+@keyframes maestro-toast-in {
+  from { opacity: 0; transform: translate3d(0, 8px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
 }

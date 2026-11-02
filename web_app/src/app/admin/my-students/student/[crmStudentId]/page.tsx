@@ -6,7 +6,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { StudentWorkspaceCard } from "@/components/student-workspace-card";
 import type { WorkspaceTab } from "@/types/teacher-student-workspace";
 
-const tabKeys: WorkspaceTab[] = ["now", "activity", "dynamics", "tasks", "dialog"];
+const tabKeys: WorkspaceTab[] = ["now", "activity", "dynamics", "tasks", "history", "sectors", "dialog"];
 
 export default function TeacherStudentPage() {
   const { crmStudentId } = useParams<{ crmStudentId: string }>();

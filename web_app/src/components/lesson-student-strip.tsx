@@ -1,7 +1,8 @@
 "use client";
 
 import { BarChart3, CalendarCheck2, Flame, GraduationCap, History, Trophy } from "lucide-react";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { LevelBadge } from "@/components/level-summary";
 import type { ProductLevelEmblem, ProductLevelTone } from "@/types/api";
 import type { LessonStudentOverview } from "@/types/teacher-offline";
@@ -62,6 +63,7 @@ export function LessonStudentStrip({
   compact: boolean;
   onOpenStudent: (crmStudentId: string) => void;
 }) {
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
   if (loading && !students.length) {
     return <div className="mb-5 h-24 animate-pulse rounded-[24px] border border-stone-200 bg-white" aria-label="Загружаем показатели ученика" />;
   }
@@ -71,6 +73,46 @@ export function LessonStudentStrip({
       {students.map((student) => {
         const level = student.level;
         const attendance = student.attendance;
+        // 01.11 (answer 7): in a lesson with several students one line per student; the rest opens.
+        const expanded = !compact || expandedIds.has(student.crmStudentId);
+        if (compact && !expanded) {
+          return (
+            <article key={student.crmStudentId} className="rounded-[24px] border border-stone-200 bg-paper p-3 shadow-sm" data-testid="lesson-student-strip-item">
+              <div className="flex items-center gap-3">
+                {level ? (
+                  <LevelBadge size="small" level={{
+                    level: level.level, code: level.code, title: level.title, minPoints: level.minPoints,
+                    tone: level.tone as ProductLevelTone, emblem: level.emblem as ProductLevelEmblem,
+                  }} />
+                ) : null}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-display text-lg text-ink">{student.name}</p>
+                  <p className="truncate text-xs font-semibold text-stone-500" data-testid="strip-row-summary">
+                    {student.sector ? `Сектор ${student.sector.sequence} · ${student.sector.percent} %` : "Сектор не открыт"}
+                    {attendance && attendance.total ? ` · посещения ${attendance.attended} из ${attendance.total}` : ""}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onOpenStudent(student.crmStudentId)}
+                  className="hidden min-h-10 items-center gap-2 rounded-xl bg-ink px-3 text-xs font-bold text-white hover:bg-stone-800 sm:inline-flex"
+                  aria-label={`Статистика ученика: ${student.name}`}
+                >
+                  <BarChart3 size={14} /> Статистика
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setExpandedIds((current) => new Set(current).add(student.crmStudentId))}
+                  className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-stone-200 bg-white text-stone-600 hover:bg-stone-100"
+                  aria-expanded={false}
+                  aria-label={`Подробнее: ${student.name}`}
+                >
+                  <ChevronDown size={18} />
+                </button>
+              </div>
+            </article>
+          );
+        }
         return (
           <article key={student.crmStudentId} className={`rounded-[24px] border border-stone-200 bg-paper ${compact ? "p-3" : "p-4"} shadow-sm`} data-testid="lesson-student-strip-item">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -88,14 +130,27 @@ export function LessonStudentStrip({
                   </p>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => onOpenStudent(student.crmStudentId)}
-                className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-ink px-4 text-sm font-bold text-white hover:bg-stone-800"
-                aria-label={`Статистика ученика: ${student.name}`}
-              >
-                <BarChart3 size={16} /> Статистика ученика
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => onOpenStudent(student.crmStudentId)}
+                  className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-ink px-4 text-sm font-bold text-white hover:bg-stone-800"
+                  aria-label={`Статистика ученика: ${student.name}`}
+                >
+                  <BarChart3 size={16} /> Статистика ученика
+                </button>
+                {compact ? (
+                  <button
+                    type="button"
+                    onClick={() => setExpandedIds((current) => { const next = new Set(current); next.delete(student.crmStudentId); return next; })}
+                    className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-stone-200 bg-white text-stone-600 hover:bg-stone-100"
+                    aria-expanded
+                    aria-label={`Свернуть: ${student.name}`}
+                  >
+                    <ChevronUp size={18} />
+                  </button>
+                ) : null}
+              </div>
             </div>
             <div className={`mt-3 grid gap-2 ${compact ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-5" : "grid-cols-2 lg:grid-cols-5"}`}>
               <div className="flex min-w-0 items-center gap-2 rounded-2xl border border-stone-200 bg-white px-3 py-2" data-testid="strip-sector">

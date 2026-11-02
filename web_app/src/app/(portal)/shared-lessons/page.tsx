@@ -2,8 +2,10 @@
 
 import { MonitorPlay } from "lucide-react";
 import Link from "next/link";
-import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
+import { ScreenError } from "@/components/app-error-screen";
+import { EmptyState } from "@/components/data-states";
 import { PageHeader } from "@/components/page-header";
+import { ScreenSkeleton } from "@/components/screen-skeleton";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { materialsApi } from "@/lib/materials-api";
 
@@ -13,8 +15,8 @@ export default function SharedLessonsPage() {
   return (
     <div className="grid min-w-0 gap-5">
       <PageHeader eyebrow="Материалы" title="Уроки от преподавателя" description="Уроки из курсов, которые прислал преподаватель. Их можно смотреть в любое время." />
-      {shares.loading && !shares.data ? <LoadingState label="Загружаем уроки" /> : null}
-      {shares.error ? <ErrorState message={shares.error} retry={shares.reload} /> : null}
+      {shares.loading && !shares.data ? <ScreenSkeleton variant="section" label="Загружаем уроки" /> : null}
+      {shares.error && !shares.data ? <ScreenError message={shares.error} code={shares.errorCode} retry={shares.reload} /> : null}
       {shares.data && !shares.data.length ? <EmptyState title="Пока ничего" description="Когда преподаватель пришлёт урок, он появится здесь." /> : null}
       <ul className="grid min-w-0 grid-cols-1 gap-2" data-testid="shared-lessons">
         {(shares.data ?? []).map((share) => (
@@ -27,7 +29,7 @@ export default function SharedLessonsPage() {
                   {share.lesson.courseTitle}{share.teacherName ? ` · от ${share.teacherName}` : ""}
                 </span>
               </span>
-              {!share.viewedAt ? <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black text-amber-900">новое</span> : null}
+              {!share.viewedAt ? <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-black text-amber-900">новое</span> : null}
             </Link>
           </li>
         ))}

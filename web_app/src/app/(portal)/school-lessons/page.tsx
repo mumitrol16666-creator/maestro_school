@@ -37,11 +37,16 @@ import { LessonMaterialItems } from "@/components/student-lesson-materials";
 import { ShareAchievementButton } from "@/components/share-achievement";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
-import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
+import { ScreenError } from "@/components/app-error-screen";
+import { EmptyState } from "@/components/data-states";
+import { ScreenSkeleton } from "@/components/screen-skeleton";
 import { PageHeader } from "@/components/page-header";
 import { useApiResource } from "@/hooks/use-api-resource";
-import { api } from "@/lib/api-client";
+import { ApiError } from "@/lib/api-client";
+import { isCrmUnavailableCode } from "@/lib/connection-status";
+import { loadStudentOfflineSummary } from "@/lib/school-offline-summary";
 import { currentAqtobeMonth } from "@/lib/aqtobe-month";
+import { formatCount, formatOutOf, pluralize } from "@/lib/plural";
 import {
   getSchoolAlertCounts,
   markSchoolAlertsSeen,
@@ -55,6 +60,8 @@ import {
 } from "@/lib/student-lesson-display";
 
 /* ─── label maps ────────────────────────────────────────────────────── */
+
+const LEARNING_POINTS_FORMS = ["учебный балл", "учебных балла", "учебных баллов"] as const;
 
 const statusLabels: Record<string, string> = {
   scheduled: "Запланирован",
@@ -135,10 +142,10 @@ function LessonCard({
     (lesson.lessonPointsAwarded ?? 0)
     + (lesson.learningTopicResults ?? []).reduce((sum, item) => sum + item.masteryPointsAwarded, 0);
   const earned = [
-    earnedPoints > 0 ? { key: "points", label: `итого +${earnedPoints} баллов`, tone: "bg-gold/20 text-amber-950" } : null,
+    earnedPoints > 0 ? { key: "points", label: `итого +${earnedPoints} ${pluralize(earnedPoints, ["балл", "балла", "баллов"])}`, tone: "bg-gold/20 text-amber-950" } : null,
     lesson.lessonRewards?.xp ? { key: "xp", label: `+${lesson.lessonRewards.xp} XP`, tone: "bg-emerald-100 text-emerald-900" } : null,
     lesson.lessonRewards?.bonusXp ? { key: "bonus", label: `бонус от преподавателя +${lesson.lessonRewards.bonusXp} XP`, tone: "bg-sky-100 text-sky-900" } : null,
-    streakWeeks && latest ? { key: "streak", label: `серия ${streakWeeks} нед.`, tone: "bg-orange-100 text-orange-900" } : null,
+    streakWeeks && latest ? { key: "streak", label: `серия ${formatCount(streakWeeks, ["неделя", "недели", "недель"])}`, tone: "bg-orange-100 text-orange-900" } : null,
   ].filter((item): item is { key: string; label: string; tone: string } => Boolean(item));
 
   const hasDetails =
@@ -161,7 +168,7 @@ function LessonCard({
                 onClick={() => setOpen(!open)}
                 aria-expanded={open}
                 aria-controls={`lesson-details-${lesson.crmClassId}`}
-                className="rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
+                className="inline-flex min-h-11 items-center rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
               >
                 {studentLessonTitle(lesson)}
               </button>
@@ -288,7 +295,7 @@ function LessonCard({
                 </div>
               ) : (lesson.lessonPoints ?? 0) > 0 ? (
                 <p className="mt-2 text-sm font-bold text-amber-950">
-                  +{lesson.lessonPoints} учебных баллов
+                  +{formatCount(lesson.lessonPoints ?? 0, LEARNING_POINTS_FORMS)}
                 </p>
               ) : null}
               {lesson.sectorProgress ? (
@@ -307,8 +314,8 @@ function LessonCard({
                       <div className="h-full rounded-full bg-amber-600" style={{ width: lesson.sectorProgress.toPercent ? `${Math.round((lesson.sectorProgress.fromPercent / lesson.sectorProgress.toPercent) * 100)}%` : "0%" }} />
                     </div>
                   </div>
-                  <p className="mt-1 text-[11px] font-semibold text-stone-500">
-                    Освоено тем: {lesson.sectorProgress.completed} из {lesson.sectorProgress.total}
+                  <p className="mt-1 text-xs font-semibold text-stone-500">
+                    Освоено: {formatOutOf(lesson.sectorProgress.completed, lesson.sectorProgress.total, ["темы", "тем", "тем"])}
                   </p>
                 </div>
               ) : null}
@@ -325,7 +332,7 @@ function LessonCard({
                           {item.title}
                         </p>
                         <span
-                          className={`shrink-0 self-start rounded-full px-2.5 py-1 text-[11px] font-bold ${
+                          className={`shrink-0 self-start rounded-full px-2.5 py-1 text-xs font-bold ${
                             item.mastered
                               ? "bg-emerald-100 text-emerald-800"
                               : "bg-amber-100 text-amber-900"
@@ -343,7 +350,7 @@ function LessonCard({
                         </span>
                         {item.masteryPointsAwarded > 0 ? (
                           <span className="rounded-lg bg-gold/20 px-2.5 py-1 text-xs font-black text-amber-950">
-                            +{item.masteryPointsAwarded} учебных баллов
+                            +{formatCount(item.masteryPointsAwarded, LEARNING_POINTS_FORMS)}
                           </span>
                         ) : null}
                         {item.mastered ? <ShareAchievementButton kind="topic" title={item.title} date={item.occurredAt} compact /> : null}
@@ -376,7 +383,7 @@ function LessonCard({
                         </div>
                         <span className="flex shrink-0 flex-wrap items-center gap-2 self-start sm:self-auto">
                           <span className="rounded-lg bg-gold/25 px-2.5 py-1 text-xs font-black text-amber-950">
-                            +{item.pointsAwarded} учебных баллов
+                            +{formatCount(item.pointsAwarded, LEARNING_POINTS_FORMS)}
                           </span>
                           <ShareAchievementButton kind="sector" title={`Сектор${item.sequence ? ` ${item.sequence}` : ""} закрыт`} date={item.completedAt} sequence={item.sequence ?? null} compact />
                         </span>
@@ -549,7 +556,7 @@ function TabNav({
   return (
     <nav
       aria-label="Разделы уроков"
-      className="mb-4 grid grid-cols-2 gap-1 rounded-2xl border border-stone-200 bg-white p-1"
+      className="mb-4 grid grid-cols-2 gap-2 rounded-2xl border border-stone-200 bg-white p-1"
     >
       {tabs.map(({ key, label, mobileLabel, icon: Icon }) => (
         <button
@@ -558,7 +565,7 @@ function TabNav({
           type="button"
           title={label}
           aria-pressed={active === key}
-          className={`relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-[10px] font-semibold leading-tight transition-colors sm:flex-row sm:gap-2 sm:px-4 sm:py-2.5 sm:text-sm ${
+          className={`relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-xs font-semibold leading-tight transition-colors sm:flex-row sm:gap-2 sm:px-4 sm:py-2.5 sm:text-sm ${
             active === key
               ? "bg-ink text-white shadow-sm"
               : "text-stone-500 hover:bg-stone-50 hover:text-ink"
@@ -573,13 +580,13 @@ function TabNav({
           </span>
           <span className="hidden sm:inline">{label}</span>
           {key === "history" && alerts.reports > 0 ? (
-            <span className="absolute right-1 top-1 grid min-w-4 place-items-center rounded-full bg-gold px-1 py-0.5 text-[9px] font-black text-ink sm:static sm:min-w-5 sm:px-1.5 sm:text-[10px]">
+            <span className="absolute right-1 top-1 grid min-h-5 min-w-5 place-items-center rounded-full bg-gold px-1 py-0.5 text-xs font-black text-ink sm:static sm:px-1.5">
               {alerts.reports}
             </span>
           ) : null}
           {key === "schedule" &&
           alerts.todayLessons + alerts.tomorrowLessons > 0 ? (
-            <span className="absolute right-1 top-1 grid min-w-4 place-items-center rounded-full bg-blue-100 px-1 py-0.5 text-[9px] font-black text-blue-800 sm:static sm:min-w-5 sm:px-1.5 sm:text-[10px]">
+            <span className="absolute right-1 top-1 grid min-h-5 min-w-5 place-items-center rounded-full bg-blue-100 px-1 py-0.5 text-xs font-black text-blue-800 sm:static sm:px-1.5">
               {alerts.todayLessons + alerts.tomorrowLessons}
             </span>
           ) : null}
@@ -595,7 +602,7 @@ function SchoolSchedule() {
   const router = useRouter();
   const params = useSearchParams();
   const { user } = useAuth();
-  const resource = useApiResource(() => api.studentOfflineSummary(), []);
+  const resource = useApiResource(() => loadStudentOfflineSummary(), []);
   const requestedTab = params.get("tab");
   const requestedFormat = params.get("format");
   const requestedLessonId = params.get("lesson");
@@ -702,11 +709,11 @@ function SchoolSchedule() {
     setAlerts(getSchoolAlertCounts(user.id, resource.data));
   }, [activeTab, resource.data, user]);
 
-  if (resource.loading) {
-    return <LoadingState label="Загружаем расписание школы" />;
+  if (resource.loading && !resource.data) {
+    return <ScreenSkeleton variant="calendar" label="Загружаем расписание школы" />;
   }
 
-  if (resource.error) {
+  if (resource.error && !resource.data) {
     if (resource.errorCode === "CRM_NOT_LINKED") {
       return (
         <>
@@ -722,17 +729,12 @@ function SchoolSchedule() {
         </>
       );
     }
-    return <ErrorState message={resource.error} retry={resource.reload} />;
+    return <ScreenError message={resource.error} code={resource.errorCode} retry={resource.reload} />;
   }
 
   const data = resource.data;
   if (!data) {
-    return (
-      <ErrorState
-        message="Не удалось загрузить данные"
-        retry={resource.reload}
-      />
-    );
+    return <ScreenError message={null} code={resource.errorCode} retry={resource.reload} />;
   }
 
   const { upcomingLessons } = data;
@@ -742,10 +744,17 @@ function SchoolSchedule() {
     setRefreshing(true);
     setRefreshError(null);
     try {
-      resource.setData(await api.studentOfflineSummary());
+      resource.setData(await loadStudentOfflineSummary({ live: true }));
       setLastRefreshedAt(new Date());
-    } catch {
-      setRefreshError("Не удалось обновить данные школы");
+    } catch (reason) {
+      const code = reason instanceof ApiError ? reason.code : null;
+      setRefreshError(
+        code === "NETWORK_ERROR"
+          ? "Нет связи. Расписание не обновилось"
+          : isCrmUnavailableCode(code)
+            ? "Школа сейчас не отвечает. Показываем расписание, которое было"
+            : "Не получилось обновить расписание",
+      );
     } finally {
       setRefreshing(false);
     }
@@ -801,7 +810,7 @@ function SchoolSchedule() {
         <section aria-label="Все занятия" className="space-y-4">
           <div className="flex flex-wrap justify-end gap-3">
             <div
-              className="inline-flex rounded-xl border border-stone-200 bg-white p-1"
+              className="inline-flex gap-2 rounded-xl border border-stone-200 bg-white p-1"
               role="group"
               aria-label="Формат уроков"
             >
@@ -907,7 +916,7 @@ function SchoolSchedule() {
             </div>
             {requestedLessonId && !lessonHistory.some((lesson) => lesson.crmClassId === requestedLessonId) ? (
               <p className="mb-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900" data-testid="history-lesson-missing">
-                Этого урока нет в истории: он старше последних {lessonHistory.length} занятий или был перенесён. Задание по нему остаётся в разделе «Обучение».
+                Этого урока нет в истории: в ней {formatCount(lessonHistory.length, ["последнее занятие", "последних занятия", "последних занятий"])}, а этот урок старше или был перенесён. Задание по нему остаётся в разделе «Обучение».
               </p>
             ) : null}
             {recentOnly && pendingLessons.length ? (
@@ -917,7 +926,7 @@ function SchoolSchedule() {
                 className="mb-3 flex min-h-11 w-full items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 text-left text-sm font-semibold text-stone-700"
                 data-testid="history-pending-toggle"
               >
-                <span>{pendingLessons.length} {pendingLessons.length === 1 ? "урок ждёт итогов" : pendingLessons.length < 5 ? "урока ждут итогов" : "уроков ждут итогов"} от преподавателя и школы</span>
+                <span>{formatCount(pendingLessons.length, ["урок", "урока", "уроков"])} {pluralize(pendingLessons.length, ["ждёт", "ждут", "ждут"])} итогов от преподавателя и школы</span>
                 <span className="text-xs text-stone-500">{showPending ? "Скрыть" : "Показать"}</span>
               </button>
             ) : null}
@@ -945,7 +954,7 @@ function SchoolSchedule() {
                 className="mt-4 inline-flex min-h-11 w-full items-center justify-center rounded-2xl border border-stone-200 bg-white px-4 text-sm font-bold text-ink sm:w-auto"
                 data-testid="history-show-more"
               >
-                Показать ещё {hiddenOlder}
+                Показать ещё {formatCount(hiddenOlder, ["урок", "урока", "уроков"])}
               </button>
             ) : null}
           </section>
@@ -971,7 +980,7 @@ export default function SchoolLessonsPage() {
       );
   }, [isHomework, id, router]);
   return isHomework ? (
-    <LoadingState label="Открываем задание в обучении" />
+    <ScreenSkeleton variant="page" label="Открываем задание в обучении" />
   ) : (
     <SchoolSchedule />
   );

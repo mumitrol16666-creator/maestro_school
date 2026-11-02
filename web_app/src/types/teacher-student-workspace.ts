@@ -95,6 +95,8 @@ export type TeacherStudentWorkspace = {
     bySource: Array<{ sourceType: string; amount: number }>;
     events: Array<{ amount: number; sourceType: string; description: string; createdAt: string }>;
   } | null;
+  homeworkHistory: WorkspaceHomeworkHistoryItem[];
+  closedSectors: WorkspaceClosedSector[];
   dynamics: {
     attendance: {
       rate: number | null;
@@ -114,4 +116,33 @@ export type TeacherStudentWorkspace = {
   } | null;
 };
 
-export type WorkspaceTab = "now" | "activity" | "dynamics" | "tasks" | "dialog";
+export type WorkspaceTab = "now" | "activity" | "dynamics" | "tasks" | "history" | "sectors" | "dialog";
+
+/** 01.11: one homework with the percent of every check at a lesson. */
+export type WorkspaceHomeworkHistoryItem = {
+  recipientId: string;
+  assignmentId: string;
+  topic: { id: string; title: string };
+  instructions: string;
+  assignedAt: string;
+  sourceLessonId: string | null;
+  state: string;
+  reviews: Array<{ cycleNumber: number; decision: string; completionPercent: number | null; comment: string | null; reviewedAt: string }>;
+};
+
+/** 01.11: a sector the student has finished (closed by exam, early, or by the group moving on). */
+export type WorkspaceClosedSector = {
+  id: string;
+  sequence: number;
+  scope: "student" | "group";
+  direction: string;
+  status: string;
+  closedAt: string | null;
+  publishedAt: string | null;
+  completed: number;
+  total: number;
+  percent: number;
+  exam: { status: string; scheduledAt: string | null; outcome: string | null } | null;
+  memberPass: { method: "exam" | "manual"; passedAt: string; points: number } | null;
+  topics: Array<{ id: string; title: string; progressPercent: number; state: string }>;
+};
