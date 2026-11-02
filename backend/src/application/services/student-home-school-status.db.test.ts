@@ -44,11 +44,15 @@ integrationTest("the home names the school status: not linked, CRM down, CRM ref
   });
 
   let crmUp = true;
+  let crmBroken = false;
   const crmCalls: string[] = [];
   t.mock.method(globalThis, "fetch", async (input: string | URL | Request) => {
     const url = String(input);
     crmCalls.push(new URL(url).pathname);
     if (!crmUp || url.includes(`/students/${down.crmStudentId}/`)) throw new TypeError("fetch failed");
+    if (crmBroken && url.includes("/offline-summary")) {
+      return new Response(JSON.stringify({ success: false, error: "Internal server error" }), { status: 500, headers: { "Content-Type": "application/json" } });
+    }
     // The bodies CRM sends: integration reads answer a missing student and their own failure without a code.
     if (url.includes(`/students/${refused.crmStudentId}/`)) {
       return new Response(JSON.stringify({ success: false, error: "Student not found" }), { status: 404, headers: { "Content-Type": "application/json" } });
@@ -85,7 +89,15 @@ integrationTest("the home names the school status: not linked, CRM down, CRM ref
   assert.equal(linkedHome.schoolStatus, "linked");
   assert.equal((linkedHome.school as { crmStale?: boolean } | null)?.crmStale, false);
 
-  // CRM goes down after a good read: the server's copy keeps the schedule, marked as a copy.
+  // CRM answers 500 after a good read: the server's copy keeps the schedule, marked as a copy.
+  crmBroken = true;
+  const brokenCopyHome = await getStudentHome(linked.id);
+  assert.equal(brokenCopyHome.schoolStatus, "linked");
+  assert.equal((brokenCopyHome.school as { crmStale?: boolean } | null)?.crmStale, true);
+  crmBroken = false;
+
+  // CRM goes down after a good read: the same.
+  assert.equal((await getStudentHome(linked.id)).schoolStatus, "linked");
   crmUp = false;
   const copyHome = await getStudentHome(linked.id);
   assert.equal(copyHome.schoolStatus, "linked");

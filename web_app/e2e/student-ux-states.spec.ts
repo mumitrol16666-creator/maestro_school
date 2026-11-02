@@ -179,7 +179,10 @@ test("when the header poll learns CRM fell or came back, the home follows the st
       monthlyPlans: [],
       tasks: null,
       today: { nextLesson: null, tasks: [], tasksTotal: 0 },
-      ...(school === "live" ? { schoolStatus: "linked" } : { school: null, schoolStatus: school }),
+      // «live» is a fresh CRM read whatever the QA CRM answers now, so the strip goes by reportSchoolFreshness.
+      ...(school === "live"
+        ? { schoolStatus: "linked", school: { ...(body.data.school as object ?? {}), crmStale: false, crmSnapshotAt: null } }
+        : { school: null, schoolStatus: school }),
     });
     await route.fulfill({ response, json: body });
   });
@@ -209,6 +212,7 @@ test("when the header poll learns CRM fell or came back, the home follows the st
   await nextPoll();
   await expect(strip).toHaveCount(0);
   await expect(page.getByTestId("today-lesson")).toContainText("Если так и останется, напиши в школу");
+  await expect(quiet).toHaveCount(0);
 });
 
 test("a profile save is confirmed by a toast; sign-out erases the saved home", async ({ page, request, context }) => {
