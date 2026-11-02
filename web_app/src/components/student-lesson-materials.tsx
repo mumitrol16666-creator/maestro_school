@@ -1,6 +1,6 @@
 "use client";
 import { Download } from "lucide-react";
-import { parseVideoUrl } from "@/lib/parse-video-url";
+import { parseVideoUrl, videoFrameClass } from "@/lib/parse-video-url";
 import { isManagedMediaUrl, triggerFileDownload } from "@/lib/file-download";
 import { sameSiteMediaUrl } from "@/lib/media-url";
 import type { SchoolOfflineLesson } from "@/types/school-offline";
@@ -18,7 +18,7 @@ function MaterialPreview({
   const parsed = parseVideoUrl(url);
   if (parsed) {
     return (
-      <div className="relative mb-3 aspect-video overflow-hidden rounded-xl bg-black" data-testid="material-embed">
+      <div className={`relative mb-3 overflow-hidden rounded-xl bg-black ${videoFrameClass(parsed)}`} data-testid="material-embed">
         <iframe
           title={material.title || "Видео к уроку"}
           src={parsed.embedUrl}

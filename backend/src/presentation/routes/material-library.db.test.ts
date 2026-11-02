@@ -83,6 +83,9 @@ if (!process.env.TEST_DATABASE_URL) {
 
   test("a material's kind and badge come from its type, host or extension", () => {
     assert.equal(materialKindFor("https://youtu.be/abc"), "video");
+    assert.equal(materialKindFor("https://www.instagram.com/reel/C9xYz/"), "video");
+    assert.equal(materialKindFor("https://www.tiktok.com/@t/video/7300000000000000000"), "video");
+    assert.equal(materialBadge("https://www.instagram.com/reel/C9xYz/", "video"), "Instagram");
     assert.equal(materialKindFor("https://example.com/score.pdf"), "pdf");
     assert.equal(materialKindFor("/api/v1/media/files/x.mp4", "video/mp4"), "video");
     assert.equal(materialKindFor("https://example.com/chords"), "link");

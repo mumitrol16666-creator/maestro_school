@@ -46,7 +46,7 @@ export default function SchoolTaskPage() {
       >
         ← Все задания
       </Link>
-      <h1 className="mb-4 text-2xl font-bold">Задание с преподавателем</h1>
+      <h1 className="mb-4 font-display text-3xl text-ink">Домашнее задание</h1>
       {homework.loading ? (
         <LoadingState label="Загружаем задание" />
       ) : homework.error ? (
@@ -57,8 +57,7 @@ export default function SchoolTaskPage() {
             <LearningHomeworkCard
               key={assignment.id}
               assignment={assignment}
-              compact
-              defaultOpen
+              lessonMaterials={lessons.find((lesson) => lesson.crmClassId === assignment.sourceLessonId)?.materials ?? []}
               onSubmitted={homework.reload}
             />
           ))}

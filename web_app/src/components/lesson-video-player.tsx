@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertCircle, Play } from "lucide-react";
-import { parseVideoUrl } from "@/lib/parse-video-url";
+import { parseVideoUrl, videoFrameClass, videoProviderLabels } from "@/lib/parse-video-url";
 
 interface LessonVideoPlayerProps {
   videoUrl?: string | null;
@@ -51,14 +51,14 @@ export function LessonVideoPlayer({
         <AlertCircle size={28} className="text-red-500" />
         <p className="mt-4 text-sm font-bold text-red-700">Не удалось распознать ссылку на видео</p>
         <p className="mt-2 max-w-md text-xs text-red-600">
-          Поддерживаются YouTube, Vimeo и Cloudflare Stream. Проверьте ссылку на видео.
+          Поддерживаются YouTube, Vimeo, Instagram, TikTok и Cloudflare Stream. Проверьте ссылку на видео.
         </p>
       </div>
     );
   }
 
   return (
-    <div className="relative aspect-video overflow-hidden rounded-[30px] bg-black shadow-soft">
+    <div className={`relative overflow-hidden rounded-[30px] bg-black shadow-soft ${videoFrameClass(parsed)}`}>
       <iframe
         src={parsed.embedUrl}
         title={title}
@@ -69,7 +69,7 @@ export function LessonVideoPlayer({
         referrerPolicy="strict-origin-when-cross-origin"
       />
       <span className="pointer-events-none absolute bottom-4 right-4 rounded-full bg-black/50 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-white/80">
-        {parsed.provider === "youtube" ? "YouTube" : parsed.provider === "vimeo" ? "Vimeo" : "Stream"}
+        {parsed.provider === "cloudflare" ? "Stream" : videoProviderLabels[parsed.provider]}
       </span>
     </div>
   );

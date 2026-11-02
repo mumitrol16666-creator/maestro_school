@@ -46,6 +46,7 @@ import { LessonStudentStrip } from "@/components/lesson-student-strip";
 import { LessonTextHints } from "@/components/lesson-text-hints";
 import { LessonSectorDrawer } from "@/components/lesson-sector-drawer";
 import {
+  appendHomeworkLine,
   appendPhrase,
   fallbackSchoolPhrases,
   homeworkSuggestions,
@@ -2046,7 +2047,7 @@ export default function AdminOfflineLessonDetailPage() {
                       type="button"
                       onClick={() => {
                         if (previousLesson.lessonSummary?.trim()) setLessonSummary((current) => appendPhrase(current, previousLesson.lessonSummary!.trim()));
-                        if (previousLesson.homework?.trim()) setHomework((current) => appendPhrase(current, previousLesson.homework!.trim()));
+                        if (previousLesson.homework?.trim()) setHomework((current) => appendHomeworkLine(current, previousLesson.homework!.trim()));
                       }}
                       className="mt-2 inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 px-2.5 text-[12px] font-bold text-sky-900 hover:bg-sky-100"
                       data-testid="lesson-like-last-time"
@@ -2132,7 +2133,7 @@ export default function AdminOfflineLessonDetailPage() {
                     school={schoolPhrases("homework")}
                     disabled={!canEditReport}
                     canSave={canEditReport && !isAdmin && Boolean(homework.trim())}
-                    onInsert={(text) => setHomework((current) => appendPhrase(current, text))}
+                    onInsert={(text) => setHomework((current) => appendHomeworkLine(current, text))}
                     onSave={() => void saveOwnTemplate("homework", homework)}
                     onRemoveOwn={(id) => void removeOwnTemplate(id)}
                   />
