@@ -189,7 +189,7 @@ export default function OnlineLessonDetailPage() {
           )}
 
           {latestSubmission && (
-            <div id={needsRevision ? "assignment-revision" : undefined} className={`mt-6 scroll-mt-24 rounded-2xl border p-4 text-sm ${
+            <div id={needsRevision ? "assignment-revision" : undefined} className={`mt-6 scroll-mt-32 rounded-2xl border p-4 text-sm ${
               needsRevision ? "border-red-100 bg-red-50 text-red-950" : "border-stone-200 bg-stone-50"
             }`}>
               <p className={`inline-flex items-center gap-2 font-bold ${needsRevision ? "text-red-800" : ""}`}>

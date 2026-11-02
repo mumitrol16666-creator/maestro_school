@@ -349,7 +349,7 @@ export default function LessonPage() {
           {lessonStarted && lesson.homeworkId && lesson.homeworkDescription && (
             <>
               {needsRevision && (
-                <section id="homework-revision" className="mt-9 scroll-mt-24 rounded-[28px] border border-red-100 bg-red-50 p-5 sm:p-6">
+                <section id="homework-revision" className="mt-9 scroll-mt-32 rounded-[28px] border border-red-100 bg-red-50 p-5 sm:p-6">
                   <p className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-wider text-red-700">
                     <RotateCcw size={15} /> Нужна доработка
                   </p>

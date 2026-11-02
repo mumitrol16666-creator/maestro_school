@@ -29,7 +29,8 @@ function bannerText(status: ConnectionStatus) {
     const at = snapshotTime(status.school.snapshotAt);
     return { icon: CloudOff, text: at ? `Нет связи со школой. Расписание на ${at}` : "Нет связи со школой. Показываем сохранённое расписание" };
   }
-  if (status.school.unavailable) return { icon: CloudOff, text: "Нет связи со школой. Расписание сейчас не загрузилось" };
+  // True both over an empty schedule and over one a screen read before CRM went down.
+  if (status.school.unavailable) return { icon: CloudOff, text: "Нет связи со школой. Расписание сейчас не обновляется" };
   return null;
 }
 
@@ -41,6 +42,8 @@ function bannerText(status: ConnectionStatus) {
 export function ConnectionBanner() {
   const status = useSyncExternalStore(subscribeConnectionStatus, getConnectionStatus, getConnectionStatus);
   const wasOffline = useRef(false);
+  const schoolState = status.school.stale ? "stale" : status.school.unavailable ? "unavailable" : "ok";
+  const previousSchoolState = useRef(schoolState);
 
   useEffect(() => {
     setSavedReadsEnabled(true);
@@ -57,6 +60,15 @@ export function ConnectionBanner() {
     invalidateStudentHome();
     announceReconnect();
   }, [status.offline]);
+
+  // The header poll learns first that CRM fell or came back; the screen then reads again, so its
+  // cards («Расписание не загрузилось», the lessons) agree with the strip.
+  useEffect(() => {
+    if (previousSchoolState.current === schoolState) return;
+    previousSchoolState.current = schoolState;
+    invalidateStudentHome();
+    announceReconnect();
+  }, [schoolState]);
 
   const content = bannerText(status);
   if (!content) return null;

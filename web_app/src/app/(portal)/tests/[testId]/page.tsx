@@ -39,7 +39,6 @@ export default function PreparedTestPage() {
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [result, setResult] = useState<PreparedTestAttemptResponse | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [hydratedTestId, setHydratedTestId] = useState<string | null>(null);
   const [retakeMode, setRetakeMode] = useState(false);
@@ -83,7 +82,6 @@ export default function PreparedTestPage() {
   if (!test || !question) return null;
 
   async function submit() {
-    setSubmitError(null);
     setSubmitting(true);
     try {
       const submittedResult = await api.submitPreparedTest(testId, answers);
@@ -113,7 +111,7 @@ export default function PreparedTestPage() {
       } : current);
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (error) {
-      setSubmitError(error instanceof Error ? error.message : "Не удалось отправить ответы");
+      // One message per failure (В-22): the toast, never the server's raw text.
       toast.error(errorToastText(error, "Не получилось отправить ответы. Попробуй ещё раз"));
     } finally {
       setSubmitting(false);
@@ -125,7 +123,6 @@ export default function PreparedTestPage() {
     setRetakeMode(true);
     setAnswers({});
     setCurrentQuestion(0);
-    setSubmitError(null);
     setSaveState("idle");
     setView(test?.theory ? "theory" : "test");
   }
@@ -363,12 +360,6 @@ export default function PreparedTestPage() {
               })}
             </div>
           </fieldset>
-
-          {submitError ? (
-            <p className="mt-4 rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
-              {submitError}
-            </p>
-          ) : null}
 
           <div className="mt-5 flex items-center justify-between gap-3">
             <button

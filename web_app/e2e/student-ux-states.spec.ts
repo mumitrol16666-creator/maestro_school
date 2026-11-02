@@ -141,7 +141,7 @@ test("the CRM copy of the schedule is named in the strip", async ({ page, reques
   await expect(page.getByTestId("connection-banner")).toContainText("Нет связи со школой. Расписание на");
 });
 
-test("CRM down without a copy shows the strip; a student the school has not linked sees none", async ({ page, request, context }) => {
+test("CRM down without a copy shows the strip; a refusal and a student not linked yet show none", async ({ page, request, context }) => {
   await signIn(context, await studentSession(request));
   let schoolStatus = "unavailable";
   await page.route("**/api/v1/students/me/home", async (route) => {
@@ -151,13 +151,68 @@ test("CRM down without a copy shows the strip; a student the school has not link
     await route.fulfill({ response, json: body });
   });
   await page.goto("/dashboard");
-  await expect(page.getByTestId("connection-banner")).toHaveText("Нет связи со школой. Расписание сейчас не загрузилось");
-  await expect(page.getByTestId("today-lesson")).toContainText("Расписание не загрузилось");
+  await expect(page.getByTestId("connection-banner")).toHaveText("Нет связи со школой. Расписание сейчас не обновляется");
+  await expect(page.getByTestId("today-lesson")).toContainText("Школа сейчас не отвечает");
+
+  schoolStatus = "failed";
+  await page.reload();
+  await expect(page.getByTestId("today-lesson")).toContainText("Если так и останется, напиши в школу");
+  await expect(page.getByTestId("connection-banner")).toHaveCount(0);
 
   schoolStatus = "not_linked";
   await page.reload();
   await expect(page.getByTestId("today-lesson")).toContainText("Ближайший урок пока не назначен");
   await expect(page.getByTestId("connection-banner")).toHaveCount(0);
+});
+
+test("when the header poll learns CRM fell or came back, the home follows the strip", async ({ page, request, context }) => {
+  await signIn(context, await studentSession(request));
+  await page.clock.install();
+  // A home with nothing else on it, so «Пока всё тихо» would be the only thing to say.
+  let school: "live" | "unavailable" | "failed" = "unavailable";
+  await page.route("**/api/v1/students/me/home", async (route) => {
+    const response = await route.fetch();
+    const body = await response.json() as { data: Record<string, unknown> };
+    const dashboard = { ...(body.data.dashboard as object), currentCourse: null };
+    Object.assign(body.data, {
+      dashboard,
+      monthlyPlans: [],
+      tasks: null,
+      today: { nextLesson: null, tasks: [], tasksTotal: 0 },
+      // «live» is a fresh CRM read whatever the QA CRM answers now, so the strip goes by reportSchoolFreshness.
+      ...(school === "live"
+        ? { schoolStatus: "linked", school: { ...(body.data.school as object ?? {}), crmStale: false, crmSnapshotAt: null } }
+        : { school: null, schoolStatus: school }),
+    });
+    await route.fulfill({ response, json: body });
+  });
+  const strip = page.getByTestId("connection-banner");
+  const quiet = page.getByRole("heading", { name: "Пока всё тихо" });
+  const nextPoll = () => page.clock.fastForward(61_000);
+
+  await page.goto("/dashboard");
+  await expect(strip).toHaveText("Нет связи со школой. Расписание сейчас не обновляется");
+  await expect(page.getByTestId("today-lesson")).toContainText("Школа сейчас не отвечает");
+  await expect(quiet).toHaveCount(0);
+
+  school = "live";
+  await nextPoll();
+  await expect(strip).toHaveCount(0);
+  await expect(page.getByTestId("today-lesson")).toContainText("Ближайший урок пока не назначен");
+  await expect(quiet).toBeVisible();
+
+  school = "unavailable";
+  await nextPoll();
+  await expect(strip).toBeVisible();
+  await expect(page.getByTestId("today-lesson")).toContainText("Школа сейчас не отвечает");
+  await expect(quiet).toHaveCount(0);
+
+  // CRM is back but refuses: the strip goes, «Сегодня» says to write to the school.
+  school = "failed";
+  await nextPoll();
+  await expect(strip).toHaveCount(0);
+  await expect(page.getByTestId("today-lesson")).toContainText("Если так и останется, напиши в школу");
+  await expect(quiet).toHaveCount(0);
 });
 
 test("a profile save is confirmed by a toast; sign-out erases the saved home", async ({ page, request, context }) => {

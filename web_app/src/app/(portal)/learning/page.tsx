@@ -32,8 +32,11 @@ export default function LearningWorkspacePage() {
   const tasks = home.tasks;
   const plans = home.monthlyPlans;
   const nextTask = tasks?.items.find((task) => task.actionRequired) ?? null;
-  // A student the school has not linked has no school data to miss; an older server only says `school: null`.
-  const schoolMissing = home.schoolStatus ? home.schoolStatus === "unavailable" : !home.school;
+  // A student the school has not linked has no school data to miss. A home saved on the phone
+  // before this field (up to 12 hours) or an older server only says `school: null`.
+  const schoolMissing = home.schoolStatus
+    ? home.schoolStatus === "unavailable" || home.schoolStatus === "failed"
+    : !home.school;
   const partial = !tasks || tasks.partial || schoolMissing;
   const pendingCount = tasks?.counts.actionRequired ?? 0;
   const waitingCount = tasks?.counts.waitingReview ?? 0;

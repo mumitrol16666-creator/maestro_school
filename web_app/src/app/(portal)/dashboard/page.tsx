@@ -44,7 +44,7 @@ export default function DashboardPage() {
   // Plan 2.1: «Сейчас» is one read of the student's home; the header shares it.
   const resource = useApiResource(() => loadStudentHome(), []);
   if (resource.loading && !resource.data) {
-    return <ScreenSkeleton variant="home" label="Собираем вашу учебную главную" />;
+    return <ScreenSkeleton variant="home" label="Собираем твою учебную главную" />;
   }
   if (!resource.data) {
     return <ScreenError message={resource.error} code={resource.errorCode} retry={() => { invalidateStudentHome(); return resource.reload(); }} />;
@@ -61,8 +61,11 @@ export default function DashboardPage() {
   const visibleUpcoming = upcoming
     .filter((lesson) => lesson.crmClassId !== today.nextLesson?.crmClassId)
     .slice(0, 3);
+  const scheduleIssue = data.schoolStatus === "unavailable" || data.schoolStatus === "failed" ? data.schoolStatus : null;
+  // «Пока всё тихо» says there are no lessons; with the schedule unread that is not known.
   const hasLearningData = Boolean(
-    today.nextLesson
+    scheduleIssue
+    || today.nextLesson
     || plans.length
     || data.dashboard.currentCourse
     || actionTasks.length,
@@ -100,7 +103,7 @@ export default function DashboardPage() {
       <StudentBanners banners={data.banners ?? []} />
 
       <div className="grid grid-cols-[minmax(0,1fr)] items-stretch gap-5 xl:grid-cols-[minmax(0,1.75fr)_minmax(280px,0.65fr)]">
-        <div className="order-1 min-w-0"><StudentTodayCard today={today} streakWeeks={data.streakWeeks ?? null} practice={data.practice ?? null} scheduleUnavailable={data.schoolStatus === "unavailable"} /></div>
+        <div className="order-1 min-w-0"><StudentTodayCard today={today} streakWeeks={data.streakWeeks ?? null} practice={data.practice ?? null} scheduleIssue={scheduleIssue} /></div>
         <div className="order-3 min-w-0 xl:order-2"><LeagueMiniWidget /></div>
       </div>
 
