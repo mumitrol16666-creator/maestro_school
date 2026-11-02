@@ -19,7 +19,7 @@ function when(lesson: NonNullable<ApiStudentHome["today"]["nextLesson"]>) {
   return `${label.charAt(0).toUpperCase()}${label.slice(1)} в ${lesson.startTime}`;
 }
 
-export function StudentTodayCard({ today, streakWeeks, practice = null }: { today: ApiStudentHome["today"]; streakWeeks: number | null; practice?: ApiStudentHome["practice"] }) {
+export function StudentTodayCard({ today, streakWeeks, practice = null, scheduleUnavailable = false }: { today: ApiStudentHome["today"]; streakWeeks: number | null; practice?: ApiStudentHome["practice"]; scheduleUnavailable?: boolean }) {
   const lesson = today.nextLesson;
   const [first, ...rest] = today.tasks;
   const LessonIcon = lesson?.deliveryFormat === "online" ? MonitorPlay : School;
@@ -54,8 +54,9 @@ export function StudentTodayCard({ today, streakWeeks, practice = null }: { toda
         <div className="mt-3 flex items-start gap-3" data-testid="today-lesson">
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/10 text-gold-ink"><CalendarDays size={20} /></span>
           <div>
-            <h2 className="font-display text-2xl leading-tight sm:text-[28px]">Ближайший урок пока не назначен</h2>
-            <p className="mt-1 text-sm text-white/70">Как только школа поставит урок, он появится здесь.</p>
+            {/* В-18: CRM is down with no server copy, so an empty schedule says nothing about lessons. */}
+            <h2 className="font-display text-2xl leading-tight sm:text-[28px]">{scheduleUnavailable ? "Расписание не загрузилось" : "Ближайший урок пока не назначен"}</h2>
+            <p className="mt-1 text-sm text-white/70">{scheduleUnavailable ? "Школа сейчас не отвечает. Ближайший урок появится здесь, когда связь вернётся." : "Как только школа поставит урок, он появится здесь."}</p>
           </div>
         </div>
       )}

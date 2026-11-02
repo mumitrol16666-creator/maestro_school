@@ -18,11 +18,14 @@ import {
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { ErrorState, LoadingState } from "@/components/data-states";
+import { ScreenError } from "@/components/app-error-screen";
 import { PageHeader } from "@/components/page-header";
 import { PreparedTheoryMaterialView } from "@/components/prepared-theory-material";
+import { ScreenSkeleton } from "@/components/screen-skeleton";
+import { toast } from "@/components/toast";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { api } from "@/lib/api-client";
+import { errorToastText } from "@/lib/error-text";
 import { formatOutOf } from "@/lib/plural";
 import type { PreparedTestAttemptResponse, PreparedTestReviewItem } from "@/types/prepared-tests";
 
@@ -75,8 +78,8 @@ export default function PreparedTestPage() {
     [result, test?.latestAttempt?.review],
   );
 
-  if (resource.loading) return <LoadingState label="Открываем тест" />;
-  if (resource.error) return <ErrorState message={resource.error} retry={resource.reload} />;
+  if (resource.loading && !resource.data) return <ScreenSkeleton variant="detail" label="Открываем тест" />;
+  if (resource.error && !resource.data) return <ScreenError message={resource.error} code={resource.errorCode} retry={resource.reload} />;
   if (!test || !question) return null;
 
   async function submit() {
@@ -111,6 +114,7 @@ export default function PreparedTestPage() {
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "Не удалось отправить ответы");
+      toast.error(errorToastText(error, "Не получилось отправить ответы. Попробуй ещё раз"));
     } finally {
       setSubmitting(false);
     }

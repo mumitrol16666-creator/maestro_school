@@ -2,6 +2,7 @@ import {
   ApiError,
   apiRequest,
   clearSession,
+  forgetSavedReads,
   getAccessToken,
 } from "@/lib/api-client";
 import type {
@@ -28,6 +29,7 @@ async function authenticatedFetch(path: string, init: RequestInit = {}) {
   } catch {
     throw new ApiError("Не удалось связаться с сервером Maestro", 0, "NETWORK_ERROR");
   }
+  if (response.ok && (init.method ?? "GET").toUpperCase() !== "GET") forgetSavedReads();
   if (response.status === 401) {
     clearSession();
     if (typeof window !== "undefined") window.location.assign("/login");

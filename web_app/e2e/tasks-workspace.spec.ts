@@ -127,7 +127,7 @@ test("slow filter requests never show the previous list under the next tab", asy
   await expect(page.getByTestId("task-card")).toHaveCount(3);
   options.delay = 1200;
   await page.getByTestId("task-source-filters").getByRole("button", { name: "Курсы", exact: true }).click();
-  await expect(page.getByText("Загружаем задания…")).toBeVisible();
+  await expect(page.getByTestId("task-results").getByTestId("screen-skeleton")).toBeVisible();
   await expect(page.getByTestId("task-card")).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Незавершённых заданий нет" })).toBeVisible();
 });
@@ -135,7 +135,7 @@ test("slow filter requests never show the previous list under the next tab", asy
 test("failed load keeps navigation and retry, never presents zero as success", async ({ page }) => {
   const options = { fail: true };
   await setup(page, options);
-  await expect(page.getByRole("heading", { name: "Не удалось загрузить задания" })).toBeVisible();
+  await expect(page.getByTestId("task-results").getByRole("heading", { name: "Что-то пошло не так" })).toBeVisible();
   await expect(page.getByTestId("task-source-filters").getByRole("button")).toHaveCount(5);
   await expect(page.getByTestId("task-state-filters")).not.toContainText("0");
   options.fail = false;

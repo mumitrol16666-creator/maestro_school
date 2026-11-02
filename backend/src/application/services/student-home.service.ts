@@ -49,6 +49,12 @@ type StudentSchoolSummary = {
 export const HOME_TASKS_LIMIT = 6;
 
 /**
+ * Package 3 (В-18): `school: null` alone cannot tell a student the school has not linked yet from
+ * a school read that failed (CRM down and no server copy); the home names which one it is.
+ */
+export type StudentHomeSchoolStatus = "linked" | "not_linked" | "unavailable";
+
+/**
  * Plan 2.1: everything the student's «Сейчас», «Обучение» and the header need, in one read.
  * Tasks, achievements and proposals are platform data; the only CRM read is the cached summary.
  * Each extra is optional: one that fails leaves its block empty instead of failing the home.
@@ -111,6 +117,7 @@ async function getStudentHomeBase(studentUserId: string) {
       generatedAt: new Date().toISOString(),
       dashboard,
       school: null,
+      schoolStatus: "not_linked" as StudentHomeSchoolStatus,
       monthlyPlans: [],
     };
   }
@@ -135,7 +142,13 @@ async function getStudentHomeBase(studentUserId: string) {
     if (dashboardResult.status === "rejected" && !monthlyPlans.length) {
       throw new BadRequestError("Не удалось собрать учебную главную", "STUDENT_HOME_UNAVAILABLE");
     }
-    return { generatedAt: new Date().toISOString(), dashboard, school: null, monthlyPlans };
+    return {
+      generatedAt: new Date().toISOString(),
+      dashboard,
+      school: null,
+      schoolStatus: "unavailable" as StudentHomeSchoolStatus,
+      monthlyPlans,
+    };
   }
 
   const school = schoolResult.value as unknown as {
@@ -153,6 +166,7 @@ async function getStudentHomeBase(studentUserId: string) {
     generatedAt: new Date().toISOString(),
     dashboard,
     school,
+    schoolStatus: "linked" as StudentHomeSchoolStatus,
     monthlyPlans,
   };
 }

@@ -1,9 +1,10 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { ErrorState, LoadingState } from "@/components/data-states";
+import { ScreenError } from "@/components/app-error-screen";
 import { LessonVideoPlayer } from "@/components/lesson-video-player";
 import { MarkdownContent } from "@/components/markdown-content";
+import { ScreenSkeleton } from "@/components/screen-skeleton";
 import { LessonMaterialItems } from "@/components/student-lesson-materials";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { materialsApi } from "@/lib/materials-api";
@@ -12,8 +13,8 @@ import { materialsApi } from "@/lib/materials-api";
 export default function SharedLessonPage() {
   const { shareId } = useParams<{ shareId: string }>();
   const share = useApiResource(() => materialsApi.studentShare(shareId), [shareId]);
-  if (share.loading && !share.data) return <LoadingState label="Открываем урок" />;
-  if (share.error || !share.data) return <ErrorState message={share.error ?? "Урок не найден"} retry={share.reload} />;
+  if (share.loading && !share.data) return <ScreenSkeleton variant="detail" label="Открываем урок" />;
+  if (!share.data) return <ScreenError message={share.error} code={share.errorCode} retry={share.reload} />;
   const data = share.data;
   return (
     <article className="grid min-w-0 gap-5" data-testid="shared-lesson">

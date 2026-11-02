@@ -13,9 +13,10 @@ import {
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { useAuth } from "@/components/auth-provider";
-import { ErrorState, LoadingState } from "@/components/data-states";
+import { ScreenError } from "@/components/app-error-screen";
 import { LevelBadge, LevelProgressDialog } from "@/components/level-summary";
 import { ProgressBar } from "@/components/progress-bar";
+import { ScreenSkeleton } from "@/components/screen-skeleton";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { StudentBanners } from "@/components/student-banners";
 import { StudentTodayCard } from "@/components/student-today-card";
@@ -42,11 +43,11 @@ export default function DashboardPage() {
   const [levelDialogOpen, setLevelDialogOpen] = useState(false);
   // Plan 2.1: «Сейчас» is one read of the student's home; the header shares it.
   const resource = useApiResource(() => loadStudentHome(), []);
-  if (resource.loading) {
-    return <LoadingState label="Собираем вашу учебную главную" />;
+  if (resource.loading && !resource.data) {
+    return <ScreenSkeleton variant="home" label="Собираем вашу учебную главную" />;
   }
-  if (resource.error || !resource.data) {
-    return <ErrorState message={resource.error ?? "Не удалось загрузить главную"} retry={() => { invalidateStudentHome(); return resource.reload(); }} />;
+  if (!resource.data) {
+    return <ScreenError message={resource.error} code={resource.errorCode} retry={() => { invalidateStudentHome(); return resource.reload(); }} />;
   }
 
   const data = resource.data;
@@ -99,7 +100,7 @@ export default function DashboardPage() {
       <StudentBanners banners={data.banners ?? []} />
 
       <div className="grid grid-cols-[minmax(0,1fr)] items-stretch gap-5 xl:grid-cols-[minmax(0,1.75fr)_minmax(280px,0.65fr)]">
-        <div className="order-1 min-w-0"><StudentTodayCard today={today} streakWeeks={data.streakWeeks ?? null} practice={data.practice ?? null} /></div>
+        <div className="order-1 min-w-0"><StudentTodayCard today={today} streakWeeks={data.streakWeeks ?? null} practice={data.practice ?? null} scheduleUnavailable={data.schoolStatus === "unavailable"} /></div>
         <div className="order-3 min-w-0 xl:order-2"><LeagueMiniWidget /></div>
       </div>
 

@@ -2,6 +2,7 @@
 
 import { CheckCircle2, Lightbulb, Send, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { toast } from "@/components/toast";
 import { improvementSuggestionsApi } from "@/lib/improvement-suggestions-api";
 
 function createIdempotencyKey() {
@@ -11,7 +12,10 @@ function createIdempotencyKey() {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-export function ImprovementSuggestionCard() {
+export function ImprovementSuggestionCard({ confirm = "card" }: {
+  /** "toast" is for the student app: a short toast and the dialog closes; elsewhere the dialog thanks the user. */
+  confirm?: "card" | "toast";
+}) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [details, setDetails] = useState("");
@@ -57,7 +61,12 @@ export function ImprovementSuggestionCard() {
         details: details.trim(),
         currentPath: window.location.pathname,
       });
-      setSent(true);
+      if (confirm === "toast") {
+        setOpen(false);
+        toast.success("Идея отправлена. Спасибо!");
+      } else {
+        setSent(true);
+      }
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Не удалось отправить предложение");
     } finally {

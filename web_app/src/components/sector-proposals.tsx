@@ -2,7 +2,9 @@
 
 import { CheckCircle2, Circle, CircleDot, Lightbulb, LoaderCircle, Send } from "lucide-react";
 import { useState } from "react";
-import { api, ApiError } from "@/lib/api-client";
+import { toast } from "@/components/toast";
+import { api } from "@/lib/api-client";
+import { errorToastText } from "@/lib/error-text";
 import type { StudentHomeMonthlyPlan } from "@/types/api";
 import type { SectorProposal } from "@/types/teacher-students";
 
@@ -43,23 +45,20 @@ export function SectorProposalSection({
   const [crmDirectionId, setCrmDirectionId] = useState(directions[0]?.[0] ?? "");
   const [sending, setSending] = useState(false);
   const [showAll, setShowAll] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState(false);
   const directionId = crmDirectionId || directions[0]?.[0] || "";
 
   async function submit() {
     if (!text.trim() || !directionId || sending) return;
     setSending(true);
-    setError(null);
     try {
       const created = await api.createSectorProposal({ crmDirectionId: directionId, kind, text: text.trim(), link: link.trim() || null });
       setSent((current) => [created, ...current]);
       setText("");
       setLink("");
-      setDone(true);
+      toast.success("Предложение отправлено преподавателю");
       onCreated?.(created);
     } catch (reason) {
-      setError(reason instanceof ApiError ? reason.message : "Не удалось отправить предложение");
+      toast.error(errorToastText(reason, "Не получилось отправить предложение. Попробуй ещё раз"));
     } finally {
       setSending(false);
     }
@@ -100,7 +99,7 @@ export function SectorProposalSection({
           </div>
           <textarea
             value={text}
-            onChange={(event) => { setText(event.target.value); setDone(false); }}
+            onChange={(event) => setText(event.target.value)}
             rows={3}
             maxLength={2000}
             placeholder={kind === "song" ? "Например: «Кукла колдуна» — Король и Шут" : kind === "goal" ? "Например: научиться играть перебором" : "Например: баррэ на F"}
@@ -121,8 +120,6 @@ export function SectorProposalSection({
             >
               {sending ? <LoaderCircle size={16} className="animate-spin" /> : <Send size={16} />} Отправить преподавателю
             </button>
-            {done ? <span className="text-xs font-bold text-emerald-700">Отправлено</span> : null}
-            {error ? <span className="text-xs font-bold text-red-700">{error}</span> : null}
           </div>
         </div>
       )}

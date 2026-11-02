@@ -15,10 +15,12 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
-import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
+import { ScreenError } from "@/components/app-error-screen";
+import { EmptyState } from "@/components/data-states";
 import { ProgressBar } from "@/components/progress-bar";
+import { ScreenSkeleton } from "@/components/screen-skeleton";
 import { useApiResource } from "@/hooks/use-api-resource";
-import { api, ApiError } from "@/lib/api-client";
+import { api } from "@/lib/api-client";
 import type { StudentHomeMonthlyPlan } from "@/types/api";
 import type { SectorProposal } from "@/types/teacher-students";
 import { GroupSectorPassBadge, SectorExamSummary } from "@/components/sector-exam-summary";
@@ -104,16 +106,18 @@ export default function SectorPage() {
         </div>
       </header>
 
-      {resource.loading ? (
-        <div className="mt-7"><LoadingState label="Открываем сектор" /></div>
-      ) : resource.error || !resource.data ? (
+      {resource.loading && !resource.data ? (
+        <div className="mt-7"><ScreenSkeleton variant="section" label="Открываем сектор" /></div>
+      ) : !resource.data ? (
         <div className="mt-7">
-          <ErrorState
-            message={resource.errorCode === "CRM_NOT_LINKED"
-              ? "Профиль школы не подключён. Обратитесь к администратору Maestro."
-              : resource.error ?? "Не удалось загрузить сектор"}
-            retry={resource.reload}
-          />
+          {resource.errorCode === "CRM_NOT_LINKED" ? (
+            <EmptyState
+              title="Профиль школы не подключён"
+              description="Обратись к администратору школы. После подключения здесь появится сектор."
+            />
+          ) : (
+            <ScreenError message={resource.error} code={resource.errorCode} retry={resource.reload} />
+          )}
         </div>
       ) : !active.length ? (
         <div className="mt-7">
@@ -128,10 +132,23 @@ export default function SectorPage() {
         </div>
       )}
 
-      {showHistory ? (
+      {showHistory && (resource.data || !resource.error) ? (
         <section className="mt-8">
           <h2 className="font-display text-2xl text-ink">Закрытые секторы</h2>
-          {!closed.length ? (
+          {resource.loading && !closed.length ? (
+            <div className="mt-4"><ScreenSkeleton variant="section" label="Открываем закрытые секторы" /></div>
+          ) : !closed.length && resource.error ? (
+            <div className="mt-3 flex flex-wrap items-center gap-3" role="alert">
+              <p className="text-sm font-semibold text-red-700">Не получилось загрузить закрытые секторы</p>
+              <button
+                type="button"
+                onClick={() => void resource.reload()}
+                className="inline-flex min-h-11 items-center rounded-lg border border-stone-200 bg-white px-4 text-sm font-bold text-ink"
+              >
+                Повторить
+              </button>
+            </div>
+          ) : !closed.length ? (
             <p className="mt-3 text-sm text-stone-500">Закрытых секторов пока нет.</p>
           ) : (
             <div className="mt-4 grid gap-3">

@@ -3,6 +3,8 @@
 import { AlertTriangle, CheckCircle2, Inbox } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
+import { ScreenError } from "@/components/app-error-screen";
+import { ScreenSkeleton } from "@/components/screen-skeleton";
 import { UnifiedTaskCard } from "@/components/unified-task-card";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { api } from "@/lib/api-client";
@@ -49,8 +51,9 @@ function TasksContent() {
   }
 
   // Never show the previous filter's items or numbers under a newly selected tab.
-  const response = resource.data?.key === filterKey && !resource.error ? resource.data.response : null;
-  const busy = resource.loading || (!response && !resource.error);
+  // A reload that failed keeps the answer already on screen (В-17).
+  const response = resource.data?.key === filterKey ? resource.data.response : null;
+  const busy = !response && !resource.error;
   const counts = response?.data.filteredCounts ?? (source === "all" ? response?.data.counts : undefined);
   const meta = response?.meta;
   const partial = Boolean(meta?.partial && (source === "all" || meta.sources[source]?.status === "unavailable"));
@@ -91,8 +94,8 @@ function TasksContent() {
       </div>
 
       <div data-testid="task-results" aria-busy={busy}>
-        {busy ? <Loading /> : resource.error ? (
-          <Notice title="Не удалось загрузить задания" description="Не можем проверить список. Попробуйте ещё раз." retry={resource.reload} />
+        {busy ? <ScreenSkeleton variant="section" label="Загружаем задания" /> : !response ? (
+          <ScreenError message={resource.error} code={resource.errorCode} retry={resource.reload} />
         ) : (
           <>
             {partial && <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950" role="status">
@@ -126,17 +129,13 @@ function TasksContent() {
   );
 }
 
-function Loading() {
-  return <p role="status" className="py-6 text-sm text-stone-600">Загружаем задания…</p>;
-}
-function Notice({ title, description, retry }: { title: string; description: string; retry?: () => void }) {
+function Notice({ title, description }: { title: string; description: string }) {
   return <section className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-5" role="alert">
     <AlertTriangle className="mt-1 shrink-0 text-amber-800" aria-hidden="true" />
     <div><h2 className="font-display text-2xl">{title}</h2><p className="mt-2 text-sm leading-6 text-stone-600">{description}</p>
-      {retry && <button type="button" onClick={retry} className={`mt-3 min-h-11 rounded-lg border border-amber-300 px-4 text-sm font-bold ${focus}`}>Повторить</button>}
     </div>
   </section>;
 }
 export default function TasksPage() {
-  return <Suspense fallback={<Loading />}><TasksContent /></Suspense>;
+  return <Suspense fallback={<ScreenSkeleton variant="list" label="Загружаем задания" />}><TasksContent /></Suspense>;
 }

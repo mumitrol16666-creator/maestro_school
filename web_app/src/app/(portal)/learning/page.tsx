@@ -2,8 +2,9 @@
 
 import { ArrowRight, BookOpenCheck, ListTodo, Target } from "lucide-react";
 import Link from "next/link";
-import { ErrorState } from "@/components/data-states";
+import { ScreenError } from "@/components/app-error-screen";
 import { ProgressBar } from "@/components/progress-bar";
+import { ScreenSkeleton } from "@/components/screen-skeleton";
 import { SectorExamSummary } from "@/components/sector-exam-summary";
 import { SectorProposalSection, sectorProposalDirections } from "@/components/sector-proposals";
 import { StudentBanners } from "@/components/student-banners";
@@ -22,20 +23,18 @@ export default function LearningWorkspacePage() {
   // Plan 2.1: «Обучение» reads the same home as «Сейчас»: sector, tasks and proposals in one request.
   const resource = useApiResource(() => loadStudentHome(), []);
 
-  if (resource.loading) return (
-    <div className="mx-auto max-w-6xl py-8" role="status" aria-live="polite" aria-busy="true">
-      <p className="text-sm text-stone-600">Загружаем сектор и задания…</p>
-    </div>
-  );
-  if (resource.error || !resource.data) {
-    return <ErrorState message={resource.error ?? "Не удалось загрузить обучение"} retry={() => { invalidateStudentHome(); return resource.reload(); }} />;
+  if (resource.loading && !resource.data) return <ScreenSkeleton variant="list" label="Загружаем сектор и задания" />;
+  if (!resource.data) {
+    return <ScreenError message={resource.error} code={resource.errorCode} retry={() => { invalidateStudentHome(); return resource.reload(); }} />;
   }
 
   const home = resource.data;
   const tasks = home.tasks;
   const plans = home.monthlyPlans;
   const nextTask = tasks?.items.find((task) => task.actionRequired) ?? null;
-  const partial = !tasks || tasks.partial || !home.school;
+  // A student the school has not linked has no school data to miss; an older server only says `school: null`.
+  const schoolMissing = home.schoolStatus ? home.schoolStatus === "unavailable" : !home.school;
+  const partial = !tasks || tasks.partial || schoolMissing;
   const pendingCount = tasks?.counts.actionRequired ?? 0;
   const waitingCount = tasks?.counts.waitingReview ?? 0;
   // Plan 5.3: the same homework from two CRM lessons is one task to the child.

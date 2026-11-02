@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError } from "@/lib/api-client";
+import { subscribeReconnect } from "@/lib/connection-status";
 
 export function useApiResource<T>(loader: () => Promise<T>, dependencies: unknown[] = []) {
   const [data, setData] = useState<T | null>(null);
@@ -35,6 +36,9 @@ export function useApiResource<T>(loader: () => Promise<T>, dependencies: unknow
       requestIdRef.current += 1;
     };
   }, [reload]);
+
+  // В-18: only the student shell announces a reconnect; a screen showing saved data reads it again.
+  useEffect(() => subscribeReconnect(() => void reload()), [reload]);
 
   return { data, loading, error, errorCode, reload, setData };
 }
