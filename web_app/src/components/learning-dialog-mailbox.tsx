@@ -3,7 +3,6 @@
 import {
   Archive,
   ArchiveRestore,
-  ArrowLeft,
   Bell,
   BellOff,
   Check,
@@ -32,7 +31,9 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
+import { BackButton } from "@/components/back-button";
 import { ApiError } from "@/lib/api-client";
+import { formatCount } from "@/lib/plural";
 import { learningDialogsApi, notifyLearningDialogsUpdated } from "@/lib/learning-dialogs-api";
 import type {
   LearningDialogArchiveFilter,
@@ -134,7 +135,7 @@ function messagePreview(message: LearningDialogSummary["lastMessage"]) {
   if (message.state === "retracted") return "Сообщение отозвано";
   if (message.state === "hidden") return "Сообщение скрыто";
   if (message.body) return message.body;
-  return message.attachments.length === 1 ? "Файл" : `Файлов: ${message.attachments.length}`;
+  return message.attachments.length === 1 ? "Файл" : formatCount(message.attachments.length, ["файл", "файла", "файлов"]);
 }
 
 function attachmentIcon(attachment: LearningDialogAttachment) {
@@ -171,10 +172,10 @@ function ActionDialog({
       <section role="dialog" aria-modal="true" aria-labelledby="dialog-action-title" className="w-full max-w-md overflow-hidden rounded-2xl border border-white/70 bg-white shadow-2xl">
         <header className="flex items-start justify-between gap-4 border-b border-stone-200 px-5 py-4">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gold-ink">Диалог Maestro</p>
+            <p className="text-xs font-black uppercase tracking-wide text-gold-ink">Диалог Maestro</p>
             <h2 id="dialog-action-title" className="mt-1 text-xl font-black text-ink">{action.title}</h2>
           </div>
-          <button type="button" onClick={onClose} disabled={busy} className="grid h-9 w-9 place-items-center rounded-lg border border-stone-200 text-stone-500" aria-label="Закрыть">
+          <button type="button" onClick={onClose} disabled={busy} className="grid h-11 w-11 place-items-center rounded-lg border border-stone-200 text-stone-500" aria-label="Закрыть">
             <X size={17} />
           </button>
         </header>
@@ -546,13 +547,13 @@ export function LearningDialogMailbox({ role, className }: { role: MailboxRole; 
           <aside className={`${active ? "hidden md:flex" : "flex"} min-w-0 flex-col border-stone-200 md:border-r`}>
             <div className="border-b border-stone-200 p-3 sm:p-4">
               <div className="flex items-center gap-2">
-                <div className="grid min-w-0 flex-1 grid-cols-2 rounded-lg bg-stone-100 p-1" aria-label="Папка диалогов">
+                <div className="grid min-w-0 flex-1 grid-cols-2 gap-2 rounded-lg bg-stone-100 p-1" aria-label="Папка диалогов">
                   {(["active", "archived"] as const).map((value) => (
                     <button
                       key={value}
                       type="button"
                       onClick={() => setArchiveFilter(value)}
-                      className={`h-9 rounded-md text-xs font-bold transition ${archiveFilter === value ? "bg-white text-ink shadow-sm" : "text-stone-500"}`}
+                      className={`h-11 rounded-md text-xs font-bold transition ${archiveFilter === value ? "bg-white text-ink shadow-sm" : "text-stone-500"}`}
                     >
                       {value === "active" ? "Диалоги" : "Архив"}
                     </button>
@@ -576,13 +577,13 @@ export function LearningDialogMailbox({ role, className }: { role: MailboxRole; 
               </div>
               <label className="relative mt-3 block">
                 <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
-                <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Поиск" className="h-10 w-full rounded-lg border border-stone-200 bg-stone-50 pl-9 pr-3 text-sm outline-none focus:border-gold" />
+                <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Поиск" className="h-11 w-full rounded-lg border border-stone-200 bg-stone-50 pl-9 pr-3 text-sm outline-none focus:border-gold" />
               </label>
             </div>
 
             {error && !active ? (
               <div className="flex shrink-0 items-start justify-between gap-3 border-b border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-semibold text-rose-800">
-                <span>{error}</span><button type="button" onClick={() => setError("")} className="grid h-6 w-6 shrink-0 place-items-center rounded" aria-label="Закрыть ошибку"><X size={14} /></button>
+                <span>{error}</span><button type="button" onClick={() => setError("")} className="-my-2 -mr-2 grid h-11 w-11 shrink-0 place-items-center rounded" aria-label="Закрыть ошибку"><X size={14} /></button>
               </div>
             ) : null}
 
@@ -604,17 +605,17 @@ export function LearningDialogMailbox({ role, className }: { role: MailboxRole; 
                       <span className="min-w-0 flex-1">
                         <span className="flex items-center gap-2">
                           <strong className="min-w-0 flex-1 truncate text-sm text-ink">{person.name}</strong>
-                          <span className="shrink-0 text-[10px] text-stone-400">{formatTime(conversation.lastMessageAt)}</span>
+                          <span className="shrink-0 text-xs text-stone-500">{formatTime(conversation.lastMessageAt)}</span>
                         </span>
                         <span className="mt-1 flex items-center gap-1.5">
                           <span className={`min-w-0 flex-1 truncate text-xs ${conversation.unreadCount ? "font-bold text-ink" : "text-stone-500"}`}>{messagePreview(conversation.lastMessage)}</span>
                           {conversation.notificationsMuted ? <BellOff size={12} className="shrink-0 text-stone-400" /> : null}
                           {conversation.openReportCount > 0 ? <ShieldAlert size={13} className="shrink-0 text-rose-600" /> : null}
                           {conversation.unreadCount > 0 ? (
-                            <span className="grid min-h-5 min-w-5 shrink-0 place-items-center rounded-full bg-gold px-1 text-[10px] font-black text-ink">{conversation.unreadCount > 99 ? "99+" : conversation.unreadCount}</span>
+                            <span className="grid min-h-5 min-w-5 shrink-0 place-items-center rounded-full bg-gold px-1 text-xs font-black text-ink">{conversation.unreadCount > 99 ? "99+" : conversation.unreadCount}</span>
                           ) : null}
                         </span>
-                        <span className="mt-1 block truncate text-[10px] font-bold uppercase text-stone-400">{typeLabels[conversation.type]}</span>
+                        <span className="mt-1 block truncate text-xs font-bold uppercase tracking-wide text-stone-500">{typeLabels[conversation.type]}</span>
                       </span>
                       <ChevronRight size={15} className="shrink-0 text-stone-300 md:hidden" />
                     </button>
@@ -637,15 +638,15 @@ export function LearningDialogMailbox({ role, className }: { role: MailboxRole; 
             ) : active && activePerson ? (
               <>
                 <header data-testid="learning-dialog-active-header" className="flex min-h-[68px] shrink-0 items-center gap-2 border-b border-stone-200 bg-white px-3 pb-2.5 pt-[max(0.625rem,env(safe-area-inset-top,0px))] sm:px-4 sm:py-2.5">
-                  <button type="button" onClick={closeThread} className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-stone-200 text-stone-600 md:hidden" aria-label="К списку диалогов"><ArrowLeft size={18} /></button>
-                  <Avatar name={activePerson.name} avatar={activePerson.avatar} />
+                  <BackButton onClick={closeThread} label="К списку диалогов" hideLabel className="md:hidden" />
+                  <span className="contents max-[399px]:hidden"><Avatar name={activePerson.name} avatar={activePerson.avatar} /></span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-bold text-ink">{activePerson.name}</p>
-                    <p className="truncate text-[11px] text-stone-500">{typeLabels[active.type]}{active.status !== "active" ? " · Только чтение" : ""}</p>
+                    <p className="truncate text-xs text-stone-500">{typeLabels[active.type]}{active.status !== "active" ? " · Только чтение" : ""}</p>
                   </div>
-                  <button type="button" onClick={() => setMembersOpen((value) => !value)} className={`grid h-10 w-10 shrink-0 place-items-center rounded-lg border ${membersOpen ? "border-gold bg-amber-50 text-amber-800" : "border-stone-200 text-stone-500"}`} aria-label="Участники диалога" title="Участники"><UsersRound size={17} /></button>
-                  <button type="button" onClick={() => void changePreferences({ notificationsMuted: !active.notificationsMuted })} className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-stone-200 text-stone-500" aria-label={active.notificationsMuted ? "Включить уведомления" : "Отключить уведомления"} title={active.notificationsMuted ? "Включить уведомления" : "Отключить уведомления"}>{active.notificationsMuted ? <BellOff size={17} /> : <Bell size={17} />}</button>
-                  <button type="button" onClick={() => void changePreferences({ archived: !active.archivedAt })} className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-stone-200 text-stone-500" aria-label={active.archivedAt ? "Вернуть из архива" : "В архив"} title={active.archivedAt ? "Вернуть из архива" : "В архив"}>{active.archivedAt ? <ArchiveRestore size={17} /> : <Archive size={17} />}</button>
+                  <button type="button" onClick={() => setMembersOpen((value) => !value)} className={`grid h-11 w-11 shrink-0 place-items-center rounded-lg border ${membersOpen ? "border-gold bg-amber-50 text-amber-800" : "border-stone-200 text-stone-500"}`} aria-label="Участники диалога" title="Участники"><UsersRound size={17} /></button>
+                  <button type="button" onClick={() => void changePreferences({ notificationsMuted: !active.notificationsMuted })} className="grid h-11 w-11 shrink-0 place-items-center rounded-lg border border-stone-200 text-stone-500" aria-label={active.notificationsMuted ? "Включить уведомления" : "Отключить уведомления"} title={active.notificationsMuted ? "Включить уведомления" : "Отключить уведомления"}>{active.notificationsMuted ? <BellOff size={17} /> : <Bell size={17} />}</button>
+                  <button type="button" onClick={() => void changePreferences({ archived: !active.archivedAt })} className="grid h-11 w-11 shrink-0 place-items-center rounded-lg border border-stone-200 text-stone-500" aria-label={active.archivedAt ? "Вернуть из архива" : "В архив"} title={active.archivedAt ? "Вернуть из архива" : "В архив"}>{active.archivedAt ? <ArchiveRestore size={17} /> : <Archive size={17} />}</button>
                 </header>
 
                 {membersOpen ? (
@@ -658,7 +659,7 @@ export function LearningDialogMailbox({ role, className }: { role: MailboxRole; 
                             <Avatar name={member.name} avatar={member.avatar} />
                             <div className="min-w-0 flex-1">
                               <p className="truncate text-xs font-bold text-ink">{member.name}</p>
-                              <p className={`mt-0.5 text-[10px] ${restricted ? "font-bold text-rose-600" : "text-stone-400"}`}>{restricted ? "Отправка ограничена" : member.role === "teacher" ? "Преподаватель" : member.role === "parent" ? "Родитель" : member.role === "student" ? "Ученик" : "Куратор"}</p>
+                              <p className={`mt-0.5 text-xs ${restricted ? "font-bold text-rose-600" : "text-stone-500"}`}>{restricted ? "Отправка ограничена" : member.role === "teacher" ? "Преподаватель" : member.role === "parent" ? "Родитель" : member.role === "student" ? "Ученик" : "Куратор"}</p>
                             </div>
                             {admin && active.type === "crm_group" && member.role !== "curator" ? (
                               <button
@@ -669,7 +670,7 @@ export function LearningDialogMailbox({ role, className }: { role: MailboxRole; 
                                   confirmLabel: restricted ? "Разрешить" : "Ограничить",
                                   userId: member.userId,
                                 })}
-                                className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-stone-200 text-stone-500"
+                                className="grid h-11 w-11 shrink-0 place-items-center rounded-md border border-stone-200 text-stone-500"
                                 aria-label={restricted ? `Разрешить отправку: ${member.name}` : `Ограничить отправку: ${member.name}`}
                                 title={restricted ? "Разрешить отправку" : "Ограничить отправку"}
                               >
@@ -685,7 +686,7 @@ export function LearningDialogMailbox({ role, className }: { role: MailboxRole; 
 
                 <div ref={messagesViewportRef} data-testid="learning-dialog-messages" className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-3 py-4 [overflow-anchor:none] sm:px-6">
                   {active.nextCursor ? (
-                    <div className="text-center"><button type="button" onClick={() => void loadEarlier()} disabled={threadLoading} className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-xs font-bold text-stone-600">Ранние сообщения</button></div>
+                    <div className="text-center"><button type="button" onClick={() => void loadEarlier()} disabled={threadLoading} className="min-h-11 rounded-lg border border-stone-200 bg-white px-4 text-xs font-bold text-stone-600">Ранние сообщения</button></div>
                   ) : null}
                   {active.messages.length ? active.messages.map((message) => {
                     const stateText = message.state === "retracted" ? "Сообщение отозвано" : message.state === "hidden" ? "Сообщение скрыто администратором" : null;
@@ -693,12 +694,12 @@ export function LearningDialogMailbox({ role, className }: { role: MailboxRole; 
                     return (
                       <article key={message.id} className={`group flex ${message.mine ? "justify-end" : "justify-start"}`}>
                         <div className={`max-w-[90%] sm:max-w-[76%] ${message.mine ? "items-end" : "items-start"} flex flex-col`}>
-                          {!message.mine && message.authorName ? <p className="mb-1 px-1 text-[10px] font-bold text-stone-500">{message.authorName}</p> : null}
+                          {!message.mine && message.authorName ? <p className="mb-1 px-1 text-xs font-bold text-stone-500">{message.authorName}</p> : null}
                           <div className={`min-w-0 rounded-2xl px-3.5 py-2.5 ${message.mine ? "rounded-br-md bg-ink text-white" : "rounded-bl-md border border-stone-200 bg-white text-ink"}`}>
                             {stateText ? <p className={`text-sm italic ${message.mine ? "text-white/55" : "text-stone-400"}`}>{stateText}</p> : null}
                             {message.body ? <p className="whitespace-pre-wrap break-words text-sm leading-6">{message.body}</p> : null}
                             {message.contextType && message.contextId ? (
-                              <p className={`mt-2 text-[10px] font-bold uppercase ${message.mine ? "text-gold-ink" : "text-amber-700"}`}>Контекст: {message.contextType}</p>
+                              <p className={`mt-2 text-xs font-bold uppercase ${message.mine ? "text-gold-ink" : "text-amber-700"}`}>Контекст: {message.contextType}</p>
                             ) : null}
                             {message.attachments.length ? (
                               <div className="mt-2 space-y-1.5">
@@ -709,33 +710,33 @@ export function LearningDialogMailbox({ role, className }: { role: MailboxRole; 
                                       key={attachment.id}
                                       type="button"
                                       onClick={() => void learningDialogsApi.download(attachment.id, attachment.originalFilename).catch((downloadError) => setError(errorText(downloadError)))}
-                                      className={`flex w-full min-w-0 items-center gap-2 rounded-lg border px-2.5 py-2 text-left ${message.mine ? "border-white/15 bg-white/10" : "border-stone-200 bg-stone-50"}`}
+                                      className={`flex min-h-11 w-full min-w-0 items-center gap-2 rounded-lg border px-2.5 py-2 text-left ${message.mine ? "border-white/15 bg-white/10" : "border-stone-200 bg-stone-50"}`}
                                     >
                                       <Icon size={16} className="shrink-0" />
                                       <span className="min-w-0 flex-1 truncate text-xs font-semibold">{attachment.originalFilename}</span>
-                                      <span className={`shrink-0 text-[10px] ${message.mine ? "text-white/45" : "text-stone-400"}`}>{formatBytes(attachment.sizeBytes)}</span>
+                                      <span className={`shrink-0 text-xs ${message.mine ? "text-white/70" : "text-stone-500"}`}>{formatBytes(attachment.sizeBytes)}</span>
                                       <Download size={14} className="shrink-0" />
                                     </button>
                                   );
                                 })}
                               </div>
                             ) : null}
-                            <p className={`mt-1.5 text-right text-[10px] ${message.mine ? "text-white/45" : "text-stone-400"}`}>{message.editedAt ? "изменено · " : ""}{formatMessageTime(message.createdAt)}</p>
+                            <p className={`mt-1.5 text-right text-xs ${message.mine ? "text-white/70" : "text-stone-500"}`}>{message.editedAt ? "изменено · " : ""}{formatMessageTime(message.createdAt)}</p>
                           </div>
 
                           {message.state === "visible" ? (
-                            <div className={`mt-1 flex flex-wrap gap-1 ${message.mine ? "justify-end" : "justify-start"}`}>
+                            <div className={`mt-1 flex flex-wrap gap-2 ${message.mine ? "justify-end" : "justify-start"}`}>
                               {changeAllowed ? (
                                 <>
-                                  <button type="button" onClick={() => setAction({ kind: "edit", title: "Изменить сообщение", confirmLabel: "Сохранить", messageId: message.id, initialValue: message.body ?? "" })} className="grid h-7 w-7 place-items-center rounded-md text-stone-400 hover:bg-white hover:text-ink" aria-label="Изменить сообщение" title="Изменить"><Pencil size={13} /></button>
-                                  <button type="button" onClick={() => void retractMessage(message.id)} className="grid h-7 w-7 place-items-center rounded-md text-stone-400 hover:bg-white hover:text-rose-700" aria-label="Отозвать сообщение" title="Отозвать"><Undo2 size={13} /></button>
+                                  <button type="button" onClick={() => setAction({ kind: "edit", title: "Изменить сообщение", confirmLabel: "Сохранить", messageId: message.id, initialValue: message.body ?? "" })} className="grid h-11 w-11 place-items-center rounded-md text-stone-500 hover:bg-white hover:text-ink" aria-label="Изменить сообщение" title="Изменить"><Pencil size={13} /></button>
+                                  <button type="button" onClick={() => void retractMessage(message.id)} className="grid h-11 w-11 place-items-center rounded-md text-stone-500 hover:bg-white hover:text-rose-700" aria-label="Отозвать сообщение" title="Отозвать"><Undo2 size={13} /></button>
                                 </>
                               ) : null}
                               {!message.mine && !admin && message.currentVersionId ? (
-                                <button type="button" onClick={() => setAction({ kind: "report", title: "Пожаловаться на сообщение", confirmLabel: "Отправить", messageId: message.id, versionId: message.currentVersionId ?? undefined })} className="grid h-7 w-7 place-items-center rounded-md text-stone-400 hover:bg-white hover:text-rose-700" aria-label="Пожаловаться на сообщение" title="Пожаловаться"><Flag size={13} /></button>
+                                <button type="button" onClick={() => setAction({ kind: "report", title: "Пожаловаться на сообщение", confirmLabel: "Отправить", messageId: message.id, versionId: message.currentVersionId ?? undefined })} className="grid h-11 w-11 place-items-center rounded-md text-stone-500 hover:bg-white hover:text-rose-700" aria-label="Пожаловаться на сообщение" title="Пожаловаться"><Flag size={13} /></button>
                               ) : null}
                               {admin ? (
-                                <button type="button" onClick={() => setAction({ kind: "hide", title: "Скрыть сообщение", confirmLabel: "Скрыть", messageId: message.id })} className="grid h-7 w-7 place-items-center rounded-md text-stone-400 hover:bg-white hover:text-rose-700" aria-label="Скрыть сообщение" title="Скрыть"><EyeOff size={13} /></button>
+                                <button type="button" onClick={() => setAction({ kind: "hide", title: "Скрыть сообщение", confirmLabel: "Скрыть", messageId: message.id })} className="grid h-11 w-11 place-items-center rounded-md text-stone-500 hover:bg-white hover:text-rose-700" aria-label="Скрыть сообщение" title="Скрыть"><EyeOff size={13} /></button>
                               ) : null}
                             </div>
                           ) : null}
@@ -747,8 +748,8 @@ export function LearningDialogMailbox({ role, className }: { role: MailboxRole; 
                                   <p className="text-xs font-bold">Жалоба{report.reporterName ? ` · ${report.reporterName}` : ""}</p>
                                   <p className="mt-1 text-xs leading-5 text-rose-800">{report.reason}</p>
                                   <div className="mt-2 flex gap-2">
-                                    <button type="button" onClick={() => setAction({ kind: "resolve", title: "Решить жалобу", confirmLabel: "Решить", reportId: report.id })} className="rounded-md bg-ink px-2.5 py-1.5 text-[10px] font-bold text-white">Решить</button>
-                                    <button type="button" onClick={() => setAction({ kind: "dismiss", title: "Отклонить жалобу", confirmLabel: "Отклонить", reportId: report.id })} className="rounded-md border border-rose-300 bg-white px-2.5 py-1.5 text-[10px] font-bold text-rose-800">Отклонить</button>
+                                    <button type="button" onClick={() => setAction({ kind: "resolve", title: "Решить жалобу", confirmLabel: "Решить", reportId: report.id })} className="min-h-11 rounded-md bg-ink px-4 text-xs font-bold text-white">Решить</button>
+                                    <button type="button" onClick={() => setAction({ kind: "dismiss", title: "Отклонить жалобу", confirmLabel: "Отклонить", reportId: report.id })} className="min-h-11 rounded-md border border-rose-300 bg-white px-4 text-xs font-bold text-rose-800">Отклонить</button>
                                   </div>
                                 </div>
                               ))}
@@ -766,7 +767,7 @@ export function LearningDialogMailbox({ role, className }: { role: MailboxRole; 
 
                 {error ? (
                   <div className="z-10 flex shrink-0 items-start justify-between gap-3 border-t border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-semibold text-rose-800">
-                    <span>{error}</span><button type="button" onClick={() => setError("")} className="grid h-6 w-6 shrink-0 place-items-center rounded" aria-label="Закрыть ошибку"><X size={14} /></button>
+                    <span>{error}</span><button type="button" onClick={() => setError("")} className="-my-2 -mr-2 grid h-11 w-11 shrink-0 place-items-center rounded" aria-label="Закрыть ошибку"><X size={14} /></button>
                   </div>
                 ) : null}
 
@@ -776,9 +777,9 @@ export function LearningDialogMailbox({ role, className }: { role: MailboxRole; 
                       {files.length ? (
                         <div className="mb-2 flex gap-2 overflow-x-auto pb-1">
                           {files.map((file, index) => (
-                            <span key={`${file.name}-${index}`} className="inline-flex max-w-[230px] shrink-0 items-center gap-2 rounded-lg border border-stone-200 bg-stone-50 px-2.5 py-2 text-xs font-semibold">
+                            <span key={`${file.name}-${index}`} className="inline-flex min-h-11 max-w-[230px] shrink-0 items-center gap-2 rounded-lg border border-stone-200 bg-stone-50 pl-2.5 pr-0.5 text-xs font-semibold">
                               <Paperclip size={13} className="shrink-0 text-gold-ink" /><span className="min-w-0 truncate">{file.name}</span>
-                              <button type="button" onClick={() => setFiles((current) => current.filter((_, itemIndex) => itemIndex !== index))} className="grid h-5 w-5 shrink-0 place-items-center rounded text-stone-400 hover:bg-stone-200" aria-label={`Убрать ${file.name}`}><X size={12} /></button>
+                              <button type="button" onClick={() => setFiles((current) => current.filter((_, itemIndex) => itemIndex !== index))} className="grid h-11 w-11 shrink-0 place-items-center rounded text-stone-500 hover:bg-stone-200" aria-label={`Убрать ${file.name}`}><X size={12} /></button>
                             </span>
                           ))}
                         </div>

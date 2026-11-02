@@ -27,7 +27,7 @@ export default function SharedLessonsPage() {
                   {share.lesson.courseTitle}{share.teacherName ? ` · от ${share.teacherName}` : ""}
                 </span>
               </span>
-              {!share.viewedAt ? <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black text-amber-900">новое</span> : null}
+              {!share.viewedAt ? <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-black text-amber-900">новое</span> : null}
             </Link>
           </li>
         ))}

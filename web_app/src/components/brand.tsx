@@ -7,7 +7,7 @@ export function Brand({ compact = false, href = "/dashboard" }: { compact?: bool
       {!compact && (
         <span className="min-w-0">
           <span className="font-display block text-[23px] leading-none tracking-[0.035em]">MAESTRO</span>
-          <span className="mt-2 block text-[9px] font-medium uppercase tracking-[0.24em] opacity-70">Music school</span>
+          <span className="mt-2 block text-xs font-medium uppercase tracking-wide opacity-70">Music school</span>
         </span>
       )}
     </Link>

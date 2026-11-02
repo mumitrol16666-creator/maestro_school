@@ -3,6 +3,9 @@ import type {
   StudentOfflineSummary,
 } from "@/types/school-offline";
 import { schoolDateLabel as formatLessonDate } from "@/lib/student-lesson-display";
+import { formatCount, pluralize } from "@/lib/plural";
+
+const CLASS_FORMS = ["занятие", "занятия", "занятий"] as const;
 const membershipTypeLabels: Record<string, string> = {
   trial: "Пробное занятие",
   monthly: "Абонемент на месяц",
@@ -127,7 +130,7 @@ export function StudentMemberships({
                 {m.classesRemaining}
               </p>
               <p className="pb-0.5 text-xs font-semibold text-stone-500">
-                занятий осталось
+                {pluralize(m.classesRemaining, CLASS_FORMS)} осталось
               </p>
             </div>
             <p className="mt-2 text-sm font-semibold text-stone-800">
@@ -139,7 +142,7 @@ export function StudentMemberships({
               </p>
             ) : null}
             <div className="mt-3 border-t border-stone-100 pt-3 text-xs text-stone-500">
-              <p>Всего в пакете: {m.totalClasses} занятий</p>
+              {m.totalClasses != null ? <p>Всего в пакете: {formatCount(m.totalClasses, CLASS_FORMS)}</p> : null}
               <p className="mt-1">Действует до {formatLessonDate(m.endDate)}</p>
             </div>
             {m.remainingAmountKzt > 0 ? (

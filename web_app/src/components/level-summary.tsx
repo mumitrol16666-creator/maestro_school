@@ -3,6 +3,7 @@
 import type { CSSProperties } from "react";
 import { useEffect, useState } from "react";
 import { ChevronRight, Gauge, Info, ShieldCheck, Sparkles, Star, X } from "lucide-react";
+import { formatCount, type PluralForms } from "@/lib/plural";
 import type {
   ProductLevelItem,
   ProductLevelProgress,
@@ -40,6 +41,10 @@ const fallbackLevels: ProductLevelItem[] = [
   { level: 10, code: "level_10", title: "LEVEL 10", minPoints: 12_000, tone: "red", emblem: "crown" },
 ];
 
+const POINTS: PluralForms = ["балл", "балла", "баллов"];
+/** After «от»: «от 1 балла», «от 300 баллов». */
+const POINTS_FROM: PluralForms = ["балла", "баллов", "баллов"];
+
 const badgeSizes = {
   small: { outer: "h-10 w-10", inner: "text-xs" },
   medium: { outer: "h-14 w-14", inner: "text-base" },
@@ -65,8 +70,8 @@ export function LevelBadge({
     <span
       className={`relative inline-grid shrink-0 place-items-center rounded-full p-[3px] ${dimensions.outer} ${muted ? "opacity-[0.45]" : ""}`}
       style={ringStyle}
-      title={`${level.title}: от ${level.minPoints.toLocaleString("ru-RU")} баллов`}
-      aria-label={`${level.title}, от ${level.minPoints.toLocaleString("ru-RU")} баллов`}
+      title={`${level.title}: от ${formatCount(level.minPoints, POINTS_FROM)}`}
+      aria-label={`${level.title}, от ${formatCount(level.minPoints, POINTS_FROM)}`}
       data-testid={`level-badge-${level.level}`}
     >
       <span className="absolute inset-[4px] rounded-full border border-white/10 bg-[#111310] shadow-inner" />
@@ -76,11 +81,11 @@ export function LevelBadge({
 }
 
 function levelRange(levels: ProductLevelItem[], index: number) {
-  const start = levels[index].minPoints.toLocaleString("ru-RU");
+  const start = levels[index].minPoints;
   const next = levels[index + 1];
   return next
-    ? `${start}–${(next.minPoints - 1).toLocaleString("ru-RU")} баллов`
-    : `от ${start} баллов`;
+    ? `${start.toLocaleString("ru-RU")}–${formatCount(next.minPoints - 1, POINTS)}`
+    : `от ${formatCount(start, POINTS_FROM)}`;
 }
 
 export function LevelProgressDialog({
@@ -112,10 +117,10 @@ export function LevelProgressDialog({
       <section role="dialog" aria-modal="true" aria-labelledby="level-dialog-title" data-testid="level-progress-dialog" className="flex max-h-[94dvh] w-full max-w-4xl flex-col overflow-hidden rounded-t-2xl border border-white/10 bg-charcoal text-white shadow-2xl sm:max-h-[88dvh] sm:rounded-2xl">
         <header className="flex shrink-0 items-start justify-between gap-4 border-b border-white/10 px-5 py-4 sm:px-7 sm:py-5">
           <div className="min-w-0">
-            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-gold-ink">Постоянный прогресс</p>
+            <p className="text-xs font-black uppercase tracking-wide text-gold-ink">Постоянный прогресс</p>
             <h2 id="level-dialog-title" className="font-display mt-1.5 text-3xl sm:text-4xl">Уровни Maestro</h2>
           </div>
-          <button type="button" autoFocus onClick={onClose} className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-white/15 text-white/65 transition hover:bg-white/10 hover:text-white" aria-label="Закрыть уровни">
+          <button type="button" autoFocus onClick={onClose} className="grid h-11 w-11 shrink-0 place-items-center rounded-lg border border-white/15 text-white/65 transition hover:bg-white/10 hover:text-white" aria-label="Закрыть уровни">
             <X size={18} />
           </button>
         </header>
@@ -127,13 +132,13 @@ export function LevelProgressDialog({
               <div className="min-w-0">
                 <p className="text-xs font-bold uppercase tracking-[0.14em] text-white/45">Ваш уровень</p>
                 <p className="font-display mt-1 text-3xl">{progress.level.title}</p>
-                <p className="mt-1 text-sm text-white/55">{progress.points.toLocaleString("ru-RU")} баллов</p>
+                <p className="mt-1 text-sm text-white/55">{formatCount(progress.points, POINTS)}</p>
               </div>
             </div>
             <div>
               <div className="flex items-end justify-between gap-3 text-xs text-white/55">
                 <span>{progress.progressPercent}% уровня</span>
-                <span className="text-right">{progress.next ? `${progress.pointsToNext.toLocaleString("ru-RU")} до ${progress.next.title}` : "Максимальный уровень"}</span>
+                <span className="text-right">{progress.next ? `${formatCount(progress.pointsToNext, POINTS)} до ${progress.next.title}` : "Максимальный уровень"}</span>
               </div>
               <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-white/10">
                 <div className={`h-full rounded-full ${toneStyles[progress.level.tone].progress}`} style={{ width: `${progress.progressPercent}%` }} />
@@ -149,7 +154,7 @@ export function LevelProgressDialog({
           <div className="mt-6">
             <div className="mb-3 flex items-end justify-between gap-3">
               <h3 className="font-display text-2xl">Шкала уровней</h3>
-              <span className="text-xs text-white/35">10 уровней</span>
+              <span className="text-xs text-white/55">{formatCount(levels.length, ["уровень", "уровня", "уровней"])}</span>
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
               {levels.map((level, index) => {
@@ -162,7 +167,7 @@ export function LevelProgressDialog({
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-2">
                         <p className="font-black">{level.title}</p>
-                        <span className={`text-[9px] font-black uppercase tracking-[0.1em] ${current ? "text-gold-ink" : achieved ? "text-emerald-300" : next ? "text-white/60" : "text-white/25"}`}>
+                        <span className={`text-xs font-black uppercase tracking-wide ${current ? "text-gold-ink" : achieved ? "text-emerald-300" : next ? "text-white/60" : "text-white/25"}`}>
                           {current ? "Текущий" : achieved ? "Получен" : next ? "Следующий" : "Закрыт"}
                         </span>
                       </div>
@@ -200,13 +205,13 @@ export function LevelSummary({
             {progress.level.title}
           </h2>
           <p className="mt-2 text-sm text-white/55">
-            {progress.points.toLocaleString("ru-RU")} баллов
+            {formatCount(progress.points, POINTS)}
           </p>
         </div>
         <div className="flex shrink-0 flex-col items-end gap-3">
           <LevelBadge level={progress.level} size={compact ? "medium" : "large"} />
           {!compact ? (
-            <button type="button" onClick={() => setDetailsOpen(true)} className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-white/15 px-3 text-xs font-bold text-white/65 transition hover:bg-white/10 hover:text-white">
+            <button type="button" onClick={() => setDetailsOpen(true)} className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-white/15 px-3 text-xs font-bold text-white/65 transition hover:bg-white/10 hover:text-white">
               Все уровни <ChevronRight size={14} />
             </button>
           ) : null}
@@ -220,7 +225,7 @@ export function LevelSummary({
           </span>
           <span>
             {progress.next
-              ? `${progress.pointsToNext.toLocaleString("ru-RU")} баллов до ${progress.next.title}`
+              ? `${formatCount(progress.pointsToNext, POINTS)} до ${progress.next.title}`
               : "Максимальный уровень достигнут"}
           </span>
         </div>
@@ -236,7 +241,7 @@ export function LevelSummary({
         <div className="mt-6 flex items-center gap-3 border-t border-white/10 pt-5">
           <LevelBadge level={progress.next} size="small" muted />
           <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-black uppercase text-white/40">Следующий рубеж</p>
+            <p className="text-xs font-black uppercase tracking-wide text-white/55">Следующий рубеж</p>
             <p className="mt-1 font-bold">{progress.next.title}</p>
           </div>
           <ChevronRight size={18} className="text-white/30" />

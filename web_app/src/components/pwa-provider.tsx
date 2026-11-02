@@ -96,17 +96,17 @@ export function PwaProvider() {
             <button
               type="button"
               onClick={() => void install()}
-              className="inline-flex items-center gap-2 rounded-full bg-ink px-4 py-2 text-xs font-bold text-white"
+              className="inline-flex min-h-11 items-center gap-2 rounded-full bg-ink px-4 py-2 text-xs font-bold text-white"
             >
               <Download size={14} />
               Установить
             </button>
-            <button type="button" onClick={dismiss} className="rounded-full border border-stone-200 px-4 py-2 text-xs font-bold text-stone-600">
+            <button type="button" onClick={dismiss} className="min-h-11 rounded-full border border-stone-200 px-4 py-2 text-xs font-bold text-stone-600">
               Позже
             </button>
           </div>
         </div>
-        <button type="button" onClick={dismiss} aria-label="Закрыть" className="text-stone-400">
+        <button type="button" onClick={dismiss} aria-label="Закрыть" className="-mr-2 -mt-2 grid h-11 w-11 shrink-0 place-items-center text-stone-500">
           <X size={16} />
         </button>
       </div>

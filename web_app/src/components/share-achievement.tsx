@@ -102,7 +102,7 @@ export function ShareAchievementButton({ kind, title, date, sequence = null, com
       type="button"
       onClick={() => void share()}
       disabled={state === "busy"}
-      className={`inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-white text-xs font-bold text-amber-900 transition hover:bg-amber-50 disabled:opacity-60 ${compact ? "min-h-9 px-2.5" : "min-h-11 px-3"}`}
+      className={`inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-white text-xs font-bold text-amber-900 transition hover:bg-amber-50 disabled:opacity-60 min-h-11 ${compact ? "px-2.5" : "px-3"}`}
       data-testid={`share-${kind}`}
       aria-label={`Поделиться: ${title}`}
     >

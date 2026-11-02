@@ -54,8 +54,9 @@ body {
     @apply min-h-11 w-full rounded-xl border border-stone-300 bg-paper px-4 py-3 text-sm text-ink transition-colors placeholder:text-stone-500 focus:border-gold;
   }
   .brand-card { @apply rounded-2xl border border-stone-200 bg-paper shadow-soft; }
+  /* A 44 px link parked above the top edge; a keyboard focus slides it in. */
   .brand-skip-link {
-    @apply sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[120] focus:rounded-xl focus:bg-charcoal focus:px-4 focus:py-3 focus:text-white;
+    @apply fixed left-4 top-4 z-[120] inline-flex min-h-11 -translate-y-[150%] items-center rounded-xl bg-charcoal px-4 text-sm font-bold text-white transition-transform focus:translate-y-0;
   }
 }
 

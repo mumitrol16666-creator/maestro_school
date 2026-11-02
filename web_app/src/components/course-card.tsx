@@ -1,5 +1,6 @@
 import { ArrowUpRight, BookOpen, CheckCircle2, Play } from "lucide-react";
 import Link from "next/link";
+import { formatCount } from "@/lib/plural";
 import { Course } from "@/types";
 import { ProgressBar } from "./progress-bar";
 
@@ -28,7 +29,7 @@ export function CourseCard({ course }: { course: Course }) {
           {course.description}
         </p>
         <div className="mt-5 flex items-center justify-between text-xs font-semibold text-stone-500">
-          <span>{course.lessonsCount} уроков</span>
+          <span>{formatCount(course.lessonsCount, ["урок", "урока", "уроков"])}</span>
           <span>
             {completed ? "Курс пройден" : enrolled ? `${course.progress}% пройдено` : "Можно начать сейчас"}
           </span>

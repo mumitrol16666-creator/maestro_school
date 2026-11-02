@@ -1,4 +1,5 @@
 import { Award, CalendarClock, Check, GraduationCap, X } from "lucide-react";
+import { formatCount } from "@/lib/plural";
 import { formatExamDate, sectorExamOutcomeLabel } from "@/lib/sector-exams-api";
 import type { PublicSectorExam } from "@/types/sector-exam";
 
@@ -9,7 +10,7 @@ export function GroupSectorPassBadge({ pass }: { pass: { method: "exam" | "manua
     <p className="mt-4 inline-flex flex-wrap items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-900" data-testid="group-sector-pass">
       <Award size={15} className="shrink-0" />
       {pass.method === "exam" ? "Сектор группы сдан на экзамене" : "Сектор группы засчитан преподавателем"}
-      {pass.points ? ` · +${pass.points} баллов` : ""}
+      {pass.points ? ` · +${formatCount(pass.points, ["балл", "балла", "баллов"])}` : ""}
     </p>
   );
 }

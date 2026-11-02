@@ -68,7 +68,7 @@ export function LessonVideoPlayer({
         loading="lazy"
         referrerPolicy="strict-origin-when-cross-origin"
       />
-      <span className="pointer-events-none absolute bottom-4 right-4 rounded-full bg-black/50 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-white/80">
+      <span className="pointer-events-none absolute bottom-4 right-4 rounded-full bg-black/50 px-3 py-1 text-xs font-bold uppercase tracking-wide text-white/90">
         {parsed.provider === "youtube" ? "YouTube" : parsed.provider === "vimeo" ? "Vimeo" : "Stream"}
       </span>
     </div>

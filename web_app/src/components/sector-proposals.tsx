@@ -83,7 +83,7 @@ export function SectorProposalSection({
                 key={option.value}
                 type="button"
                 onClick={() => setKind(option.value)}
-                className={`rounded-full border px-3 py-1.5 text-xs font-bold ${kind === option.value ? "border-sky-700 bg-sky-700 text-white" : "border-stone-300 bg-white text-stone-700"}`}
+                className={`min-h-11 rounded-full border px-4 py-1.5 text-xs font-bold ${kind === option.value ? "border-sky-700 bg-sky-700 text-white" : "border-stone-300 bg-white text-stone-700"}`}
               >
                 {option.label}
               </button>
@@ -92,7 +92,7 @@ export function SectorProposalSection({
               <select
                 value={directionId}
                 onChange={(event) => setCrmDirectionId(event.target.value)}
-                className="ml-auto h-9 rounded-lg border border-stone-300 bg-white px-2 text-xs font-bold"
+                className="ml-auto h-11 rounded-lg border border-stone-300 bg-white px-2 text-xs font-bold"
               >
                 {directions.map(([id, direction]) => <option key={id} value={id}>{direction.title}</option>)}
               </select>
@@ -110,7 +110,7 @@ export function SectorProposalSection({
             value={link}
             onChange={(event) => setLink(event.target.value)}
             placeholder="Ссылка на видео или разбор (необязательно)"
-            className="h-10 w-full rounded-lg border border-stone-200 bg-white px-3 text-sm outline-none focus:border-sky-400"
+            className="h-11 w-full rounded-lg border border-stone-200 bg-white px-3 text-sm outline-none focus:border-sky-400"
           />
           <div className="flex flex-wrap items-center gap-3">
             <button
@@ -147,7 +147,7 @@ export function SectorProposalSection({
         </ul>
       ) : null}
       {shown.length > 3 && !showAll ? (
-        <button type="button" onClick={() => setShowAll(true)} className="mt-3 inline-flex min-h-10 items-center text-xs font-bold text-sky-800 hover:underline" data-testid="proposals-show-all">
+        <button type="button" onClick={() => setShowAll(true)} className="mt-3 inline-flex min-h-11 items-center text-xs font-bold text-sky-800 hover:underline" data-testid="proposals-show-all">
           Показать все ({shown.length})
         </button>
       ) : null}

@@ -14,6 +14,9 @@ import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
 import { PageHeader } from "@/components/page-header";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { api } from "@/lib/api-client";
+import { formatCount, formatOutOf } from "@/lib/plural";
+
+const QUESTION_FORMS = ["вопрос", "вопроса", "вопросов"] as const;
 
 export default function TestsPage() {
   const resource = useApiResource(() => api.preparedTests(), []);
@@ -57,12 +60,12 @@ export default function TestsPage() {
               <ClipboardCheck size={22} />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block text-xs font-bold uppercase tracking-[0.16em] text-gold-ink">
+              <span className="block text-xs font-bold uppercase tracking-wide text-gold-ink">
                 Продолжить
               </span>
               <span className="mt-1 block font-display text-2xl leading-tight">{next.title}</span>
               <span className="mt-1 block text-sm text-white/60">
-                {next.questionCount} вопросов · проходной результат {next.passingScore}%
+                {formatCount(next.questionCount, QUESTION_FORMS)} · проходной результат {next.passingScore}%
               </span>
             </span>
             <ChevronRight className="shrink-0 text-gold-ink transition group-hover:translate-x-1" />
@@ -89,10 +92,10 @@ export default function TestsPage() {
             <Flame size={22} />
           </span>
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.16em] text-stone-500">Правила прохождения</p>
-            <p className="mt-1 font-display text-2xl">{dailyRules.testLimit} тест · {dailyRules.attemptLimit} попытки в день</p>
+            <p className="text-xs font-bold uppercase tracking-wide text-stone-500">Правила прохождения</p>
+            <p className="mt-1 font-display text-2xl">{formatCount(dailyRules.testLimit, ["тест", "теста", "тестов"])} · {formatCount(dailyRules.attemptLimit, ["попытка", "попытки", "попыток"])} в день</p>
             <p className="mt-1 text-sm text-stone-600">
-              За успешную сдачу: +{xpRules.firstAttempt} XP с первой попытки или +{xpRules.retry} XP со второй. До {xpRules.weeklyLimit} тестов в неделю.
+              За успешную сдачу: +{xpRules.firstAttempt} XP с первой попытки или +{xpRules.retry} XP со второй. До {formatCount(xpRules.weeklyLimit, ["теста", "тестов", "тестов"])} в неделю.
             </p>
           </div>
         </div>
@@ -111,7 +114,7 @@ export default function TestsPage() {
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block font-display text-2xl">Раздел {section}</span>
-                <span className="block text-xs text-stone-500">Пройдено {passedCount} из {inSection.length}</span>
+                <span className="block text-xs text-stone-500">Пройдено {formatOutOf(passedCount, inSection.length, ["теста", "тестов", "тестов"])}</span>
               </span>
               <ChevronRight size={18} className="shrink-0 text-stone-400 transition group-open:rotate-90" />
             </summary>
@@ -149,16 +152,17 @@ export default function TestsPage() {
                   <span className="min-w-0 flex-1">
                     <span className="block font-display text-xl sm:text-2xl">{test.title}</span>
                     <span className="mt-1 block text-sm text-stone-500">{test.description}</span>
-                    <span className="mt-2 block text-xs font-bold uppercase tracking-[0.1em] text-stone-400">
-                      {test.questionCount} вопросов
-                      {test.attemptsUsedToday ? ` · сегодня: ${test.attemptsUsedToday} из ${dailyRules.attemptLimit}` : ""}
+                    <span className="mt-2 block text-xs font-bold uppercase tracking-wide text-stone-500">
+                      {formatCount(test.questionCount, QUESTION_FORMS)}
+                      {test.attemptsUsedToday ? ` · использовано сегодня: ${formatOutOf(test.attemptsUsedToday, dailyRules.attemptLimit, ["попытки", "попыток", "попыток"])}` : ""}
                       {test.bestScore != null ? ` · лучший результат ${test.bestScore}%` : ""}
                     </span>
                   </span>
                   {test.available && !test.passed ? (
                     <Link
                       href={`/tests/${test.id}`}
-                      className="inline-flex shrink-0 items-center gap-1 rounded-full bg-ink px-4 py-2.5 text-sm font-bold text-white transition hover:bg-gold hover:text-ink"
+                      aria-label={`${test.attemptsUsed ? "Продолжить" : "Начать"}: ${test.title}`}
+                      className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-full bg-ink px-3 text-sm sm:px-4 font-bold text-white transition hover:bg-gold hover:text-ink"
                     >
                       <span className="hidden sm:inline">{test.attemptsUsed ? "Продолжить" : "Начать"}</span>
                       <ChevronRight size={16} />
@@ -166,13 +170,14 @@ export default function TestsPage() {
                   ) : test.passed ? (
                     <Link
                       href={`/tests/${test.id}`}
-                      className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-300 bg-white px-4 py-2.5 text-sm font-bold text-emerald-800 transition hover:border-emerald-500"
+                      aria-label={`Материал и разбор: ${test.title}`}
+                      className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-full border border-emerald-300 bg-white px-3 text-sm sm:px-4 font-bold text-emerald-800 transition hover:border-emerald-500"
                     >
                       <BookOpen size={15} />
                       <span className="hidden sm:inline">Материал и разбор</span>
                     </Link>
                   ) : (test.dailyLocked || test.exhausted) && !test.locked ? (
-                    <Link href={`/tests/${test.id}`} className="inline-flex shrink-0 items-center gap-1 rounded-full border border-amber-300 bg-white px-4 py-2.5 text-sm font-bold text-amber-900">
+                    <Link href={`/tests/${test.id}`} aria-label={`Читать: ${test.title}`} className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-full border border-amber-300 bg-white px-3 text-sm sm:px-4 font-bold text-amber-900">
                       <BookOpen size={15} /><span className="hidden sm:inline">Читать</span>
                     </Link>
                   ) : null}

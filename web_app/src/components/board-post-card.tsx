@@ -22,7 +22,7 @@ export function BoardPostCard({ post }: { post: BoardPost }) {
             <Newspaper size={19} />
           </span>
           <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-3 text-xs text-stone-400">
+            <div className="flex flex-wrap items-center gap-3 text-xs text-stone-500">
               <span>{post.date}</span>
               <span>{post.author}</span>
             </div>
@@ -42,7 +42,7 @@ export function BoardPostCard({ post }: { post: BoardPost }) {
               <button
                 type="button"
                 onClick={() => setExpanded((value) => !value)}
-                className="mt-4 inline-flex items-center gap-2 rounded-full border border-stone-200 bg-white px-4 py-2 text-sm font-bold text-ink transition hover:border-gold/40"
+                className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-full border border-stone-200 bg-white px-4 py-2 text-sm font-bold text-ink transition hover:border-gold/40"
               >
                 {expanded ? (
                   <>

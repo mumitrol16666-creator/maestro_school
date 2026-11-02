@@ -66,7 +66,7 @@ export function HomeworkSubmissionForm({
 
   return (
     <form onSubmit={handleSubmit} className="mt-9 rounded-[30px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
-      <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold-ink">
+      <p className="text-xs font-bold uppercase tracking-wide text-gold-ink">
         {revision ? "Доработка" : "Домашнее задание"}
       </p>
       <h2 className="font-display mt-3 text-3xl">
@@ -90,7 +90,7 @@ export function HomeworkSubmissionForm({
                 type="button"
                 disabled={disabled || submitting}
                 onClick={() => setAttachmentType(type)}
-                className={`rounded-full px-4 py-2 text-xs font-bold ${
+                className={`min-h-11 rounded-full px-4 py-2 text-xs font-bold ${
                   attachmentType === type ? "bg-ink text-white" : "border border-stone-200 bg-white text-stone-600"
                 }`}
               >
@@ -123,7 +123,7 @@ export function HomeworkSubmissionForm({
               value={attachmentUrl}
               onChange={(e) => setAttachmentUrl(e.target.value)}
               disabled={disabled || submitting}
-              className="w-full rounded-xl border border-stone-200 bg-white p-3 text-sm outline-none focus:border-gold disabled:opacity-60"
+              className="min-h-11 w-full rounded-xl border border-stone-200 bg-white p-3 text-sm outline-none focus:border-gold disabled:opacity-60"
               placeholder={placeholders[attachmentType]}
             />
           </label>
@@ -139,9 +139,9 @@ export function HomeworkSubmissionForm({
               accept={attachmentType === "video" ? "video/*" : attachmentType === "audio" ? "audio/*" : "image/*,application/pdf,audio/*,video/*"}
               disabled={disabled || submitting}
               onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-              className="block w-full text-sm text-stone-600 file:mr-3 file:min-h-10 file:rounded-xl file:border-0 file:bg-ink file:px-4 file:text-sm file:font-bold file:text-white"
+              className="block w-full text-sm text-stone-600 file:mr-3 file:min-h-11 file:rounded-xl file:border-0 file:bg-ink file:px-4 file:text-sm file:font-bold file:text-white"
             />
-            <span className="mt-1 block text-[11px] text-stone-500">
+            <span className="mt-1 block text-xs text-stone-500">
               {file ? `Будет отправлен: ${file.name}` : "Видео до 500 МБ, аудио до 100 МБ, фото до 15 МБ, PDF до 25 МБ. Файл увидит только преподаватель."}
             </span>
           </label>
@@ -150,7 +150,7 @@ export function HomeworkSubmissionForm({
 
       <button
         disabled={disabled || submitting}
-        className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-ink px-5 py-4 text-sm font-bold text-white disabled:opacity-50"
+        className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl bg-ink px-5 py-4 text-sm font-bold text-white disabled:opacity-50"
       >
         {submitting ? <LoaderCircle className="animate-spin" size={16} /> : <Send size={16} />}
         {disabled

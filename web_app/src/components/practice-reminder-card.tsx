@@ -65,7 +65,7 @@ export function PracticeReminderCard() {
         </label>
         <div>
           <p className="text-xs font-bold uppercase tracking-wider text-stone-500">Дни</p>
-          <div className="mt-1 flex flex-wrap gap-1.5">
+          <div className="mt-1 flex flex-wrap gap-2">
             {weekdays.map((day) => {
               const on = settings.days.includes(day.value);
               return (
@@ -79,7 +79,7 @@ export function PracticeReminderCard() {
                     if (!days.length) return;
                     void save({ ...settings, days });
                   }}
-                  className={`min-h-10 min-w-11 rounded-xl border px-3 text-sm font-bold ${on ? "border-amber-600 bg-amber-50 text-amber-950" : "border-stone-200 bg-white text-stone-500"}`}
+                  className={`min-h-11 min-w-11 rounded-xl border px-3 text-sm font-bold ${on ? "border-amber-600 bg-amber-50 text-amber-950" : "border-stone-200 bg-white text-stone-500"}`}
                 >
                   {day.label}
                 </button>

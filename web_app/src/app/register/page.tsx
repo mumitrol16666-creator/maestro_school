@@ -1,7 +1,8 @@
 "use client";
 
-import { ArrowLeft, ArrowRight, ShieldCheck } from "lucide-react";
+import { ArrowRight, ShieldCheck } from "lucide-react";
 import Link from "next/link";
+import { BackButton } from "@/components/back-button";
 import { AuthHeroPanel } from "@/components/auth-hero-panel";
 import { Brand } from "@/components/brand";
 
@@ -12,12 +13,10 @@ export default function RegisterPage() {
   return (
     <main className="grid min-h-screen bg-paper lg:grid-cols-[1.05fr_0.95fr]">
       <AuthHeroPanel />
-      <section className="flex items-center justify-center p-6 sm:p-12">
+      <section className="flex items-start justify-center p-6 sm:p-12 lg:items-center">
         <div className="w-full max-w-md">
-          <div className="mb-10 lg:hidden"><Brand /></div>
-          <Link href="/login" className="inline-flex items-center gap-2 text-sm font-bold text-stone-500 transition hover:text-ink">
-            <ArrowLeft size={16} /> Назад ко входу
-          </Link>
+          <BackButton href="/login" label="Вход" className="-ml-1" />
+          <div className="mb-10 mt-4 lg:hidden"><Brand /></div>
           <p className="mt-8 text-xs font-bold uppercase tracking-[0.22em] text-gold-ink">Внутренняя экосистема</p>
           <h2 className="font-display mt-3 text-5xl leading-tight">Доступ выдаёт школа</h2>
           <p className="mt-5 text-sm leading-6 text-stone-500">

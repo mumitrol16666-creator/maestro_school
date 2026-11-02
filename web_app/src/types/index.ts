@@ -24,7 +24,6 @@ export interface Lesson {
   moduleId: string;
   title: string;
   description: string;
-  order: number;
   status: LessonStatus;
   pointsReward: number;
   materials: Material[];

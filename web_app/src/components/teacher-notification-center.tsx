@@ -25,6 +25,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { useDialogBehavior } from "@/hooks/use-dialog-behavior";
+import { formatCount } from "@/lib/plural";
 import { notificationsApi, type UserNotification } from "@/lib/notifications-api";
 
 type NotificationAudience = "student" | "teacher" | "staff" | "parent";
@@ -214,11 +215,11 @@ export function NotificationCenter({
         onClick={() => setOpen(true)}
         aria-label={unreadCount && unreadCount > 0 ? `Уведомления, новых: ${unreadCount}` : "Уведомления"}
         aria-expanded={open}
-        className="relative grid h-10 w-10 place-items-center rounded-xl border border-stone-200 bg-white text-stone-600 transition-colors hover:border-gold/30 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold sm:rounded-full"
+        className="relative grid h-11 w-11 place-items-center rounded-xl border border-stone-200 bg-white text-stone-600 transition-colors hover:border-gold/30 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold sm:rounded-full"
       >
-        <Bell size={16} />
+        <Bell size={18} />
         {unreadCount != null && unreadCount > 0 ? (
-          <span className="absolute -right-1 -top-1 grid min-h-4 min-w-4 place-items-center rounded-full bg-gold px-1 text-[9px] font-black leading-none text-ink">
+          <span className="absolute -right-1 -top-1 grid min-h-5 min-w-5 place-items-center rounded-full bg-gold px-1 text-xs font-black leading-none text-ink">
             {unreadCount > 9 ? "9+" : unreadCount}
           </span>
         ) : null}
@@ -242,11 +243,11 @@ export function NotificationCenter({
           >
             <header className="flex shrink-0 items-start gap-3 border-b border-stone-200 bg-paper px-4 pb-4 pt-[max(1rem,env(safe-area-inset-top,0px))] sm:px-5 sm:py-5">
               <div className="min-w-0 flex-1">
-                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gold-ink">
+                <p className="text-xs font-black uppercase tracking-wide text-gold-ink">
                   {audienceCopy(audience)}
                 </p>
                 <h2 id="notifications-title" className="mt-1 text-xl font-black text-ink">
-                  {totalUnread > 0 ? `${totalUnread} новых` : "Всё просмотрено"}
+                  {totalUnread > 0 ? formatCount(totalUnread, ["новое", "новых", "новых"]) : "Всё просмотрено"}
                 </h2>
               </div>
               {totalUnread > 0 ? (
@@ -254,7 +255,7 @@ export function NotificationCenter({
                   type="button"
                   disabled={markingAll}
                   onClick={() => void markAllRead()}
-                  className="inline-flex min-h-10 items-center gap-2 rounded-lg px-2 text-xs font-bold text-stone-600 transition-colors hover:bg-stone-100 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold disabled:opacity-50"
+                  className="inline-flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-lg px-2 text-xs font-bold text-stone-600 transition-colors hover:bg-stone-100 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold disabled:opacity-50"
                   title="Отметить всё просмотренным"
                 >
                   <CheckCheck size={17} />
@@ -265,7 +266,7 @@ export function NotificationCenter({
                 type="button"
                 onClick={() => setOpen(false)}
                 data-dialog-initial-focus="true"
-                className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-stone-200 bg-white text-stone-500 transition-colors hover:border-stone-300 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold"
+                className="grid h-11 w-11 shrink-0 place-items-center rounded-lg border border-stone-200 bg-white text-stone-500 transition-colors hover:border-stone-300 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold"
                 aria-label="Закрыть уведомления"
               >
                 <X size={18} />
@@ -310,7 +311,7 @@ export function NotificationCenter({
                   ) : null}
                   {unreadItems.length > 0 ? (
                     <section aria-labelledby="new-notifications-title">
-                      <h3 id="new-notifications-title" className="border-b border-stone-200 bg-stone-50 px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.16em] text-stone-500 sm:px-5">
+                      <h3 id="new-notifications-title" className="border-b border-stone-200 bg-stone-50 px-4 py-2.5 text-xs font-black uppercase tracking-wide text-stone-600 sm:px-5">
                         Новые
                       </h3>
                       {unreadItems.map((item) => <NotificationRow key={item.id} item={item} onOpen={(candidate) => void openItem(candidate)} />)}
@@ -318,7 +319,7 @@ export function NotificationCenter({
                   ) : null}
                   {readItems.length > 0 ? (
                     <section aria-labelledby="read-notifications-title" className={unreadItems.length ? "mt-3" : ""}>
-                      <h3 id="read-notifications-title" className="border-y border-stone-200 bg-stone-50 px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.16em] text-stone-500 sm:px-5">
+                      <h3 id="read-notifications-title" className="border-y border-stone-200 bg-stone-50 px-4 py-2.5 text-xs font-black uppercase tracking-wide text-stone-600 sm:px-5">
                         Ранее
                       </h3>
                       {readItems.map((item) => <NotificationRow key={item.id} item={item} onOpen={(candidate) => void openItem(candidate)} />)}

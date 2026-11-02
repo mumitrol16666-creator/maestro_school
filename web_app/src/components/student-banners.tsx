@@ -53,7 +53,7 @@ export function StudentBanners({ banners }: { banners: ApiStudentHome["banners"]
               <p className="mt-0.5 text-xs leading-5 opacity-80">{item.body}</p>
               <button
                 type="button"
-                className="mt-2 inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-white/80 px-3 text-xs font-bold shadow-xs"
+                className="mt-2 inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-white/80 px-3 text-xs font-bold shadow-xs"
                 onClick={() => {
                   const url = item.url;
                   void settle(item.id).then(() => {
@@ -64,7 +64,7 @@ export function StudentBanners({ banners }: { banners: ApiStudentHome["banners"]
                 {style.action} <ArrowRight size={14} />
               </button>
             </div>
-            <button type="button" aria-label={`Скрыть: ${item.title}`} onClick={() => void settle(item.id)} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg opacity-60 hover:bg-white/60 hover:opacity-100">
+            <button type="button" aria-label={`Скрыть: ${item.title}`} onClick={() => void settle(item.id)} className="grid h-11 w-11 shrink-0 place-items-center rounded-lg opacity-60 hover:bg-white/60 hover:opacity-100">
               <X size={16} />
             </button>
           </div>

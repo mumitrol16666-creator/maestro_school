@@ -79,7 +79,7 @@ test("on a phone «Сейчас» shows the focus, the league, then the way to �
     document.documentElement.scrollWidth - document.documentElement.clientWidth
   ));
   expect(overflow).toBeLessThanOrEqual(1);
-  await expect(page.getByText("баллов", { exact: true })).toBeVisible();
+  await expect(page.getByText(/^балл(а|ов)?$/)).toBeVisible();
   await expect(page.getByText("Coins", { exact: true })).toHaveCount(0);
   await page.getByTestId("dashboard-points-chip").click();
   const levelDialog = page.getByTestId("level-progress-dialog");

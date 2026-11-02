@@ -9,6 +9,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { normalizeLessonStatus } from "@/lib/adapters";
 import { api } from "@/lib/api-client";
+import { formatOutOf, pluralize } from "@/lib/plural";
 
 export default function ProgressPage() {
   const resource = useApiResource(() => api.progress(), []);
@@ -34,34 +35,34 @@ export default function ProgressPage() {
         title="История обучения"
         description="Онлайн-курсы и последние начисления учебных баллов."
       />
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
-        <section className="space-y-6" aria-label="Курсы и уроки">
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <section className="min-w-0 space-y-6" aria-label="Курсы и уроки">
           {enrollments.length ? enrollments.map((enrollment) => {
             const courseLessons = lessons.filter((item) => item.lesson.module.courseId === enrollment.courseId);
             const completed = courseLessons.filter((item) => item.status === "completed").length;
             const percent = courseLessons.length ? Math.round((completed / courseLessons.length) * 100) : 0;
 
             return (
-              <article key={enrollment.id} className="rounded-[30px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
+              <article key={enrollment.id} className="min-w-0 rounded-[30px] border border-stone-200 bg-paper p-5 shadow-soft sm:p-8">
                 <div className="flex flex-col gap-3 border-b border-stone-200 pb-5 sm:flex-row sm:items-end sm:justify-between">
                   <div className="min-w-0">
                     <p className="text-xs font-bold uppercase tracking-widest text-gold-ink">
                       {enrollment.course.direction.title}
                     </p>
-                    <h2 className="font-display mt-2 text-3xl text-pretty sm:text-4xl">
-                      <Link href={`/courses/${enrollment.courseId}`} className="hover:text-gold-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-gold">
+                    <h2 className="font-display mt-2 break-words text-3xl text-pretty sm:text-4xl">
+                      <Link href={`/courses/${enrollment.courseId}`} className="inline-flex min-h-11 items-center hover:text-gold-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-gold">
                         {enrollment.course.title}
                       </Link>
                     </h2>
                   </div>
                   <p className="shrink-0 text-sm font-semibold text-stone-500">
-                    {completed} из {courseLessons.length} уроков
+                    {formatOutOf(completed, courseLessons.length, ["урока", "уроков", "уроков"])}
                   </p>
                 </div>
 
-                <div className="mt-5 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4">
+                <div className="mt-5">
                   <ProgressBar value={percent} />
-                  <span className="font-display text-2xl tabular-nums">{percent}%</span>
+                  <p className="mt-2 text-sm font-semibold tabular-nums text-stone-600">{percent}% пройдено</p>
                 </div>
 
                 {courseLessons.length ? (
@@ -90,8 +91,9 @@ export default function ProgressPage() {
                             <span className="mt-1 block truncate text-xs text-stone-500">
                               {item.lesson.module.title}
                             </span>
+                            <span className="mt-2 block sm:hidden"><StatusBadge status={status} /></span>
                           </span>
-                          <StatusBadge status={status} />
+                          <span className="hidden shrink-0 sm:block"><StatusBadge status={status} /></span>
                         </Link>
                       );
                     })}
@@ -113,11 +115,11 @@ export default function ProgressPage() {
           )}
         </section>
 
-        <aside className="self-start overflow-hidden rounded-[28px] border border-stone-200 bg-paper shadow-soft" data-testid="learning-points-history">
+        <aside className="min-w-0 self-start overflow-hidden rounded-[28px] border border-stone-200 bg-paper shadow-soft" data-testid="learning-points-history">
           <div className="bg-ink p-6 text-white">
             <Star size={22} className="text-gold-ink" fill="currentColor" aria-hidden="true" />
             <p className="font-display mt-6 text-4xl tabular-nums">{points.toLocaleString("ru-RU")}</p>
-            <p className="mt-1 text-sm text-white/60">учебных баллов</p>
+            <p className="mt-1 text-sm text-white/60">{pluralize(points, ["учебный балл", "учебных балла", "учебных баллов"])}</p>
           </div>
           <div className="p-6">
             <div className="flex items-end justify-between gap-3">

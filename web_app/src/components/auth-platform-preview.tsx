@@ -62,12 +62,12 @@ export function AuthPlatformPreview({ profile }: { profile: AuthProfile }) {
                 <Icon size={16} />
               </span>
               {card.badge ? (
-                <span className="rounded-full border border-gold/25 bg-gold/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-gold-ink">
+                <span className="rounded-full border border-gold/25 bg-gold/10 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-gold-ink">
                   {card.badge}
                 </span>
               ) : null}
             </div>
-            <p className="mt-4 text-[11px] font-bold uppercase tracking-[0.18em] text-white/40">{card.label}</p>
+            <p className="mt-4 text-xs font-bold uppercase tracking-wide text-white/60">{card.label}</p>
             <p className={`mt-1 text-sm font-semibold leading-snug ${card.accent ? "text-gold-ink" : "text-white/90"}`}>
               {card.value}
             </p>

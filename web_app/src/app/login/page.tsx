@@ -264,7 +264,7 @@ export default function LoginPage() {
               </p>
               <a
                 href={TRIAL_LANDING_URL}
-                className="mt-4 inline-flex items-center gap-2 text-sm font-bold text-gold-ink transition hover:text-ink"
+                className="mt-2 inline-flex min-h-11 items-center gap-2 text-sm font-bold text-gold-ink transition hover:text-ink"
               >
                 Записаться на пробный урок <ArrowRight size={15} />
               </a>

@@ -1,8 +1,9 @@
 "use client";
 
-import { ArrowLeft, ArrowRight, CheckCircle2, LoaderCircle, MessageCircle, Music2 } from "lucide-react";
+import { ArrowRight, CheckCircle2, LoaderCircle, MessageCircle, Music2 } from "lucide-react";
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { BackButton } from "@/components/back-button";
 import { AuthHeroPanel } from "@/components/auth-hero-panel";
 import { Brand } from "@/components/brand";
 import { ApiError, api } from "@/lib/api-client";
@@ -122,10 +123,8 @@ export default function TrialLessonPage() {
       <AuthHeroPanel />
       <section className="flex items-center justify-center p-6 sm:p-12">
         <div className="w-full max-w-lg py-8">
-          <div className="mb-8 lg:hidden"><Brand /></div>
-          <Link href="/login" className="inline-flex items-center gap-2 text-sm font-bold text-stone-500 transition hover:text-ink">
-            <ArrowLeft size={16} /> Назад ко входу
-          </Link>
+          <BackButton href="/login" label="Вход" className="-ml-1" />
+          <div className="mb-8 mt-4 lg:hidden"><Brand /></div>
           <p className="mt-8 text-xs font-bold uppercase tracking-[0.22em] text-gold-ink">Первое знакомство</p>
           <h1 className="font-display mt-3 text-5xl leading-tight">Записаться на пробный урок</h1>
           <p className="mt-4 flex items-start gap-2 text-sm leading-6 text-stone-500">

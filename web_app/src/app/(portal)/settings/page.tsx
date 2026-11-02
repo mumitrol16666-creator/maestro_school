@@ -20,6 +20,7 @@ import { useApiResource } from "@/hooks/use-api-resource";
 import { api } from "@/lib/api-client";
 import { formatFio, initialsFromName } from "@/lib/name";
 import { isStudentRole, roleLabel, settingsPathForRole } from "@/lib/role-labels";
+import { pluralize } from "@/lib/plural";
 import { familyApi } from "@/lib/family-api";
 import type { ParentVisibility } from "@/types/family";
 
@@ -320,7 +321,7 @@ function EconomyProfileSummary({
           <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold-ink">Активность</p>
           <h3 className="font-display mt-2 text-3xl">Серия и медали</h3>
         </div>
-        <Link href="/league" className="text-sm font-bold text-stone-600 hover:text-gold-ink">Открыть лигу</Link>
+        <Link href="/league" className="inline-flex min-h-11 items-center text-sm font-bold text-stone-600 hover:text-gold-ink">Открыть лигу</Link>
       </div>
       <div className="mt-6 grid divide-y divide-stone-200 border-y border-stone-200 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
         <div className="py-4 sm:px-4 sm:first:pl-0">
@@ -343,7 +344,7 @@ function EconomyProfileSummary({
         {economy.milestones.map((milestone) => (
           <div key={milestone.weeks} className={`min-w-0 border-t-2 pt-3 text-center ${milestone.earned ? "border-gold text-ink" : "border-stone-200 text-stone-400"}`}>
             <p className="font-display text-xl">{milestone.weeks}</p>
-            <p className="mt-1 truncate text-[10px] font-bold">недель</p>
+            <p className="mt-1 truncate text-xs font-bold">{pluralize(milestone.weeks, ["неделя", "недели", "недель"])}</p>
           </div>
         ))}
       </div>
@@ -373,7 +374,7 @@ function ProfileAchievements({
           <button
             type="button"
             onClick={() => setShowAll((current) => !current)}
-            className="min-h-10 text-sm font-bold text-stone-600 hover:text-gold-ink"
+            className="min-h-11 px-2 text-sm font-bold text-stone-600 hover:text-gold-ink"
             aria-expanded={showAll}
           >
             {showAll ? "Свернуть" : "Показать все"}
@@ -625,7 +626,7 @@ function PasswordChangeCard() {
               onChange={(event) => setCurrentPassword(event.target.value)}
               className="min-w-0 flex-1 rounded-2xl px-4 py-3 text-sm outline-none"
             />
-            <button type="button" onClick={() => setShowCurrent((c) => !c)} aria-label={showCurrent ? "Скрыть пароль" : "Показать пароль"} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-stone-400 transition-colors hover:bg-stone-100 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold">
+            <button type="button" onClick={() => setShowCurrent((c) => !c)} aria-label={showCurrent ? "Скрыть пароль" : "Показать пароль"} className="grid h-11 w-11 shrink-0 place-items-center rounded-xl text-stone-500 transition-colors hover:bg-stone-100 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold">
               {showCurrent ? <EyeOff size={17} /> : <Eye size={17} />}
             </button>
           </span>
@@ -644,7 +645,7 @@ function PasswordChangeCard() {
               onChange={(event) => setNewPassword(event.target.value)}
               className="min-w-0 flex-1 rounded-2xl px-4 py-3 text-sm outline-none"
             />
-            <button type="button" onClick={() => setShowNew((c) => !c)} aria-label={showNew ? "Скрыть пароль" : "Показать пароль"} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-stone-400 transition-colors hover:bg-stone-100 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold">
+            <button type="button" onClick={() => setShowNew((c) => !c)} aria-label={showNew ? "Скрыть пароль" : "Показать пароль"} className="grid h-11 w-11 shrink-0 place-items-center rounded-xl text-stone-500 transition-colors hover:bg-stone-100 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold">
               {showNew ? <EyeOff size={17} /> : <Eye size={17} />}
             </button>
           </span>
