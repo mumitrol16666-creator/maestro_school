@@ -261,7 +261,7 @@ export function paywallCopy(voice: Voice, childName?: string): PaywallCopy {
     lead: (price) => `Первые уроки бесплатные, дальше нужен доступ: ${price}.`,
     includes: [
       "Все уроки, видео и материалы курса",
-      "Домашние задания и тесты",
+      "Тесты после уроков и PDF к урокам",
       `Доступ на ${ACCESS_MONTHS} месяцев с дня подтверждения оплаты`,
     ],
     kaspiButton: "Оплатить через Kaspi Pay",
