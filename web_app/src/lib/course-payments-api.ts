@@ -1,4 +1,4 @@
-import { apiDownload, apiRequest, apiRequestEnvelope } from "@/lib/api-client";
+import { ApiError, apiRequest, apiRequestEnvelope, getAccessToken } from "@/lib/api-client";
 import {
   paymentFiltersQuery,
   type AccessListStatus,
@@ -42,6 +42,52 @@ export interface AdminPaymentRequest {
   } | null;
   /** A pending request for a course the student already holds. */
   repeatPurchase: { currentExpiresAt: string; source: "payment" | "admin_grant" } | null;
+  /**
+   * A pending request for a course the student now gets free from the school (linked to CRM, the
+   * course is included in school): the administrator checks whether payment is still needed.
+   */
+  coveredBySchool: boolean;
+}
+
+/** A course for the payment filter and for giving access (GET /admin/course-payments/courses). */
+export interface PaymentCourseOption {
+  id: string;
+  title: string;
+  isPublished: boolean;
+  priceKzt: number | null;
+  includedInSchool: boolean;
+}
+
+export interface PaymentsTableFile {
+  blob: Blob;
+  filename: string | null;
+  /** The server stopped at its limit: the table is not the whole list. */
+  truncated: boolean;
+}
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "/api/v1";
+
+/** The table of payments. Like `apiDownload`, but also reads `X-Export-Truncated`. */
+async function downloadPaymentsTable(path: string): Promise<PaymentsTableFile> {
+  const token = getAccessToken();
+  const headers = new Headers();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${path}`, { headers, cache: "no-store" });
+  } catch {
+    throw new ApiError("Не удалось связаться с сервером Maestro", 0, "NETWORK_ERROR");
+  }
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: { message?: string; code?: string } };
+    throw new ApiError(payload.error?.message ?? "Не удалось скачать файл", response.status, payload.error?.code ?? "API_ERROR");
+  }
+  const disposition = response.headers.get("Content-Disposition") ?? "";
+  return {
+    blob: await response.blob(),
+    filename: /filename="?([^";]+)"?/i.exec(disposition)?.[1] ?? null,
+    truncated: response.headers.get("X-Export-Truncated") === "1",
+  };
 }
 
 export interface PaymentRequestsMeta {
@@ -110,7 +156,9 @@ export const coursePaymentsApi = {
     ),
   /** The table for Excel with the same filters as the list. */
   exportCsv: (filters: PaymentFilters) =>
-    apiDownload(`/admin/course-payments/requests/export.csv?${paymentFiltersQuery(filters)}`),
+    downloadPaymentsTable(`/admin/course-payments/requests/export.csv?${paymentFiltersQuery(filters)}`),
+  /** All courses that are not deleted: needs only the payment right, not the catalog right. */
+  courses: () => apiRequest<PaymentCourseOption[]>("/admin/course-payments/courses"),
 
   settings: () => apiRequest<CoursePaymentSettings>("/admin/course-payments/settings"),
   saveSettings: (body: CoursePaymentSettingsInput) =>

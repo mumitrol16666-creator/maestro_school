@@ -83,10 +83,23 @@ if (!process.env.TEST_DATABASE_URL) {
     assert.equal(response.statusCode, 200, response.body);
     return response.json().data.token as string;
   }
-  const call = (token: string | null, method: "GET" | "POST" | "PUT", path: string, payload?: unknown) => app.inject({
-    method, url: `/api/v1${path}`, payload: payload as never,
-    headers: token ? { authorization: `Bearer ${token}` } : {},
-  });
+  /**
+   * A payer always sends the price on the screen. The helper adds the current price of the course in
+   * the path to a request body that does not name one, so most tests need not repeat it; pass
+   * `expectedPriceKzt` (even `undefined`) to send exactly that.
+   */
+  async function call(token: string | null, method: "GET" | "POST" | "PUT", path: string, payload?: unknown) {
+    let body = payload;
+    const target = /\/courses\/([0-9a-f-]{36})\/payment-requests$/.exec(path);
+    if (method === "POST" && target && body && typeof body === "object" && !("expectedPriceKzt" in body)) {
+      const course = await prisma.course.findUnique({ where: { id: target[1] }, select: { priceKzt: true } });
+      body = { ...body, expectedPriceKzt: course?.priceKzt ?? 1 };
+    }
+    return app.inject({
+      method, url: `/api/v1${path}`, payload: body as never,
+      headers: token ? { authorization: `Bearer ${token}` } : {},
+    });
+  }
   const adminCall = (method: "GET" | "POST" | "PUT", path: string, payload?: unknown) => call(adminToken, method, path, payload);
 
   /** Three lessons in one module; the first two are the free ones. */
@@ -651,13 +664,23 @@ if (!process.env.TEST_DATABASE_URL) {
     await adminCall("POST", `/admin/course-payments/requests/${requestId}/confirm`, {});
     const access = await prisma.courseAccess.findUniqueOrThrow({ where: { paymentRequestId: requestId } });
 
+    const shownAs = async (id: string) => (await adminCall("GET", `/admin/course-payments/requests/${id}`)).json().data.displayStatus as string;
+    assert.equal(await shownAs(requestId), "confirmed");
     assert.equal((await adminCall("POST", `/admin/course-access/${access.id}/revoke`, {})).statusCode, 200);
     assert.equal((await requestOf(requestId)).status, "confirmed");
+    // The money was accepted, the lessons are closed: «Подтверждена, доступ закрыт», not a plain «Подтверждена».
+    assert.equal(await shownAs(requestId), "access_revoked");
+    const ids = async (status: string) => (await adminCall("GET", `/admin/course-payments/requests?status=${status}&courseId=${course.id}`)).json().data.map((item: { id: string }) => item.id);
+    assert.deepEqual(await ids("access_revoked"), [requestId]);
+    assert.deepEqual(await ids("confirmed"), [], "the plain «confirmed» filter no longer lists it");
+    assert.equal((await call(await login(child), "GET", "/students/me/course-payment-requests")).json().data[0].displayStatus, "access_revoked");
     for (const user of [child, parent]) {
       assert.ok((await notifications(user.id, "course_access_revoked")).some((entry) => entry.dedupeKey?.includes(access.id)), `notification for ${user.login}`);
     }
     assert.equal((await adminCall("POST", `/admin/course-payments/requests/${requestId}/refund`, {})).statusCode, 200);
     assert.equal((await prisma.courseAccess.findUniqueOrThrow({ where: { id: access.id } })).revokeReason, "admin", "the first reason stays");
+    assert.equal(await shownAs(requestId), "refunded", "a refund after the revoke is shown as a refund");
+    assert.deepEqual(await ids("access_revoked"), []);
   });
 
   test("payment details: only https links, empty becomes null, and payers see them on the paywall", async () => {
@@ -763,7 +786,7 @@ if (!process.env.TEST_DATABASE_URL) {
 
   // ── Before the new economy ────────────────────────────────────────────────────
 
-  test("before the new economy a finished course still pays Coins and no module or course Points; XP only for the school", async () => {
+  test("before the new economy a finished course pays neither Coins nor module or course Points; XP only for the school", async () => {
     const { enrollStudentInCourse } = await import("../../application/services/enrollment.service.js");
     const { startLesson, completeLessonWithoutHomework } = await import("../../application/services/lesson-progress.service.js");
     const { submitHomework } = await import("../../application/services/homework-submit.service.js");
@@ -784,11 +807,135 @@ if (!process.env.TEST_DATABASE_URL) {
       await submitHomework({ homeworkId: test3.id, studentId: student.id, testAnswers: { q1: "a" } });
       assert.equal((await prisma.studentCourse.findFirstOrThrow({ where: { studentId: student.id, courseId: course.id } })).status, "completed");
       const coins = await prisma.maestroCoinTransaction.findMany({ where: { studentId: student.id, sourceType: "course" } });
-      assert.deepEqual(coins.map((row) => [row.amount, row.economicEpochId]), [[30, null]], "Coins for the course as before");
+      assert.deepEqual(coins, [], "the old Coins for a finished course are gone, the course still has a Coins reward set");
       assert.equal(await prisma.pointsTransaction.count({ where: { studentId: student.id, sourceKey: { startsWith: "course-" } } }), 0, "no module or course Points");
     }
     assert.equal(await prisma.leagueXpEvent.count({ where: { studentId: school.id, sourceType: "course_homework" } }), 1, "XP as before for the school student");
     assert.equal(await prisma.leagueXpEvent.count({ where: { studentId: external.id } }), 0, "none for a person outside the school");
+  });
+
+  // ── Fixes after the reviews ───────────────────────────────────────────────────
+
+  test("a pending request for a course the student now gets free from the school is flagged for the administrator, and can still be confirmed", async () => {
+    const included = await makeCourse({ priceKzt: 15000, includedInSchool: true });
+    const plain = await makeCourse({ priceKzt: 15000 });
+    const student = await makeStudent();
+    const token = await login(student);
+    const onIncluded = await ask(token, included.course.id);
+    const onPlain = await ask(token, plain.course.id);
+    const flag = async (id: string) => (await adminCall("GET", `/admin/course-payments/requests/${id}`)).json().data.coveredBySchool as boolean;
+    assert.deepEqual([await flag(onIncluded), await flag(onPlain)], [false, false], "an outsider has to pay");
+
+    await prisma.user.update({ where: { id: student.id }, data: { crmStudentId: `crm-covered-${suffix}` } });
+    assert.deepEqual([await flag(onIncluded), await flag(onPlain)], [true, false], "now the included course is free: check whether payment is needed");
+    const inList = (await adminCall("GET", "/admin/course-payments/requests?status=pending&limit=100")).json().data
+      .find((item: { id: string }) => item.id === onIncluded);
+    assert.equal(inList.coveredBySchool, true);
+
+    // Not forbidden: the money may have been paid already.
+    const confirmed = await adminCall("POST", `/admin/course-payments/requests/${onIncluded}/confirm`, {});
+    assert.equal(confirmed.statusCode, 200, confirmed.body);
+    assert.equal(confirmed.json().data.coveredBySchool, false, "a decided request carries no warning");
+  });
+
+  test("the request is made for the price the payer saw: another price is a 409 with the new one, no request and no log entry", async () => {
+    const { course } = await makeCourse({ priceKzt: 15000 });
+    const student = await makeStudent();
+    const token = await login(student);
+    const post = (body: unknown) => app.inject({
+      method: "POST", url: `/api/v1/courses/${course.id}/payment-requests`, payload: body as never,
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    assert.equal((await post({})).statusCode, 400, "the price on the screen is required");
+    assert.equal((await post({ expectedPriceKzt: "15000" })).statusCode, 400);
+    assert.equal((await post({ expectedPriceKzt: 0 })).statusCode, 400);
+    await prisma.course.update({ where: { id: course.id }, data: { priceKzt: 18000 } });
+    const changed = await post({ expectedPriceKzt: 15000 });
+    assert.equal(changed.statusCode, 409, changed.body);
+    assert.equal(changed.json().error.code, "COURSE_PRICE_CHANGED");
+    assert.equal(changed.json().error.details.priceKzt, 18000);
+    assert.equal(await prisma.coursePaymentRequest.count({ where: { studentId: student.id } }), 0);
+
+    const made = await post({ expectedPriceKzt: 18000 });
+    assert.equal(made.statusCode, 201, made.body);
+    requestIds.push(made.json().data.id);
+    assert.equal(made.json().data.amountKzt, 18000, "the sum is the price the payer saw");
+
+    // The parent route works the same way.
+    const child = await makeStudent();
+    const parent = await makeParent();
+    await linkParent(parent.id, child.id);
+    const parentToken = await login(parent);
+    const parentPath = `/api/v1/parents/me/children/${child.id}/courses/${course.id}/payment-requests`;
+    const wrong = await app.inject({ method: "POST", url: parentPath, payload: { expectedPriceKzt: 15000 }, headers: { authorization: `Bearer ${parentToken}` } });
+    assert.equal(wrong.statusCode, 409);
+    assert.deepEqual([wrong.json().error.code, wrong.json().error.details.priceKzt], ["COURSE_PRICE_CHANGED", 18000]);
+    assert.equal((await app.inject({ method: "POST", url: parentPath, payload: {}, headers: { authorization: `Bearer ${parentToken}` } })).statusCode, 400);
+    const right = await app.inject({ method: "POST", url: parentPath, payload: { expectedPriceKzt: 18000 }, headers: { authorization: `Bearer ${parentToken}` } });
+    assert.equal(right.statusCode, 201, right.body);
+    requestIds.push(right.json().data.id);
+  });
+
+  test("the request and its log entry are one transaction: if the entry cannot be written there is no request", async () => {
+    const { course } = await makeCourse({ priceKzt: 15000 });
+    const student = await makeStudent();
+    const token = await login(student);
+    const fn = `fail_audit_${suffix}`;
+    await prisma.$executeRawUnsafe(`CREATE FUNCTION ${fn}() RETURNS trigger AS $$ BEGIN
+      IF NEW.payload->>'event' = 'requested' AND NEW.actor_id = '${student.id}' THEN RAISE EXCEPTION 'audit refused'; END IF; RETURN NEW; END; $$ LANGUAGE plpgsql`);
+    await prisma.$executeRawUnsafe(`CREATE TRIGGER ${fn} BEFORE INSERT ON audit_logs FOR EACH ROW EXECUTE FUNCTION ${fn}()`);
+    const realError = console.error;
+    console.error = () => undefined;
+    try {
+      const failed = await call(token, "POST", `/courses/${course.id}/payment-requests`, {});
+      assert.equal(failed.statusCode, 500, failed.body);
+      assert.equal(await prisma.coursePaymentRequest.count({ where: { studentId: student.id } }), 0, "no request without its entry");
+    } finally {
+      console.error = realError;
+      await prisma.$executeRawUnsafe(`DROP TRIGGER ${fn} ON audit_logs`);
+      await prisma.$executeRawUnsafe(`DROP FUNCTION ${fn}()`);
+    }
+    const id = await ask(token, course.id);
+    assert.deepEqual(await eventsOf(id), ["requested"], "with the entry writable the pair is made together");
+  });
+
+  test("the table says so when it stops at the limit; the administrator's course list needs no catalog right", async () => {
+    const { course } = await makeCourse({ priceKzt: 15000, title: `Выгрузка ${suffix}` });
+    const first = await makeStudent({ firstName: "Выг", lastName: `Рузка${suffix}` });
+    const second = await makeStudent({ firstName: "Выг", lastName: `Рузка${suffix}` });
+    await ask(await login(first), course.id);
+    await ask(await login(second), course.id);
+    const exportUrl = `/admin/course-payments/requests/export.csv?courseId=${course.id}`;
+    const previous = process.env.COURSE_PAYMENTS_EXPORT_LIMIT;
+    try {
+      process.env.COURSE_PAYMENTS_EXPORT_LIMIT = "1";
+      const cut = await adminCall("GET", exportUrl);
+      assert.equal(cut.statusCode, 200);
+      assert.equal(cut.headers["x-export-truncated"], "1");
+      assert.equal(parseCsv(cut.body.replace(/^﻿/, "")).length, 2, "header and the one row that fits");
+      process.env.COURSE_PAYMENTS_EXPORT_LIMIT = "2";
+      const exact = await adminCall("GET", exportUrl);
+      assert.equal(exact.headers["x-export-truncated"], undefined, "exactly the limit is not a cut");
+      assert.equal(parseCsv(exact.body.replace(/^﻿/, "")).length, 3);
+    } finally {
+      if (previous === undefined) delete process.env.COURSE_PAYMENTS_EXPORT_LIMIT;
+      else process.env.COURSE_PAYMENTS_EXPORT_LIMIT = previous;
+    }
+    const whole = await adminCall("GET", exportUrl);
+    assert.equal(whole.headers["x-export-truncated"], undefined);
+
+    // `admin` holds course_payments.manage and nothing about the catalog.
+    const deleted = await makeCourse({ priceKzt: 1000, title: `Удалён ${suffix}` });
+    await prisma.course.update({ where: { id: deleted.course.id }, data: { deletedAt: new Date() } });
+    const listed = await adminCall("GET", "/admin/course-payments/courses");
+    assert.equal(listed.statusCode, 200, listed.body);
+    const rows = listed.json().data as Array<{ id: string; title: string; priceKzt: number | null; includedInSchool: boolean }>;
+    const mine = rows.find((row) => row.id === course.id);
+    assert.deepEqual([mine?.title, mine?.priceKzt, mine?.includedInSchool], [`Выгрузка ${suffix}`, 15000, false]);
+    assert.ok(!rows.some((row) => row.id === deleted.course.id), "a deleted course is not offered");
+    assert.equal((await call(await login(await makeStudent()), "GET", "/admin/course-payments/courses")).statusCode, 403);
+    assert.equal((await call(null, "GET", "/admin/course-payments/courses")).statusCode, 401);
   });
 
   // ── Telegram ──────────────────────────────────────────────────────────────────
@@ -811,7 +958,7 @@ if (!process.env.TEST_DATABASE_URL) {
     try {
       // No variables: a quiet no-op.
       const silent = await makeStudent();
-      const first = await createPaymentRequest({ courseId: course.id, studentId: silent.id, payerUserId: silent.id });
+      const first = await createPaymentRequest({ courseId: course.id, studentId: silent.id, payerUserId: silent.id, expectedPriceKzt: 15000 });
       requestIds.push(first.request.id);
       assert.equal(await first.telegram, false);
       assert.equal(sent.length, 0);
@@ -845,7 +992,7 @@ if (!process.env.TEST_DATABASE_URL) {
       requestIds.push(failed.json().data.id);
       mode = "refuse";
       const other = await makeStudent();
-      const refused = await createPaymentRequest({ courseId: course.id, studentId: other.id, payerUserId: other.id });
+      const refused = await createPaymentRequest({ courseId: course.id, studentId: other.id, payerUserId: other.id, expectedPriceKzt: 15000 });
       requestIds.push(refused.request.id);
       assert.equal(await refused.telegram, false);
       assert.equal((await requestOf(failed.json().data.id)).status, "pending");

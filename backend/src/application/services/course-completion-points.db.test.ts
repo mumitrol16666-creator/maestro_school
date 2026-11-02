@@ -153,7 +153,7 @@ integrationTest("module and course Points come once, Coins never, XP only for th
 
   // ── A paid course: the refund takes back the access, not the Points ──────────
   await prisma.course.update({ where: { id: course.id }, data: { priceKzt: 15000 } });
-  const payment = await createPaymentRequest({ courseId: course.id, studentId: paying.id, payerUserId: paying.id });
+  const payment = await createPaymentRequest({ courseId: course.id, studentId: paying.id, payerUserId: paying.id, expectedPriceKzt: 15000 });
   await payment.telegram;
   const confirmed = await confirmPaymentRequest({ requestId: payment.request.id, actorId: admin.id });
   assert.equal(confirmed.displayStatus, "confirmed");
@@ -181,4 +181,91 @@ integrationTest("module and course Points come once, Coins never, XP only for th
   const again = await awardSystemPoints({ studentId: school.id, amount: 100, reason: "Пройден модуль «Заново»", sourceKey: key });
   assert.equal(again.awarded, true);
   assert.equal(await sum(school.id), 450);
+});
+
+integrationTest("an unpublished finished lesson neither finishes the course nor pays +250; a lesson finished before the cutover can be confirmed again", async t => {
+  const { prisma } = await import("../../infrastructure/database/prisma.js");
+  const { enrollStudentInCourse } = await import("./enrollment.service.js");
+  const { startLesson, completeLessonWithoutHomework } = await import("./lesson-progress.service.js");
+  const { calculateCourseProgressPercent, isCourseCompleted } = await import("./course-progress.service.js");
+  const { courseCompletionSourceKey } = await import("./course-completion-rewards.service.js");
+
+  const suffix = randomUUID().slice(0, 8);
+  const role = await prisma.role.upsert({ where: { slug: "student" }, create: { slug: "student", name: "student" }, update: {} });
+  const student = await prisma.user.create({ data: {
+    login: `unp_${suffix}`, phone: `+7703${randomUUID().replace(/\D/g, "").padEnd(7, "4").slice(0, 7)}`, passwordHash: "x",
+    firstName: "Снятый", lastName: "Урок", roleId: role.id,
+  } });
+  const direction = await prisma.direction.create({ data: { title: `Снятый ${suffix}`, slug: `course-unpub-${suffix}`, isPublished: true } });
+  const course = await prisma.course.create({ data: { directionId: direction.id, title: `Курс снятого ${suffix}`, isPublished: true } });
+  const module = await prisma.courseModule.create({ data: { courseId: course.id, title: "Модуль", sortOrder: 1 } });
+  const lesson = (title: string, sortOrder: number, extra: object = {}) => prisma.lesson.create({
+    data: { moduleId: module.id, title, sortOrder, isPublished: true, pointsReward: 10, ...extra },
+  });
+  const a = await lesson("А", 1);
+  const x = await lesson("Х", 2);
+  const y = await lesson("У", 3);
+  let epoch = await prisma.economicEpoch.findFirst({ where: { status: "active", startsAt: { lte: new Date() } } });
+  const epochCreated = !epoch;
+  if (!epoch) {
+    epoch = await prisma.economicEpoch.create({ data: {
+      code: `unp-${suffix}`, name: "Тестовая эпоха", startsAt: new Date(Date.now() - 30 * 86_400_000),
+      status: "active", sourceKey: `unp-epoch:${suffix}`, activatedAt: new Date(Date.now() - 30 * 86_400_000),
+    } });
+  }
+  t.after(async () => {
+    await prisma.userNotification.deleteMany({ where: { userId: student.id } });
+    await prisma.pointsTransaction.deleteMany({ where: { studentId: student.id } });
+    await prisma.economicEpochParticipant.deleteMany({ where: { studentId: student.id } });
+    await prisma.lessonProgress.deleteMany({ where: { studentId: student.id } });
+    await prisma.studentCourse.deleteMany({ where: { studentId: student.id } });
+    await prisma.course.deleteMany({ where: { directionId: direction.id } });
+    await prisma.user.delete({ where: { id: student.id } });
+    await prisma.direction.delete({ where: { id: direction.id } });
+    if (epochCreated) await prisma.economicEpoch.delete({ where: { id: epoch!.id } });
+    await prisma.$disconnect();
+  });
+  const courseKey = courseCompletionSourceKey(course.id, student.id);
+  const finish = async (lessonId: string) => {
+    await startLesson(student.id, lessonId);
+    return completeLessonWithoutHomework(student.id, lessonId);
+  };
+
+  await enrollStudentInCourse(student.id, course.id);
+  await finish(a.id);
+  await finish(x.id);
+  assert.equal(await calculateCourseProgressPercent(student.id, course.id), 67, "two of three");
+
+  // The lesson X is taken off the publication: the course now has A and Y, and only A is done.
+  await prisma.lesson.update({ where: { id: x.id }, data: { isPublished: false } });
+  assert.equal(await calculateCourseProgressPercent(student.id, course.id), 50);
+  assert.equal(await isCourseCompleted(student.id, course.id), false, "a finished lesson that is no longer published does not count");
+  // Confirming a finished lesson again runs the same check; it must not pay the course.
+  const replay = await completeLessonWithoutHomework(student.id, a.id);
+  assert.equal(replay.alreadyCompleted, true);
+  assert.equal(replay.courseCompleted, false);
+  assert.equal(await prisma.pointsTransaction.count({ where: { sourceKey: courseKey } }), 0, "no +250");
+  assert.notEqual((await prisma.studentCourse.findFirstOrThrow({ where: { studentId: student.id, courseId: course.id } })).status, "completed");
+
+  // Really finishing the last published lesson pays the course once.
+  const last = await finish(y.id);
+  assert.equal(last.courseCompleted, true);
+  assert.equal(await prisma.pointsTransaction.count({ where: { sourceKey: courseKey } }), 1);
+
+  // A deleted lesson does not count either.
+  const z = await lesson("З", 4);
+  await finish(z.id);
+  await prisma.lesson.update({ where: { id: z.id }, data: { deletedAt: new Date() } });
+  assert.equal(await calculateCourseProgressPercent(student.id, course.id), 100);
+
+  // ── A lesson finished before the cutover: confirming it again is a success, not a 409 ──
+  const oldLesson = await lesson("Старый", 5, { pointsReward: 10 });
+  await prisma.lessonProgress.upsert({
+    where: { studentId_lessonId: { studentId: student.id, lessonId: oldLesson.id } },
+    create: { studentId: student.id, lessonId: oldLesson.id, status: "completed", completedAt: new Date("2025-12-01T10:00:00.000Z") },
+    update: { status: "completed", completedAt: new Date("2025-12-01T10:00:00.000Z") },
+  });
+  const again = await completeLessonWithoutHomework(student.id, oldLesson.id);
+  assert.equal(again.alreadyCompleted, true);
+  assert.equal(await prisma.pointsTransaction.count({ where: { studentId: student.id, lessonId: oldLesson.id } }), 0, "no direct Points for a lesson any more");
 });

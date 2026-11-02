@@ -9,6 +9,7 @@ import { calculateCourseProgressPercent } from "./course-progress.service.js";
 import { getStudentPointsReadModel } from "./points.service.js";
 import { syncLessonAvailability } from "./lesson-unlock.service.js";
 import { getStudentRank } from "../../domain/student-rank.js";
+import { findLockedLessonIdsInCourse } from "./course-access.service.js";
 
 const ACTIONABLE_STATUSES: LessonProgressStatus[] = [
   "available",
@@ -34,10 +35,14 @@ export interface StudentDashboardData {
   level: Awaited<ReturnType<typeof getStudentPointsReadModel>>["level"];
   nextAvailableLesson: {
     id: string;
+    /** Course of the lesson, for the «Оплатить курс» link. */
+    courseId: string;
     title: string;
     status: LessonProgressStatus;
     moduleSortOrder: number;
     sortOrder: number;
+    /** The lesson belongs to a paid course and the student holds no access: the home page says «Оплатить курс». */
+    paymentRequired: boolean;
   } | null;
 }
 
@@ -74,6 +79,11 @@ export async function getStudentDashboard(studentId: string): Promise<StudentDas
       getStudentPointsReadModel(studentId),
     ]);
 
+  const closedByPayment = await findLockedLessonIdsInCourse(
+    studentId,
+    courseId,
+    orderedLessons.map((lesson) => lesson.id),
+  );
   let nextAvailableLesson: StudentDashboardData["nextAvailableLesson"] = null;
 
   for (const lesson of orderedLessons) {
@@ -83,10 +93,12 @@ export async function getStudentDashboard(studentId: string): Promise<StudentDas
     if (ACTIONABLE_STATUSES.includes(status)) {
       nextAvailableLesson = {
         id: lesson.id,
+        courseId,
         title: lesson.title,
         status,
         moduleSortOrder: lesson.moduleSortOrder,
         sortOrder: lesson.sortOrder,
+        paymentRequired: closedByPayment.has(lesson.id),
       };
       break;
     }

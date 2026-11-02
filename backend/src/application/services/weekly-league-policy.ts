@@ -220,3 +220,15 @@ export function rankLeagueEvents(events: RankedEvent[]): RankedStudent[] {
     ))
     .map((entry, index) => ({ ...entry, position: index + 1 }));
 }
+
+/**
+ * XP и лига только для учеников школы: ученик связан с CRM (`crmStudentId`)
+ * и школа не исключила его из лиги (`leagueEligible`). Внешний (без связи)
+ * не получает XP и не попадает в рейтинг, даже если флаг стоит true.
+ */
+export function isLeagueStudent(user: {
+  leagueEligible: boolean;
+  crmStudentId: string | null;
+}): boolean {
+  return Boolean(user.leagueEligible && user.crmStudentId);
+}

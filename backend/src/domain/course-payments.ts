@@ -32,14 +32,20 @@ export function paidAccessExpiry(confirmedAt: Date): Date {
   return addCalendarMonths(confirmedAt, COURSE_ACCESS_MONTHS);
 }
 
-/** A request is stored as pending / confirmed / rejected; a refund is a mark on a confirmed one. */
-export type CoursePaymentDisplayStatus = "pending" | "confirmed" | "rejected" | "refunded";
+/**
+ * A request is stored as pending / confirmed / rejected; a refund is a mark on a confirmed one.
+ * «access_revoked» is a confirmed payment, not refunded, whose access the administrator closed by
+ * hand: the money was accepted, the lessons are closed.
+ */
+export type CoursePaymentDisplayStatus = "pending" | "confirmed" | "rejected" | "refunded" | "access_revoked";
 
 export function paymentDisplayStatus(request: {
   status: "pending" | "confirmed" | "rejected";
   refundedAt: Date | null;
+  access?: { revokedAt: Date | null } | null;
 }): CoursePaymentDisplayStatus {
   if (request.status === "confirmed" && request.refundedAt) return "refunded";
+  if (request.status === "confirmed" && request.access?.revokedAt) return "access_revoked";
   return request.status;
 }
 
@@ -48,6 +54,7 @@ export const PAYMENT_STATUS_LABEL: Record<CoursePaymentDisplayStatus, string> = 
   confirmed: "Подтверждена",
   rejected: "Отклонена",
   refunded: "Возвращена",
+  access_revoked: "Подтверждена, доступ закрыт",
 };
 
 /**

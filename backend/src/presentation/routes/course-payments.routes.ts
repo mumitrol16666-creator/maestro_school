@@ -10,6 +10,7 @@ import {
   getCoursePaymentView,
   getPaymentRequest,
   listChildCourses,
+  listCoursesForPayments,
   listPaymentRequests,
   listStudentPaymentRequests,
   PAYMENT_MANAGE_PERMISSION,
@@ -37,7 +38,7 @@ const optionalNote = z.string().trim().max(1000).optional().nullable();
 const periodDate = z.string().trim().refine((value) => parsePeriodStart(value) !== null, "Некорректная дата");
 
 const filterQuery = z.object({
-  status: z.enum(["pending", "confirmed", "rejected", "refunded"]).optional(),
+  status: z.enum(["pending", "confirmed", "rejected", "refunded", "access_revoked"]).optional(),
   courseId: uuid.optional(),
   from: periodDate.optional(),
   to: periodDate.optional(),
@@ -71,7 +72,12 @@ export async function coursePaymentsRoutes(app: FastifyInstance) {
   const adminGuards = [authenticate, requirePermission(PAYMENT_MANAGE_PERMISSION)];
   const childParams = z.object({ studentId: uuid });
   const childCourseParams = z.object({ studentId: uuid, courseId: uuid });
-  const noteBody = z.object({ payerNote: z.string().trim().max(1000).optional().nullable() });
+  // The payer sends the price they saw: the request is made for exactly that price or not at all.
+  const noteBody = z.object({
+    payerNote: z.string().trim().max(1000).optional().nullable(),
+    expectedPriceKzt: z.number({ required_error: "Укажите цену курса, которую вы видите" })
+      .int("Цена должна быть целым числом").positive("Цена должна быть больше нуля"),
+  });
 
   // ── Student ──────────────────────────────────────────────────────────────────
 
@@ -94,6 +100,7 @@ export async function coursePaymentsRoutes(app: FastifyInstance) {
       studentId: request.user!.id,
       payerUserId: request.user!.id,
       payerNote: body.payerNote,
+      expectedPriceKzt: body.expectedPriceKzt,
     });
     return reply.status(201).send({ data: created });
   });
@@ -129,6 +136,7 @@ export async function coursePaymentsRoutes(app: FastifyInstance) {
         studentId,
         courseId,
         payerNote: body.payerNote,
+        expectedPriceKzt: body.expectedPriceKzt,
       });
       return reply.status(201).send({ data: created });
     },
@@ -149,6 +157,12 @@ export async function coursePaymentsRoutes(app: FastifyInstance) {
     };
   });
 
+  // The courses for the filter and for giving access: the catalog route needs `catalog.manage`,
+  // which a payment administrator (branch_manager) may not have.
+  app.get("/admin/course-payments/courses", { preHandler: adminGuards }, async () => ({
+    data: await listCoursesForPayments(),
+  }));
+
   app.get("/admin/course-payments/requests/pending-count", { preHandler: adminGuards }, async () => ({
     data: { count: await countPendingPaymentRequests() },
   }));
@@ -165,6 +179,8 @@ export async function coursePaymentsRoutes(app: FastifyInstance) {
       payload: { filters, rows: result.count },
     });
     const day = new Date().toISOString().slice(0, 10);
+    // The table stops at the limit: say so, or the administrator takes an incomplete list for all.
+    if (result.truncated) reply.header("X-Export-Truncated", "1");
     return reply
       .header("Content-Type", "text/csv; charset=utf-8")
       .header("Content-Disposition", `attachment; filename="course-payments-${day}.csv"`)

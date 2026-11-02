@@ -114,6 +114,13 @@ export function CoursePaymentCard({
         </p>
       ) : null}
 
+      {item.coveredBySchool ? (
+        <p data-testid="covered-by-school" className="mt-3 flex items-start gap-2 rounded-lg bg-sky-50 px-3 py-2.5 text-sm font-semibold leading-5 text-sky-900">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+          <span>Курс уже входит в обучение ученика — проверьте, нужна ли оплата. Подтвердить заявку всё равно можно.</span>
+        </p>
+      ) : null}
+
       {item.displayStatus === "rejected" ? (
         <p className="mt-3 break-words text-sm text-stone-700">
           <span className="font-bold text-stone-500">Причина, её видит ученик: </span>{item.decisionNote ?? "не указана"}
@@ -121,11 +128,19 @@ export function CoursePaymentCard({
         </p>
       ) : null}
 
-      {item.displayStatus === "confirmed" || item.displayStatus === "refunded" ? (
+      {item.displayStatus === "confirmed" || item.displayStatus === "refunded" || item.displayStatus === "access_revoked" ? (
         <p className="mt-3 break-words text-sm text-stone-700">
           <span className="font-bold text-stone-500">Подтвердил: </span>
           {item.decidedBy?.name ?? "—"}{item.decidedAt ? `, ${formatSchoolDateTime(item.decidedAt)}` : ""}
           {item.access && !item.access.revokedAt ? `. Доступ до ${formatSchoolDate(item.access.expiresAt)}` : ""}
+        </p>
+      ) : null}
+
+      {item.displayStatus === "access_revoked" ? (
+        <p data-testid="access-revoked-note" className="mt-2 break-words text-sm text-stone-700">
+          <span className="font-bold text-stone-500">Доступ закрыт: </span>
+          {item.access?.revokedAt ? formatSchoolDateTime(item.access.revokedAt) : "—"}.
+          {" "}Оплата подтверждена и не возвращена. Если вы вернули деньги, нажмите «Возврат».
         </p>
       ) : null}
 
@@ -147,7 +162,7 @@ export function CoursePaymentCard({
           </button>
         </div>
       ) : null}
-      {item.displayStatus === "confirmed" ? (
+      {item.displayStatus === "confirmed" || item.displayStatus === "access_revoked" ? (
         <div className="mt-4">
           <button type="button" onClick={() => actions.onRefund(item)} className={`${secondaryButton} w-full sm:w-auto`}>
             <RotateCcw size={16} />Возврат

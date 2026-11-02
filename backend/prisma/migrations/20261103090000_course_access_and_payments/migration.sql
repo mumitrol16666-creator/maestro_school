@@ -109,6 +109,8 @@ ALTER TABLE "course_payment_settings" ADD CONSTRAINT "course_payment_settings_up
 
 -- Prisma cannot express these; schema.prisma only mentions them in comments.
 ALTER TABLE "course_payment_requests" ADD CONSTRAINT "course_payment_requests_amount_kzt_positive" CHECK ("amount_kzt" > 0);
+-- A refund exists only for a confirmed payment (the service refunds `confirmed` only).
+ALTER TABLE "course_payment_requests" ADD CONSTRAINT "course_payment_requests_refund_needs_confirmed" CHECK ("refunded_at" IS NULL OR "status" = 'confirmed');
 ALTER TABLE "course_access" ADD CONSTRAINT "course_access_period_valid" CHECK ("expires_at" > "starts_at");
 ALTER TABLE "course_payment_settings" ADD CONSTRAINT "course_payment_settings_single_row" CHECK ("id" = 1);
 

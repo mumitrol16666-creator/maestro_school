@@ -8,7 +8,6 @@ import { PaymentActionDialog, type PaymentDialogRequest } from "@/components/pay
 import { ErrorState, LoadingState } from "@/components/data-states";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { ApiError } from "@/lib/api-client";
-import { cmsApi } from "@/lib/cms-api";
 import {
   announceCoursePaymentsChanged,
   coursePaymentsApi,
@@ -41,12 +40,12 @@ function AccessCard({ studentId, studentName }: { studentId: string; studentName
   const [notice, setNotice] = useState<{ kind: "success" | "info"; text: string } | null>(null);
 
   async function openGrant() {
-    // The catalog is open to content admins; for other roles the picker says so.
+    // The payment right is enough to read the list of courses (not the catalog right).
     let options: Array<{ id: string; title: string; priceKzt: number }> = [];
     let catalogError = false;
     try {
-      options = (await cmsApi.courses("", "", 1, 100)).data
-        .filter((course) => !course.deletedAt && course.isPublished && course.priceKzt !== null)
+      options = (await coursePaymentsApi.courses())
+        .filter((course) => course.isPublished && course.priceKzt !== null)
         .map((course) => ({ id: course.id, title: course.title, priceKzt: course.priceKzt as number }));
     } catch {
       catalogError = true;
@@ -66,7 +65,7 @@ function AccessCard({ studentId, studentName }: { studentId: string; studentName
       extra: {
         initial: { courseId: options[0]?.id ?? "", until: defaultUntil },
         problem: (values) => !values.courseId
-          ? (catalogError ? "Список курсов недоступен для вашей роли." : "Нет платных опубликованных курсов.")
+          ? (catalogError ? "Не удалось загрузить список курсов." : "Нет платных опубликованных курсов.")
           : values.until <= today || values.until > maxUntil ? "Срок — от завтра и не дальше 5 лет." : null,
         render: (values, set) => (
           <>

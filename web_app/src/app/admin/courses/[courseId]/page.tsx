@@ -18,6 +18,7 @@ import { MediaPicker } from "@/components/media-picker";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { cmsApi } from "@/lib/cms-api";
+import { lessonPreviewHref } from "@/lib/lesson-preview-api";
 import { uploadMediaFile } from "@/lib/file-upload";
 import { materialTypeFromFile, materialTypeFromMedia, titleFromFilename } from "@/lib/media-utils";
 import type { CmsHomework, CmsMaterial, CmsMaterialUsage, CmsMedia } from "@/types/cms";
@@ -356,6 +357,7 @@ export default function CourseBuilderPage() {
         ) : selectedLessonId && lesson.loading && !selectedLesson ? <LoadingState label="Загружаем урок" /> : selectedLessonId && lesson.error ? <ErrorState message={lesson.error} retry={lesson.reload} /> : selectedLesson ? (
           <LessonWorkspace
             lesson={selectedLesson}
+            previewHref={lessonPreviewHref(courseId, selectedLesson.id)}
             module={selectedModule}
             activeTab={lessonTab}
             lessonForm={lessonForm}

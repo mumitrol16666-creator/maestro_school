@@ -100,14 +100,20 @@ function stateFor(
   };
 }
 
-/** Access state of one person for several courses at once (the catalog). A guest holds nothing. */
+/**
+ * Access state of one person for several courses at once (the catalog). A guest holds nothing.
+ * `allowPreview: false` is for student actions (open, start, complete, submit): staff preview runs
+ * only through the dedicated admin route, so a role that may preview never opens the student gate.
+ */
 export async function getCourseAccessStates(
   userId: string | null | undefined,
   courses: Array<CourseSaleTerms & { id: string }>,
   now = new Date(),
+  options: { allowPreview?: boolean } = {},
 ): Promise<Map<string, CourseAccessState>> {
   const result = new Map<string, CourseAccessState>();
   const actor: AccessActor = userId ? await loadAccessActor(userId) : { linkedToSchool: false, preview: false };
+  if (options.allowPreview === false) actor.preview = false;
   const courseIds = courses.map((course) => course.id);
   const [accessRows, pendingRows] = userId && courseIds.length
     ? await Promise.all([
@@ -170,7 +176,7 @@ export async function getLessonAccess(userId: string, lessonId: string, now = ne
     const state = stateFor(course, { linkedToSchool: false, preview: false }, [], null, now);
     return { lessonId, courseId: course.id, open: true, state };
   }
-  const states = await getCourseAccessStates(userId, [course], now);
+  const states = await getCourseAccessStates(userId, [course], now, { allowPreview: false });
   const state = states.get(course.id)!;
 
   // A course that is open to everyone, or a person who holds it, needs no look at the lesson order.
@@ -206,7 +212,7 @@ export async function findLockedLessonIds(
   const locked = new Set<string>();
   const paid = courses.filter((item) => courseIsForSale(item.course));
   if (!paid.length) return locked;
-  const states = await getCourseAccessStates(userId, paid.map((item) => item.course), now);
+  const states = await getCourseAccessStates(userId, paid.map((item) => item.course), now, { allowPreview: false });
   for (const { course, orderedLessonIds } of paid) {
     const state = states.get(course.id)!;
     if (state.fullAccess) continue;
@@ -222,4 +228,19 @@ export async function findLockedLessonIds(
     }
   }
   return locked;
+}
+
+/** Lessons of one course the person may not open (the course is paid and holds no access). */
+export async function findLockedLessonIdsInCourse(
+  userId: string,
+  courseId: string,
+  orderedLessonIds: string[],
+  now = new Date(),
+): Promise<Set<string>> {
+  const course = await prisma.course.findFirst({
+    where: { id: courseId, deletedAt: null },
+    select: courseSaleTermsSelect,
+  });
+  if (!course) return new Set();
+  return findLockedLessonIds(userId, [{ course, orderedLessonIds }], now);
 }

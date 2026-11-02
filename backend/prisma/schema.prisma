@@ -1559,7 +1559,8 @@ model CourseAccess {
 }
 
 /// Stage 4: «Я оплатил». The amount is a snapshot of the course price in tenge. A confirmed request
-/// is the payment record. CHECK (amount_kzt > 0) and the partial unique index
+/// is the payment record. CHECK (amount_kzt > 0), CHECK (refunded_at IS NULL OR status = 'confirmed')
+/// and the partial unique index
 /// course_payment_requests_one_pending_idx ("student_id", "course_id") WHERE status = 'pending'
 /// live in the migration SQL: Prisma cannot express them.
 model CoursePaymentRequest {

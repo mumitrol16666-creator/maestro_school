@@ -63,7 +63,7 @@ type Person = Prisma.UserGetPayload<{ select: typeof personSelect }>;
 type NamePart = Prisma.UserGetPayload<{ select: typeof nameSelect }>;
 
 const requestInclude = {
-  course: { select: { id: true, title: true, priceKzt: true } },
+  course: { select: { id: true, title: true, priceKzt: true, includedInSchool: true } },
   student: { select: personSelect },
   payer: { select: personSelect },
   decidedBy: { select: nameSelect },
@@ -270,6 +270,8 @@ export async function createPaymentRequest(params: {
   studentId: string;
   payerUserId: string;
   payerNote?: string | null;
+  /** The price the payer saw on the screen. A request is created only for exactly this price. */
+  expectedPriceKzt: number;
   now?: Date;
 }) {
   const now = params.now ?? new Date();
@@ -280,6 +282,13 @@ export async function createPaymentRequest(params: {
   if (!course) throw new NotFoundError("Course");
   if (!courseIsForSale(course)) {
     throw new ConflictError("Этот курс бесплатный, оплата не нужна.", "COURSE_NOT_FOR_SALE");
+  }
+  if (params.expectedPriceKzt !== course.priceKzt) {
+    throw new ConflictError(
+      "Цена курса изменилась. Проверьте новую цену и отправьте заявку ещё раз.",
+      "COURSE_PRICE_CHANGED",
+      { priceKzt: course.priceKzt },
+    );
   }
   const student = await prisma.user.findFirst({
     where: { id: params.studentId, role: { slug: "student" }, ...notDeleted, isActive: true },
@@ -304,35 +313,35 @@ export async function createPaymentRequest(params: {
   });
   if (waiting) throw pendingError();
 
-  let created: { id: string };
+  // The request and its audit entry stand or fall together.
+  let row: RequestRow;
   try {
-    created = await prisma.coursePaymentRequest.create({
-      data: {
-        courseId: course.id,
-        studentId: student.id,
-        payerUserId: params.payerUserId,
-        amountKzt: course.priceKzt!,
-        payerNote: params.payerNote?.trim() || null,
-      },
-      select: { id: true },
+    row = await prisma.$transaction(async (tx) => {
+      const created = await tx.coursePaymentRequest.create({
+        data: {
+          courseId: course.id,
+          studentId: student.id,
+          payerUserId: params.payerUserId,
+          amountKzt: course.priceKzt!,
+          payerNote: params.payerNote?.trim() || null,
+        },
+        include: requestInclude,
+      });
+      await writeAuditLog({
+        client: tx,
+        entityType: "course_payment_request",
+        entityId: created.id,
+        action: "create",
+        actorId: params.payerUserId,
+        payload: { event: "requested", courseId: created.courseId, studentId: created.studentId, amountKzt: created.amountKzt },
+      });
+      return created;
     });
   } catch (error) {
     // Two presses at once: the partial unique index lets only one pending request live.
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") throw pendingError();
     throw error;
   }
-
-  const row = await prisma.coursePaymentRequest.findUniqueOrThrow({
-    where: { id: created.id },
-    include: requestInclude,
-  });
-  await writeAuditLog({
-    entityType: "course_payment_request",
-    entityId: row.id,
-    action: "create",
-    actorId: params.payerUserId,
-    payload: { event: "requested", courseId: row.courseId, studentId: row.studentId, amountKzt: row.amountKzt },
-  }).catch((error) => logSideEffectFailure("audit write failed", error));
 
   // After the request is stored: neither the app notification nor Telegram can undo it.
   await notifyAdminsAboutRequest(row).catch((error) => logSideEffectFailure("admin notification failed", error));
@@ -349,6 +358,7 @@ export async function createChildPaymentRequest(params: {
   studentId: string;
   courseId: string;
   payerNote?: string | null;
+  expectedPriceKzt: number;
 }) {
   await assertParentChildLink(params.parentUserId, params.studentId);
   return createPaymentRequest({
@@ -356,6 +366,7 @@ export async function createChildPaymentRequest(params: {
     studentId: params.studentId,
     payerUserId: params.parentUserId,
     payerNote: params.payerNote,
+    expectedPriceKzt: params.expectedPriceKzt,
   });
 }
 
@@ -606,7 +617,11 @@ function buildWhere(filters: PaymentRequestFilters): Prisma.CoursePaymentRequest
       and.push({ status: filters.status });
       break;
     case "confirmed":
-      and.push({ status: "confirmed", refundedAt: null });
+      // Confirmed and still open: not refunded, and the access was not closed by hand.
+      and.push({ status: "confirmed", refundedAt: null, NOT: { access: { is: { revokedAt: { not: null } } } } });
+      break;
+    case "access_revoked":
+      and.push({ status: "confirmed", refundedAt: null, access: { is: { revokedAt: { not: null } } } });
       break;
     case "refunded":
       and.push({ status: "confirmed", refundedAt: { not: null } });
@@ -673,6 +688,14 @@ export function adminRequestView(row: RequestRow, currentAccess: CurrentAccessMa
     repeatPurchase: current
       ? { currentExpiresAt: current.expiresAt, source: current.source }
       : null,
+    /**
+     * A pending request for a course the student now gets free from the school (linked to CRM and
+     * the course is included in school): the administrator checks whether payment is still needed.
+     * Confirming is not blocked.
+     */
+    coveredBySchool: row.status === "pending"
+      && row.course.includedInSchool
+      && Boolean(row.student.crmStudentId),
   };
 }
 
@@ -727,20 +750,47 @@ export async function getPaymentRequest(requestId: string, now = new Date()) {
   return adminRequestView(row, await loadCurrentAccess([row], now));
 }
 
+/** Courses for the payment filter and for giving access by hand: not deleted, with their terms. */
+export async function listCoursesForPayments() {
+  return prisma.course.findMany({
+    where: { ...notDeleted },
+    orderBy: { title: "asc" },
+    select: {
+      id: true,
+      title: true,
+      isPublished: true,
+      priceKzt: true,
+      includedInSchool: true,
+    },
+  });
+}
+
 /** For the badge on the menu. */
 export async function countPendingPaymentRequests() {
   return prisma.coursePaymentRequest.count({ where: { status: "pending" } });
 }
 
-const EXPORT_LIMIT = 20_000;
+export const PAYMENT_EXPORT_LIMIT = 20_000;
+
+/** The limit may be lowered by COURSE_PAYMENTS_EXPORT_LIMIT (the tests do it); never raised past the default. */
+function paymentExportLimit() {
+  const configured = Number(process.env.COURSE_PAYMENTS_EXPORT_LIMIT);
+  return Number.isInteger(configured) && configured > 0
+    ? Math.min(configured, PAYMENT_EXPORT_LIMIT)
+    : PAYMENT_EXPORT_LIMIT;
+}
 
 export async function exportPaymentRequestsCsv(filters: PaymentRequestFilters) {
-  const rows = await prisma.coursePaymentRequest.findMany({
+  const limit = paymentExportLimit();
+  // One row over the limit tells «exactly the limit» from «cut at the limit».
+  const loaded = await prisma.coursePaymentRequest.findMany({
     where: buildWhere(filters),
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-    take: EXPORT_LIMIT,
+    take: limit + 1,
     include: requestInclude,
   });
+  const truncated = loaded.length > limit;
+  const rows = truncated ? loaded.slice(0, limit) : loaded;
   const csvRows: PaymentCsvRow[] = rows.map((row) => {
     const refundPart = row.refundedAt
       ? [formatSchoolDateTime(row.refundedAt), fullName(row.refundedBy) || null, row.refundNote]
@@ -760,5 +810,5 @@ export async function exportPaymentRequestsCsv(filters: PaymentRequestFilters) {
       refund: refundPart,
     };
   });
-  return { csv: buildPaymentsCsv(csvRows), count: csvRows.length, truncated: rows.length >= EXPORT_LIMIT };
+  return { csv: buildPaymentsCsv(csvRows), count: csvRows.length, truncated };
 }

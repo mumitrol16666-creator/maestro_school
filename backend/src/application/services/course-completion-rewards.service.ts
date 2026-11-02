@@ -10,7 +10,7 @@ import { awardSystemPoints } from "./points.service.js";
 /**
  * Stage 4: Points for finishing a module and a whole course of the app, one time each, for anyone
  * who studies it — a school student and a person from outside alike. They exist in the new economy
- * only; before it a finished course still pays Maestro Coins (see lesson-progress.service).
+ * only. Maestro Coins for a finished course no longer exist.
  * A refund of the course payment does not take these back.
  */
 

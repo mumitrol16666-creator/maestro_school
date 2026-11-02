@@ -47,7 +47,7 @@ test("the query keeps only filled filters", () => {
   assert.equal(paymentFiltersQuery({ status: "", search: "   " }), "");
 });
 
-test("the sum counts confirmed payments only, a refund and a rejection do not count", () => {
+test("the sum counts payments that stand (also with the access closed by hand); a refund and a rejection do not count", () => {
   assert.deepEqual(
     sumStandingPayments([
       { displayStatus: "confirmed", amountKzt: 12000 },
@@ -55,8 +55,9 @@ test("the sum counts confirmed payments only, a refund and a rejection do not co
       { displayStatus: "rejected", amountKzt: 9000 },
       { displayStatus: "pending", amountKzt: 9000 },
       { displayStatus: "confirmed", amountKzt: 8000 },
+      { displayStatus: "access_revoked", amountKzt: 5000 },
     ]),
-    { count: 2, amountKzt: 20000 },
+    { count: 3, amountKzt: 25000 },
   );
   assert.deepEqual(sumStandingPayments([]), { count: 0, amountKzt: 0 });
 });

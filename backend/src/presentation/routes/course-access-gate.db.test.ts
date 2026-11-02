@@ -269,16 +269,25 @@ if (!process.env.TEST_DATABASE_URL) {
     assert.equal(await prisma.courseAccess.count({ where: { studentId: schoolStudent.id } }), 0);
   });
 
-  test("teachers and catalog managers preview any lesson of a paid course", async () => {
+  test("teachers and catalog managers see a paid course unlocked in the catalog; the student gate is closed to them, preview has its own route", async () => {
     const built = await makeCourse({ priceKzt: 15000 });
     const teacher = await makeUser("teacher", ["lessons.read"]);
     const manager = await makeUser("curator", ["catalog.manage"]);
     const student = await makeUser("student", STUDENT_PERMISSIONS);
     const l3 = built.lessons[2].id;
     for (const user of [teacher, manager]) {
+      // The catalog (course page, lock marks) is read by staff for review...
+      const detail = (await call(await login(user), "GET", `/courses/${built.course.id}`)).json().data;
+      assert.equal(detail.access.preview, true);
+      assert.deepEqual(
+        detail.modules.flatMap((module: { lessons: Array<{ locked: boolean }> }) => module.lessons.map((lesson) => lesson.locked)),
+        [false, false, false, false],
+      );
+      // ...but the gate of student actions does not know «preview» any more: staff look at a lesson through
+      // GET /admin/lessons/:id/student-view (see course-review-fixes.db.test.ts).
       const access = await getLessonAccess(user.id, l3);
-      assert.equal(access.open, true);
-      assert.equal(access.state.preview, true);
+      assert.equal(access.open, false);
+      assert.equal(access.state.preview, false);
     }
     assert.equal((await getLessonAccess(student.id, l3)).open, false);
   });

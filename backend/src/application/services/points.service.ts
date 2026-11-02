@@ -194,58 +194,6 @@ export async function getProductPointsLeaderboard(
   };
 }
 
-/**
- * Awards lesson points after successful homework review.
- * Idempotent per (studentId, lessonId) — no double award.
- */
-export async function awardLessonPoints(params: {
-  studentId: string;
-  lessonId: string;
-  amount: number;
-  reason: string;
-  awardedBy: string;
-}): Promise<{ awarded: boolean; transactionId?: string }> {
-  if (params.amount <= 0) {
-    return { awarded: false };
-  }
-  if (rewardEconomyV2AppliesToEvent(new Date())) {
-    throw new ConflictError(
-      "Прямые баллы за урок отключены в новой экономике",
-      "LEGACY_LESSON_POINTS_DISABLED",
-    );
-  }
-
-  const existing = await prisma.pointsTransaction.findFirst({
-    where: {
-      studentId: params.studentId,
-      lessonId: params.lessonId,
-    },
-  });
-
-  if (existing) {
-    return { awarded: false, transactionId: existing.id };
-  }
-
-  const tx = await prisma.pointsTransaction.create({
-    data: {
-      studentId: params.studentId,
-      lessonId: params.lessonId,
-      amount: params.amount,
-      reason: params.reason,
-      awardedBy: params.awardedBy,
-    },
-  });
-
-  await notifyPointsAwarded({
-    studentId: params.studentId,
-    amount: params.amount,
-    reason: params.reason,
-    transactionId: tx.id,
-  });
-
-  return { awarded: true, transactionId: tx.id };
-}
-
 export async function awardManualPoints(params: {
   studentId: string;
   amount: number;

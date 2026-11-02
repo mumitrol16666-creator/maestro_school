@@ -144,7 +144,6 @@ async function submitHomeworkTest(params: {
       lessonId: params.lessonId,
       courseId: params.courseId,
       reviewerId: params.studentId,
-      pointsReward: params.lesson.pointsReward,
       lessonTitle: params.lesson.title,
     });
 

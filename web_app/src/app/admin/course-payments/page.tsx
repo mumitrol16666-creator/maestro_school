@@ -12,7 +12,6 @@ import { PageHeader } from "@/components/page-header";
 import { PaymentActionDialog, type PaymentDialogRequest } from "@/components/payment-action-dialog";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { ApiError } from "@/lib/api-client";
-import { cmsApi } from "@/lib/cms-api";
 import {
   announceCoursePaymentsChanged,
   coursePaymentsApi,
@@ -21,6 +20,7 @@ import {
 } from "@/lib/course-payments-api";
 import {
   PAYMENT_STATUS_LABELS,
+  STANDING_PAYMENT_STATUSES,
   formatTenge,
   paymentFiltersQuery,
   schoolDay,
@@ -44,6 +44,7 @@ const STATUS_OPTIONS: Array<{ value: PaymentDisplayStatus | ""; label: string }>
   { value: "confirmed", label: PAYMENT_STATUS_LABELS.confirmed },
   { value: "rejected", label: PAYMENT_STATUS_LABELS.rejected },
   { value: "refunded", label: PAYMENT_STATUS_LABELS.refunded },
+  { value: "access_revoked", label: PAYMENT_STATUS_LABELS.access_revoked },
 ];
 
 type Notice = { kind: "success" | "info" | "error"; text: string };
@@ -113,15 +114,8 @@ function CoursePaymentsWorkspace() {
     },
     [requestParam, version],
   );
-  const courses = useApiResource(async () => {
-    try {
-      return (await cmsApi.courses("", "", 1, 100)).data.filter((item) => !item.deletedAt);
-    } catch {
-      // Not every role that decides payments may open the course catalog; the filter then
-      // offers the courses seen in the requests.
-      return [];
-    }
-  }, []);
+  // The payment right is enough: this list does not need the catalog right (a branch manager has none).
+  const courses = useApiResource(() => coursePaymentsApi.courses(), []);
 
   const focusedRequest = focused.data && focused.data !== "missing" ? focused.data : null;
   const focusedId = focusedRequest?.id ?? null;
@@ -213,7 +207,12 @@ function CoursePaymentsWorkspace() {
     try {
       const file = await coursePaymentsApi.exportCsv(filters);
       saveBlobAsFile(file.blob, file.filename ?? `course-payments-${schoolDay()}.csv`);
-      setNotice({ kind: "success", text: "Таблица скачана. Она открывается в Excel." });
+      setNotice(file.truncated
+        ? {
+            kind: "info",
+            text: "Таблица скачана, но в неё вошли не все оплаты: сервер отдаёт не больше 20 000 строк. Сузьте период или курс и скачайте остальное отдельно.",
+          }
+        : { kind: "success", text: "Таблица скачана. Она открывается в Excel." });
     } catch (reason) {
       setNotice({ kind: "error", text: reason instanceof Error ? reason.message : "Не удалось скачать таблицу" });
     } finally {
@@ -399,28 +398,31 @@ function PeriodSum({ filters, version }: { filters: PaymentFilters; version: num
     | { kind: "ready"; count: number; amountKzt: number; partial: boolean }
     | { kind: "error" }
   >({ kind: "loading" });
+  // Payments that stand: confirmed, and confirmed ones whose access was closed by hand (not refunded).
   const key = paymentFiltersQuery({ ...filters, status: "confirmed" });
 
   useEffect(() => {
     let cancelled = false;
     setState({ kind: "loading" });
     (async () => {
-      const standing = { ...filters, status: "confirmed" as const };
       let count = 0;
       let amountKzt = 0;
-      let pages = 1;
       let partial = false;
-      for (let page = 1; page <= pages; page += 1) {
-        if (page > SUM_MAX_PAGES) {
-          partial = true;
-          break;
+      for (const status of STANDING_PAYMENT_STATUSES) {
+        const standing = { ...filters, status };
+        let pages = 1;
+        for (let page = 1; page <= pages; page += 1) {
+          if (page > SUM_MAX_PAGES) {
+            partial = true;
+            break;
+          }
+          const result = await coursePaymentsApi.list(standing, page, SUM_PAGE_SIZE);
+          if (cancelled) return;
+          pages = result.meta?.pages ?? 1;
+          const sum = sumStandingPayments(result.data);
+          count += sum.count;
+          amountKzt += sum.amountKzt;
         }
-        const result = await coursePaymentsApi.list(standing, page, SUM_PAGE_SIZE);
-        if (cancelled) return;
-        pages = result.meta?.pages ?? 1;
-        const sum = sumStandingPayments(result.data);
-        count += sum.count;
-        amountKzt += sum.amountKzt;
       }
       if (!cancelled) setState({ kind: "ready", count, amountKzt, partial });
     })().catch(() => {

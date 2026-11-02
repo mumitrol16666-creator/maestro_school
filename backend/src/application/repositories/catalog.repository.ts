@@ -60,9 +60,10 @@ export async function getCourseById(courseId: string) {
   });
 }
 
-export async function getLessonById(lessonId: string) {
+/** `includeUnpublished` is for the staff preview of a lesson that is still a draft. */
+export async function getLessonById(lessonId: string, options: { includeUnpublished?: boolean } = {}) {
   return prisma.lesson.findFirst({
-    where: { id: lessonId, ...notDeleted, isPublished: true },
+    where: { id: lessonId, ...notDeleted, ...(options.includeUnpublished ? {} : { isPublished: true }) },
     include: {
       materials: { orderBy: { sortOrder: "asc" } },
       homeworks: { where: notDeleted, take: 1 },

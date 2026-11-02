@@ -54,6 +54,13 @@ integrationTest("the database keeps one pending payment request per student and 
   await rejects(request(first.id, otherCourse.id, { status: "rejected", amountKzt: -5 }), /check|constraint/i, "a negative amount is refused");
   await rejects(prisma.course.update({ where: { id: course.id }, data: { priceKzt: 0 } }), /check|constraint/i, "a price of zero is refused");
 
+  await rejects(
+    prisma.coursePaymentRequest.update({ where: { id: again.id }, data: { refundedAt: new Date() } }),
+    /check|constraint/i,
+    "a refund mark on a request that was never confirmed is refused",
+  );
+  await prisma.coursePaymentRequest.update({ where: { id: confirmed.id }, data: { refundedAt: new Date() } });
+
   const period = { startsAt: new Date(), expiresAt: new Date(Date.now() + 86_400_000) };
   await prisma.courseAccess.create({ data: { studentId: second.id, courseId: otherCourse.id, source: "payment", paymentRequestId: confirmed.id, ...period } });
   await rejects(

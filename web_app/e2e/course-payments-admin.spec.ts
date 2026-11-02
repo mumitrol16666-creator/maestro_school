@@ -66,7 +66,9 @@ async function makePricedCourse(request: APIRequestContext, admin: Session, labe
 }
 
 async function askToPay(request: APIRequestContext, student: Session, courseId: string, payerNote = "Перевёл через Kaspi") {
-  return (await api<{ id: string }>(request, student, "post", `/courses/${courseId}/payment-requests`, { payerNote })).id;
+  // The payer sends the price they see; the request is made for exactly that price.
+  const { course } = await api<{ course: { priceKzt: number } }>(request, student, "get", `/courses/${courseId}/access`);
+  return (await api<{ id: string }>(request, student, "post", `/courses/${courseId}/payment-requests`, { payerNote, expectedPriceKzt: course.priceKzt })).id;
 }
 
 const accessKind = async (request: APIRequestContext, student: Session, courseId: string) =>

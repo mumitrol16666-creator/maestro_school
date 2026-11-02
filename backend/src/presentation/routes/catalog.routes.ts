@@ -16,9 +16,7 @@ import {
 } from "../../application/services/enrollment.service.js";
 import { getLessonProgressRecord } from "../../application/repositories/learning.repository.js";
 import { syncLessonAvailability } from "../../application/services/lesson-unlock.service.js";
-import { publicHomeworkTestQuestions } from "../../domain/homework-test.js";
-import { buildLessonEndActions } from "../../application/services/lesson-signup.service.js";
-import { getMediaInfoFromUrl } from "../../application/services/media-storage.service.js";
+import { buildOpenLessonView } from "./student-lesson-view.js";
 import {
   courseAccessDto,
   getCourseAccessStates,
@@ -150,9 +148,18 @@ export async function catalogRoutes(app: FastifyInstance) {
 
       const studentId = request.user!.id;
       const courseId = lesson.module.courseId;
+      const lessonAccess = await getLessonAccess(studentId, lessonId);
+
+      // The order comes first: a lesson that is not yet reached stays «пока закрыт» whether it is
+      // paid or not. Only a lesson that is open by order can meet the paywall.
+      await requireCourseEnrollment(studentId, courseId);
+      await syncLessonAvailability(studentId, courseId);
+      const progress = await getLessonProgressRecord(studentId, lessonId);
+      if (!progress || progress.status === "locked") {
+        throw new ForbiddenError("Урок пока закрыт");
+      }
 
       // A paid lesson without access answers with the paywall data and no content at all.
-      const lessonAccess = await getLessonAccess(studentId, lessonId);
       if (!lessonAccess.open) {
         return {
           data: {
@@ -181,60 +188,21 @@ export async function catalogRoutes(app: FastifyInstance) {
         };
       }
 
-      await requireCourseEnrollment(studentId, courseId);
-      await syncLessonAvailability(studentId, courseId);
-      const progress = await getLessonProgressRecord(studentId, lessonId);
-      if (!progress || progress.status === "locked") {
-        throw new ForbiddenError("Урок пока закрыт");
-      }
-      const contentOpen = progress.status !== "available";
       const signupCourseIds = lesson.signupCourseId ? [lesson.signupCourseId] : [];
       const enrollmentMap = await getStudentEnrollmentMap(studentId, signupCourseIds);
-      const endActions = contentOpen
-        ? buildLessonEndActions(lesson, new Set(enrollmentMap.keys()))
-        : { askTeacher: null, signup: null, hasActions: false };
-
       return {
-        data: {
-          id: lesson.id,
-          moduleId: lesson.moduleId,
-          courseId: lesson.module.courseId,
-          title: lesson.title,
-          description: lesson.description,
-          videoUrl: contentOpen ? lesson.videoUrl : null,
-          sortOrder: lesson.sortOrder,
-          pointsReward: lesson.pointsReward,
-          materials: contentOpen
-            ? await Promise.all(lesson.materials.map(async (material) => ({
-              ...material,
-              media: await getMediaInfoFromUrl(material.url, request),
-            })))
-            : [],
-          homework: contentOpen && lesson.homeworks[0]
-            ? {
-                id: lesson.homeworks[0].id,
-                description: lesson.homeworks[0].description,
-                type: lesson.homeworks[0].type,
-                passingScore: lesson.homeworks[0].passingScore,
-                testQuestions: lesson.homeworks[0].type === "test"
-                  ? publicHomeworkTestQuestions(lesson.homeworks[0].testQuestions)
-                  : null,
-              }
-            : null,
-          endActions,
-          course: lesson.module.course,
-          access: {
-            kind: "open" as const,
-            source: lessonAccess.state.preview
-              ? "preview" as const
-              : !lessonAccess.state.forSale
-                ? "free_course" as const
-                : lessonAccess.state.kind !== "none"
-                  ? lessonAccess.state.kind
-                  : "free_lesson" as const,
-            expiresAt: lessonAccess.state.expiresAt,
-          },
-        },
+        data: await buildOpenLessonView({
+          lesson,
+          request,
+          contentOpen: progress.status !== "available",
+          enrolledCourseIds: new Set(enrollmentMap.keys()),
+          source: !lessonAccess.state.forSale
+            ? "free_course"
+            : lessonAccess.state.kind !== "none"
+              ? lessonAccess.state.kind
+              : "free_lesson",
+          expiresAt: lessonAccess.state.expiresAt,
+        }),
       };
     },
   );

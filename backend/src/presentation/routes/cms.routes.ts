@@ -13,7 +13,9 @@ import { listAdminCrmDirectionProjection } from "../../application/services/crm-
 import { getMediaInfoFromUrl } from "../../application/services/media-storage.service.js";
 import { productFeatureConfig } from "../../config/product-features.js";
 import { authenticate, requireContentAdmin, requirePermission } from "../guards/auth.guards.js";
-import { BadRequestError, ConflictError } from "../../domain/errors.js";
+import { BadRequestError, ConflictError, NotFoundError } from "../../domain/errors.js";
+import { getLessonById } from "../../application/repositories/catalog.repository.js";
+import { buildOpenLessonView } from "./student-lesson-view.js";
 import { listPreparedTestTemplates } from "../../domain/prepared-tests.js";
 
 const idParams = z.object({ id: z.string().uuid() });
@@ -189,6 +191,23 @@ export async function cmsRoutes(app: FastifyInstance) {
   });
   app.get("/admin/lessons/:id", { preHandler: catalogGuards() }, async (request) => {
     const { id } = idParams.parse(request.params); return { data: await getAdminLesson(id) };
+  });
+  // «Посмотреть как ученик»: the answer of GET /lessons/:id for an open lesson, content included, even
+  // for a draft. Reads only: no progress, no enrollment, nothing is written.
+  app.get("/admin/lessons/:id/student-view", { preHandler: catalogGuards() }, async (request) => {
+    const { id } = idParams.parse(request.params);
+    const lesson = await getLessonById(id, { includeUnpublished: true });
+    if (!lesson) throw new NotFoundError("Lesson");
+    return {
+      data: await buildOpenLessonView({
+        lesson,
+        request,
+        contentOpen: true,
+        enrolledCourseIds: new Set(),
+        source: "preview",
+        expiresAt: null,
+      }),
+    };
   });
   app.post("/admin/lessons", { preHandler: catalogGuards() }, async (request, reply) => {
     const body = z.object({

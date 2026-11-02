@@ -16,7 +16,6 @@ import { syncLessonAvailability } from "./lesson-unlock.service.js";
 import { requireCourseEnrollment } from "./enrollment.service.js";
 import { requireLessonAccess } from "./course-access.service.js";
 import { syncCourseCompletionStatus } from "./course-progress.service.js";
-import { rewardEconomyV2AppliesToEvent } from "../../config/product-features.js";
 import { awardCourseProgressPoints } from "./course-completion-rewards.service.js";
 
 async function runLessonCompletionSideEffects(params: {
@@ -24,35 +23,18 @@ async function runLessonCompletionSideEffects(params: {
   lessonId: string;
   courseId: string;
   actorId: string;
-  pointsReward: number;
   lessonTitle: string;
   awardHomeworkLeagueXp?: boolean;
   eventAt?: Date;
 }) {
   const { unlockNextLesson } = await import("./lesson-unlock.service.js");
-  const { awardLessonPoints } = await import("./points.service.js");
-  const { awardCourseCompletionCoins } = await import("./coins.service.js");
 
   const nextLessonId = await unlockNextLesson(params.studentId, params.courseId, params.lessonId);
   const eventAt = params.eventAt ?? new Date();
-  if (!rewardEconomyV2AppliesToEvent(eventAt)) {
-    await awardLessonPoints({
-      studentId: params.studentId,
-      lessonId: params.lessonId,
-      amount: params.pointsReward,
-      reason: `Урок «${params.lessonTitle}»`,
-      awardedBy: params.actorId,
-    });
-  }
 
-  // A person from outside the school (no CRM link) has no league and earns no XP.
-  const schoolStudent = params.awardHomeworkLeagueXp
-    ? Boolean((await prisma.user.findUnique({
-        where: { id: params.studentId },
-        select: { crmStudentId: true },
-      }))?.crmStudentId)
-    : false;
-  if (params.awardHomeworkLeagueXp && schoolStudent) {
+  // A person from outside the school (no CRM link) has no league and earns no XP:
+  // awardHomeworkAcceptedXp checks it (isLeagueStudent), so no special case here.
+  if (params.awardHomeworkLeagueXp) {
     const submissionAttempts = await prisma.homeworkSubmission.count({
       where: {
         studentId: params.studentId,
@@ -79,8 +61,8 @@ async function runLessonCompletionSideEffects(params: {
   }
 
   const courseCompleted = await syncCourseCompletionStatus(params.studentId, params.courseId);
-  // New economy: Points for the module and the course, no Coins. Before it: Coins as always.
-  // A failed reward never undoes the completed lesson; the next completion call repeats it.
+  // Points for the module and the course, no Coins. A failed reward never undoes the completed
+  // lesson; the failure is logged as an error (the award is idempotent by source key).
   await awardCourseProgressPoints({
     studentId: params.studentId,
     lessonId: params.lessonId,
@@ -88,15 +70,11 @@ async function runLessonCompletionSideEffects(params: {
     courseCompleted,
     eventAt,
   }).catch((error) => {
-    console.error("[course-rewards] Points for module/course failed", error instanceof Error ? error.message : error);
+    console.error(
+      `[course-rewards] ERROR Points for module/course failed student=${params.studentId} lesson=${params.lessonId}`,
+      error instanceof Error ? error.message : error,
+    );
   });
-  if (courseCompleted && !rewardEconomyV2AppliesToEvent(eventAt)) {
-    await awardCourseCompletionCoins({
-      studentId: params.studentId,
-      courseId: params.courseId,
-      createdBy: params.actorId,
-    });
-  }
 
   return { nextLessonId, courseCompleted };
 }
@@ -163,24 +141,22 @@ export async function completeLesson(params: {
   lessonId: string;
   courseId: string;
   reviewerId: string;
-  pointsReward: number;
   lessonTitle: string;
 }) {
   const progress = await getLessonProgressRecord(params.studentId, params.lessonId);
   if (!progress) throw new NotFoundError("Lesson progress");
 
   if (progress.status === "completed") {
-    await runLessonCompletionSideEffects({
+    const completion = await runLessonCompletionSideEffects({
       studentId: params.studentId,
       lessonId: params.lessonId,
       courseId: params.courseId,
       actorId: params.reviewerId,
-      pointsReward: params.pointsReward,
       lessonTitle: params.lessonTitle,
       awardHomeworkLeagueXp: true,
       eventAt: progress.completedAt ?? new Date(),
     });
-    return { alreadyCompleted: true, progress };
+    return { alreadyCompleted: true, progress, nextLessonId: completion.nextLessonId };
   }
 
   if (progress.status === "submitted" || progress.status === "reviewed") {
@@ -208,18 +184,17 @@ export async function completeLesson(params: {
     return lessonProgress;
   });
 
-  await runLessonCompletionSideEffects({
+  const completion = await runLessonCompletionSideEffects({
     studentId: params.studentId,
     lessonId: params.lessonId,
     courseId: params.courseId,
     actorId: params.reviewerId,
-    pointsReward: params.pointsReward,
     lessonTitle: params.lessonTitle,
     awardHomeworkLeagueXp: true,
     eventAt: completedAt,
   });
 
-  return { alreadyCompleted: false, progress: updated };
+  return { alreadyCompleted: false, progress: updated, nextLessonId: completion.nextLessonId };
 }
 
 /** Student confirms a started lesson that has no homework. */
@@ -241,7 +216,6 @@ export async function completeLessonWithoutHomework(studentId: string, lessonId:
       lessonId,
       courseId,
       actorId: studentId,
-      pointsReward: lesson.pointsReward,
       lessonTitle: lesson.title,
       eventAt: progress.completedAt ?? new Date(),
     });
@@ -275,7 +249,6 @@ export async function completeLessonWithoutHomework(studentId: string, lessonId:
         lessonId,
         courseId,
         actorId: studentId,
-        pointsReward: lesson.pointsReward,
         lessonTitle: lesson.title,
         eventAt: current.completedAt ?? new Date(),
       });
@@ -298,7 +271,6 @@ export async function completeLessonWithoutHomework(studentId: string, lessonId:
     lessonId,
     courseId,
     actorId: studentId,
-    pointsReward: lesson.pointsReward,
     lessonTitle: lesson.title,
   });
 

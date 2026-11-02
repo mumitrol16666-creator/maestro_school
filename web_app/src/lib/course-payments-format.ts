@@ -7,13 +7,18 @@ export const SCHOOL_TIME_ZONE = "Asia/Aqtobe";
 /** The school sits at UTC+5 all year (no summer time). */
 const SCHOOL_UTC_OFFSET = "+05:00";
 
-export type PaymentDisplayStatus = "pending" | "confirmed" | "rejected" | "refunded";
+/**
+ * `access_revoked`: the payment is confirmed and not refunded, but the administrator closed the
+ * access by hand. The money stands, the lessons are closed.
+ */
+export type PaymentDisplayStatus = "pending" | "confirmed" | "rejected" | "refunded" | "access_revoked";
 
 export const PAYMENT_STATUS_LABELS: Record<PaymentDisplayStatus, string> = {
   pending: "Ждёт проверки",
   confirmed: "Подтверждена",
   rejected: "Оплата не найдена",
   refunded: "Возвращена",
+  access_revoked: "Подтверждена, доступ закрыт",
 };
 
 export const PAYMENT_STATUS_STYLES: Record<PaymentDisplayStatus, string> = {
@@ -21,6 +26,7 @@ export const PAYMENT_STATUS_STYLES: Record<PaymentDisplayStatus, string> = {
   confirmed: "bg-emerald-50 text-emerald-700",
   rejected: "bg-red-50 text-red-700",
   refunded: "bg-stone-100 text-stone-600",
+  access_revoked: "bg-orange-50 text-orange-800",
 };
 
 export type AccessListStatus = "active" | "expired" | "revoked" | "scheduled";
@@ -126,12 +132,15 @@ export function paymentFiltersQuery(filters: PaymentFilters, extra: Record<strin
   return query.toString();
 }
 
-/** The sum of the payments that stand: confirmed and not given back. */
+/** Statuses of a payment that was accepted and not given back: the money stands. */
+export const STANDING_PAYMENT_STATUSES = ["confirmed", "access_revoked"] as const;
+
+/** The sum of the payments that stand: confirmed and not given back, also when the access was closed by hand. */
 export function sumStandingPayments(items: ReadonlyArray<{ displayStatus: PaymentDisplayStatus; amountKzt: number }>) {
   let count = 0;
   let amountKzt = 0;
   for (const item of items) {
-    if (item.displayStatus !== "confirmed") continue;
+    if (!(STANDING_PAYMENT_STATUSES as readonly string[]).includes(item.displayStatus)) continue;
     count += 1;
     amountKzt += item.amountKzt;
   }
