@@ -20,9 +20,9 @@ import { publicHomeworkTestQuestions } from "../../domain/homework-test.js";
 import { buildLessonEndActions } from "../../application/services/lesson-signup.service.js";
 import { getMediaInfoFromUrl } from "../../application/services/media-storage.service.js";
 import {
+  courseAccessDto,
   getCourseAccessStates,
   getLessonAccess,
-  type CourseAccessState,
 } from "../../application/services/course-access.service.js";
 import { canOpenLesson } from "../../domain/course-access.js";
 import {
@@ -31,18 +31,6 @@ import {
   requirePermission,
   requireStudent,
 } from "../guards/auth.guards.js";
-
-/** What the client needs to draw a course card or a paywall. */
-function courseAccessDto(state: CourseAccessState) {
-  return {
-    forSale: state.forSale,
-    kind: state.kind,
-    expiresAt: state.expiresAt,
-    fullAccess: state.fullAccess,
-    preview: state.preview,
-    pendingPaymentRequest: state.pendingPaymentRequest,
-  };
-}
 
 export async function catalogRoutes(app: FastifyInstance) {
   app.get("/directions", async () => {

@@ -35,6 +35,18 @@ export interface CourseAccessState {
   pendingPaymentRequest: { id: string; createdAt: Date } | null;
 }
 
+/** What the client needs to draw a course card or a paywall. */
+export function courseAccessDto(state: CourseAccessState) {
+  return {
+    forSale: state.forSale,
+    kind: state.kind,
+    expiresAt: state.expiresAt,
+    fullAccess: state.fullAccess,
+    preview: state.preview,
+    pendingPaymentRequest: state.pendingPaymentRequest,
+  };
+}
+
 export const courseSaleTermsSelect = {
   id: true,
   priceKzt: true,
