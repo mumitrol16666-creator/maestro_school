@@ -22,6 +22,8 @@ import {
   freeLessonsNote,
   isForSale,
   isFreeLesson,
+  lessonLockBadge,
+  lessonLockHref,
   lessonLockLabel,
   mergeLessonLock,
   saleViewOf,
@@ -156,11 +158,12 @@ export default function CourseDetailPage() {
                 const lock = mergeLessonLock({ paymentLocked: paymentLocked.has(lesson.id), progressStatus: lesson.status, enrolled });
                 const locked = lock !== null;
                 const lockLabel = lessonLockLabel(lock);
+                const lockBadge = lessonLockBadge(lock);
                 const free = isFreeLesson({ paymentLocked: paymentLocked.has(lesson.id), course: sale });
                 return (
                   <Link
-                    // A lesson closed for the payment opens as the paywall; one closed for the order leads back to the course.
-                    href={lock === "payment" ? `/lessons/${lesson.id}` : locked ? `/courses/${course.id}` : `/lessons/${lesson.id}`}
+                    // Only the payment alone opens the paywall; a lesson the order still holds leads back to the course.
+                    href={lessonLockHref(lock, { courseId: course.id, lessonId: lesson.id })}
                     key={lesson.id}
                     data-testid="course-lesson"
                     data-lock={lock ?? "open"}
@@ -176,6 +179,7 @@ export default function CourseDetailPage() {
                         ) : (
                           <StatusBadge status={lesson.status} />
                         )}
+                        {lockBadge ? <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-bold text-stone-600" data-testid="lesson-paid-label">{lockBadge}</span> : null}
                       </div>
                       <p className="mt-1 line-clamp-2 break-words text-sm text-stone-500 sm:line-clamp-1">{lesson.description}</p>
                     </div>

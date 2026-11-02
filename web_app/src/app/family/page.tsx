@@ -27,6 +27,7 @@ import { familyApi } from "@/lib/family-api";
 import type { StudentHomeMonthlyPlan } from "@/types/api";
 import type { FamilyChild, FamilyMembership, FamilyNewsPost, FamilyResults, FamilySchoolSummary, FamilyVisit } from "@/types/family";
 import { FamilyCoursesCard } from "@/components/family-courses-card";
+import { externalChildLine, isExternalChild } from "@/lib/course-access-format";
 import { GroupSectorPassBadge, SectorExamSummary } from "@/components/sector-exam-summary";
 import { sectorTitle } from "@/lib/sector-label";
 
@@ -109,8 +110,13 @@ export default function FamilyPage() {
         </div>
       </header>
 
+      {isExternalChild(selectedChild) ? (
+        // Registered in the app, no card in the school: nothing to ask the school for, so no school overview
+        // and no «не удалось получить данные» — the sentence and the child's courses.
+        <p className="text-lg font-semibold text-ink" data-testid="family-external-note">{externalChildLine(selectedChild.firstName)}</p>
+      ) : null}
       <FamilyCourses key={`courses-${selectedChild.id}`} child={selectedChild} />
-      <ChildOverview key={selectedChild.id} child={selectedChild} />
+      {isExternalChild(selectedChild) ? null : <ChildOverview key={selectedChild.id} child={selectedChild} />}
       <FamilyNews posts={newsResource.data ?? []} loading={newsResource.loading} error={newsResource.error} retry={newsResource.reload} />
     </div>
   );

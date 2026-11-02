@@ -105,6 +105,18 @@ async function noOverflow(page: Page) {
   expect(overflow).toBeLessThanOrEqual(1);
 }
 
+/**
+ * The server checks the order of the course before the payment: a person reaches the paywall of
+ * lesson 3 only after lessons 1 and 2 are done. This does it through the API.
+ */
+async function finishFreeLessons(request: APIRequestContext, session: Session) {
+  await api(request, session, "post", `/courses/${paid.id}/enroll`);
+  for (const lessonId of paid.lessonIds.slice(0, 2)) {
+    await api(request, session, "post", `/lessons/${lessonId}/start`);
+    await api(request, session, "post", `/lessons/${lessonId}/complete`);
+  }
+}
+
 const navigation = (page: Page) =>
   page.locator("[data-testid=student-primary-navigation]:visible, [data-testid=student-mobile-navigation]:visible").first();
 
@@ -191,12 +203,21 @@ test("the course page tells the two locks apart: «после оплаты» and
   // The second free lesson is closed by the order of the course, the third by the payment.
   await expect(lessons.nth(1).getByTestId("lesson-lock-label")).toHaveText("откроется после предыдущего");
   await expect(lessons.nth(1).getByTestId("lesson-free-label")).toHaveText("бесплатно");
-  await expect(lessons.nth(2).getByTestId("lesson-lock-label")).toHaveText("после оплаты");
+  await expect(lessons.nth(1).getByTestId("lesson-paid-label")).toHaveCount(0);
+  // The third is closed by both: the order is the main word, «платный» a small mark, and it leads to the
+  // course (not to the paywall, the lesson before it is not done yet).
+  await expect(lessons.nth(2).getByTestId("lesson-lock-label")).toHaveText("откроется после предыдущего");
+  await expect(lessons.nth(2).getByTestId("lesson-paid-label")).toHaveText("платный");
+  await expect(lessons.nth(2)).toHaveAttribute("data-lock", "order_payment");
+  await expect(lessons.nth(2)).toHaveAttribute("href", `/courses/${paid.id}`);
   await noOverflow(page);
 });
 
 test("lesson 3 is the paywall; a payment request goes, the payment page opens in a new tab and the number copies", async ({ page, context, request }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  // The server checks the order of the course before the payment: lessons 1 and 2 are done first, so
+  // that lesson 3 is closed only by the payment.
+  await finishFreeLessons(request, outsider);
   await installSession(context, outsider);
   await page.goto(`/lessons/${paid.lessonIds[2]}`);
 
@@ -295,6 +316,7 @@ test("a rejection shows its reason and the request can be sent again", async ({ 
 test("a request sent from another tab meanwhile is met quietly with the waiting card", async ({ page, context, request }) => {
   // The previous test left a waiting request; a new student of the same kind shows the race alone.
   const second = await registerOutsider(request, `гонка-${run}`);
+  await finishFreeLessons(request, second);
   await installSession(context, second);
   await page.goto(`/lessons/${paid.lessonIds[2]}`);
   await expect(page.getByTestId("paywall-paid")).toBeVisible();
@@ -307,6 +329,7 @@ test("a request sent from another tab meanwhile is met quietly with the waiting 
 
 test("when the price changed meanwhile the person is told and sees the new price [409 answered by the test: the server of this branch does not send it yet]", async ({ page, context, request }) => {
   const third = await registerOutsider(request, `цена-${run}`);
+  await finishFreeLessons(request, third);
   await installSession(context, third);
   await page.goto(`/lessons/${paid.lessonIds[2]}`);
   await expect(page.getByTestId("paywall-price")).toHaveText("12 000 ₸ за 6 месяцев");

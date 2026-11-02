@@ -5,10 +5,14 @@ import {
   courseRewardLine,
   courseStateLine,
   dashboardCourseAction,
+  externalChildLine,
   externalMayOpen,
   freeLessonsNote,
+  isExternalChild,
   isExternalStudent,
   isFreeLesson,
+  lessonLockBadge,
+  lessonLockHref,
   lessonLockLabel,
   mergeLessonLock,
   paywallHistoryNote,
@@ -102,8 +106,11 @@ test("the note about free lessons is for a course the person does not hold", () 
   assert.equal(freeLessonsNote(paidCourse({ fullAccess: true })), null);
 });
 
-test("two locks of a lesson merge into one: payment first, then the order", () => {
-  assert.equal(mergeLessonLock({ paymentLocked: true, progressStatus: "locked", enrolled: true }), "payment");
+test("two locks of a lesson merge into one: the order is the main word, the payment alone opens the paywall", () => {
+  // The order is not passed and the payment is also needed: both, the order leads.
+  assert.equal(mergeLessonLock({ paymentLocked: true, progressStatus: "locked", enrolled: true }), "order_payment");
+  // The order is passed (the lesson before is done), only the payment is left.
+  assert.equal(mergeLessonLock({ paymentLocked: true, progressStatus: "available", enrolled: true }), "payment");
   // Paid for the access, but the previous lesson is not done: the order.
   assert.equal(mergeLessonLock({ paymentLocked: false, progressStatus: "locked", enrolled: true }), "order");
   assert.equal(mergeLessonLock({ paymentLocked: false, progressStatus: "available", enrolled: true }), null);
@@ -114,11 +121,23 @@ test("two locks of a lesson merge into one: payment first, then the order", () =
   assert.equal(mergeLessonLock({ paymentLocked: true, progressStatus: "locked", enrolled: false }), "payment");
 });
 
-test("the two locks are named differently", () => {
+test("the locks are named differently; a lesson closed by both says «после предыдущего» and is marked «платный»", () => {
   assert.equal(lessonLockLabel("payment"), "после оплаты");
   assert.equal(lessonLockLabel("order"), "откроется после предыдущего");
+  assert.equal(lessonLockLabel("order_payment"), "откроется после предыдущего");
   assert.equal(lessonLockLabel("not_started"), "после начала курса");
   assert.equal(lessonLockLabel(null), null);
+  assert.equal(lessonLockBadge("order_payment"), "платный");
+  for (const lock of ["payment", "order", "not_started", null] as const) assert.equal(lessonLockBadge(lock), null);
+});
+
+test("a closed lesson leads to the paywall only when the payment alone is left; otherwise to the course", () => {
+  const ids = { courseId: "c1", lessonId: "l3" };
+  assert.equal(lessonLockHref("payment", ids), "/lessons/l3");
+  assert.equal(lessonLockHref(null, ids), "/lessons/l3");
+  assert.equal(lessonLockHref("order", ids), "/courses/c1");
+  assert.equal(lessonLockHref("order_payment", ids), "/courses/c1");
+  assert.equal(lessonLockHref("not_started", ids), "/courses/c1");
 });
 
 test("a lesson is marked free only in a paid course the person does not hold", () => {
@@ -234,4 +253,13 @@ test("the courses of a child: held and waiting first, then to buy, then the free
   const waiting = title("Я ждёт", paidCourse({ pendingPaymentRequest: { id: "r", createdAt: "2026-11-02T10:00:00Z" } }));
   const sorted = [free, buy, held, waiting].sort(childCourseSort).map((course) => course.title);
   assert.deepEqual(sorted, ["Я ждёт", "Я купленный", "А платный", "Б бесплатный"]);
+});
+
+test("a child of the family page without the school is marked by the server; an older answer means the school", () => {
+  assert.equal(isExternalChild({ audience: "external" }), true);
+  assert.equal(isExternalChild({ audience: "school" }), false);
+  assert.equal(isExternalChild({}), false);
+  assert.equal(isExternalChild(null), false);
+  assert.equal(externalChildLine("Лена"), "Лена занимается онлайн-курсами Maestro");
+  assert.equal(externalChildLine(" Лена "), "Лена занимается онлайн-курсами Maestro");
 });

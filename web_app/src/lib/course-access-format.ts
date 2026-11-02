@@ -23,6 +23,16 @@ export function isExternalStudent(user: { role?: string | null; audience?: strin
   return Boolean(user) && user!.role === "student" && user!.audience === "external";
 }
 
+/** A child of the family page without a card in the school: only the online courses are shown for them. */
+export function isExternalChild(child: { audience?: string | null } | null | undefined): boolean {
+  return child?.audience === "external";
+}
+
+/** The one line the family page says instead of the school overview. */
+export function externalChildLine(firstName: string): string {
+  return `${firstName.trim()} занимается онлайн-курсами Maestro`;
+}
+
 /**
  * What an external student opens in the student app: courses, tests, the profile. Everything else
  * (schedule, sector, league, school homework, lesson results…) is the school's and leads back to
@@ -123,26 +133,42 @@ export function freeLessonsNote(course: CourseSaleView): string | null {
 /**
  * Why a lesson of a course is closed. Two causes live side by side: the payment
  * (`lessons[].locked` of `GET /courses/:id`) and the order (progress status `locked`).
- * The payment wins: it is the one the person can act on.
+ * - `payment`: only the payment is in the way (the lessons before it are done, or the course is not
+ *   started). The person can act on it: the lesson opens as the paywall.
+ * - `order`: only the order. The lesson opens nothing; the way back is the course page.
+ * - `order_payment`: both. The order is what blocks the person right now (the server checks it
+ *   before the payment), so it is the main word; «платный» is a small mark that payment is also needed.
  */
-export type LessonLock = "payment" | "order" | "not_started" | null;
+export type LessonLock = "payment" | "order" | "order_payment" | "not_started" | null;
 
 export function mergeLessonLock(input: {
   paymentLocked?: boolean | null;
   progressStatus: string;
   enrolled: boolean;
 }): LessonLock {
-  if (input.paymentLocked) return "payment";
+  const orderLocked = input.enrolled && input.progressStatus === "locked";
+  if (input.paymentLocked) return orderLocked ? "order_payment" : "payment";
   if (!input.enrolled) return "not_started";
-  if (input.progressStatus === "locked") return "order";
+  if (orderLocked) return "order";
   return null;
 }
 
 export function lessonLockLabel(lock: LessonLock): string | null {
   if (lock === "payment") return "после оплаты";
-  if (lock === "order") return "откроется после предыдущего";
+  if (lock === "order" || lock === "order_payment") return "откроется после предыдущего";
   if (lock === "not_started") return "после начала курса";
   return null;
+}
+
+/** The small mark next to the main word of a lesson closed by the order and the payment at once. */
+export function lessonLockBadge(lock: LessonLock): string | null {
+  return lock === "order_payment" ? "платный" : null;
+}
+
+/** Where a closed lesson leads: only the payment alone opens the paywall; the order leads to the course. */
+export function lessonLockHref(lock: LessonLock, ids: { courseId: string; lessonId: string }): string {
+  if (lock === null || lock === "payment") return `/lessons/${ids.lessonId}`;
+  return `/courses/${ids.courseId}`;
 }
 
 /**

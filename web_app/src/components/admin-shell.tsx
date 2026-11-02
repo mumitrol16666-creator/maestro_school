@@ -161,7 +161,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         <button
           type="button"
           aria-label="Закрыть меню"
-          className="grid h-10 w-10 place-items-center rounded-xl border border-white/10 bg-white/5 text-white/70 transition hover:bg-white/10 hover:text-white lg:hidden"
+          className="grid h-11 w-11 place-items-center rounded-xl border border-white/10 bg-white/5 text-white/70 transition hover:bg-white/10 hover:text-white lg:hidden"
           onClick={() => setOpen(false)}
         >
           <X size={19} />
@@ -278,7 +278,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             <Brand compact href="/admin" />
           </span>
         ) : (
-          <button onClick={() => setOpen(true)} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-stone-200/80 bg-white shadow-sm transition hover:border-gold/30 lg:hidden" aria-label="Открыть меню"><Menu size={20} /></button>
+          <button onClick={() => setOpen(true)} className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-stone-200/80 bg-white shadow-sm transition hover:border-gold/30 lg:hidden" aria-label="Открыть меню"><Menu size={20} /></button>
         )}
         <div className={`min-w-0 ${isContentAdmin ? "hidden sm:block" : ""}`}>
           <p className="truncate text-[10px] font-bold uppercase tracking-[0.16em] text-gold-ink sm:text-xs sm:tracking-[0.18em]">{headerTitle}</p>
@@ -301,7 +301,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           <Link
             href="/admin/settings"
             aria-label="Настройки"
-            className={`inline-flex h-10 items-center justify-center gap-2 rounded-xl border px-3 text-xs font-bold transition sm:rounded-full sm:px-4 ${
+            className={`inline-flex h-11 items-center justify-center gap-2 rounded-xl border px-3 text-xs font-bold transition sm:rounded-full sm:px-4 ${
               pathname.startsWith("/admin/settings")
                 ? "border-gold/30 bg-amber-50 text-amber-900"
                 : "border-stone-200 bg-white text-stone-600 hover:border-gold/30"
@@ -311,7 +311,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             <span className="hidden sm:inline">Настройки</span>
           </Link>
           <RefreshAppButton />
-          <button onClick={logout} aria-label="Выйти" className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-stone-200 bg-white px-3 text-xs font-bold text-stone-600 transition hover:border-red-200 hover:bg-red-50 hover:text-red-700 sm:rounded-full sm:px-4">
+          <button onClick={logout} aria-label="Выйти" className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-stone-200 bg-white px-3 text-xs font-bold text-stone-600 transition hover:border-red-200 hover:bg-red-50 hover:text-red-700 sm:rounded-full sm:px-4">
             <LogOut size={14} />
             <span className="hidden sm:inline">Выйти</span>
           </button>

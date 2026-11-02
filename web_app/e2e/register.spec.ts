@@ -154,6 +154,7 @@ test("the parent form sends both persons in one request and meets a taken phone 
 });
 
 test("a parent registers the child too, lands in the family cabinet and the child signs in with their own phone [needs POST /auth/register/parent]", async ({ page, request }) => {
+  test.setTimeout(120_000);
   const probe = await request.post("/api/v1/auth/register/parent", { data: {} });
   test.skip(probe.status() === 404, "the server of this stand has no /auth/register/parent yet");
 
@@ -164,6 +165,12 @@ test("a parent registers the child too, lands in the family cabinet and the chil
   await fillPerson(page, "parent", { first: "Марат", last: "Родитель", phone: parentPhone, password: PASSWORD });
   await fillPerson(page, "child", { first: "Дамир", last: "Ребёнок", phone: childPhone, password: "Ребёнок-2026" });
   await page.getByTestId("register-submit").click();
+  // Both registration forms share one limit of five a minute: after a busy minute the form says so in words.
+  const limited = page.getByTestId("register-error").filter({ hasText: "Слишком много попыток" });
+  if (await limited.waitFor({ timeout: 3000 }).then(() => true, () => false)) {
+    await page.waitForTimeout(62_000);
+    await page.getByTestId("register-submit").click();
+  }
 
   await expect(page).toHaveURL(/\/family$/);
   // The child is an outsider: the card «Курсы Дамир» is there at once.

@@ -165,3 +165,46 @@ test("the family page of a parent fits 320 px with the courses card open", async
   await expect(page.getByTestId("family-courses")).toBeVisible();
   await noOverflow(page);
 });
+
+/** The parent's registration form: a parent and a child in one request, the child without the school. */
+async function registerParentWithExternalChild(request: APIRequestContext, label: string): Promise<{ session: Session; childName: string }> {
+  const stamp = `${Date.now()}`.slice(-8);
+  const phone = (tail: string) => `+7 70${stamp.slice(0, 7)}${tail}`;
+  const childName = `Лена${label}`.slice(0, 40);
+  // The two registration forms share a limit of five a minute; a refusal waits for the window.
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const response = await request.post("/api/v1/auth/register/parent", {
+      data: {
+        parent: { firstName: "Ольга", lastName: "Внешняя", phone: phone("11"), password: PASSWORD },
+        child: { firstName: childName, lastName: "Внешняя", phone: phone("22"), password: PASSWORD },
+      },
+    });
+    if (response.status() === 429) {
+      const seconds = Number(/retry in (\d+)/.exec(await response.text())?.[1] ?? 10);
+      await new Promise((resolve) => setTimeout(resolve, (seconds + 1) * 1000));
+      continue;
+    }
+    expect(response.status(), await response.text()).toBe(201);
+    return { session: (await response.json()).data as Session, childName };
+  }
+  throw new Error("the registration stayed rate limited");
+}
+
+test("a child without the school has no school overview: one sentence and the courses, no error", async ({ page, context, request }, testInfo) => {
+  test.setTimeout(150_000);
+  const { session, childName } = await registerParentWithExternalChild(request, testInfo.project.name.replace(/\W/g, "").slice(0, 8));
+  const children = await api<Array<{ id: string; audience: string }>>(request, session, "get", "/parents/me/children");
+  expect(children.map((item) => item.audience)).toEqual(["external"]);
+
+  await installSession(context, session);
+  await page.goto("/family");
+  await expect(page.getByTestId("family-external-note")).toHaveText(`${childName} занимается онлайн-курсами Maestro`);
+  await expect(page.getByTestId("family-courses").getByRole("heading", { name: `Курсы ${childName}` })).toBeVisible();
+  // None of the school's blocks, and no apology for data the school cannot have.
+  for (const id of ["family-crm-notice", "family-balance", "family-week-digest", "family-explainer"]) {
+    await expect(page.getByTestId(id), id).toHaveCount(0);
+  }
+  await expect(page.getByText("Сейчас не удалось получить данные школы")).toHaveCount(0);
+  await expect(page.getByText("Загружаем данные")).toHaveCount(0);
+  await noOverflow(page);
+});
