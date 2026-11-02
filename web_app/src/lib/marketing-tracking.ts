@@ -26,7 +26,7 @@ export interface MarketingContext {
 const crmMarketingApiUrl = () => {
   const localHost = typeof window !== "undefined"
     && ["localhost", "127.0.0.1"].includes(window.location.hostname);
-  const fallback = localHost ? "http://localhost:5001" : "https://app-maestro-school.duckdns.org";
+  const fallback = localHost ? "http://localhost:5001" : "https://crm.maestro.com.kz";
   return (process.env.NEXT_PUBLIC_CRM_API_URL ?? fallback).replace(/\/$/, "");
 };
 

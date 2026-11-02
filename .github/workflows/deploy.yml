@@ -138,4 +138,4 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             curl -fsS http://127.0.0.1:4000/health
-            curl -fsS -o /dev/null https://maestro-school.duckdns.org/
+            curl -fsS -o /dev/null https://app.maestro.com.kz/

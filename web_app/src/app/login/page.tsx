@@ -50,7 +50,7 @@ function loginErrorText(reason: unknown, fallback: string) {
 }
 
 const TRIAL_LANDING_URL =
-  process.env.NEXT_PUBLIC_TRIAL_LANDING_URL ?? "https://app-maestro-school.duckdns.org/trial.html";
+  process.env.NEXT_PUBLIC_TRIAL_LANDING_URL ?? "https://crm.maestro.com.kz/trial.html";
 
 const LOGIN_COPY = {
   student: {

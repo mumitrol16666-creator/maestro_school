@@ -1,7 +1,7 @@
 /** Read-only production smoke. It must never create or mutate application data. */
 export {};
 
-const BASE_URL = (process.env.SMOKE_BASE_URL ?? "https://maestro-school.duckdns.org").replace(/\/$/, "");
+const BASE_URL = (process.env.SMOKE_BASE_URL ?? "https://app.maestro.com.kz").replace(/\/$/, "");
 const API_BASE_URL = (process.env.SMOKE_API_BASE_URL ?? BASE_URL).replace(/\/$/, "");
 const WEB_BASE_URL = (process.env.SMOKE_WEB_BASE_URL ?? BASE_URL).replace(/\/$/, "");
 
