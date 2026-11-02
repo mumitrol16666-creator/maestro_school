@@ -68,10 +68,15 @@ test("the student marks today's practice on the home and sets the reminder in se
   // A value different from the saved one, so the save really happens on every run.
   const nextTime = (await time.inputValue()) === "19:30" ? "19:45" : "19:30";
   await time.fill(nextTime);
+  const reminderSaved = () => page.waitForResponse((response) => response.url().includes("/students/me/practice/reminder") && response.request().method() === "PUT");
+  const timeSaved = reminderSaved();
   await time.dispatchEvent("change");
-  await expect(card.getByRole("status")).toContainText("Сохранено");
+  expect((await timeSaved).ok()).toBe(true);
+  await expect(page.getByTestId("app-toast")).toContainText("Напоминание сохранено");
+  const daySaved = reminderSaved();
   await card.getByRole("button", { name: "Вс" }).click();
-  await expect(card.getByRole("status")).toContainText("Сохранено");
+  expect((await daySaved).ok()).toBe(true);
+  await expect(page.getByTestId("app-toast")).toContainText("Напоминание сохранено");
 
   const saved = await request.get("/api/v1/students/me/practice", { headers: { Authorization: `Bearer ${token}` } });
   const data = (await saved.json()).data as { checkedInToday: boolean; reminder: { enabled: boolean; time: string; days: number[] } };

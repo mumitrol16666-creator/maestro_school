@@ -32,7 +32,7 @@ test("a student sends a course homework answer with a file and downloads it back
   await expect(form).toContainText("Будет отправлен: ruka.png");
   await form.getByPlaceholder("Опишите, как вы выполнили задание").fill("Фото постановки руки");
   await form.getByRole("button", { name: /Отправить на проверку/ }).click();
-  await expect(page.getByText("Работа отправлена на проверку.", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("app-toast")).toContainText("Задание отправлено на проверку");
 
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: "Скачать файл" }).first().click();
