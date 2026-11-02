@@ -11,11 +11,27 @@ const SHELL_PAGES = new Set(["/dashboard", "/login"]);
 // A release build names its static files by content, so a kept copy is never out of date.
 const IMMUTABLE_STATIC = releaseVersion !== "dev";
 
+// Paths of the static files a page names in its HTML (scripts, styles, fonts, route chunks).
+const STATIC_PATH = /(?:\/_next\/)?static\/(?:chunks|css|media)\/[^"'\\\s<>]+/g;
+
+/** The shell pages and every static file they name, so the app opens offline after one visit. */
+async function keepShell(cache) {
+  await cache.addAll(OFFLINE_ASSETS);
+  for (const page of SHELL_PAGES) {
+    const response = await fetch(page, { cache: "no-store", credentials: "omit" });
+    if (!response.ok || response.redirected) continue;
+    const html = await response.clone().text();
+    await cache.put(new URL(page, self.location.origin).href, response);
+    const assets = new Set([...html.matchAll(STATIC_PATH)].map(([path]) => (path.startsWith("/_next/") ? path : `/_next/${path}`)));
+    await Promise.all([...assets].map((asset) => cache.add(asset).catch(() => undefined)));
+  }
+}
+
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_VERSION)
-      .then((cache) => cache.addAll(OFFLINE_ASSETS))
-      // Without the page the app still works online; installing must not fail over it.
+      .then(keepShell)
+      // Without the shell the app still works online; installing must not fail over it.
       .catch(() => undefined)
       .then(() => self.skipWaiting()),
   );

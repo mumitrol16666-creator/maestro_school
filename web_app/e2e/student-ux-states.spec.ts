@@ -79,7 +79,8 @@ test("a failed read shows the Russian error screen, never the server's English",
   await page.goto("/dashboard");
   await expect(page.getByRole("heading", { name: "Что-то пошло не так" })).toBeVisible();
   await expect(page.getByText("Internal server error")).toHaveCount(0);
-  await expect(page.getByRole("link", { name: "На главную" })).toBeVisible();
+  // On the home screen itself «На главную» would lead nowhere, so only «Повторить» is offered.
+  await expect(page.getByTestId("app-error-screen").getByRole("link", { name: "На главную" })).toHaveCount(0);
   fail = false;
   await page.getByRole("button", { name: "Повторить" }).click();
   await expect(page.getByTestId("dashboard-learning-summary")).toBeVisible();
