@@ -1,4 +1,5 @@
 import { api } from "@/lib/api-client";
+import { reportSchoolFreshness } from "@/lib/connection-status";
 import type { ApiStudentHome } from "@/types/api";
 
 /**
@@ -12,9 +13,13 @@ export function loadStudentHome(options: { fresh?: boolean } = {}) {
   if (!options.fresh && cached && Date.now() - cached.at < HOME_TTL_MS) return cached.promise;
   const promise = api.studentHome();
   cached = { at: Date.now(), promise };
-  promise.catch(() => {
-    if (cached?.promise === promise) cached = null;
-  });
+  promise.then(
+    // В-18: the shell tells the student when the schedule is the server's last copy from CRM.
+    (home) => reportSchoolFreshness(home.school),
+    () => {
+      if (cached?.promise === promise) cached = null;
+    },
+  );
   return promise;
 }
 

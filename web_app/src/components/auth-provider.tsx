@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, clearSession, getAccessToken, getStoredUser, storeSession } from "@/lib/api-client";
+import { api, ApiError, clearSession, getAccessToken, getStoredUser, storeSession } from "@/lib/api-client";
 import type { ApiAuthUser } from "@/types/api";
 import type { RegisterInput } from "@/types/api";
 
@@ -34,16 +34,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     const cached = getStoredUser();
-    api.me()
+    let checkedOnline = false;
+    const confirm = () => api.me()
       .then((fresh) => {
+        checkedOnline = true;
         const merged = { ...cached, ...fresh };
         setUser(merged);
         storeSession(token, merged);
         // Sessions signed in before plan 1.12 have no media cookie yet; refreshing keeps it current.
         void api.refreshMediaSession().catch(() => undefined);
+      });
+    // В-18, З-14: no network or a server hiccup is not a logout. The session stays on the saved
+    // profile and is checked again when the connection returns; only a rejected token (401,
+    // handled by the API client) or a missing profile sends the user to the sign-in screen.
+    const onOnline = () => {
+      if (!checkedOnline && getAccessToken()) void confirm().catch(() => undefined);
+    };
+    window.addEventListener("online", onOnline);
+    confirm()
+      .catch((reason) => {
+        const transient = reason instanceof ApiError && (reason.status === 0 || reason.status >= 500);
+        setUser(transient && cached ? cached : null);
       })
-      .catch(() => setUser(null))
       .finally(() => setLoading(false));
+    return () => window.removeEventListener("online", onOnline);
   }, []);
 
   const value = useMemo<AuthContextValue>(() => ({

@@ -9,13 +9,14 @@ import {
   LoaderCircle,
   UsersRound,
 } from "lucide-react";
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { AuthHeroPanel } from "@/components/auth-hero-panel";
 import { AndroidAppDownloadLink } from "@/components/android-app-download";
 import { Brand } from "@/components/brand";
 import { useAuth } from "@/components/auth-provider";
 import { ApiError } from "@/lib/api-client";
+import { getConnectionStatus, subscribeConnectionStatus } from "@/lib/connection-status";
 import { homePathForRole, isStaffRole } from "@/lib/role-labels";
 
 function safeNextPath(next: string | null, role?: string | null) {
@@ -36,6 +37,12 @@ function safeNextPath(next: string | null, role?: string | null) {
     return homePathForRole(role);
   }
   return next;
+}
+
+/** В-18: no network is said plainly instead of «Не удалось связаться с сервером». */
+function loginErrorText(reason: unknown, fallback: string) {
+  if (reason instanceof ApiError && reason.code === "NETWORK_ERROR") return "Нет связи. Проверьте интернет и попробуйте снова.";
+  return reason instanceof ApiError ? reason.message : fallback;
 }
 
 const TRIAL_LANDING_URL =
@@ -76,6 +83,7 @@ export default function LoginPage() {
   const [ssoPending, setSsoPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const ssoStartedRef = useRef(false);
+  const { offline } = useSyncExternalStore(subscribeConnectionStatus, getConnectionStatus, getConnectionStatus);
 
   useEffect(() => {
     if (!authLoading && user) router.replace(homePathForRole(user.role));
@@ -102,7 +110,7 @@ export default function LoginPage() {
         else router.replace(target);
       } catch (reason) {
         if (!cancelled) {
-          setError(reason instanceof ApiError ? reason.message : "Не удалось войти по ссылке из личного кабинета");
+          setError(loginErrorText(reason, "Не удалось войти по ссылке из личного кабинета"));
         }
       } finally {
         if (!cancelled) setSsoPending(false);
@@ -126,7 +134,7 @@ export default function LoginPage() {
       if (target.startsWith("/api/")) window.location.assign(target);
       else router.replace(target);
     } catch (reason) {
-      setError(reason instanceof ApiError ? reason.message : "Не удалось войти в кабинет");
+      setError(loginErrorText(reason, "Не удалось войти в кабинет"));
     } finally {
       setSubmitting(false);
     }
@@ -230,6 +238,11 @@ export default function LoginPage() {
                 </button>
               </span>
             </label>
+            {offline && !error ? (
+              <p role="status" className="rounded-xl border border-stone-300 bg-paper px-4 py-3 text-sm font-semibold text-stone-700" data-testid="login-offline">
+                Нет связи. Войти получится, когда появится интернет.
+              </p>
+            ) : null}
             {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</p>}
             <button
               disabled={busy}

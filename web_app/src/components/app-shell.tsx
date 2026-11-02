@@ -18,6 +18,8 @@ import { PushNotificationPrompt } from "./push-notification-prompt";
 import { pathMatchesAny, StudentWorkspaceContextNavigation, studentWorkspaceNavigation } from "./student-workspace-navigation";
 import { UserMenu } from "./user-menu";
 import { StudentUsageTracker } from "./student-usage-tracker";
+import { ConnectionBanner } from "./connection-banner";
+import { ToastViewport } from "./toast";
 
 type ShellNavigationItem = {
   href: string;
@@ -154,6 +156,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <UserMenu />
           </div>
         </header>
+        {student ? <ConnectionBanner /> : null}
         <main id="main-content" tabIndex={-1} className={`mobile-safe mx-auto max-w-[1500px] p-4 sm:p-8 lg:p-10 print:max-w-none print:p-0 ${
           pathname.startsWith("/messages") ? "sm:py-5 lg:py-6" : ""
         } ${
@@ -207,6 +210,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <>
           <StudentUsageTracker />
           <PushNotificationPrompt userId={user.id} audience="student" />
+          <ToastViewport />
         </>
       ) : null}
     </div>

@@ -1,9 +1,18 @@
 const releaseVersion = new URL(self.location.href).searchParams.get("v") || "dev";
 const cacheSuffix = releaseVersion.replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 80) || "dev";
 const CACHE_VERSION = `maestro-${cacheSuffix}`;
+// В-18: only the «Нет связи» page and its logo are kept — no pages with data, no API answers.
+const OFFLINE_URL = "/offline.html";
+const OFFLINE_ASSETS = [OFFLINE_URL, "/brand/guitar-avatar.png"];
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(self.skipWaiting());
+  event.waitUntil(
+    caches.open(CACHE_VERSION)
+      .then((cache) => cache.addAll(OFFLINE_ASSETS))
+      // Without the page the app still works online; installing must not fail over it.
+      .catch(() => undefined)
+      .then(() => self.skipWaiting()),
+  );
 });
 
 self.addEventListener("activate", (event) => {
@@ -22,7 +31,19 @@ self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   const url = new URL(event.request.url);
   if (url.pathname.startsWith("/api/")) return;
-  event.respondWith(fetch(event.request));
+  if (event.request.mode === "navigate") {
+    event.respondWith(
+      fetch(event.request).catch(() =>
+        caches.match(OFFLINE_URL, { cacheName: CACHE_VERSION })
+          .then((page) => page || Response.error())),
+    );
+    return;
+  }
+  event.respondWith(
+    fetch(event.request).catch(() =>
+      caches.match(event.request, { cacheName: CACHE_VERSION })
+        .then((cached) => cached || Response.error())),
+  );
 });
 
 self.addEventListener("push", (event) => {

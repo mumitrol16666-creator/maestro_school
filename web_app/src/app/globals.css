@@ -439,3 +439,24 @@ button.card-hover:focus-visible {
     width: 100%;
   }
 }
+
+/* В-15: placeholders of the cards while a student screen loads. */
+.maestro-skeleton {
+  background: #e2ddd2;
+  animation: maestro-skeleton-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes maestro-skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+/* В-22: the confirmation slides up above the bottom navigation. */
+.maestro-toast {
+  animation: maestro-toast-in 160ms ease-out;
+}
+
+@keyframes maestro-toast-in {
+  from { opacity: 0; transform: translate3d(0, 8px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}

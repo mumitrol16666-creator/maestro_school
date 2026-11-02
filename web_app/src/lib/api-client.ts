@@ -32,10 +32,34 @@ import type {
   PreparedTestsAnalytics,
   PreparedTestsResponse,
 } from "@/types/prepared-tests";
+import { reportApiReachable, reportApiUnreachable } from "@/lib/connection-status";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "/api/v1";
 const TOKEN_KEY = "maestro_access_token";
 const USER_KEY = "maestro_auth_user";
+
+/**
+ * В-18: in the student app the last answer of every read stays in this tab's memory, so a
+ * screen opened again without network shows what was already loaded (the shell shows
+ * «Нет связи»). Nothing is written to the device; logout and a new session drop it.
+ */
+const SAVED_READS_LIMIT = 80;
+const savedReads = new Map<string, unknown>();
+let savedReadsEnabled = false;
+
+/** Only the student shell turns this on: staff and family screens have no «Нет связи» strip. */
+export function setSavedReadsEnabled(enabled: boolean) {
+  savedReadsEnabled = enabled;
+}
+
+function keepSavedRead(path: string, payload: unknown) {
+  savedReads.delete(path);
+  savedReads.set(path, payload);
+  if (savedReads.size > SAVED_READS_LIMIT) {
+    const oldest = savedReads.keys().next().value;
+    if (oldest !== undefined) savedReads.delete(oldest);
+  }
+}
 
 interface ApiEnvelope<T, M = unknown> {
   data: T;
@@ -83,6 +107,7 @@ export function storeSession(token: string, user: ApiAuthUser) {
 
 export function clearSession() {
   if (typeof window === "undefined") return;
+  savedReads.clear();
   window.localStorage.removeItem(TOKEN_KEY);
   window.localStorage.removeItem(USER_KEY);
 }
@@ -103,15 +128,20 @@ export async function apiRequestEnvelope<T, M = unknown>(path: string, init: Req
       response = await fetch(`${API_URL}${path}`, { ...init, headers, cache: "no-store" });
       break;
     } catch {
-      if (init.signal?.aborted || attempt === attempts - 1) {
+      if (init.signal?.aborted) {
         throw new ApiError("Не удалось связаться с сервером Maestro", 0, "NETWORK_ERROR");
       }
+      if (attempt === attempts - 1) return unreachable<T, M>(method, path);
       await new Promise((resolve) => setTimeout(resolve, 150));
     }
   }
 
-  if (!response) throw new ApiError("Не удалось связаться с сервером Maestro", 0, "NETWORK_ERROR");
+  if (!response) return unreachable<T, M>(method, path);
   const payload = (await response.json().catch(() => ({}))) as ApiEnvelope<T, M> & ApiErrorEnvelope;
+  // A gateway answer without our error envelope means the Maestro server itself is down.
+  if (response.status >= 500 && !payload.error?.code) return unreachable<T, M>(method, path);
+  reportApiReachable();
+  if (response.ok && method === "GET" && savedReadsEnabled) keepSavedRead(path, payload);
   if (!response.ok) {
     if (response.status === 401) {
       clearSession();
@@ -126,6 +156,13 @@ export async function apiRequestEnvelope<T, M = unknown>(path: string, init: Req
     );
   }
   return payload;
+}
+
+function unreachable<T, M>(method: string, path: string): ApiEnvelope<T, M> {
+  const saved = method === "GET" && savedReadsEnabled ? savedReads.get(path) : undefined;
+  reportApiUnreachable({ servedSaved: saved !== undefined });
+  if (saved !== undefined) return saved as ApiEnvelope<T, M>;
+  throw new ApiError("Не удалось связаться с сервером Maestro", 0, "NETWORK_ERROR");
 }
 
 export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
