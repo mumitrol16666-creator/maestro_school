@@ -14,7 +14,7 @@ const integrationTest = process.env.RUN_DB_INTEGRATION_TESTS === "1" ? test : te
  * that failed because CRM is down and the server kept no copy, and both from a CRM refusal;
  * the shell shows «Нет связи со школой» only for the outage.
  */
-integrationTest("the home names the school status: not linked, CRM down, CRM refusal, linked, the server's copy", async t => {
+integrationTest("the home names the school status: not linked, CRM down, CRM refusal or 500, linked, the server's copy", async t => {
   const { prisma } = await import("../../infrastructure/database/prisma.js");
   const { getStudentHome } = await import("./student-home.service.js");
 
@@ -37,8 +37,9 @@ integrationTest("the home names the school status: not linked, CRM down, CRM ref
   const down = await student(2, `crm-home-down-${suffix}`);
   const refused = await student(3, `crm-home-refused-${suffix}`);
   const linked = await student(4, `crm-home-up-${suffix}`);
+  const broken = await student(5, `crm-home-500-${suffix}`);
   t.after(async () => {
-    await prisma.user.deleteMany({ where: { id: { in: [unlinked.id, down.id, refused.id, linked.id] } } });
+    await prisma.user.deleteMany({ where: { id: { in: [unlinked.id, down.id, refused.id, linked.id, broken.id] } } });
     await prisma.$disconnect();
   });
 
@@ -48,8 +49,12 @@ integrationTest("the home names the school status: not linked, CRM down, CRM ref
     const url = String(input);
     crmCalls.push(new URL(url).pathname);
     if (!crmUp || url.includes(`/students/${down.crmStudentId}/`)) throw new TypeError("fetch failed");
+    // The bodies CRM sends: integration reads answer a missing student and their own failure without a code.
     if (url.includes(`/students/${refused.crmStudentId}/`)) {
-      return new Response(JSON.stringify({ success: false, error: { code: "NOT_FOUND", message: "Student not found" } }), { status: 404, headers: { "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ success: false, error: "Student not found" }), { status: 404, headers: { "Content-Type": "application/json" } });
+    }
+    if (url.includes(`/students/${broken.crmStudentId}/`)) {
+      return new Response(JSON.stringify({ success: false, error: "Internal server error" }), { status: 500, headers: { "Content-Type": "application/json" } });
     }
     const body = url.includes(`/students/${linked.crmStudentId}/offline-summary`)
       ? { profile: { groups: [] }, upcomingLessons: [], lessonHistory: [] }
@@ -70,6 +75,11 @@ integrationTest("the home names the school status: not linked, CRM down, CRM ref
   const refusedHome = await getStudentHome(refused.id);
   assert.equal(refusedHome.schoolStatus, "failed");
   assert.equal(refusedHome.school, null);
+
+  // CRM answered 500 with no copy on the server: «Расписание» shows its own error, not «нет связи».
+  const brokenHome = await getStudentHome(broken.id);
+  assert.equal(brokenHome.schoolStatus, "failed");
+  assert.equal(brokenHome.school, null);
 
   const linkedHome = await getStudentHome(linked.id);
   assert.equal(linkedHome.schoolStatus, "linked");

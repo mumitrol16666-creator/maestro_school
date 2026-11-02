@@ -51,14 +51,17 @@ export const HOME_TASKS_LIMIT = 6;
 /**
  * Package 3 (В-18): `school: null` alone cannot tell a student the school has not linked yet from
  * a school read that failed; the home names which one it is. `unavailable`: CRM did not answer and
- * the server kept no copy; `failed`: CRM answered with a refusal (student not found, a rejected
- * secret) or the summary could not be built, so «нет связи» would not be true.
+ * the server kept no copy; `failed`: CRM answered with a refusal or an error of its own (student
+ * not found, a rejected secret, a CRM 500) or the summary could not be built.
  */
 export type StudentHomeSchoolStatus = "linked" | "not_linked" | "unavailable" | "failed";
 
-/** The same rule the CRM read cache keeps its copy by: a transport failure (502/504) or a CRM 5xx. */
+/**
+ * CRM did not answer at all — the codes «Расписание» names «Нет связи со школой» by, so the strip
+ * on the home and the schedule screen say the same. A CRM that answers 500 is `failed` on both.
+ */
 function isCrmOutage(reason: unknown) {
-  return reason instanceof AppError && reason.statusCode >= 500;
+  return reason instanceof AppError && (reason.code === "CRM_UNAVAILABLE" || reason.code === "CRM_TIMEOUT");
 }
 
 /**

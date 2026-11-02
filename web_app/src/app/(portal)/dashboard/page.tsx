@@ -43,7 +43,7 @@ export default function DashboardPage() {
   // Plan 2.1: «Сейчас» is one read of the student's home; the header shares it.
   const resource = useApiResource(() => loadStudentHome(), []);
   if (resource.loading && !resource.data) {
-    return <ScreenSkeleton variant="home" label="Собираем вашу учебную главную" />;
+    return <ScreenSkeleton variant="home" label="Собираем твою учебную главную" />;
   }
   if (!resource.data) {
     return <ScreenError message={resource.error} code={resource.errorCode} retry={() => { invalidateStudentHome(); return resource.reload(); }} />;

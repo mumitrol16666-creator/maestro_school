@@ -367,7 +367,7 @@ function ProfileAchievements({
   const totalCount = achievements.meta?.totalCount ?? achievements.data.length;
 
   return (
-    <section id="achievements" className="scroll-mt-24 rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8" data-testid="profile-achievements">
+    <section id="achievements" className="scroll-mt-32 rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8" data-testid="profile-achievements">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold-ink">Учебный путь</p>

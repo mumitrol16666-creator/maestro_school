@@ -105,6 +105,13 @@ export function reportSchoolFreshness(summary: { crmStale?: boolean; crmSnapshot
   publish();
 }
 
+/** CRM answered (the student is not linked, or CRM refused): no «нет связи со школой» to show. */
+export function reportSchoolReachable() {
+  if (school === NO_SCHOOL_ISSUE) return;
+  school = NO_SCHOOL_ISSUE;
+  publish();
+}
+
 /** The school data could not be read at all because CRM did not answer. */
 export function reportSchoolUnavailable() {
   if (school.unavailable) return;

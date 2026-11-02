@@ -294,7 +294,7 @@ export interface ApiStudentHome {
   school: StudentOfflineSummary | null;
   /**
    * В-18: why `school` is empty — the school has not linked the student yet, CRM is down and the
-   * server kept no copy (`unavailable`), or CRM answered with a refusal (`failed`).
+   * server kept no copy (`unavailable`), or CRM answered with a refusal or an error (`failed`).
    */
   schoolStatus?: "linked" | "not_linked" | "unavailable" | "failed";
   monthlyPlans: StudentHomeMonthlyPlan[];
