@@ -13,7 +13,7 @@ import {
   findUserWithRoleByLogin,
   findUserWithRoleByLoginOrEmail,
   findUsersWithRoleByPhone,
-  updateUserPassword,
+  updateOwnPassword,
   updateUserProfile,
 } from "../../application/repositories/auth.repository.js";
 import { BadRequestError, ConflictError, ForbiddenError, UnauthorizedError } from "../../domain/errors.js";
@@ -23,7 +23,7 @@ import { getStudentCoins } from "../../application/services/coins.service.js";
 import { getStudentPointsBalance } from "../../application/services/points.service.js";
 import { authenticate } from "../guards/auth.guards.js";
 import { syncNewStudentToCrm } from "../../application/services/crm-sync.service.js";
-import { postStudentAvatarToCrm } from "../../infrastructure/crm/crm-client.js";
+import { postPasswordChangedInApp, postStudentAvatarToCrm } from "../../infrastructure/crm/crm-client.js";
 import {
   inferMimeType,
   mediaPublicUrl,
@@ -430,7 +430,14 @@ export async function authRoutes(app: FastifyInstance) {
       throw new UnauthorizedError("Текущий пароль указан неверно");
     }
 
-    const updated = await updateUserPassword(authUser.id, await bcrypt.hash(body.newPassword, 10));
+    const updated = await updateOwnPassword(authUser.id, await bcrypt.hash(body.newPassword, 10));
+    // CRM forgets its copy of the old password. Not awaited: the change is already saved, and CRM
+    // also compares passwordChangedInAppAt before it shows a copy, so a lost notice shows nothing stale.
+    const crmUserId = user.crmStudentId || user.crmTeacherId;
+    if (crmUserId && user.externalLinkStatus === "linked" && updated.passwordChangedInAppAt) {
+      void postPasswordChangedInApp({ appUserId: updated.id, crmUserId, changedAt: updated.passwordChangedInAppAt.toISOString() })
+        .catch((error) => request.log.warn({ error, userId: updated.id }, "Failed to tell CRM about a password change"));
+    }
     // Authentication already checked CRM. Do not make a fallible remote call
     // after committing the new password; retain that checked revision instead.
     const lifetime = sessionLifetimeSeconds(user.role.slug);

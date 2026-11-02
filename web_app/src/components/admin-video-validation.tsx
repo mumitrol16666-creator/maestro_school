@@ -3,14 +3,7 @@
 import { CheckCircle2, ExternalLink, Pencil, Trash2, XCircle } from "lucide-react";
 import { LessonVideoPlayer } from "@/components/lesson-video-player";
 import { secondaryButton } from "@/components/admin-ui";
-import { parseVideoUrl } from "@/lib/parse-video-url";
-
-const providerLabels = {
-  youtube: "YouTube",
-  vimeo: "Vimeo",
-  cloudflare: "Cloudflare Stream",
-  unknown: "Неизвестно",
-};
+import { parseVideoUrl, videoProviderLabels as providerLabels } from "@/lib/parse-video-url";
 
 export function AdminVideoValidation({ videoUrl, title, onReplace, onDelete }: { videoUrl: string; title: string; onReplace: () => void; onDelete: () => void }) {
   if (!videoUrl.trim()) return null;
@@ -20,7 +13,7 @@ export function AdminVideoValidation({ videoUrl, title, onReplace, onDelete }: {
     <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
       <div className="flex items-start gap-3">
         <span className={`mt-0.5 ${parsed ? "text-emerald-600" : "text-red-600"}`}>{parsed ? <CheckCircle2 size={20} /> : <XCircle size={20} />}</span>
-        <div><p className="text-sm font-bold">{parsed ? "Ссылка распознана" : "Ссылка не поддерживается"}</p><p className="mt-1 break-all text-xs text-stone-500">{parsed ? `${providerLabels[parsed.provider]} · videoId: ${parsed.videoId}` : "Поддерживаются YouTube, Vimeo и Cloudflare Stream."}</p></div>
+        <div><p className="text-sm font-bold">{parsed ? "Ссылка распознана" : "Ссылка не поддерживается"}</p><p className="mt-1 break-all text-xs text-stone-500">{parsed ? `${providerLabels[parsed.provider]} · videoId: ${parsed.videoId}` : "Поддерживаются YouTube, Vimeo, Instagram, TikTok и Cloudflare Stream."}</p></div>
       </div>
       <div className="flex flex-wrap gap-2">
         {parsed && <a href={videoUrl} target="_blank" rel="noreferrer" className={secondaryButton}><ExternalLink size={14} /> Открыть</a>}

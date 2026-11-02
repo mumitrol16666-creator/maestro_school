@@ -78,7 +78,8 @@ const updatePasswordSchema = z.object({
   appUserId: z.string().uuid().optional(),
   crmStudentId: z.string().optional(),
   crmTeacherId: z.string().optional(),
-  password: z.string().min(4).max(72),
+  // '[скрыто]' is how CRM's integration journal masks a password; a replay must not set it.
+  password: z.string().min(8).max(72).refine((value) => value !== "[скрыто]", "Пароль скрыт в журнале CRM, задайте его заново"),
 });
 
 const archiveStudentAccessSchema = z.object({
@@ -204,7 +205,8 @@ export async function integrationRoutes(app: FastifyInstance) {
         || (user.crmTeacherId || user.crmStudentId) !== crmUserId) {
       throw new UnauthorizedError("Account access or link is no longer valid");
     }
-    return { success: true, data: { sessionVersion: user.sessionVersion, role: user.role.slug } };
+    return { success: true, data: { sessionVersion: user.sessionVersion, role: user.role.slug,
+      passwordChangedInAppAt: user.passwordChangedInAppAt?.toISOString() ?? null } };
   });
 
   app.post("/shop/coins/balance", async (request) => {

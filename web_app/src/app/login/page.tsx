@@ -51,7 +51,7 @@ function loginErrorText(reason: unknown, fallback: string) {
 }
 
 const TRIAL_LANDING_URL =
-  process.env.NEXT_PUBLIC_TRIAL_LANDING_URL ?? "https://app-maestro-school.duckdns.org/trial.html";
+  process.env.NEXT_PUBLIC_TRIAL_LANDING_URL ?? "https://crm.maestro.com.kz/trial.html";
 
 // The school's WhatsApp number is not in the code; it comes from the environment (В-41).
 const SCHOOL_WHATSAPP_URL = whatsAppUrl(process.env.NEXT_PUBLIC_SCHOOL_WHATSAPP);

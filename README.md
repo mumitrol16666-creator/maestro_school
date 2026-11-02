@@ -81,9 +81,9 @@ Android использует те же оригинальные изображе
 - workflow: `.github/workflows/deploy.yml`
 - инструкция: [deploy/README.md](./deploy/README.md)
 
-Продакшен: **https://maestro-school.duckdns.org** (nginx + certbot на сервере).
+Продакшен: **https://app.maestro.com.kz** (nginx + certbot на сервере).
 
-- Логин: https://maestro-school.duckdns.org/login
-- Админка: https://maestro-school.duckdns.org/admin
+- Логин: https://app.maestro.com.kz/login
+- Админка: https://app.maestro.com.kz/admin
 - Nginx config: [deploy/nginx-maestro-school.conf](./deploy/nginx-maestro-school.conf)
-- Android APK: https://maestro-school.duckdns.org/downloads/maestro-school.apk
+- Android APK: https://app.maestro.com.kz/downloads/maestro-school.apk

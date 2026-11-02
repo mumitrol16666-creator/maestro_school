@@ -45,6 +45,7 @@ import { LessonStudentStrip } from "@/components/lesson-student-strip";
 import { LessonTextHints } from "@/components/lesson-text-hints";
 import { LessonSectorDrawer } from "@/components/lesson-sector-drawer";
 import {
+  appendHomeworkLine,
   appendPhrase,
   fallbackSchoolPhrases,
   homeworkSuggestions,
@@ -2094,7 +2095,7 @@ export default function AdminOfflineLessonDetailPage() {
                       type="button"
                       onClick={() => {
                         if (previousLesson.lessonSummary?.trim()) setLessonSummary((current) => appendPhrase(current, previousLesson.lessonSummary!.trim()));
-                        if (previousLesson.homework?.trim()) setHomework((current) => appendPhrase(current, previousLesson.homework!.trim()));
+                        if (previousLesson.homework?.trim()) setHomework((current) => appendHomeworkLine(current, previousLesson.homework!.trim()));
                       }}
                       className="mt-2 inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 px-2.5 text-[12px] font-bold text-sky-900 hover:bg-sky-100"
                       data-testid="lesson-like-last-time"
@@ -2176,7 +2177,7 @@ export default function AdminOfflineLessonDetailPage() {
                     school={schoolPhrases("homework")}
                     disabled={!canEditReport}
                     canSave={canEditReport && !isAdmin && Boolean(homework.trim())}
-                    onInsert={(text) => setHomework((current) => appendPhrase(current, text))}
+                    onInsert={(text) => setHomework((current) => appendHomeworkLine(current, text))}
                     onSave={() => void saveOwnTemplate("homework", homework)}
                     onRemoveOwn={(id) => void removeOwnTemplate(id)}
                   />
@@ -2345,7 +2346,7 @@ export default function AdminOfflineLessonDetailPage() {
             <div className="rounded-[24px] border border-emerald-200 bg-emerald-50 p-5 text-sm text-emerald-950">
               <p className="font-bold">Ожидает подтверждения в CRM</p>
               <p className="mt-2">Администратор проверяет отчёт, тариф и сумму списания в CRM. После подтверждения здесь появится итоговый статус.</p>
-              <a href={`${(process.env.NEXT_PUBLIC_CRM_API_URL ?? "https://app-maestro-school.duckdns.org").replace(/\/$/, "")}/admin.html#schedule`}
+              <a href={`${(process.env.NEXT_PUBLIC_CRM_API_URL ?? "https://crm.maestro.com.kz").replace(/\/$/, "")}/admin.html#schedule`}
                 target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex min-h-11 items-center font-bold underline">Открыть расписание CRM</a>
             </div>
           ) : null}
@@ -2386,7 +2387,7 @@ export default function AdminOfflineLessonDetailPage() {
           {isAdmin && ["completed", "cancelled"].includes(lesson.status) ? (
             <div className="rounded-[20px] border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
               <p>Пересмотр урока и возврат списания выполняются в CRM.</p>
-              <a href={`${(process.env.NEXT_PUBLIC_CRM_API_URL ?? "https://app-maestro-school.duckdns.org").replace(/\/$/, "")}/admin.html#schedule`}
+              <a href={`${(process.env.NEXT_PUBLIC_CRM_API_URL ?? "https://crm.maestro.com.kz").replace(/\/$/, "")}/admin.html#schedule`}
                 target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex min-h-11 items-center font-bold underline">Открыть расписание CRM</a>
             </div>
           ) : null}

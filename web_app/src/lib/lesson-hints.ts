@@ -1,3 +1,5 @@
+import { parseHomeworkInstructions } from "./homework-items";
+
 /**
  * Plan 1.14: what the lesson itself suggests for the summary and the homework, from the topics the
  * teacher moved and the homework they checked. Pure functions, so the page and its tests agree.
@@ -38,14 +40,27 @@ export function homeworkSuggestions(input: {
 }) {
   const hints: string[] = [];
   const criteria = input.topic?.masteryCriteria?.trim();
-  if (input.topic && criteria) hints.push(`«${input.topic.title}»: ${criteria}`);
+  if (input.topic && criteria) hints.push(`Цель по теме «${input.topic.title}»: ${criteria}`);
   for (const previous of input.previousHomework) {
-    const text = previous.instructions.trim();
-    if (text && previous.completionPercent != null && previous.completionPercent < 100) {
-      hints.push(`Доделать прошлое задание: ${text}`);
-    }
+    if (previous.completionPercent == null || previous.completionPercent >= 100) continue;
+    // The old homework may itself hold «Доделать прошлое задание: …» and a topic goal: carry over
+    // only its own tasks, once, so the text never nests into itself lesson after lesson.
+    const old = parseHomeworkInstructions(previous.instructions);
+    const tasks = [...old.carryOver, ...old.tasks];
+    if (tasks.length) hints.push(`С прошлого урока: ${tasks.join("; ")}`);
   }
   return [...new Set(hints)];
+}
+
+/** Adds a phrase to the homework as its own line, so the student sees a list, not a paragraph. */
+export function appendHomeworkLine(current: string, phrase: string) {
+  const text = current.trim();
+  const next = phrase.trim();
+  if (!next) return current;
+  if (!text) return next;
+  const lines = text.split(/\r?\n/).map((line) => line.trim());
+  if (lines.some((line) => line === next) || text.includes(next)) return current;
+  return `${text}\n${next}`;
 }
 
 /** Adds a phrase to a text field: a new sentence, never a duplicate of what is already there. */

@@ -2,25 +2,28 @@
 
 import {
   BookOpen,
-  CalendarDays,
   CheckCircle2,
   Clock3,
   Download,
   ExternalLink,
   RotateCcw,
+  Target,
   XCircle,
 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { LessonMaterialItems } from "@/components/student-lesson-materials";
+import { parseHomeworkInstructions } from "@/lib/homework-items";
 import { ApiError } from "@/lib/api-client";
 import { learningHomeworkApi } from "@/lib/learning-homework-api";
 import { homeworkPercentTone } from "@/lib/homework-ui";
 import { sameSiteMediaUrl } from "@/lib/media-url";
-import { parseVideoUrl } from "@/lib/parse-video-url";
+import { parseVideoUrl, videoFrameClass } from "@/lib/parse-video-url";
 import type {
   LearningHomeworkMaterial,
   LearningHomeworkRecipientState,
   StudentLearningHomeworkAssignment,
 } from "@/types/learning-homework";
+import type { SchoolOfflineLesson } from "@/types/school-offline";
 
 /**
  * A homework given from a lesson, as the student sees it. The student does
@@ -36,7 +39,7 @@ const stateView: Record<
   }
 > = {
   assigned: {
-    label: "Нужно подготовить",
+    label: "К следующему уроку",
     className: "bg-amber-50 text-amber-900",
     icon: BookOpen,
   },
@@ -68,12 +71,14 @@ const stateView: Record<
 };
 
 function formatDate(value: string) {
+  const date = new Date(value);
+  const sameYear = date.getFullYear() === new Date().getFullYear();
   return new Intl.DateTimeFormat("ru-RU", {
     day: "numeric",
     month: "long",
-    year: "numeric",
+    ...(sameYear ? {} : { year: "numeric" as const }),
     timeZone: "Asia/Aqtobe",
-  }).format(new Date(value));
+  }).format(date);
 }
 
 function formatBytes(value?: number) {
@@ -151,15 +156,21 @@ function HomeworkVideoEmbeds({ materials }: { materials: LearningHomeworkMateria
   return (
     <div className="mt-4 grid min-w-0 grid-cols-1 gap-3" data-testid="homework-video-embed">
       {videos.map(({ material, parsed }) => (
-        <div key={material.url} className="relative aspect-video overflow-hidden rounded-xl bg-black">
-          <iframe
-            title={material.title || "Видео к заданию"}
-            src={parsed.embedUrl}
-            className="h-full w-full border-0"
-            allow="autoplay; encrypted-media; picture-in-picture"
-            allowFullScreen
-          />
-        </div>
+        <figure key={material.url} className="min-w-0">
+          <div className={`relative overflow-hidden rounded-xl bg-black ${videoFrameClass(parsed)}`}>
+            <iframe
+              title={material.title || "Видео к заданию"}
+              src={parsed.embedUrl}
+              className="h-full w-full border-0"
+              allow="autoplay; encrypted-media; picture-in-picture"
+              allowFullScreen
+              loading="lazy"
+            />
+          </div>
+          {material.title ? (
+            <figcaption className="mt-1.5 text-sm font-semibold text-ink">{material.title}</figcaption>
+          ) : null}
+        </figure>
       ))}
     </div>
   );
@@ -169,8 +180,11 @@ export function LearningHomeworkCard({
   assignment,
   compact = false,
   defaultOpen = false,
+  lessonMaterials = [],
 }: {
   assignment: StudentLearningHomeworkAssignment;
+  /** Materials the teacher attached to the lesson itself: the homework shows them too. */
+  lessonMaterials?: SchoolOfflineLesson["materials"];
   /** Kept for callers that refresh after an action; the card itself sends nothing. */
   onSubmitted?: () => Promise<unknown> | unknown;
   compact?: boolean;
@@ -184,6 +198,28 @@ export function LearningHomeworkCard({
   const checked = assignment.completionPercent != null;
   const tone = homeworkPercentTone(assignment.completionPercent);
   const open = ["assigned", "waiting_review", "revision"].includes(assignment.state);
+  const items = useMemo(() => parseHomeworkInstructions(assignment.instructions), [assignment.instructions]);
+  const hasItems = items.goals.length + items.tasks.length + items.carryOver.length > 0;
+  // Lesson materials and links typed into the text, minus what the homework already carries.
+  const extraMaterials = useMemo(() => {
+    const known = new Set(assignment.materials.map((material) => material.url));
+    const extra: SchoolOfflineLesson["materials"] = [];
+    for (const material of [...lessonMaterials, ...items.links.map((url) => ({ url, type: "link" }))]) {
+      if (!material.url || known.has(material.url)) continue;
+      known.add(material.url);
+      extra.push(material);
+    }
+    return extra;
+  }, [assignment.materials, lessonMaterials, items.links]);
+  // Videos play full width right in the card; files and other links keep their download rows.
+  const extraVideos: LearningHomeworkMaterial[] = extraMaterials.flatMap((material) =>
+    material.url && parseVideoUrl(material.url)
+      ? [{ type: "video" as const, url: material.url, title: material.title }]
+      : [],
+  );
+  const extraOther = extraMaterials.filter((material) => !material.url || !parseVideoUrl(material.url));
+  const showMaterials = !compact || detailsOpen;
+  const visibleTasks = compact && !detailsOpen ? items.tasks.slice(0, 2) : items.tasks;
 
   return (
     <article
@@ -213,27 +249,64 @@ export function LearningHomeworkCard({
               </h3>
             </div>
           </div>
-          <p
-            className={`mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-stone-700 ${compact && !detailsOpen ? "line-clamp-2" : ""}`}
-          >
-            {assignment.instructions}
-          </p>
-          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs font-semibold text-stone-500">
-            <span className="inline-flex items-center gap-1.5">
-              <CalendarDays size={13} className="text-gold-ink" />
-              {compact ? "" : "Назначено "}
-              {formatDate(assignment.assignedAt)}
-            </span>
-            {assignment.teacherName ? (
-              <span>{assignment.teacherName}</span>
-            ) : null}
-          </div>
         </div>
         <span
           className={`inline-flex min-h-9 shrink-0 items-center gap-1.5 self-start rounded-xl px-3 text-xs font-black ${checked ? tone.className : view.className}`}
         >
           <StateIcon size={14} /> {checked ? `${view.label === "Не выполнено" ? "Не выполнено" : "Выполнено"} · ${tone.label}` : view.label}
         </span>
+      </div>
+
+      <div className="mt-4 max-w-prose space-y-4" data-testid="homework-items">
+        {items.goals.map((goal) => (
+          <div
+            key={`${goal.topic}:${goal.text}`}
+            className="flex gap-3 rounded-2xl border border-gold/30 bg-gold-bright/10 px-4 py-3"
+            data-testid="homework-goal"
+          >
+            <Target size={18} className="mt-0.5 shrink-0 text-gold-ink" aria-hidden />
+            <div className="min-w-0">
+              <p className="text-xs font-black uppercase tracking-wide text-gold-ink">
+                Цель{goal.topic !== assignment.topic.title ? ` · ${goal.topic}` : ""}
+              </p>
+              <p className="mt-0.5 break-words text-base font-semibold leading-6 text-ink">{goal.text}</p>
+            </div>
+          </div>
+        ))}
+
+        {visibleTasks.length ? (
+          <div>
+            <p className="text-xs font-black uppercase tracking-wide text-stone-400">Что сделать</p>
+            <ul className="mt-2 space-y-2">
+              {visibleTasks.map((task) => (
+                <li key={task} className="flex gap-3 text-[15px] leading-6 text-ink">
+                  <span className="mt-2.5 h-1.5 w-1.5 shrink-0 rounded-full bg-gold" aria-hidden />
+                  <span className="min-w-0 break-words">{task}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        {items.carryOver.length && (!compact || detailsOpen) ? (
+          <div>
+            <p className="text-xs font-black uppercase tracking-wide text-stone-400">С прошлого урока</p>
+            <ul className="mt-2 space-y-2">
+              {items.carryOver.map((task) => (
+                <li key={task} className="flex gap-3 text-[15px] leading-6 text-stone-600">
+                  <RotateCcw size={14} className="mt-1 shrink-0 text-stone-400" aria-hidden />
+                  <span className="min-w-0 break-words">{task}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        {!hasItems && assignment.instructions.trim() ? (
+          <p className="whitespace-pre-wrap break-words text-[15px] leading-6 text-ink">
+            {assignment.instructions}
+          </p>
+        ) : null}
       </div>
 
       {checked ? (
@@ -246,10 +319,6 @@ export function LearningHomeworkCard({
             {assignment.completionPercent ? ` · выполнено на ${assignment.completionPercent}%` : " · не выполнено"}
           </p>
         </div>
-      ) : open ? (
-        <p className="mt-4 rounded-2xl border border-sky-100 bg-sky-50 px-3 py-2.5 text-sm leading-6 text-sky-950" data-testid="homework-lesson-check-note">
-          Отправлять ничего не нужно: преподаватель проверит домашнее задание на следующем уроке и отметит, насколько оно выполнено.
-        </p>
       ) : null}
 
       {latestReview?.comment ? (
@@ -269,23 +338,38 @@ export function LearningHomeworkCard({
         </div>
       ) : null}
 
-      {assignment.materials.length && (!compact || detailsOpen) ? (
-        <HomeworkVideoEmbeds materials={assignment.materials} />
-      ) : null}
-      {assignment.materials.length && (!compact || detailsOpen) ? (
-        <div className="mt-4 flex flex-wrap gap-2">
-          {assignment.materials.map((material, index) => (
-            <HomeworkMaterialAction
-              key={`${material.url}-${index}`}
-              material={{
-                ...material,
-                title: material.title || `Материал ${index + 1}`,
-              }}
-              onError={setError}
-            />
-          ))}
+      {showMaterials && (assignment.materials.length || extraMaterials.length) ? (
+        <div className="mt-5 max-w-prose" data-testid="homework-materials">
+          <p className="text-xs font-black uppercase tracking-wide text-stone-400">Видео и материалы</p>
+          <HomeworkVideoEmbeds materials={assignment.materials} />
+          {assignment.materials.length ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {assignment.materials.map((material, index) => (
+                <HomeworkMaterialAction
+                  key={`${material.url}-${index}`}
+                  material={{
+                    ...material,
+                    title: material.title || `Материал ${index + 1}`,
+                  }}
+                  onError={setError}
+                />
+              ))}
+            </div>
+          ) : null}
+          <HomeworkVideoEmbeds materials={extraVideos} />
+          {extraOther.length ? <LessonMaterialItems materials={extraOther} /> : null}
         </div>
       ) : null}
+
+      <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-stone-100 pt-3 text-xs text-stone-400">
+        <span>
+          Задано {formatDate(assignment.assignedAt)}
+          {assignment.teacherName ? ` · ${assignment.teacherName}` : ""}
+        </span>
+        {open && !checked ? (
+          <span data-testid="homework-lesson-check-note">Отправлять ничего не нужно, учитель проверит на уроке</span>
+        ) : null}
+      </div>
 
       {compact ? (
         <button

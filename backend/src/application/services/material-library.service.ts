@@ -14,7 +14,7 @@ import { inferMimeType, mediaFolderFor, mediaPath, writeMediaFile } from "./medi
 
 export const MATERIAL_UPLOAD_MAX_BYTES = 20 * 1024 * 1024;
 
-const VIDEO_HOSTS = /(^|\.)(youtube\.com|youtu\.be|vimeo\.com|videodelivery\.net|cloudflarestream\.com)$/i;
+const VIDEO_HOSTS = /(^|\.)(youtube\.com|youtu\.be|vimeo\.com|videodelivery\.net|cloudflarestream\.com|instagram\.com|tiktok\.com)$/i;
 const extensionKinds: Array<[RegExp, MaterialKind]> = [
   [/\.(mp4|m4v|mov|webm|ogv)$/i, "video"],
   [/\.(png|jpe?g|webp|gif|heic)$/i, "image"],
@@ -49,6 +49,8 @@ export function materialBadge(url: string, kind: MaterialKind, mimeType?: string
     const host = new URL(url, "https://maestro.local").hostname.replace(/^www\./, "");
     if (/youtube\.com|youtu\.be/.test(host)) return "YouTube";
     if (/vimeo\.com/.test(host)) return "Vimeo";
+    if (/instagram\.com/.test(host)) return "Instagram";
+    if (/tiktok\.com/.test(host)) return "TikTok";
   } catch {
     // ignore
   }

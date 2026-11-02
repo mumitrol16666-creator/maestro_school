@@ -8,9 +8,9 @@
 | SSH port | `14579` |
 | User | `root` |
 | App path | `/var/www/maestro_school` |
-| **Домен** | `https://maestro-school.duckdns.org` |
-| Web | `https://maestro-school.duckdns.org` |
-| API | `https://maestro-school.duckdns.org/api/v1` |
+| **Домен** | `https://app.maestro.com.kz` |
+| Web | `https://app.maestro.com.kz` |
+| API | `https://app.maestro.com.kz/api/v1` |
 | IP (fallback) | `http://178.105.59.89:3001` |
 
 Workflow: `.github/workflows/deploy.yml` — срабатывает при push в `main`.
@@ -55,8 +55,8 @@ chmod 600 ~/.ssh/authorized_keys
 | `SSH_PRIVATE_KEY` | ✅ | содержимое `~/.ssh/maestro_deploy` (приватный ключ) |
 | `JWT_SECRET` | ✅ | длинная случайная строка (мин. 16 символов) |
 | `POSTGRES_PASSWORD` | ✅ | надёжный пароль БД |
-| `CORS_ORIGIN` | опционально | `https://maestro-school.duckdns.org` (дефолт в deploy.sh) |
-| `API_PUBLIC_URL` | опционально | `https://maestro-school.duckdns.org/api/v1` (дефолт в deploy.sh) |
+| `CORS_ORIGIN` | опционально | `https://app.maestro.com.kz` (дефолт в deploy.sh) |
+| `API_PUBLIC_URL` | опционально | `https://app.maestro.com.kz/api/v1` (дефолт в deploy.sh) |
 | `ADMIN_EMAIL` | ✅ (первый деплой) | email администратора, например `admin@your-school.ru` |
 | `ADMIN_PASSWORD` | ✅ (первый деплой) | пароль, 8–72 символа |
 | `ADMIN_FIRST_NAME` | ✅ (первый деплой) | имя, например `Анна` |
@@ -104,7 +104,7 @@ pm2 status
 curl http://127.0.0.1:4000/health
 ```
 
-В браузере: https://maestro-school.duckdns.org/login
+В браузере: https://app.maestro.com.kz/login
 
 Вход администратора выполняется с `ADMIN_EMAIL` и `ADMIN_PASSWORD`.
 Ученики самостоятельно регистрируются на странице `/register`.
@@ -137,5 +137,5 @@ pm2 restart all
 - SSH только по ключу, порт `14579`
 - PostgreSQL слушает только `127.0.0.1:5432`
 - Nginx: `deploy/nginx-maestro-school.conf` → `/etc/nginx/sites-available/maestro`
-- HTTPS: `certbot --nginx -d maestro-school.duckdns.org`
+- HTTPS: `certbot --nginx -d app.maestro.com.kz`
 - Второй поддомен для API **не нужен** — `/api/` на том же домене
