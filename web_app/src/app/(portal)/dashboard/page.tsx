@@ -20,6 +20,7 @@ import { ScreenSkeleton } from "@/components/screen-skeleton";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { StudentBanners } from "@/components/student-banners";
 import { StudentTodayCard } from "@/components/student-today-card";
+import { dashboardCourseAction } from "@/lib/course-access-format";
 import { invalidateStudentHome, loadStudentHome } from "@/lib/student-home";
 import { formatCount, formatOutOf, pluralize } from "@/lib/plural";
 import { weeklyLeagueApi } from "@/lib/weekly-league-api";
@@ -70,6 +71,10 @@ export default function DashboardPage() {
     || data.dashboard.currentCourse
     || actionTasks.length,
   );
+  // Stage 4: a lesson that waits for the payment of its course leads to the course, not to the lesson.
+  const courseAction = data.dashboard.currentCourse
+    ? dashboardCourseAction({ nextLesson: data.dashboard.nextAvailableLesson, currentCourseId: data.dashboard.currentCourse.id })
+    : { href: "/courses", label: "Открыть курс" };
 
   return (
     <div className="mx-auto max-w-[1400px]">
@@ -129,10 +134,11 @@ export default function DashboardPage() {
               </p>
             </div>
             <Link
-              href={data.dashboard.nextAvailableLesson ? `/lessons/${data.dashboard.nextAvailableLesson.id}` : `/courses/${data.dashboard.currentCourse.id}`}
+              href={courseAction.href}
               className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-stone-300 px-4 text-sm font-bold"
+              data-testid="dashboard-course-action"
             >
-              {data.dashboard.nextAvailableLesson ? "Открыть урок" : "Открыть курс"}
+              {courseAction.label}
               <ArrowRight size={16} />
             </Link>
           </div>

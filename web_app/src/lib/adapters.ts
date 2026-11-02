@@ -1,4 +1,5 @@
 import { formatDownloadUrl } from "./file-download";
+import { saleViewOf } from "./course-access-format";
 import type { BoardPost, Course, Lesson, LessonStatus } from "@/types";
 import type {
   ApiCourseDetail,
@@ -51,6 +52,7 @@ export function toCourse(
     modulesCount: course.modulesCount,
     lessonsCount: course.lessonsCount,
     completionCoinsReward: course.completionCoinsReward ?? 0,
+    sale: saleViewOf(course),
   };
 }
 
