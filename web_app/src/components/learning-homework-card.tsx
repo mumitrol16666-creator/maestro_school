@@ -266,7 +266,7 @@ export function LearningHomeworkCard({
           >
             <Target size={18} className="mt-0.5 shrink-0 text-gold-ink" aria-hidden />
             <div className="min-w-0">
-              <p className="text-[11px] font-black uppercase tracking-wide text-gold-ink">
+              <p className="text-xs font-black uppercase tracking-wide text-gold-ink">
                 Цель{goal.topic !== assignment.topic.title ? ` · ${goal.topic}` : ""}
               </p>
               <p className="mt-0.5 break-words text-base font-semibold leading-6 text-ink">{goal.text}</p>
@@ -276,7 +276,7 @@ export function LearningHomeworkCard({
 
         {visibleTasks.length ? (
           <div>
-            <p className="text-[11px] font-black uppercase tracking-wide text-stone-400">Что сделать</p>
+            <p className="text-xs font-black uppercase tracking-wide text-stone-400">Что сделать</p>
             <ul className="mt-2 space-y-2">
               {visibleTasks.map((task) => (
                 <li key={task} className="flex gap-3 text-[15px] leading-6 text-ink">
@@ -290,7 +290,7 @@ export function LearningHomeworkCard({
 
         {items.carryOver.length && (!compact || detailsOpen) ? (
           <div>
-            <p className="text-[11px] font-black uppercase tracking-wide text-stone-400">С прошлого урока</p>
+            <p className="text-xs font-black uppercase tracking-wide text-stone-400">С прошлого урока</p>
             <ul className="mt-2 space-y-2">
               {items.carryOver.map((task) => (
                 <li key={task} className="flex gap-3 text-[15px] leading-6 text-stone-600">
@@ -340,7 +340,7 @@ export function LearningHomeworkCard({
 
       {showMaterials && (assignment.materials.length || extraMaterials.length) ? (
         <div className="mt-5 max-w-prose" data-testid="homework-materials">
-          <p className="text-[11px] font-black uppercase tracking-wide text-stone-400">Видео и материалы</p>
+          <p className="text-xs font-black uppercase tracking-wide text-stone-400">Видео и материалы</p>
           <HomeworkVideoEmbeds materials={assignment.materials} />
           {assignment.materials.length ? (
             <div className="mt-3 flex flex-wrap gap-2">
