@@ -215,7 +215,7 @@ function LeagueHistory() {
                 </div>
               </summary>
               <div className="border-t border-stone-100 bg-stone-50 px-4 py-5 sm:px-6">
-                <div className="grid gap-6 lg:grid-cols-2">
+                <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-2">
                   <div>
                     <p className="text-xs font-black uppercase tracking-wider text-stone-400">Ваш результат</p>
                     <p className="mt-3 text-sm font-bold">{streakOutcomeLabel(item.streakOutcome)}{item.goalMet ? ` · цель ${item.goalXp} XP выполнена` : ""}</p>
@@ -512,7 +512,7 @@ export default function WeeklyLeaguePage() {
         </div>
 
         {podium.length ? (
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-3">
             {podium.map((entry, index) => <PodiumCard key={`${entry.position}-${entry.displayName}`} entry={entry} index={index} />)}
           </div>
         ) : (
@@ -569,8 +569,8 @@ export default function WeeklyLeaguePage() {
           </div>
           <ChevronDown size={20} className="shrink-0 text-stone-400 transition-transform group-open:rotate-180" />
         </summary>
-        <div className="grid gap-5 pb-5 lg:grid-cols-2">
-        <section className="rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-5 pb-5 lg:grid-cols-2">
+        <section className="min-w-0 rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft">
           <div className="flex items-center justify-between gap-4">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.18em] text-gold-ink">За что начислено</p>
@@ -597,7 +597,7 @@ export default function WeeklyLeaguePage() {
         </section>
 
         {/* Recent XP history */}
-        <section className="rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft">
+        <section className="min-w-0 rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft">
           <div className="flex items-center justify-between gap-4">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.18em] text-gold-ink">История XP</p>
