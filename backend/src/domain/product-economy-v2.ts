@@ -46,6 +46,9 @@ export const PRODUCT_LEVELS: ProductLevel[] = [
 
 export const TOPIC_COMPLETION_POINTS = 100;
 export const NON_EMPTY_PLAN_COMPLETION_POINTS = 250;
+/** Course in the app: a finished module is worth as much as a mastered topic, a finished course as a closed sector. */
+export const COURSE_MODULE_COMPLETION_POINTS = TOPIC_COMPLETION_POINTS;
+export const COURSE_COMPLETION_POINTS = NON_EMPTY_PLAN_COMPLETION_POINTS;
 
 export function getProductLevel(points: number) {
   const safePoints = Math.max(0, Math.floor(points));

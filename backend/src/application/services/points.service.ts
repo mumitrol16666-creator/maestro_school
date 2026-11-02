@@ -9,6 +9,7 @@ import {
   requireActiveEconomicEpochForEvent,
 } from "./economic-epoch.service.js";
 import { privateLeagueName } from "./weekly-league-policy.js";
+import { freeReversedKey, reversalKey } from "../../domain/source-key-reversal.js";
 
 async function notifyPointsAwarded(params: {
   studentId: string;
@@ -426,6 +427,53 @@ export async function awardSystemPoints(params: {
     awarded: result.awarded,
     transactionId: result.transaction.id,
   };
+}
+
+/**
+ * Takes back an automated award: the original row keeps its history but gives up its canonical
+ * source key (`<key>:reversed:v<n>`, so the same source can be awarded again), and a negative
+ * correction row `<key>:reversal:v<n>` is written. Runs inside the caller's transaction.
+ * Returns the amount taken back; 0 when there is nothing to reverse or it was reversed already.
+ */
+export async function reverseSystemPoints(
+  tx: Prisma.TransactionClient,
+  params: {
+    sourceKey: string;
+    /** Revision the reversal belongs to (for an offline lesson: the confirmed report version). */
+    version: number;
+    reason: string;
+    actorUserId: string | null;
+    at: Date;
+  },
+): Promise<number> {
+  const original = await tx.pointsTransaction.findUnique({ where: { sourceKey: params.sourceKey } });
+  if (!original || original.amount <= 0) return 0;
+  const correctionKey = reversalKey(params.sourceKey, params.version);
+  const existing = await tx.pointsTransaction.findUnique({ where: { sourceKey: correctionKey } });
+  if (existing) return 0;
+  await tx.pointsTransaction.update({
+    where: { id: original.id },
+    data: {
+      sourceKey: await freeReversedKey(
+        async (candidate) => Boolean(await tx.pointsTransaction.findUnique({ where: { sourceKey: candidate }, select: { id: true } })),
+        params.sourceKey,
+        params.version,
+      ),
+    },
+  });
+  await tx.pointsTransaction.create({
+    data: {
+      economicEpochId: original.economicEpochId,
+      studentId: original.studentId,
+      amount: -original.amount,
+      reason: `Отмена: ${original.reason}. ${params.reason}`.slice(0, 500),
+      sourceKey: correctionKey,
+      lessonId: null,
+      awardedBy: params.actorUserId,
+      createdAt: params.at,
+    },
+  });
+  return original.amount;
 }
 
 export async function assertLessonPointsNotAwarded(

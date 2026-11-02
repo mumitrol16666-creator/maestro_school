@@ -1,5 +1,6 @@
 import { resolveLessonAvailability, findNextLessonId } from "../../domain/lesson-unlock.logic.js";
 import {
+  getLessonProgressRecord,
   getOrderedPublishedLessons,
   getProgressMapForCourse,
   upsertLessonProgress,
@@ -43,6 +44,10 @@ export async function unlockNextLesson(
   const nextId = findNextLessonId(completedLessonId, orderedLessons);
   if (!nextId) return null;
 
+  // Only a closed lesson opens. Completing a lesson again (a repeated click, a retried request)
+  // must not push a later lesson that is started or done back to «available».
+  const next = await getLessonProgressRecord(studentId, nextId);
+  if (next && next.status !== "locked") return nextId;
   await upsertLessonProgress(studentId, nextId, { status: "available" });
   return nextId;
 }
