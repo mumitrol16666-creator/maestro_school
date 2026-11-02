@@ -141,7 +141,7 @@ test("the CRM copy of the schedule is named in the strip", async ({ page, reques
   await expect(page.getByTestId("connection-banner")).toContainText("Нет связи со школой. Расписание на");
 });
 
-test("CRM down without a copy shows the strip; a student the school has not linked sees none", async ({ page, request, context }) => {
+test("CRM down without a copy shows the strip; a refusal and a student not linked yet show none", async ({ page, request, context }) => {
   await signIn(context, await studentSession(request));
   let schoolStatus = "unavailable";
   await page.route("**/api/v1/students/me/home", async (route) => {
@@ -151,8 +151,13 @@ test("CRM down without a copy shows the strip; a student the school has not link
     await route.fulfill({ response, json: body });
   });
   await page.goto("/dashboard");
-  await expect(page.getByTestId("connection-banner")).toHaveText("Нет связи со школой. Расписание сейчас не загрузилось");
-  await expect(page.getByTestId("today-lesson")).toContainText("Расписание не загрузилось");
+  await expect(page.getByTestId("connection-banner")).toHaveText("Нет связи со школой. Расписание сейчас не обновляется");
+  await expect(page.getByTestId("today-lesson")).toContainText("Школа сейчас не отвечает");
+
+  schoolStatus = "failed";
+  await page.reload();
+  await expect(page.getByTestId("today-lesson")).toContainText("Если так и останется, напиши в школу");
+  await expect(page.getByTestId("connection-banner")).toHaveCount(0);
 
   schoolStatus = "not_linked";
   await page.reload();

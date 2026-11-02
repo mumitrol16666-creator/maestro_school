@@ -292,8 +292,11 @@ export interface ApiStudentHome {
   generatedAt: string;
   dashboard: ApiDashboard;
   school: StudentOfflineSummary | null;
-  /** В-18: why `school` is empty — the school has not linked the student yet, or CRM is down and the server kept no copy. */
-  schoolStatus?: "linked" | "not_linked" | "unavailable";
+  /**
+   * В-18: why `school` is empty — the school has not linked the student yet, CRM is down and the
+   * server kept no copy (`unavailable`), or CRM answered with a refusal (`failed`).
+   */
+  schoolStatus?: "linked" | "not_linked" | "unavailable" | "failed";
   monthlyPlans: StudentHomeMonthlyPlan[];
   /** Plan 2.1: active tasks for «Сейчас», «Обучение» and the header; null when they could not be read. */
   tasks: { items: UnifiedTask[]; counts: UnifiedTaskCounts; partial: boolean } | null;

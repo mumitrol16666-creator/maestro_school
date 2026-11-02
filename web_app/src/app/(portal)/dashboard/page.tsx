@@ -60,8 +60,11 @@ export default function DashboardPage() {
   const visibleUpcoming = upcoming
     .filter((lesson) => lesson.crmClassId !== today.nextLesson?.crmClassId)
     .slice(0, 3);
+  const scheduleIssue = data.schoolStatus === "unavailable" || data.schoolStatus === "failed" ? data.schoolStatus : null;
+  // «Пока всё тихо» says there are no lessons; with the schedule unread that is not known.
   const hasLearningData = Boolean(
-    today.nextLesson
+    scheduleIssue
+    || today.nextLesson
     || plans.length
     || data.dashboard.currentCourse
     || actionTasks.length,
@@ -99,7 +102,7 @@ export default function DashboardPage() {
       <StudentBanners banners={data.banners ?? []} />
 
       <div className="grid items-stretch gap-5 xl:grid-cols-[minmax(0,1.75fr)_minmax(280px,0.65fr)]">
-        <div className="order-1"><StudentTodayCard today={today} streakWeeks={data.streakWeeks ?? null} practice={data.practice ?? null} scheduleUnavailable={data.schoolStatus === "unavailable"} /></div>
+        <div className="order-1"><StudentTodayCard today={today} streakWeeks={data.streakWeeks ?? null} practice={data.practice ?? null} scheduleIssue={scheduleIssue} /></div>
         <div className="order-3 xl:order-2"><LeagueMiniWidget /></div>
       </div>
 
