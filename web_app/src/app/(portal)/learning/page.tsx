@@ -2,8 +2,9 @@
 
 import { ArrowRight, BookOpenCheck, ListTodo, Target } from "lucide-react";
 import Link from "next/link";
-import { ErrorState } from "@/components/data-states";
+import { ScreenError } from "@/components/app-error-screen";
 import { ProgressBar } from "@/components/progress-bar";
+import { ScreenSkeleton } from "@/components/screen-skeleton";
 import { SectorExamSummary } from "@/components/sector-exam-summary";
 import { SectorProposalSection, sectorProposalDirections } from "@/components/sector-proposals";
 import { StudentBanners } from "@/components/student-banners";
@@ -21,13 +22,9 @@ export default function LearningWorkspacePage() {
   // Plan 2.1: «Обучение» reads the same home as «Сейчас»: sector, tasks and proposals in one request.
   const resource = useApiResource(() => loadStudentHome(), []);
 
-  if (resource.loading) return (
-    <div className="mx-auto max-w-6xl py-8" role="status" aria-live="polite" aria-busy="true">
-      <p className="text-sm text-stone-600">Загружаем сектор и задания…</p>
-    </div>
-  );
-  if (resource.error || !resource.data) {
-    return <ErrorState message={resource.error ?? "Не удалось загрузить обучение"} retry={() => { invalidateStudentHome(); return resource.reload(); }} />;
+  if (resource.loading && !resource.data) return <ScreenSkeleton variant="list" label="Загружаем сектор и задания" />;
+  if (!resource.data) {
+    return <ScreenError message={resource.error} code={resource.errorCode} retry={() => { invalidateStudentHome(); return resource.reload(); }} />;
   }
 
   const home = resource.data;

@@ -27,7 +27,8 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { ErrorState, LoadingState } from "@/components/data-states";
+import { ScreenError } from "@/components/app-error-screen";
+import { ScreenSkeleton } from "@/components/screen-skeleton";
 import { LevelBadge } from "@/components/level-summary";
 import { PageHeader } from "@/components/page-header";
 import { useApiResource } from "@/hooks/use-api-resource";
@@ -187,8 +188,8 @@ function LeagueHistory() {
     setNextCursor(resource.data?.nextCursor ?? null);
   }, [resource.data]);
 
-  if (resource.loading && !resource.data) return <LoadingState label="Загружаем историю недель" />;
-  if (resource.error) return <ErrorState message={resource.error} retry={resource.reload} />;
+  if (resource.loading && !resource.data) return <ScreenSkeleton variant="section" label="Загружаем историю недель" />;
+  if (resource.error && !resource.data) return <ScreenError message={resource.error} code={resource.errorCode} retry={resource.reload} />;
   if (!resource.data?.economyV2Enabled) return null;
 
   return (
@@ -323,8 +324,8 @@ export default function WeeklyLeaguePage() {
   const podium = useMemo(() => resource.data?.standings.slice(0, 3) ?? [], [resource.data]);
   const table = useMemo(() => resource.data?.standings.slice(3) ?? [], [resource.data]);
 
-  if (resource.loading && !resource.data) return <LoadingState label="Считаем места в лиге" />;
-  if (resource.error) return <ErrorState message={resource.error} retry={resource.reload} />;
+  if (resource.loading && !resource.data) return <ScreenSkeleton variant="list" label="Считаем места в лиге" />;
+  if (resource.error && !resource.data) return <ScreenError message={resource.error} code={resource.errorCode} retry={resource.reload} />;
   if (!resource.data) return null;
   const data = resource.data;
   const me = data.currentStudent;

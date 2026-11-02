@@ -2,7 +2,9 @@
 
 import { BoardPostCard } from "@/components/board-post-card";
 import { FounderMessage } from "@/components/founder-message";
-import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
+import { ScreenError } from "@/components/app-error-screen";
+import { EmptyState } from "@/components/data-states";
+import { ScreenSkeleton } from "@/components/screen-skeleton";
 import { PageHeader } from "@/components/page-header";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { toBoardPost } from "@/lib/adapters";
@@ -10,8 +12,8 @@ import { api } from "@/lib/api-client";
 
 export default function BoardPage() {
   const resource = useApiResource(async () => (await api.news()).map(toBoardPost), []);
-  if (resource.loading) return <LoadingState label="Загружаем доску Maestro" />;
-  if (resource.error) return <ErrorState message={resource.error} retry={resource.reload} />;
+  if (resource.loading && !resource.data) return <ScreenSkeleton variant="list" label="Загружаем доску Maestro" />;
+  if (resource.error && !resource.data) return <ScreenError message={resource.error} code={resource.errorCode} retry={resource.reload} />;
   if (!resource.data?.length) {
     return (
       <>

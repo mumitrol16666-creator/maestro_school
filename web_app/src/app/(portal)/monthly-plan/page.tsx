@@ -16,8 +16,10 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
-import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
+import { ScreenError } from "@/components/app-error-screen";
+import { EmptyState } from "@/components/data-states";
 import { ProgressBar } from "@/components/progress-bar";
+import { ScreenSkeleton } from "@/components/screen-skeleton";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { api, ApiError } from "@/lib/api-client";
 import type { StudentHomeMonthlyPlan } from "@/types/api";
@@ -105,14 +107,15 @@ export default function SectorPage() {
         </div>
       </header>
 
-      {resource.loading ? (
-        <div className="mt-7"><LoadingState label="Открываем сектор" /></div>
-      ) : resource.error || !resource.data ? (
+      {resource.loading && !resource.data ? (
+        <div className="mt-7"><ScreenSkeleton variant="section" label="Открываем сектор" /></div>
+      ) : !resource.data ? (
         <div className="mt-7">
-          <ErrorState
+          <ScreenError
             message={resource.errorCode === "CRM_NOT_LINKED"
-              ? "Профиль школы не подключён. Обратитесь к администратору Maestro."
-              : resource.error ?? "Не удалось загрузить сектор"}
+              ? "Профиль школы не подключён. Обратись к администратору Maestro."
+              : resource.error}
+            code={resource.errorCode}
             retry={resource.reload}
           />
         </div>
@@ -132,7 +135,9 @@ export default function SectorPage() {
       {showHistory ? (
         <section className="mt-8">
           <h2 className="font-display text-2xl text-ink">Закрытые секторы</h2>
-          {!closed.length ? (
+          {resource.loading && !closed.length ? (
+            <div className="mt-4"><ScreenSkeleton variant="section" label="Открываем закрытые секторы" /></div>
+          ) : !closed.length ? (
             <p className="mt-3 text-sm text-stone-500">Закрытых секторов пока нет.</p>
           ) : (
             <div className="mt-4 grid gap-3">

@@ -2,6 +2,7 @@
 
 import { CheckCircle2, Guitar } from "lucide-react";
 import { useState } from "react";
+import { toast } from "@/components/toast";
 import { practiceApi } from "@/lib/api-client";
 import { invalidateStudentHome } from "@/lib/student-home";
 import type { PracticeStatus } from "@/types/api";
@@ -22,8 +23,9 @@ export function PracticeCheckin({ practice }: { practice: PracticeStatus | null 
       const result = await practiceApi.checkIn();
       setState({ checked: true, streak: result.streakDays, reply: result.reply });
       invalidateStudentHome();
+      toast.success("Отмечено: сегодня позанимался");
     } catch {
-      setState((current) => ({ ...current, reply: "Не получилось отметить. Попробуй ещё раз" }));
+      toast.error("Не получилось отметить. Попробуй ещё раз");
     } finally {
       setBusy(false);
     }

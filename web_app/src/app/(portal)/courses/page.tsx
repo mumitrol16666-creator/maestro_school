@@ -2,7 +2,9 @@
 
 import { Compass } from "lucide-react";
 import { CourseCard } from "@/components/course-card";
-import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
+import { ScreenError } from "@/components/app-error-screen";
+import { EmptyState } from "@/components/data-states";
+import { ScreenSkeleton } from "@/components/screen-skeleton";
 import { PageHeader } from "@/components/page-header";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { toCourse } from "@/lib/adapters";
@@ -14,8 +16,8 @@ export default function CoursesPage() {
     return { directions, courses: courses.map((course, index) => toCourse(course, index)) };
   }, []);
 
-  if (resource.loading) return <LoadingState label="Загружаем курсы" />;
-  if (resource.error) return <ErrorState message={resource.error} retry={resource.reload} />;
+  if (resource.loading && !resource.data) return <ScreenSkeleton variant="list" label="Загружаем курсы" />;
+  if (resource.error && !resource.data) return <ScreenError message={resource.error} code={resource.errorCode} retry={resource.reload} />;
   if (!resource.data?.courses.length) return <EmptyState title="Курсов пока нет" description="Опубликованные курсы появятся здесь." />;
 
   const myCourses = resource.data.courses.filter((course) => course.access === "enrolled");

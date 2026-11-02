@@ -3,10 +3,13 @@
 import { ArrowLeft, BookOpen, Check, ChevronRight, LoaderCircle, LockKeyhole, Play, Trophy } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
+import { ScreenError } from "@/components/app-error-screen";
+import { EmptyState } from "@/components/data-states";
 import { MarkdownContent } from "@/components/markdown-content";
 import { ProgressBar } from "@/components/progress-bar";
+import { ScreenSkeleton } from "@/components/screen-skeleton";
 import { StatusBadge } from "@/components/status-badge";
+import { toast } from "@/components/toast";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { difficultyLabel, flattenCourseLessons } from "@/lib/adapters";
 import { api } from "@/lib/api-client";
@@ -23,8 +26,8 @@ export default function CourseDetailPage() {
   const [enrolling, setEnrolling] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  if (resource.loading) return <LoadingState label="Открываем курс" />;
-  if (resource.error) return <ErrorState message={resource.error} retry={resource.reload} />;
+  if (resource.loading && !resource.data) return <ScreenSkeleton variant="detail" label="Открываем курс" />;
+  if (resource.error && !resource.data) return <ScreenError message={resource.error} code={resource.errorCode} retry={resource.reload} />;
   if (!resource.data) return <EmptyState title="Курс не найден" description="Возможно, курс больше недоступен." />;
 
   const { course, progress, lessons } = resource.data;
@@ -38,6 +41,7 @@ export default function CourseDetailPage() {
     try {
       await api.enroll(courseId);
       await resource.reload();
+      toast.success("Курс добавлен в обучение");
     } catch (reason) {
       setActionError(reason instanceof ApiError ? reason.message : "Не удалось начать обучение");
     } finally {

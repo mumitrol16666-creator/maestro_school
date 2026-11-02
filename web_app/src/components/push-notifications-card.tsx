@@ -10,11 +10,16 @@ import {
   subscribeToPushNotifications,
   unsubscribeFromPushNotifications,
 } from "@/lib/push-notifications";
+import { toast } from "@/components/toast";
+import { errorToastText } from "@/lib/error-text";
 
 export function PushNotificationsCard({
   audience = "default",
+  confirm = "inline",
 }: {
   audience?: "default" | "parent";
+  /** "toast" is for the student app, where the shell shows the toast; elsewhere the text stays in the card. */
+  confirm?: "inline" | "toast";
 }) {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -23,6 +28,16 @@ export function PushNotificationsCard({
   const [permission, setPermission] = useState<NotificationPermission | "unsupported">("default");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const viaToast = confirm === "toast";
+  function tell(text: string, toastText: string) {
+    if (viaToast) toast.success(toastText);
+    else setMessage(text);
+  }
+  function fail(text: string, reason?: unknown, toastFallback?: string) {
+    if (viaToast) toast.error(errorToastText(reason, toastFallback ?? text));
+    else setError(reason instanceof Error ? reason.message : text);
+  }
 
   useEffect(() => {
     void (async () => {
@@ -45,9 +60,9 @@ export function PushNotificationsCard({
     try {
       await subscribeToPushNotifications();
       setPermission(getNotificationPermission());
-      setMessage("Готово — будем сообщать о важных изменениях.");
+      tell("Готово — будем сообщать о важных изменениях.", "Уведомления включены");
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Не удалось включить уведомления");
+      fail("Не удалось включить уведомления", reason, "Не получилось включить уведомления. Попробуй ещё раз");
     } finally {
       setBusy(false);
     }
@@ -60,9 +75,9 @@ export function PushNotificationsCard({
     try {
       await unsubscribeFromPushNotifications();
       setPermission(getNotificationPermission());
-      setMessage("Уведомления отключены");
+      tell("Уведомления отключены", "Уведомления выключены");
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Не удалось отключить уведомления");
+      fail("Не удалось отключить уведомления", reason, "Не получилось выключить уведомления. Попробуй ещё раз");
     } finally {
       setBusy(false);
     }
@@ -74,14 +89,16 @@ export function PushNotificationsCard({
     try {
       const result = await sendTestPushNotification();
       if (result.skipped) {
-        setError("Сейчас уведомления недоступны. Попробуйте позже.");
+        if (viaToast) toast.error("Сейчас уведомления недоступны. Попробуй позже");
+        else setError("Сейчас уведомления недоступны. Попробуйте позже.");
       } else if (result.sent === 0) {
-        setError("Сначала нажмите «Включить уведомления».");
+        if (viaToast) toast.error("Сначала включи уведомления");
+        else setError("Сначала нажмите «Включить уведомления».");
       } else {
-        setMessage("Отправили пробное сообщение — проверьте экран телефона.");
+        tell("Отправили пробное сообщение — проверьте экран телефона.", "Пробное уведомление отправлено");
       }
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Не удалось отправить пробное сообщение");
+      fail("Не удалось отправить пробное сообщение", reason, "Не получилось отправить пробное уведомление. Попробуй ещё раз");
     } finally {
       setBusy(false);
     }

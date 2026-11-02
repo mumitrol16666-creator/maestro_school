@@ -37,10 +37,12 @@ import { LessonMaterialItems } from "@/components/student-lesson-materials";
 import { ShareAchievementButton } from "@/components/share-achievement";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
-import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
+import { ScreenError } from "@/components/app-error-screen";
+import { EmptyState } from "@/components/data-states";
+import { ScreenSkeleton } from "@/components/screen-skeleton";
 import { PageHeader } from "@/components/page-header";
 import { useApiResource } from "@/hooks/use-api-resource";
-import { api } from "@/lib/api-client";
+import { loadStudentOfflineSummary } from "@/lib/school-offline-summary";
 import { currentAqtobeMonth } from "@/lib/aqtobe-month";
 import {
   getSchoolAlertCounts,
@@ -595,7 +597,7 @@ function SchoolSchedule() {
   const router = useRouter();
   const params = useSearchParams();
   const { user } = useAuth();
-  const resource = useApiResource(() => api.studentOfflineSummary(), []);
+  const resource = useApiResource(() => loadStudentOfflineSummary(), []);
   const requestedTab = params.get("tab");
   const requestedFormat = params.get("format");
   const requestedLessonId = params.get("lesson");
@@ -702,11 +704,11 @@ function SchoolSchedule() {
     setAlerts(getSchoolAlertCounts(user.id, resource.data));
   }, [activeTab, resource.data, user]);
 
-  if (resource.loading) {
-    return <LoadingState label="Загружаем расписание школы" />;
+  if (resource.loading && !resource.data) {
+    return <ScreenSkeleton variant="calendar" label="Загружаем расписание школы" />;
   }
 
-  if (resource.error) {
+  if (resource.error && !resource.data) {
     if (resource.errorCode === "CRM_NOT_LINKED") {
       return (
         <>
@@ -722,17 +724,12 @@ function SchoolSchedule() {
         </>
       );
     }
-    return <ErrorState message={resource.error} retry={resource.reload} />;
+    return <ScreenError message={resource.error} code={resource.errorCode} retry={resource.reload} />;
   }
 
   const data = resource.data;
   if (!data) {
-    return (
-      <ErrorState
-        message="Не удалось загрузить данные"
-        retry={resource.reload}
-      />
-    );
+    return <ScreenError message={null} code={resource.errorCode} retry={resource.reload} />;
   }
 
   const { upcomingLessons } = data;
@@ -742,7 +739,7 @@ function SchoolSchedule() {
     setRefreshing(true);
     setRefreshError(null);
     try {
-      resource.setData(await api.studentOfflineSummary());
+      resource.setData(await loadStudentOfflineSummary());
       setLastRefreshedAt(new Date());
     } catch {
       setRefreshError("Не удалось обновить данные школы");
@@ -971,7 +968,7 @@ export default function SchoolLessonsPage() {
       );
   }, [isHomework, id, router]);
   return isHomework ? (
-    <LoadingState label="Открываем задание в обучении" />
+    <ScreenSkeleton variant="page" label="Открываем задание в обучении" />
   ) : (
     <SchoolSchedule />
   );

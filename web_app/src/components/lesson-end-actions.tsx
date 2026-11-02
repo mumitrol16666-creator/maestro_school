@@ -6,6 +6,8 @@ import { FormEvent, useState } from "react";
 import type { ApiLessonEndActions } from "@/types/api";
 import { ApiError, api } from "@/lib/api-client";
 import { useAuth } from "@/components/auth-provider";
+import { toast } from "@/components/toast";
+import { errorToastText } from "@/lib/error-text";
 import { learningDialogsApi, notifyLearningDialogsUpdated } from "@/lib/learning-dialogs-api";
 
 interface LessonEndActionsProps {
@@ -28,7 +30,6 @@ export function LessonEndActions({
   const { user } = useAuth();
   const [questionOpen, setQuestionOpen] = useState(false);
   const [question, setQuestion] = useState("");
-  const [questionSent, setQuestionSent] = useState(false);
   const [submittingQuestion, setSubmittingQuestion] = useState(false);
   const [submittingSignup, setSubmittingSignup] = useState(false);
 
@@ -47,10 +48,11 @@ export function LessonEndActions({
       }
       setQuestion("");
       setQuestionOpen(false);
-      setQuestionSent(true);
+      toast.success("Вопрос отправлен преподавателю");
       onQuestionSent?.();
     } catch (reason) {
       onError?.(reason instanceof ApiError ? reason.message : "Не удалось отправить вопрос");
+      toast.error(errorToastText(reason, "Не получилось отправить вопрос. Попробуй ещё раз"));
     } finally {
       setSubmittingQuestion(false);
     }
@@ -75,6 +77,7 @@ export function LessonEndActions({
       }
     } catch (reason) {
       onError?.(reason instanceof ApiError ? reason.message : "Не удалось выполнить запись");
+      toast.error(errorToastText(reason, "Не получилось записаться. Попробуй ещё раз"));
     } finally {
       setSubmittingSignup(false);
     }
@@ -122,12 +125,6 @@ export function LessonEndActions({
           )
         )}
       </div>
-
-      {questionSent && (
-        <p className="mt-4 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
-          Вопрос отправлен преподавателю.
-        </p>
-      )}
 
       {questionOpen && (
         <form onSubmit={handleQuestionSubmit} className="mt-5 rounded-2xl border border-stone-200 bg-stone-50 p-5">

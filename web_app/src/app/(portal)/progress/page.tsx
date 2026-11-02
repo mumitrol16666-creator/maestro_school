@@ -2,7 +2,9 @@
 
 import { CheckCircle2, Clock3, Star } from "lucide-react";
 import Link from "next/link";
-import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
+import { ScreenError } from "@/components/app-error-screen";
+import { EmptyState } from "@/components/data-states";
+import { ScreenSkeleton } from "@/components/screen-skeleton";
 import { PageHeader } from "@/components/page-header";
 import { ProgressBar } from "@/components/progress-bar";
 import { StatusBadge } from "@/components/status-badge";
@@ -13,8 +15,8 @@ import { api } from "@/lib/api-client";
 export default function ProgressPage() {
   const resource = useApiResource(() => api.progress(), []);
 
-  if (resource.loading) return <LoadingState label="Загружаем историю обучения" />;
-  if (resource.error) return <ErrorState message={resource.error} retry={resource.reload} />;
+  if (resource.loading && !resource.data) return <ScreenSkeleton variant="list" label="Загружаем историю обучения" />;
+  if (resource.error && !resource.data) return <ScreenError message={resource.error} code={resource.errorCode} retry={resource.reload} />;
   if (!resource.data) return null;
 
   const { lessons, points, pointsHistory, enrollments } = resource.data;

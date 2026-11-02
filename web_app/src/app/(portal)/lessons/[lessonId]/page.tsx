@@ -17,18 +17,22 @@ import {
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
+import { ScreenError } from "@/components/app-error-screen";
+import { EmptyState } from "@/components/data-states";
 import { HomeworkAttemptHistory } from "@/components/homework-attempt-history";
 import { HomeworkSubmissionForm } from "@/components/homework-submission-form";
 import { HomeworkTestForm } from "@/components/homework-test-form";
 import { HomeworkTestResult } from "@/components/homework-test-result";
 import { LessonEndActions } from "@/components/lesson-end-actions";
 import { LessonVideoPlayer } from "@/components/lesson-video-player";
+import { ScreenSkeleton } from "@/components/screen-skeleton";
 import { StatusBadge } from "@/components/status-badge";
+import { toast } from "@/components/toast";
 import { MarkdownContent } from "@/components/markdown-content";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { flattenCourseLessons, normalizeLessonStatus, toLesson } from "@/lib/adapters";
 import { ApiError, api } from "@/lib/api-client";
+import { errorToastText } from "@/lib/error-text";
 import { lessonStatusHints, testLessonStatusHints } from "@/lib/homework-ui";
 import { lessonStatusLabels } from "@/lib/ui";
 import { triggerFileDownload } from "@/lib/file-download";
@@ -98,8 +102,8 @@ export default function LessonPage() {
     return () => window.cancelAnimationFrame(frame);
   }, [resource.data]);
 
-  if (resource.loading) return <LoadingState label="Открываем урок" />;
-  if (resource.error) return <ErrorState message={resource.error} retry={resource.reload} />;
+  if (resource.loading && !resource.data) return <ScreenSkeleton variant="detail" label="Открываем урок" />;
+  if (resource.error && !resource.data) return <ScreenError message={resource.error} code={resource.errorCode} retry={resource.reload} />;
   if (!resource.data) return <EmptyState title="Урок не найден" description="Возможно, урок больше недоступен." />;
 
   const { detail, lesson, attempts, nextLesson } = resource.data;
@@ -119,9 +123,10 @@ export default function LessonPage() {
       await api.startLesson(lessonId);
       await resource.reload();
       setShowStartPrompt(false);
-      setSuccess("Урок начат. Можно смотреть видео и готовить домашнее задание.");
+      toast.success("Урок начат");
     } catch (reason) {
       setActionError(reason instanceof ApiError ? reason.message : "Не удалось начать урок");
+      toast.error(errorToastText(reason, "Не получилось начать урок. Попробуй ещё раз"));
     } finally {
       setStarting(false);
     }
@@ -158,11 +163,13 @@ export default function LessonPage() {
             ? `Тест пройден: ${result.testResult.score}% (${result.testResult.correctAnswers} из ${result.testResult.totalQuestions} правильных). Урок завершён.`
             : `Набрано ${result.testResult.score}% (${result.testResult.correctAnswers} из ${result.testResult.totalQuestions} правильных). Нужно не менее ${passingScore}%. Попробуйте ещё раз.`,
         );
+        toast.success("Ответы отправлены");
       } else {
-        setSuccess("Работа отправлена на проверку.");
+        toast.success("Задание отправлено на проверку");
       }
     } catch (reason) {
       setActionError(reason instanceof ApiError ? reason.message : "Не удалось отправить домашнее задание");
+      toast.error(errorToastText(reason, "Не получилось отправить задание. Попробуй ещё раз"));
     } finally {
       setSubmitting(false);
     }
@@ -176,16 +183,13 @@ export default function LessonPage() {
     try {
       const result = await api.completeLesson(lessonId);
       await resource.reload();
-      setSuccess(
-        result.courseCompleted
-          ? "Курс завершён."
-          : "Урок завершён. Следующий урок открыт.",
-      );
+      toast.success(result.courseCompleted ? "Курс завершён" : "Урок завершён. Следующий урок открыт");
     } catch (reason) {
       if (reason instanceof ApiError && reason.code === "LESSON_REQUIRES_HOMEWORK") {
         await resource.reload();
       }
       setActionError(reason instanceof ApiError ? reason.message : "Не удалось завершить урок");
+      toast.error(errorToastText(reason, "Не получилось завершить урок. Попробуй ещё раз"));
     } finally {
       setCompleting(false);
     }
@@ -421,7 +425,7 @@ export default function LessonPage() {
               endActions={detail.endActions}
               onSignupComplete={(message) => {
                 setActionError(null);
-                setSuccess(message);
+                toast.success(message);
               }}
               onError={(message) => {
                 setSuccess(null);
