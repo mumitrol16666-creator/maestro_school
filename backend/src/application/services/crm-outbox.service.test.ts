@@ -1140,3 +1140,79 @@ test("queued approval notification falls back to the confirmed version roster wh
   assert.deepEqual(notified?.crmStudentIds, ["student-absent", "student-present"]);
   assert.equal(event.payload.approvalNotificationDelivery?.state, "delivered");
 });
+
+// 02.11 (money review): an approval whose «было %» can never match again must not retry every
+// 5 minutes for good — CRM has already charged the lesson, the student would never get XP.
+test("a diverged topic percent turns the approval into a conflict instead of an endless retry", async () => {
+  const { ConflictError } = await import("../../domain/errors.js");
+  const event = outboxEvent("admin_approve");
+  event.payload = { ...event.payload, body: { approved: true }, approvedBy: "admin-1" };
+  const { database, reportState } = createOutboxDatabase(event, undefined, {
+    crmDeliveredAt: new Date("2026-09-05T06:00:00.000Z"),
+    payload: { learningResultsV2: { homeworkDecisions: [], topicUpdates: [{ topicId: "topic-1", expectedPercent: 70, toPercent: 100 }] } },
+  });
+  let conflicts = 0;
+  database.crmSyncConflict.create = async () => { conflicts += 1; return {}; };
+  const confirmApproval = async () => {
+    reportState.status = "confirmed";
+    reportState.confirmedVersion = 1;
+    reportState.crmConfirmedAt ??= new Date("2026-09-05T06:01:00.000Z");
+    return { reportVersion: 1, approvedBy: "admin-1", learningResultsV2: null };
+  };
+  const deps = {
+    database,
+    deliverEvent: async () => ({ accepted: true }),
+    readApprovalRetryStatus: async () => ({ status: "scheduled" }),
+    readLocallyConfirmedApproval: async () => ({ recoveredFromLocalConfirmation: true }),
+    confirmApproval,
+    now: () => new Date("2026-09-05T06:01:00.000Z"),
+  };
+
+  const diverged = await processCrmOutboxEvent(event.id, {
+    ...deps,
+    finalizeApproval: async () => {
+      throw new ConflictError("Тема «Бой» в отчёте начиналась с 70 %, а сейчас на 60 %", "LEARNING_TOPIC_PROGRESS_DIVERGED");
+    },
+  } as any);
+  assert.equal(diverged?.status, "conflict", "a permanent 409 is a conflict for the admin");
+  assert.equal(diverged?.nextAttemptAt, null);
+  assert.equal(conflicts, 1);
+
+  const waiting = outboxEvent("admin_approve");
+  waiting.payload = { ...waiting.payload, body: { approved: true }, approvedBy: "admin-1" };
+  const second = createOutboxDatabase(waiting);
+  second.database.crmSyncConflict.create = async () => { conflicts += 1; return {}; };
+  const stillWaiting = await processCrmOutboxEvent(waiting.id, {
+    ...deps,
+    database: second.database,
+    confirmApproval: async () => {
+      second.reportState.status = "confirmed";
+      second.reportState.crmConfirmedAt = new Date("2026-09-05T06:01:00.000Z");
+      return { reportVersion: 1, approvedBy: "admin-1", learningResultsV2: null };
+    },
+    finalizeApproval: async () => {
+      throw new ConflictError("Тема продолжается с 70 % после урока «Вторник»", "LEARNING_TOPIC_STALE_PROGRESS");
+    },
+  } as any);
+  assert.equal(stillWaiting?.status, "failed", "an earlier lesson awaiting approval is still retried");
+  assert.ok(stillWaiting?.nextAttemptAt instanceof Date);
+  assert.equal(conflicts, 1);
+});
+
+test("a retryable failure stops retrying after the attempt cap and becomes a conflict", async () => {
+  const { CRM_OUTBOX_MAX_RETRY_ATTEMPTS } = await import("./crm-outbox.service.js");
+  const event = outboxEvent("teacher_attendance");
+  event.attempts = CRM_OUTBOX_MAX_RETRY_ATTEMPTS - 1; // the claim counts this attempt
+  const { database } = createOutboxDatabase(event);
+  let conflicts = 0;
+  database.crmSyncConflict.create = async () => { conflicts += 1; return {}; };
+  const result = await processCrmOutboxEvent(event.id, {
+    database,
+    deliverEvent: async () => { throw new Error("CRM timeout"); },
+    now: () => new Date("2026-09-05T06:01:00.000Z"),
+  } as any);
+  assert.equal(result?.status, "conflict");
+  assert.equal(result?.nextAttemptAt, null);
+  assert.match(String(result?.lastError), /повторы остановлены/);
+  assert.equal(conflicts, 1);
+});

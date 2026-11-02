@@ -40,6 +40,7 @@ import {
   processCrmOutboxEvent,
 } from "./crm-outbox.service.js";
 import {
+  assertOfflineLessonReportNotSubmitted,
   getCurrentOfflineLessonLearningResultsV2,
   submitOfflineLessonReportVersion,
   withdrawOfflineLessonReport,
@@ -397,6 +398,8 @@ export async function teacherOfflineCancel(appUserId: string, crmClassId: string
   if (["completed", "cancelled", "pending_admin_review"].includes(String(lesson.status))) {
     throw new BadRequestError("Урок уже отправлен администратору или закрыт", "LESSON_ALREADY_CLOSED");
   }
+  // The card may be a stale projection while CRM is down; the local report says whether it was sent.
+  if (lessonSyncV2Enabled()) await assertOfflineLessonReportNotSubmitted(crmClassId);
   // CRM accepts an absence from the lesson time; starting the lesson earlier would leave it hanging.
   if (lesson.date && lesson.startTime && now < offlineLessonStartsAt(lesson.date, lesson.startTime)) {
     throw new BadRequestError(`Отменить урок можно с ${lesson.startTime}, когда наступит время урока`, "LESSON_CANCEL_TOO_EARLY");

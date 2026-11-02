@@ -194,8 +194,25 @@ function withApprovalNotificationDelivery(
   });
 }
 
-function retryable(error: unknown) {
-  return !(error instanceof AppError) || error.statusCode >= 500 || error.statusCode === 409;
+/**
+ * A 409 usually means «not yet» (CRM still has the lesson open, an earlier lesson awaits approval)
+ * and is retried. These codes mean «never»: retrying them only hides the lesson in `approving`
+ * or `pending_sync` for good while CRM has already charged for it (02.11, money review).
+ */
+const PERMANENT_CONFLICT_CODES = new Set([
+  "LEARNING_TOPIC_PROGRESS_DIVERGED",
+  "LEARNING_TOPIC_MASTERED_LOCKED",
+  "LESSON_PENDING_REVIEW",
+]);
+
+/** Retries every ≤5 min; after this many the event is a conflict for the admin, not a silent loop. */
+export const CRM_OUTBOX_MAX_RETRY_ATTEMPTS = 2016; // ≈ 7 days at the 5-minute cap
+
+function retryable(error: unknown, attempts = 0) {
+  if (attempts >= CRM_OUTBOX_MAX_RETRY_ATTEMPTS) return false;
+  if (!(error instanceof AppError)) return true;
+  if (error.statusCode === 409) return !PERMANENT_CONFLICT_CODES.has(String(error.code ?? ""));
+  return error.statusCode >= 500;
 }
 
 function errorMessage(error: unknown) {
@@ -1053,10 +1070,14 @@ async function markFailed(event: {
   payload: Prisma.JsonValue;
   attempts: number;
 }, error: unknown, claimToken: Date, database: typeof prisma = prisma) {
-  const message = errorMessage(error);
   const awaitingCrm = event.eventType === "admin_approve" && error instanceof AppError
     && error.code === CRM_APPROVAL_REQUIRED;
-  const shouldRetry = !awaitingCrm && retryable(error);
+  const shouldRetry = !awaitingCrm && retryable(error, event.attempts);
+  const exhausted = !awaitingCrm && !shouldRetry && event.attempts >= CRM_OUTBOX_MAX_RETRY_ATTEMPTS
+    && retryable(error, 0);
+  const message = exhausted
+    ? `${errorMessage(error)} (попыток: ${event.attempts}, повторы остановлены)`
+    : errorMessage(error);
   const payload = event.payload as unknown as DeliveryPayload;
 
   const ownsClaim = await database.$transaction(async (tx) => {
@@ -1728,7 +1749,8 @@ export async function retryCrmOutboxEvent(eventId: string) {
   await prisma.$transaction([
     prisma.crmOutboxEvent.update({
       where: { id: eventId },
-      data: { status: "pending", nextAttemptAt: new Date(), lastError: null },
+      // A manual retry starts a fresh count: otherwise after the attempt cap every retry gets one try.
+      data: { status: "pending", nextAttemptAt: new Date(), lastError: null, attempts: 0 },
     }),
     prisma.crmSyncConflict.updateMany({
       where: { outboxEventId: eventId, status: "open" },
@@ -1754,6 +1776,16 @@ export async function resolveCrmSyncConflict(
   const conflict = await prisma.crmSyncConflict.findUnique({ where: { id: conflictId } });
   if (!conflict) throw new BadRequestError("Конфликт не найден", "CRM_CONFLICT_NOT_FOUND");
   if (conflict.status === "resolved") return conflict;
+
+  // An approval conflict means CRM has confirmed and charged the lesson while the rewards were not
+  // applied. «Accept CRM» would close it with nothing applied and no trace — the students would lose
+  // XP, Coins, topic percents and homework decisions silently (02.11, money review).
+  if (resolution === "accept_crm" && conflict.kind === "admin_approve") {
+    throw new BadRequestError(
+      "Урок уже подтверждён в CRM, а награды и проценты тем не применены. «Принять CRM» их не начислит: повторите применение или пересмотрите урок в CRM и верните преподавателю.",
+      "CRM_CONFLICT_APPROVAL_NEEDS_REPLAY",
+    );
+  }
 
   const localPayload = conflict.localPayload as Record<string, unknown>;
   const crmPayload = conflict.crmPayload as Record<string, unknown> | null;
