@@ -36,7 +36,7 @@
 
 ### Платформа, одна миграция `20261103090000_course_access_and_payments`
 
-- `Course`: `priceKzt Int?` (null = не продаётся), `includedInSchool Boolean @default(false)`, `freeLessonsCount Int @default(2)`.
+- `Course`: `priceKzt Int?` (null = курс бесплатный целиком, как все курсы сейчас; платным курс становится, когда админ задал цену — уточнение 02.11, иначе выкатка закрыла бы текущие курсы), `includedInSchool Boolean @default(false)`, `freeLessonsCount Int @default(2)`.
 - `CourseAccess`: `studentId`, `courseId`, `source` (`payment | admin_grant`), `paymentRequestId @unique`, `startsAt`, `expiresAt` (+6 мес), `grantedById`, `grantNote`, `revokedAt`, `revokedById`, `revokeReason` (`refund | admin`), `revokeNote`. Доступ ученика школы к курсу с признаком не хранится — вычисляется: `includedInSchool && crmStudentId`.
 - `CoursePaymentRequest` («Я оплатил»): `courseId`, `studentId` (кому), `payerUserId` (кто нажал), `amountKzt` (снимок цены), `status` (`pending | confirmed | rejected`), `payerNote`, `decidedById/At`, `decisionNote`, `refundedAt/ById`, `refundNote`. Частичный уникальный индекс `(student_id, course_id) WHERE status='pending'`. Подтверждённая заявка и есть запись в списке оплат (4.10).
 - `CoursePaymentSettings` (одна строка): ссылка Kaspi Pay, номер для перевода, получатель, подсказка.
@@ -95,7 +95,7 @@
 | Родитель и ребёнок жмут одновременно | Тот же индекс, вторая заявка 409 |
 | Админ без права | `requirePermission("course_payments.manage")` |
 | Цена изменилась после заявки | Сумма — снимок в заявке |
-| Курс без цены | 409 `COURSE_NOT_FOR_SALE`, «Курс пока не продаётся» |
+| Курс без цены | Открыт целиком бесплатно; заявка на оплату — 409 `COURSE_NOT_FOR_SALE` |
 | CRM или Telegram недоступны | Регистрация и уведомление в приложении работают, ошибка в лог |
 
 ## 8. Допущения
