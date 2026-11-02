@@ -30,7 +30,19 @@ export async function retryPendingAppRegistrationLeads(now = new Date()) {
       where: { crmLeadPendingSince: { not: null }, crmStudentId: { not: null } },
       data: { crmLeadPendingSince: null },
     });
-    result.cleared = linked.count;
+    // A parent whose child the school has linked since, or an account switched off or deleted: no lead either.
+    const settled = await prisma.user.updateMany({
+      where: {
+        crmLeadPendingSince: { not: null },
+        OR: [
+          { isActive: false },
+          { deletedAt: { not: null } },
+          { parentLinksAsParent: { some: { revokedAt: null, student: { crmStudentId: { not: null } } } } },
+        ],
+      },
+      data: { crmLeadPendingSince: null },
+    });
+    result.cleared = linked.count + settled.count;
 
     const expired = await prisma.user.findMany({
       where: { crmLeadPendingSince: { lt: new Date(now.getTime() - GIVE_UP_AFTER_MS) }, crmStudentId: null },
@@ -49,6 +61,7 @@ export async function retryPendingAppRegistrationLeads(now = new Date()) {
         crmLeadPendingSince: { lte: new Date(now.getTime() - MIN_AGE_MS), gte: new Date(now.getTime() - GIVE_UP_AFTER_MS) },
         crmStudentId: null,
         deletedAt: null,
+        isActive: true,
       },
       orderBy: { crmLeadPendingSince: "asc" },
       take: BATCH_SIZE,

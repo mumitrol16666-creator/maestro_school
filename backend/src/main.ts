@@ -25,6 +25,8 @@ import { isCorsOriginAllowed } from "./config/cors-origin.js";
 async function bootstrap() {
   const app = Fastify({
     logger: true,
+    // nginx on the same host proxies /api/; trust only it, so request.ip is the visitor (rate limits per person, not per server).
+    trustProxy: ["127.0.0.1", "::1"],
     // Base64 JSON uploads: allow ~20 MB files (+ overhead)
     bodyLimit: 28 * 1024 * 1024,
   });

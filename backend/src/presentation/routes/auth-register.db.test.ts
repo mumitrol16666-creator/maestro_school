@@ -353,6 +353,27 @@ if (!process.env.TEST_DATABASE_URL) {
     await retryPendingAppRegistrationLeads();
     assert.equal(sent.filter((item) => [linkedId, goneId].some((value) => item.body.externalSourceId === `app-registration:${value}`)).length, 0);
     assert.equal(await pendingSince(linkedId), null);
+    assert.equal(await pendingSince(goneId), null, "a deleted account's flag goes too");
+
+    // Switched off, or a parent whose child the school has linked since: nothing to send, the flag goes.
+    const off = await register({ firstName: "Выключен", lastName: "Позже", phone: phone(), password: "password-1234" });
+    const offId = off.json().data.user.id as string;
+    const family = await registerParent({
+      parent: { firstName: "Мама", lastName: "Школа", phone: phone(), password: "family-pass-1" },
+      child: { firstName: "Дочь", lastName: "Школа", phone: phone(), password: "family-pass-1" },
+    });
+    const [familyParentId, familyChildId] = [family.json().data.user.id as string, family.json().data.child.id as string];
+    userIds.push(offId, familyParentId, familyChildId);
+    await leads(2);
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    await prisma.user.update({ where: { id: offId }, data: { isActive: false, crmLeadPendingSince: minutesAgo(5) } });
+    await prisma.user.update({ where: { id: familyParentId }, data: { crmLeadPendingSince: minutesAgo(5) } });
+    await prisma.user.update({ where: { id: familyChildId }, data: { crmStudentId: `crm-child-${suffix}` } });
+    sent.length = 0;
+    await retryPendingAppRegistrationLeads();
+    assert.equal(sent.filter((item) => [offId, familyParentId].some((value) => item.body.externalSourceId === `app-registration:${value}`)).length, 0);
+    assert.equal(await pendingSince(offId), null);
+    assert.equal(await pendingSince(familyParentId), null);
   });
 
   test("both registration forms share one limit of 5 a minute per IP", async () => {
