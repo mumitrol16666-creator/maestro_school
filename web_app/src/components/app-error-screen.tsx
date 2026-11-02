@@ -2,6 +2,7 @@
 
 import { Home, RotateCcw } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 /**
  * В-17: the one error look of the student app — the logo, a Russian title, one line of
@@ -22,6 +23,9 @@ export function AppErrorScreen({
   /** Outside the shell (global error, a 404 without a session) the screen fills the window. */
   fullPage?: boolean;
 }) {
+  const pathname = usePathname();
+  // On the home screen itself «На главную» would do nothing.
+  const showHome = pathname !== homeHref;
   return (
     <section
       data-testid="app-error-screen"
@@ -37,11 +41,11 @@ export function AppErrorScreen({
         />
         <h1 className="font-display mt-6 text-[28px] leading-tight text-ink">{title}</h1>
         <p className="mt-3 text-base leading-6 text-stone-600">{reason}</p>
-        <div className="mt-7 grid gap-2 sm:grid-cols-2">
+        <div className={`mt-7 grid gap-2 ${showHome ? "sm:grid-cols-2" : ""}`}>
           <button type="button" onClick={onRetry} className="brand-button-primary">
             <RotateCcw size={17} aria-hidden="true" /> Повторить
           </button>
-          {fullPage ? (
+          {!showHome ? null : fullPage ? (
             // Outside the app's layout the client router may be the broken part: load the page anew.
             <a href={homeHref} className="brand-button-secondary">
               <Home size={17} aria-hidden="true" /> На главную
@@ -59,8 +63,15 @@ export function AppErrorScreen({
 
 /** The student-facing reason for a failed request; English server texts never reach the child. */
 export function errorScreenCopy(message: string | null | undefined, code?: string | null) {
-  if (code === "NETWORK_ERROR" || (typeof navigator !== "undefined" && !navigator.onLine)) {
+  if (typeof navigator !== "undefined" && !navigator.onLine) {
     return { title: "Нет связи", reason: "Проверь интернет и нажми «Повторить»." };
+  }
+  if (code === "NETWORK_ERROR") {
+    // The device is online: the Maestro server, not the child's internet, did not answer.
+    return { title: "Нет связи", reason: "Сервер Maestro сейчас не отвечает. Попробуй через минуту." };
+  }
+  if (code === "CRM_NOT_LINKED") {
+    return { title: "Школа ещё не подключила профиль", reason: "Расписание и сектор появятся, когда администратор подключит твой профиль." };
   }
   if (code === "NOT_FOUND") {
     return { title: "Такой страницы нет", reason: "Возможно, её убрали или ссылка устарела." };

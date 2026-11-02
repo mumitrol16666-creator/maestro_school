@@ -90,7 +90,8 @@ test("without network the strip appears and the loaded screen stays", async ({ p
   await page.goto("/dashboard");
   await expect(page.getByTestId("dashboard-learning-summary")).toBeVisible();
   await context.setOffline(true);
-  await expect(page.getByTestId("connection-banner")).toContainText("Нет связи. Показываем сохранённое на");
+  // Nothing saved is shown yet: the screen is the one already loaded, so no time in the strip.
+  await expect(page.getByTestId("connection-banner")).toHaveText("Нет связи");
   await expect(page.getByTestId("dashboard-learning-summary")).toBeVisible();
   await context.setOffline(false);
   await expect(page.getByTestId("connection-banner")).toHaveCount(0);

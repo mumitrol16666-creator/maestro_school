@@ -32,7 +32,7 @@ import type {
   PreparedTestsAnalytics,
   PreparedTestsResponse,
 } from "@/types/prepared-tests";
-import { reportApiReachable, reportApiUnreachable } from "@/lib/connection-status";
+import { reportApiReachable, reportApiUnreachable, resetConnectionStatus } from "@/lib/connection-status";
 import { clearHomeSnapshots, isFreshSavedAnswer } from "@/lib/offline-snapshot";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "/api/v1";
@@ -54,6 +54,11 @@ let savedReadsEnabled = false;
 /** Only the student shell turns this on: staff and family screens have no «Нет связи» strip. */
 export function setSavedReadsEnabled(enabled: boolean) {
   savedReadsEnabled = enabled;
+}
+
+/** A change sent outside `apiRequestEnvelope` (multipart uploads) drops the kept answers too. */
+export function forgetSavedReads() {
+  savedReads.clear();
 }
 
 export function isAnswerFromMemory(data: unknown) {
@@ -117,6 +122,7 @@ export function clearSession() {
   if (typeof window === "undefined") return;
   savedReads.clear();
   clearHomeSnapshots();
+  resetConnectionStatus();
   window.localStorage.removeItem(TOKEN_KEY);
   window.localStorage.removeItem(USER_KEY);
 }
@@ -151,6 +157,8 @@ export async function apiRequestEnvelope<T, M = unknown>(path: string, init: Req
   if (response.status >= 500 && !payload.error?.code) return unreachable<T, M>(method, path);
   reportApiReachable();
   if (response.ok && method === "GET" && savedReadsEnabled) keepSavedRead(path, payload);
+  // After a change the kept answers may show the state before it; a reread must not fall back to them.
+  if (response.ok && method !== "GET") savedReads.clear();
   if (!response.ok) {
     if (response.status === 401) {
       clearSession();

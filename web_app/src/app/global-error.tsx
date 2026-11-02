@@ -38,9 +38,10 @@ export default function GlobalError({ reset }: { error: Error & { digest?: strin
           <AppErrorScreen
             fullPage
             title="Что-то пошло не так"
+            // Every role lands here, so the reason addresses no one in particular.
             reason={typeof navigator !== "undefined" && !navigator.onLine
-              ? "Нет связи. Проверь интернет и нажми «Повторить»."
-              : "Приложение не открылось из-за ошибки. Попробуй ещё раз."}
+              ? "Нет связи с интернетом."
+              : "Приложение не открылось из-за ошибки."}
             onRetry={() => reset()}
           />
         ) : (

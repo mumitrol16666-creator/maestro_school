@@ -1,9 +1,10 @@
 "use client";
 
 import { CloudOff, WifiOff } from "lucide-react";
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 import { setSavedReadsEnabled } from "@/lib/api-client";
-import { getConnectionStatus, subscribeConnectionStatus, type ConnectionStatus } from "@/lib/connection-status";
+import { announceReconnect, getConnectionStatus, subscribeConnectionStatus, type ConnectionStatus } from "@/lib/connection-status";
+import { invalidateStudentHome } from "@/lib/student-home";
 
 function snapshotTime(value: string | number | null) {
   if (value == null) return null;
@@ -21,7 +22,7 @@ function snapshotTime(value: string | number | null) {
 
 function bannerText(status: ConnectionStatus) {
   if (status.offline) {
-    const at = snapshotTime(status.savedAt);
+    const at = status.servedSaved ? snapshotTime(status.savedAt) : null;
     return { icon: WifiOff, text: at ? `Нет связи. Показываем сохранённое на ${at}` : "Нет связи" };
   }
   if (status.school.stale) {
@@ -34,15 +35,28 @@ function bannerText(status: ConnectionStatus) {
 
 /**
  * В-18: a strip under the student header when the network or the school's CRM is down,
- * so the student knows the lessons on screen may be out of date.
+ * so the student knows the lessons on screen may be out of date. When the connection comes
+ * back, the screens read their data again.
  */
 export function ConnectionBanner() {
   const status = useSyncExternalStore(subscribeConnectionStatus, getConnectionStatus, getConnectionStatus);
+  const wasOffline = useRef(false);
 
   useEffect(() => {
     setSavedReadsEnabled(true);
     return () => setSavedReadsEnabled(false);
   }, []);
+
+  useEffect(() => {
+    if (status.offline) {
+      wasOffline.current = true;
+      return;
+    }
+    if (!wasOffline.current) return;
+    wasOffline.current = false;
+    invalidateStudentHome();
+    announceReconnect();
+  }, [status.offline]);
 
   const content = bannerText(status);
   if (!content) return null;

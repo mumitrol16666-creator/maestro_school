@@ -23,15 +23,21 @@
       border: 1px solid #C59A44; border-radius: 12px; background: #F5C45C; color: #0D0D0D;
       font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer; touch-action: manipulation;
     }
-    button:focus-visible { outline: 2px solid #7A571C; outline-offset: 3px; }
+    a {
+      display: flex; align-items: center; justify-content: center; margin-top: 8px; min-height: 44px;
+      padding: 12px 20px; border: 1px solid #CFC8BC; border-radius: 12px; background: #FCFBF8;
+      color: #2B2A28; font-size: 14px; font-weight: 600; text-decoration: none;
+    }
+    button:focus-visible, a:focus-visible { outline: 2px solid #7A571C; outline-offset: 3px; }
   </style>
 </head>
 <body>
   <main>
     <img src="/brand/guitar-avatar.png" alt="Maestro">
     <h1>Нет связи</h1>
-    <p>Проверь интернет. Как только связь появится, Maestro откроется сам.</p>
+    <p>Как только интернет появится, Maestro откроется сам.</p>
     <button type="button" onclick="location.reload()">Повторить</button>
+    <a href="/dashboard">На главную</a>
   </main>
   <script>window.addEventListener("online", function () { location.reload(); });</script>
 </body>

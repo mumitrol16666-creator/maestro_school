@@ -8,11 +8,18 @@ import type { ApiStudentHome } from "@/types/api";
  * Pages and the shell asking within a few seconds share one request; a failed read is not kept.
  */
 const HOME_TTL_MS = 20_000;
-let cached: { at: number; promise: Promise<ApiStudentHome> } | null = null;
+let cached: { at: number; userId: string | null; promise: Promise<ApiStudentHome> } | null = null;
+
+/** The moment the saved home describes: when it was saved, or the server's older CRM copy inside it. */
+function savedHomeTime(savedAt: number, home: ApiStudentHome) {
+  const crmAt = home.school?.crmStale && home.school.crmSnapshotAt ? Date.parse(home.school.crmSnapshotAt) : Number.NaN;
+  return Number.isFinite(crmAt) ? Math.min(savedAt, crmAt) : savedAt;
+}
 
 export function loadStudentHome(options: { fresh?: boolean } = {}) {
-  if (!options.fresh && cached && Date.now() - cached.at < HOME_TTL_MS) return cached.promise;
   const userId = getStoredUser()?.id ?? null;
+  // A home read for another student on this device (sign-out, sign-in) is never reused.
+  if (!options.fresh && cached && cached.userId === userId && Date.now() - cached.at < HOME_TTL_MS) return cached.promise;
   const promise: Promise<ApiStudentHome> = api.studentHome().then(
     (home) => {
       // В-18: the last live home is kept on the device for opening the app without network.
@@ -28,11 +35,11 @@ export function loadStudentHome(options: { fresh?: boolean } = {}) {
         ? readHomeSnapshot<ApiStudentHome>(userId)
         : null;
       if (!saved) throw reason;
-      reportApiUnreachable({ servedSavedAt: saved.savedAt });
+      reportApiUnreachable({ servedSavedAt: savedHomeTime(saved.savedAt, saved.home) });
       return saved.home;
     },
   );
-  cached = { at: Date.now(), promise };
+  cached = { at: Date.now(), userId, promise };
   return promise;
 }
 

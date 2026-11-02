@@ -2,9 +2,9 @@
  * В-15: while a student screen loads, grey placeholders of its cards stand where the
  * content will be; the header and the bottom navigation stay, nothing turns dark.
  */
-export type ScreenSkeletonVariant = "page" | "home" | "list" | "detail" | "calendar" | "profile" | "chat" | "section";
+type ScreenSkeletonVariant = "page" | "home" | "list" | "detail" | "calendar" | "profile" | "section";
 
-export function SkeletonBlock({ className = "" }: { className?: string }) {
+function SkeletonBlock({ className = "" }: { className?: string }) {
   return <div className={`maestro-skeleton ${className}`} aria-hidden="true" />;
 }
 
@@ -112,21 +112,6 @@ function variantBody(variant: ScreenSkeletonVariant) {
           <Row />
         </>
       );
-    case "chat":
-      return (
-        <>
-          <Title />
-          {Array.from({ length: 5 }, (_, index) => (
-            <div key={index} className="flex items-center gap-3 py-1">
-              <SkeletonBlock className="h-12 w-12 shrink-0 rounded-full" />
-              <div className="min-w-0 flex-1 space-y-2">
-                <SkeletonBlock className="h-4 w-1/2 rounded-md" />
-                <SkeletonBlock className="h-3 w-3/4 rounded-md" />
-              </div>
-            </div>
-          ))}
-        </>
-      );
     default:
       return (
         <>
@@ -142,12 +127,10 @@ function variantBody(variant: ScreenSkeletonVariant) {
 export function ScreenSkeleton({
   variant = "page",
   label = "Загружаем",
-  className = "",
 }: {
   variant?: ScreenSkeletonVariant;
   /** Read by a screen reader only; the placeholders carry no text. */
   label?: string;
-  className?: string;
 }) {
   return (
     <div
@@ -155,7 +138,7 @@ export function ScreenSkeleton({
       aria-live="polite"
       aria-busy="true"
       data-testid="screen-skeleton"
-      className={`mx-auto w-full max-w-[1400px] space-y-4 ${className}`}
+      className="mx-auto w-full max-w-[1400px] space-y-4"
     >
       {variantBody(variant)}
       <span className="sr-only">{label}</span>

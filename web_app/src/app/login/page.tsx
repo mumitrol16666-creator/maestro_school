@@ -41,7 +41,11 @@ function safeNextPath(next: string | null, role?: string | null) {
 
 /** В-18: no network is said plainly instead of «Не удалось связаться с сервером». */
 function loginErrorText(reason: unknown, fallback: string) {
-  if (reason instanceof ApiError && reason.code === "NETWORK_ERROR") return "Нет связи. Проверьте интернет и попробуйте снова.";
+  if (reason instanceof ApiError && reason.code === "NETWORK_ERROR") {
+    return typeof navigator !== "undefined" && !navigator.onLine
+      ? "Нет связи. Проверьте интернет и попробуйте снова."
+      : "Сервер Maestro сейчас не отвечает. Попробуйте через минуту.";
+  }
   return reason instanceof ApiError ? reason.message : fallback;
 }
 
@@ -83,7 +87,7 @@ export default function LoginPage() {
   const [ssoPending, setSsoPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const ssoStartedRef = useRef(false);
-  const { offline } = useSyncExternalStore(subscribeConnectionStatus, getConnectionStatus, getConnectionStatus);
+  const { deviceOffline: offline } = useSyncExternalStore(subscribeConnectionStatus, getConnectionStatus, getConnectionStatus);
 
   useEffect(() => {
     if (!authLoading && user) router.replace(homePathForRole(user.role));
