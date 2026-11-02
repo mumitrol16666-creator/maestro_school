@@ -153,8 +153,9 @@ export async function apiRequestEnvelope<T, M = unknown>(path: string, init: Req
 
   if (!response) return unreachable<T, M>(method, path);
   const payload = (await response.json().catch(() => ({}))) as ApiEnvelope<T, M> & ApiErrorEnvelope;
-  // A gateway answer without our error envelope means the Maestro server itself is down.
-  if (response.status >= 500 && !payload.error?.code) return unreachable<T, M>(method, path);
+  // A gateway answer (502/504 page, empty body) without our error envelope means the Maestro server
+  // itself is down; any `error` the server wrote, with or without a code, is its own answer.
+  if (response.status >= 500 && !payload.error) return unreachable<T, M>(method, path);
   reportApiReachable();
   if (response.ok && method === "GET" && savedReadsEnabled) keepSavedRead(path, payload);
   // After a change the kept answers may show the state before it; a reread must not fall back to them.
