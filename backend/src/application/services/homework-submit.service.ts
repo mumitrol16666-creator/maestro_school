@@ -11,6 +11,7 @@ import { getLessonProgressRecord, getLessonWithCourse } from "../repositories/le
 import { completeLesson, markLessonSubmitted } from "./lesson-progress.service.js";
 import { syncLessonAvailability } from "./lesson-unlock.service.js";
 import { requireCourseEnrollment } from "./enrollment.service.js";
+import { requireLessonAccess } from "./course-access.service.js";
 import { deliverUserNotification, listUsersWithPermission } from "./notification.service.js";
 
 async function notifyHomeworkReviewQueue(params: {
@@ -43,6 +44,7 @@ export async function submitHomework(params: {
   const lesson = await getLessonWithCourse(lessonId);
   const courseId = lesson.module.courseId;
 
+  await requireLessonAccess(params.studentId, lessonId);
   await requireCourseEnrollment(params.studentId, courseId);
   await syncLessonAvailability(params.studentId, courseId);
 

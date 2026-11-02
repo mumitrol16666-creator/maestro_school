@@ -17,6 +17,7 @@ export function errorHandler(
       error: {
         code: error.code ?? "APP_ERROR",
         message: error.message,
+        ...(error.details ? { details: error.details } : {}),
       },
     });
   }

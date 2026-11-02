@@ -3,12 +3,14 @@ import { BadRequestError, NotFoundError } from "../../domain/errors.js";
 import { getLessonById } from "../repositories/catalog.repository.js";
 import { enrollStudentInCourse, getStudentEnrollment, requireCourseEnrollment } from "./enrollment.service.js";
 import { syncLessonAvailability } from "./lesson-unlock.service.js";
+import { requireLessonAccess } from "./course-access.service.js";
 
 export async function signupFromLesson(params: { lessonId: string; studentId: string }) {
   const lesson = await getLessonById(params.lessonId);
   if (!lesson) throw new NotFoundError("Lesson");
 
   const courseId = lesson.module.courseId;
+  await requireLessonAccess(params.studentId, params.lessonId);
   await requireCourseEnrollment(params.studentId, courseId);
   await syncLessonAvailability(params.studentId, courseId);
 

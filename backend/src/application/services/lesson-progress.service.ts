@@ -14,6 +14,7 @@ import {
 } from "../repositories/learning.repository.js";
 import { syncLessonAvailability } from "./lesson-unlock.service.js";
 import { requireCourseEnrollment } from "./enrollment.service.js";
+import { requireLessonAccess } from "./course-access.service.js";
 import { syncCourseCompletionStatus } from "./course-progress.service.js";
 import { rewardEconomyV2AppliesToEvent } from "../../config/product-features.js";
 
@@ -86,6 +87,7 @@ export async function startLesson(studentId: string, lessonId: string) {
   const lesson = await getLessonWithCourse(lessonId);
   const courseId = lesson.module.courseId;
 
+  await requireLessonAccess(studentId, lessonId);
   await requireCourseEnrollment(studentId, courseId);
   await syncLessonAvailability(studentId, courseId);
 
@@ -206,6 +208,7 @@ export async function completeLessonWithoutHomework(studentId: string, lessonId:
   const lesson = await getLessonWithCourse(lessonId);
   const courseId = lesson.module.courseId;
 
+  await requireLessonAccess(studentId, lessonId);
   await requireCourseEnrollment(studentId, courseId);
   await syncLessonAvailability(studentId, courseId);
 

@@ -20,11 +20,29 @@ import { publicHomeworkTestQuestions } from "../../domain/homework-test.js";
 import { buildLessonEndActions } from "../../application/services/lesson-signup.service.js";
 import { getMediaInfoFromUrl } from "../../application/services/media-storage.service.js";
 import {
+  getCourseAccessStates,
+  getLessonAccess,
+  type CourseAccessState,
+} from "../../application/services/course-access.service.js";
+import { canOpenLesson } from "../../domain/course-access.js";
+import {
   authenticate,
   optionalAuthenticate,
   requirePermission,
   requireStudent,
 } from "../guards/auth.guards.js";
+
+/** What the client needs to draw a course card or a paywall. */
+function courseAccessDto(state: CourseAccessState) {
+  return {
+    forSale: state.forSale,
+    kind: state.kind,
+    expiresAt: state.expiresAt,
+    fullAccess: state.fullAccess,
+    preview: state.preview,
+    pendingPaymentRequest: state.pendingPaymentRequest,
+  };
+}
 
 export async function catalogRoutes(app: FastifyInstance) {
   app.get("/directions", async () => {
@@ -43,6 +61,8 @@ export async function catalogRoutes(app: FastifyInstance) {
     const enrollmentMap = studentId
       ? await getStudentEnrollmentMap(studentId, courses.map((course) => course.id))
       : new Map<string, string>();
+
+    const accessStates = await getCourseAccessStates(request.user?.id, courses);
 
     const data = await Promise.all(
       courses.map(async (course) => {
@@ -65,6 +85,10 @@ export async function catalogRoutes(app: FastifyInstance) {
           lessonsCount,
           progress,
           enrollmentStatus,
+          priceKzt: course.priceKzt,
+          includedInSchool: course.includedInSchool,
+          freeLessonsCount: course.freeLessonsCount,
+          access: courseAccessDto(accessStates.get(course.id)!),
         };
       }),
     );
@@ -83,11 +107,30 @@ export async function catalogRoutes(app: FastifyInstance) {
       ? await calculateCourseProgressPercent(studentId, course.id)
       : 0;
 
+    const accessState = (await getCourseAccessStates(request.user?.id, [course])).get(course.id)!;
+    const orderedLessonIds = course.modules.flatMap((module) => module.lessons.map((lesson) => lesson.id));
+    const access = { kind: accessState.kind, expiresAt: accessState.expiresAt };
+
     return {
       data: {
         ...course,
+        // A lesson that stays closed until the course is paid for: the list can show a lock.
+        modules: course.modules.map((module) => ({
+          ...module,
+          lessons: module.lessons.map((lesson) => ({
+            ...lesson,
+            locked: !canOpenLesson({
+              course,
+              access,
+              preview: accessState.preview,
+              orderedLessonIds,
+              lessonId: lesson.id,
+            }),
+          })),
+        })),
         progress,
         enrollmentStatus: enrollment?.status ?? null,
+        access: courseAccessDto(accessState),
       },
     };
   });
@@ -119,6 +162,37 @@ export async function catalogRoutes(app: FastifyInstance) {
 
       const studentId = request.user!.id;
       const courseId = lesson.module.courseId;
+
+      // A paid lesson without access answers with the paywall data and no content at all.
+      const lessonAccess = await getLessonAccess(studentId, lessonId);
+      if (!lessonAccess.open) {
+        return {
+          data: {
+            id: lesson.id,
+            moduleId: lesson.moduleId,
+            courseId,
+            title: lesson.title,
+            description: lesson.description,
+            videoUrl: null,
+            sortOrder: lesson.sortOrder,
+            pointsReward: lesson.pointsReward,
+            materials: [],
+            homework: null,
+            endActions: { askTeacher: null, signup: null, hasActions: false },
+            course: lesson.module.course,
+            access: {
+              kind: "locked" as const,
+              reason: "payment_required" as const,
+              courseId,
+              priceKzt: lessonAccess.state.priceKzt,
+              includedInSchool: lessonAccess.state.includedInSchool,
+              freeLessonsCount: lessonAccess.state.freeLessonsCount,
+              pendingPaymentRequest: lessonAccess.state.pendingPaymentRequest,
+            },
+          },
+        };
+      }
+
       await requireCourseEnrollment(studentId, courseId);
       await syncLessonAvailability(studentId, courseId);
       const progress = await getLessonProgressRecord(studentId, lessonId);
@@ -161,6 +235,17 @@ export async function catalogRoutes(app: FastifyInstance) {
             : null,
           endActions,
           course: lesson.module.course,
+          access: {
+            kind: "open" as const,
+            source: lessonAccess.state.preview
+              ? "preview" as const
+              : !lessonAccess.state.forSale
+                ? "free_course" as const
+                : lessonAccess.state.kind !== "none"
+                  ? lessonAccess.state.kind
+                  : "free_lesson" as const,
+            expiresAt: lessonAccess.state.expiresAt,
+          },
         },
       };
     },

@@ -40,6 +40,7 @@ import {
 } from "../../domain/login-profile.js";
 import { getProductFeatureSnapshot } from "../../config/product-features.js";
 import { recordStudentLogin } from "../../application/services/app-usage.service.js";
+import { resolveAudience } from "../../domain/course-access.js";
 
 const ssoExchangeSchema = z.object({
   token: z.string().min(10),
@@ -107,6 +108,8 @@ function profile(
     profilePublic: user.profilePublic,
     phone: user.phone,
     role: user.role.slug,
+    // Stage 4: a student without a CRM link is external; everyone else works in the school interface.
+    audience: resolveAudience({ roleSlug: user.role.slug, crmStudentId: user.crmStudentId }),
     permissions: user.role.rolePermissions.map((item) => item.permission.code),
     productFeatures: getProductFeatureSnapshot().flags,
     points: stats?.points,

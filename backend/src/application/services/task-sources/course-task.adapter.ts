@@ -7,6 +7,7 @@ import {
   type UnifiedTaskStatus,
 } from "../../../domain/unified-task.js";
 import { prisma } from "../../../infrastructure/database/prisma.js";
+import { findLockedLessonIds } from "../course-access.service.js";
 
 type CourseTaskRow = {
   homeworkId: string;
@@ -85,7 +86,11 @@ export async function loadCourseTasks(studentId: string, now = new Date()) {
     select: {
       course: {
         select: {
+          id: true,
           title: true,
+          priceKzt: true,
+          includedInSchool: true,
+          freeLessonsCount: true,
           modules: {
             where: { deletedAt: null },
             orderBy: { sortOrder: "asc" },
@@ -134,18 +139,30 @@ export async function loadCourseTasks(studentId: string, now = new Date()) {
     },
   });
 
+  // Stage 4: a task of a paid lesson the student cannot open any more (access ended or was refunded)
+  // is not a to-do: it would lead to the paywall. Finished ones stay in the history.
+  const locked = await findLockedLessonIds(studentId, enrollments.map(({ course }) => ({
+    course,
+    orderedLessonIds: course.modules.flatMap((module) => module.lessons.map((lesson) => lesson.id)),
+  })));
+
   return enrollments.flatMap(({ course }) => course.modules.flatMap((module) =>
-    module.lessons.flatMap((lesson) => lesson.homeworks.map((homework) => mapCourseTask({
-      homeworkId: homework.id,
-      homeworkType: homework.type,
-      homeworkDescription: homework.description,
-      homeworkCreatedAt: homework.createdAt,
-      lessonId: lesson.id,
-      lessonTitle: lesson.title,
-      moduleTitle: module.title,
-      courseTitle: course.title,
-      progress: lesson.lessonProgress[0] ?? null,
-      submission: homework.submissions[0] ?? null,
-    }, now)).filter((task): task is UnifiedTask => Boolean(task))),
+    module.lessons.flatMap((lesson) => lesson.homeworks.flatMap((homework) => {
+      const row: CourseTaskRow = {
+        homeworkId: homework.id,
+        homeworkType: homework.type,
+        homeworkDescription: homework.description,
+        homeworkCreatedAt: homework.createdAt,
+        lessonId: lesson.id,
+        lessonTitle: lesson.title,
+        moduleTitle: module.title,
+        courseTitle: course.title,
+        progress: lesson.lessonProgress[0] ?? null,
+        submission: homework.submissions[0] ?? null,
+      };
+      if (locked.has(lesson.id) && courseStatus(row) !== "completed") return [];
+      const task = mapCourseTask(row, now);
+      return task ? [task] : [];
+    })),
   ));
 }

@@ -34,6 +34,7 @@ const PERMISSIONS = [
   { code: "offline_school.read", description: "View offline school lessons from CRM" },
   { code: "offline_school.write", description: "Manage offline school lessons via CRM proxy" },
   { code: "family.read", description: "View family dashboard for linked students" },
+  { code: "course_payments.manage", description: "Confirm, reject and refund course payments, grant and revoke course access" },
 ] as const;
 
 const ROLE_PERMISSION_MAP: Record<string, string[]> = {
@@ -42,18 +43,18 @@ const ROLE_PERMISSION_MAP: Record<string, string[]> = {
     "directions.read", "courses.read", "lessons.read", "progress.read",
     "catalog.manage", "users.manage", "news.manage", "homework.review", "news.read",
     "online_lessons.read", "online_lessons.manage", "coins.read",
-    "offline_school.read", "offline_school.write",
+    "offline_school.read", "offline_school.write", "course_payments.manage",
   ],
   owner: [
     "directions.read", "courses.read", "lessons.read", "catalog.manage",
     "users.manage", "news.manage", "homework.review", "news.read",
     "online_lessons.read", "online_lessons.manage", "coins.read",
-    "offline_school.read", "offline_school.write",
+    "offline_school.read", "offline_school.write", "course_payments.manage",
   ],
   branch_manager: [
     "directions.read", "courses.read", "lessons.read", "users.manage", "homework.review",
     "online_lessons.read", "online_lessons.manage", "coins.read",
-    "offline_school.read", "offline_school.write",
+    "offline_school.read", "offline_school.write", "course_payments.manage",
   ],
   teacher: [
     "directions.read", "courses.read", "lessons.read", "homework.review", "progress.read",
