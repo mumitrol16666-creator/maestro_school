@@ -4,6 +4,7 @@ import { Award, BookOpen, Camera, Coins, Eye, EyeOff, Flame, GraduationCap, Load
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState, type ChangeEvent } from "react";
+import { ExternalCoursesSection } from "@/components/external-courses-section";
 import { StudentMemberships } from "@/components/student-memberships";
 import { AchievementsWall } from "@/components/achievements-wall";
 import { useAuth } from "@/components/auth-provider";
@@ -19,6 +20,7 @@ import { AndroidAppDownloadCard } from "@/components/android-app-download";
 import { ImprovementSuggestionCard } from "@/components/improvement-suggestion-card";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { api } from "@/lib/api-client";
+import { isExternalStudent } from "@/lib/course-access-format";
 import { errorToastText } from "@/lib/error-text";
 import { formatFio, initialsFromName } from "@/lib/name";
 import { isStudentRole, roleLabel, settingsPathForRole } from "@/lib/role-labels";
@@ -31,13 +33,15 @@ export default function SettingsPage() {
   const router = useRouter();
   const { user, logout, refreshUser } = useAuth();
   const [activeSection, setActiveSection] = useState<"overview" | "data" | "settings">("overview");
+  // Stage 4: a student outside the school has no groups, memberships or league; their profile is courses.
+  const external = isExternalStudent(user);
   const resource = useApiResource(async () => {
     const profile = await api.me();
     const [directionsResult, progressResult, schoolResult, economyResult, achievementsResult] = await Promise.allSettled([
       api.directions(),
       api.progress(),
-      loadStudentOfflineSummary(),
-      api.studentEconomyProfile(),
+      external ? Promise.resolve(null) : loadStudentOfflineSummary(),
+      external ? Promise.resolve(null) : api.studentEconomyProfile(),
       api.achievements(),
     ]);
     const directions = directionsResult.status === "fulfilled" ? directionsResult.value : [];
@@ -121,7 +125,7 @@ export default function SettingsPage() {
             <h2 className="font-display mt-7 text-4xl">{fullName}</h2>
             <p className="mt-2 text-sm text-white/45">Ученик Maestro</p>
             <div className="mt-8 space-y-3 border-t border-white/10 pt-6 text-sm">
-              <div className="flex items-center gap-3 text-white/60"><GraduationCap size={16} className="text-gold-ink" /> {offlineGroups.length ? offlineGroups.map((item) => item.name).join(", ") : "Учебные группы пока не подключены"}</div>
+              {external ? null : <div className="flex items-center gap-3 text-white/60"><GraduationCap size={16} className="text-gold-ink" /> {offlineGroups.length ? offlineGroups.map((item) => item.name).join(", ") : "Учебные группы пока не подключены"}</div>}
               <div className="flex items-center gap-3 text-white/60"><BookOpen size={16} className="text-gold-ink" /> {directions.length ? directions.map((item) => item.title).join(", ") : "Онлайн-курсы пока не начаты"}</div>
               <div className="flex items-center gap-3 text-white/60"><Mail size={16} className="text-gold-ink" /> {profile.email}</div>
               <div className="flex items-center gap-3 text-white/60"><Phone size={16} className="text-gold-ink" /> {profile.phone && profile.phone !== "00000000000" ? profile.phone : "Телефон не указан"}</div>
@@ -143,6 +147,7 @@ export default function SettingsPage() {
               {economy?.economyV2Enabled ? <EconomyProfileSummary economy={economy} /> : null}
               {achievements ? <ProfileAchievements achievements={achievements} /> : null}
               {school ? <StudentMemberships balanceSnapshot={school.balanceSnapshot} /> : null}
+              {external ? <ExternalCoursesSection /> : <>
               <div className="rounded-[30px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
                 <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold-ink">Обучение</p>
                 <div className={`mt-6 grid gap-4 ${economy?.economyV2Enabled ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>
@@ -190,6 +195,7 @@ export default function SettingsPage() {
                   )}
                 </div>
               </div>
+              </>}
             </>
           ) : null}
 

@@ -83,6 +83,7 @@ interface ApiErrorEnvelope {
   error?: {
     code?: string;
     message?: string;
+    details?: unknown;
   };
 }
 
@@ -91,6 +92,8 @@ export class ApiError extends Error {
     message: string,
     public readonly status: number,
     public readonly code = "API_ERROR",
+    /** Stage 4: what the server added to the error (the new price of a course, for one). */
+    public readonly details: unknown = undefined,
   ) {
     super(message);
     this.name = "ApiError";
@@ -171,6 +174,7 @@ export async function apiRequestEnvelope<T, M = unknown>(path: string, init: Req
       payload.error?.message ?? "Произошла ошибка при загрузке данных",
       response.status,
       payload.error?.code ?? "API_ERROR",
+      payload.error?.details,
     );
   }
   return payload;

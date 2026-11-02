@@ -26,6 +26,7 @@ import { useApiResource } from "@/hooks/use-api-resource";
 import { familyApi } from "@/lib/family-api";
 import type { StudentHomeMonthlyPlan } from "@/types/api";
 import type { FamilyChild, FamilyMembership, FamilyNewsPost, FamilyResults, FamilySchoolSummary, FamilyVisit } from "@/types/family";
+import { FamilyCoursesCard } from "@/components/family-courses-card";
 import { GroupSectorPassBadge, SectorExamSummary } from "@/components/sector-exam-summary";
 import { sectorTitle } from "@/lib/sector-label";
 
@@ -108,6 +109,7 @@ export default function FamilyPage() {
         </div>
       </header>
 
+      <FamilyCourses key={`courses-${selectedChild.id}`} child={selectedChild} />
       <ChildOverview key={selectedChild.id} child={selectedChild} />
       <FamilyNews posts={newsResource.data ?? []} loading={newsResource.loading} error={newsResource.error} retry={newsResource.reload} />
     </div>
@@ -126,6 +128,7 @@ const noticeSections: Record<string, { section: string; label: string }> = {
   cancelled: { section: "schedule", label: "Отмена урока" },
   schedule: { section: "schedule", label: "Изменение расписания" },
   sector: { section: "sector", label: "Сектор и экзамен" },
+  course: { section: "courses", label: "Курсы ребёнка" },
 };
 
 function useNotice() {
@@ -136,6 +139,12 @@ function useNotice() {
     if (target) setNotice({ ...target, event: params.get("event") });
   }, []);
   return notice;
+}
+
+/** Stage 4: the courses of the child, opened at once when the notification came from a course payment. */
+function FamilyCourses({ child }: { child: FamilyChild }) {
+  const notice = useNotice();
+  return <FamilyCoursesCard child={child} highlighted={notice?.section === "courses"} />;
 }
 
 function ChildOverview({ child }: { child: FamilyChild }) {

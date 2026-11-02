@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { formatCount } from "@/lib/plural";
 import { formatFio, initialsFromName } from "@/lib/name";
+import { isExternalStudent } from "@/lib/course-access-format";
 import { isStudentRole, roleLabel, settingsPathForRole } from "@/lib/role-labels";
 import { useAuth } from "./auth-provider";
 import { RefreshAppButton } from "./refresh-app-button";
@@ -17,6 +18,8 @@ export function UserMenu() {
   const fullName = (user ? formatFio(user) : "") || user?.email || user?.login || "Пользователь";
   const initials = user ? initialsFromName(user) : fullName.slice(0, 2).toUpperCase();
   const student = isStudentRole(user?.role);
+  // Stage 4: Coins are not given for courses any more and a student outside the school has none to show.
+  const showCoins = !isExternalStudent(user);
   const settingsHref = settingsPathForRole(user?.role);
 
   useEffect(() => {
@@ -81,10 +84,12 @@ export function UserMenu() {
                   <Star size={14} className="text-gold-ink" fill="currentColor" />
                   {formatCount(user?.points ?? 0, ["балл", "балла", "баллов"])} Maestro
                 </div>
-                <div className="flex items-center gap-2 rounded-xl bg-stone-100 px-3 py-2 text-xs font-semibold text-stone-700">
-                  <Coins size={14} className="text-gold-ink" />
-                  {(user?.coins ?? 0).toLocaleString("ru-RU")} Maestro Coins
-                </div>
+                {showCoins ? (
+                  <div className="flex items-center gap-2 rounded-xl bg-stone-100 px-3 py-2 text-xs font-semibold text-stone-700">
+                    <Coins size={14} className="text-gold-ink" />
+                    {(user?.coins ?? 0).toLocaleString("ru-RU")} Maestro Coins
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </div>

@@ -1,46 +1,65 @@
 "use client";
 
-import { ArrowRight, ShieldCheck } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { BackButton } from "@/components/back-button";
 import { AuthHeroPanel } from "@/components/auth-hero-panel";
 import { Brand } from "@/components/brand";
+import { useAuth } from "@/components/auth-provider";
+import { RegisterForm } from "@/components/register-form";
+import type { PersonFields } from "@/lib/registration-form";
+import { homePathForUser } from "@/lib/role-labels";
 
 const TRIAL_LANDING_URL =
   process.env.NEXT_PUBLIC_TRIAL_LANDING_URL ?? "https://crm.maestro.com.kz/trial.html";
 
 export default function RegisterPage() {
+  const router = useRouter();
+  const { user, loading } = useAuth();
+  // The trial form hands over what the person has already typed (`/register?firstName=…&phone=…`).
+  // A person who signs up is sent on by the form itself; only one who was already signed in is sent from here.
+  const registering = useRef(false);
+  const [initial, setInitial] = useState<Partial<PersonFields> | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setInitial({
+      firstName: params.get("firstName") ?? "",
+      lastName: params.get("lastName") ?? "",
+      phone: params.get("phone") ?? "",
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!loading && user && !registering.current) router.replace(homePathForUser(user));
+  }, [loading, router, user]);
+
   return (
     <main className="grid min-h-screen bg-paper lg:grid-cols-[1.05fr_0.95fr]">
       <AuthHeroPanel />
-      <section className="flex items-start justify-center p-6 sm:p-12 lg:items-center">
+      <section className="flex items-start justify-center px-5 py-6 sm:p-12 lg:items-center">
         <div className="w-full max-w-md">
           <BackButton href="/login" label="Вход" className="-ml-1" />
-          <div className="mb-10 mt-4 lg:hidden"><Brand /></div>
-          <p className="mt-8 text-xs font-bold uppercase tracking-[0.22em] text-gold-ink">Внутренняя экосистема</p>
-          <h2 className="font-display mt-3 text-5xl leading-tight">Доступ выдаёт школа</h2>
-          <p className="mt-5 text-sm leading-6 text-stone-500">
-            Платформа Maestro создана для действующих учеников: здесь уроки, домашние задания, материалы,
-            онлайн-занятия и прогресс. Аккаунт открывает администратор после записи в школу.
+          <div className="mb-6 mt-4 lg:hidden"><Brand /></div>
+          <p className="mt-6 text-xs font-bold uppercase tracking-[0.22em] text-gold-ink">Регистрация</p>
+          <h1 className="font-display mt-3 text-balance text-4xl leading-tight sm:text-5xl">Создайте аккаунт Maestro</h1>
+          <p className="mt-4 text-sm leading-6 text-stone-500">
+            Онлайн-курсы Maestro: уроки, тесты и материалы. Первые уроки платных курсов бесплатные.
+            Подтверждать телефон не нужно.
           </p>
 
-          <div className="mt-8 rounded-[28px] border border-gold/20 bg-white p-6 shadow-soft">
-            <span className="grid h-12 w-12 place-items-center rounded-2xl bg-gold/10 text-gold-ink">
-              <ShieldCheck size={22} />
-            </span>
-            <h3 className="mt-5 font-display text-3xl text-ink">Хотите начать обучение?</h3>
-            <p className="mt-3 text-sm leading-6 text-stone-500">
-              Запишитесь на пробный урок по ссылке. Мы получим заявку, свяжемся с вами и поможем выбрать направление.
-            </p>
-            <a
-              href={TRIAL_LANDING_URL}
-              className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-ink px-5 py-4 text-sm font-bold text-white transition hover:bg-stone-800"
-            >
-              Записаться на пробный урок <ArrowRight size={17} />
-            </a>
-            <Link href="/login" className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-stone-200 px-5 py-4 text-sm font-bold text-ink transition hover:border-gold">
-              Уже есть доступ — войти
+          {initial ? <RegisterForm initial={initial} registering={registering} /> : <div className="mt-7 h-64" aria-hidden="true" />}
+
+          <div className="mt-8 border-t border-stone-200 pt-5">
+            <Link href="/login" className="inline-flex min-h-11 items-center gap-2 text-sm font-bold text-ink transition hover:text-gold-ink">
+              Уже есть аккаунт — войти <ArrowRight size={15} />
             </Link>
+            <p className="mt-3 text-sm leading-6 text-stone-500">
+              Хотите заниматься в школе с преподавателем?{" "}
+              <a href={TRIAL_LANDING_URL} className="font-bold text-gold-ink underline">Запишитесь на пробный урок</a>.
+            </p>
           </div>
         </div>
       </section>

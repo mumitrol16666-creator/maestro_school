@@ -1,3 +1,5 @@
+import { EXTERNAL_HOME_PATH, isExternalStudent } from "./course-access-format";
+
 const ROLE_LABELS: Record<string, string> = {
   admin: "Администратор",
   super_admin: "Супер-админ",
@@ -92,6 +94,11 @@ export function homePathForRole(role?: string | null) {
   if (role === "admin" || role === "owner" || role === "super_admin") return "/admin";
   if (isStaffRole(role)) return "/admin/offline-lessons";
   return "/dashboard";
+}
+
+/** The first screen after signing in: an external student starts in the courses, nobody else changes. */
+export function homePathForUser(user?: { role?: string | null; audience?: string | null } | null) {
+  return isExternalStudent(user) ? EXTERNAL_HOME_PATH : homePathForRole(user?.role);
 }
 
 export function settingsPathForRole(role?: string | null) {
