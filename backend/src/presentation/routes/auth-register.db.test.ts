@@ -528,6 +528,126 @@ if (!process.env.TEST_DATABASE_URL) {
     assert.equal(sent.length, 0, "no lead for a registration that did not happen");
   });
 
+  test("«Добавить ребёнка»: a parent adds another child with their own phone; the child is external; one lead per child names the parent", async () => {
+    const parentPhone = phone();
+    const answer = await registerParent({
+      parent: { firstName: "Анна", lastName: "Второва", phone: parentPhone, password: "parent-pass-1" },
+      child: { firstName: "Первый", lastName: "Второв", phone: phone(), password: "child-pass-12" },
+    });
+    assert.equal(answer.statusCode, 201, answer.body);
+    const { token, user, child: first } = answer.json().data;
+    userIds.push(user.id, first.id);
+    await leads(1);
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    sent.length = 0;
+
+    const add = (payload: unknown, bearer = token) => app.inject({
+      method: "POST", url: "/api/v1/parents/me/children", headers: { authorization: `Bearer ${bearer}` }, payload: payload as never,
+    });
+    const secondPhone = phone();
+    const added = await add({ firstName: " Вторая ", lastName: "Второва", phone: secondPhone, password: "child-pass-34" });
+    assert.equal(added.statusCode, 201, added.body);
+    const second = added.json().data;
+    userIds.push(second.id);
+    assert.deepEqual([second.firstName, second.audience, second.relationship], ["Вторая", "external", "guardian"]);
+
+    const row = await prisma.user.findUniqueOrThrow({ where: { id: second.id }, include: { role: true } });
+    assert.deepEqual([row.role.slug, row.crmStudentId, row.leagueEligible, row.phoneNormalized], ["student", null, false, secondPhone.replace(/\D/g, "")]);
+    const family = await call(token, "GET", "/parents/me/children");
+    assert.deepEqual(family.json().data.map((item: { id: string }) => item.id), [first.id, second.id], "both children, in the order they were added");
+
+    // The new child signs in with their own phone and is an external student.
+    const login = await app.inject({ method: "POST", url: "/api/v1/auth/login", payload: { phone: secondPhone, password: "child-pass-34", profile: "student" } });
+    assert.equal(login.statusCode, 200, login.body);
+    assert.equal(login.json().data.user.audience, "external");
+
+    // The lead is the child's own (CRM keeps one per child), with the parent to call.
+    const [lead] = await leads(1);
+    assert.deepEqual(lead.body, {
+      requestType: "app_registration",
+      externalSourceId: `app-registration:${second.id}`,
+      name: "Анна",
+      lastName: "Второва",
+      phone: parentPhone.replace(/\D/g, ""),
+      comment: `Ребёнок: Вторая Второва, телефон ${secondPhone.replace(/\D/g, "")}`,
+    });
+    assert.ok(await until(async () => (await pendingSince(second.id)) === null), "the lead went, the flag is cleared");
+
+    // CRM down: the child keeps the flag, and the retry job sends the same lead with the parent.
+    crmMode = "down";
+    const thirdPhone = phone();
+    const third = await add({ firstName: "Третий", lastName: "Второв", phone: thirdPhone, password: "child-pass-56" });
+    assert.equal(third.statusCode, 201, third.body);
+    const thirdId = third.json().data.id as string;
+    userIds.push(thirdId);
+    await leads(1);
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    assert.ok(await pendingSince(thirdId));
+    crmMode = "ok";
+    sent.length = 0;
+    await prisma.user.update({ where: { id: thirdId }, data: { crmLeadPendingSince: minutesAgo(5) } });
+    await retryPendingAppRegistrationLeads();
+    const retried = sent.find((item) => item.body.externalSourceId === `app-registration:${thirdId}`);
+    assert.ok(retried, "the job re-sent the added child's lead");
+    assert.deepEqual([retried.body.name, retried.body.phone, retried.body.comment], ["Анна", parentPhone.replace(/\D/g, ""), `Ребёнок: Третий Второв, телефон ${thirdPhone.replace(/\D/g, "")}`]);
+    assert.equal(await pendingSince(thirdId), null);
+  });
+
+  test("«Добавить ребёнка» refuses the parent's phone, a taken phone, a student and a sixth child; a refusal creates nothing", async () => {
+    const parentPhone = phone();
+    const answer = await registerParent({
+      parent: { firstName: "Лимит", lastName: "Семья", phone: parentPhone, password: "parent-pass-1" },
+      child: { firstName: "Ребёнок", lastName: "Один", phone: phone(), password: "child-pass-12" },
+    });
+    assert.equal(answer.statusCode, 201, answer.body);
+    const { token, user, child } = answer.json().data;
+    userIds.push(user.id, child.id);
+    const add = (payload: unknown, bearer = token) => app.inject({
+      method: "POST", url: "/api/v1/parents/me/children", headers: { authorization: `Bearer ${bearer}` }, payload: payload as never,
+    });
+    const person = (number: string, name = "Новый") => ({ firstName: name, lastName: "Семья", phone: number, password: "family-pass-1" });
+    const links = () => prisma.parentStudentLink.count({ where: { parentUserId: user.id } });
+
+    const same = await add(person(parentPhone.replace("+7", "8")));
+    assert.equal(same.statusCode, 400, same.body);
+    assert.equal(same.json().error.code, "CHILD_PHONE_SAME_AS_PARENT");
+    const broken = await add(person("123-45"));
+    assert.equal(broken.statusCode, 400, "a broken phone is a 400");
+    const firstChildPhone = (await prisma.user.findUniqueOrThrow({ where: { id: child.id } })).phone;
+    const busy = await add(person(firstChildPhone));
+    assert.equal(busy.statusCode, 409, busy.body);
+    assert.equal(busy.json().error.code, "PHONE_ALREADY_REGISTERED");
+    assert.doesNotMatch(busy.json().error.message, /Войдите/, "the parent is signed in already");
+    const short = await add({ firstName: "Без", lastName: "Пароля", phone: phone(), password: "short" });
+    assert.equal(short.statusCode, 400, short.body);
+    assert.equal(await links(), 1, "refusals create no child");
+
+    // A student cannot add children.
+    const studentLogin = await app.inject({ method: "POST", url: "/api/v1/auth/login", payload: { phone: firstChildPhone, password: "child-pass-12", profile: "student" } });
+    const studentToken = studentLogin.json().data.token as string;
+    assert.equal((await add(person(phone()), studentToken)).statusCode, 403);
+
+    // Five children that the parent made themselves (the registration counts); the sixth is refused.
+    for (let index = 2; index <= 5; index += 1) {
+      const next = await add(person(phone(), `Ребёнок${index}`));
+      assert.equal(next.statusCode, 201, next.body);
+      userIds.push(next.json().data.id);
+    }
+    const sixthPhone = phone();
+    const sixth = await add(person(sixthPhone));
+    assert.equal(sixth.statusCode, 409, sixth.body);
+    assert.equal(sixth.json().error.code, "CHILD_LIMIT_REACHED");
+    assert.equal(await prisma.user.count({ where: { phoneNormalized: sixthPhone.replace(/\D/g, "") } }), 0);
+    assert.equal(await links(), 5);
+
+    // A child the school unlinked frees the place.
+    const anyAdded = await prisma.parentStudentLink.findFirstOrThrow({ where: { parentUserId: user.id, studentUserId: { not: child.id } } });
+    await prisma.parentStudentLink.update({ where: { id: anyAdded.id }, data: { isActive: false, revokedAt: new Date() } });
+    const again = await add(person(phone(), "Снова"));
+    assert.equal(again.statusCode, 201, again.body);
+    userIds.push(again.json().data.id);
+  });
+
   test("a CRM link makes the student a student of the school and puts them in the league; the old session is closed on purpose; unlinking takes them out", async () => {
     const answer = await register({ firstName: "Связь", lastName: "Школьная", phone: phone(), password: "password-1234" });
     const { token, user } = answer.json().data;

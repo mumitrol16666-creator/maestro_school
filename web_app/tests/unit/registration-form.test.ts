@@ -6,6 +6,7 @@ import {
   parentRegistrationHasErrors,
   phoneDigits,
   trimPerson,
+  validateAddedChild,
   validateParentRegistration,
   validatePerson,
   validateStudentRegistration,
@@ -84,4 +85,12 @@ test("names and phones are trimmed before sending, the password never", () => {
   );
   assert.equal(hasErrors({}), false);
   assert.equal(hasErrors({ phone: "x" }), true);
+});
+
+test("«Добавить ребёнка»: the child's fields are checked, and the phone cannot be the parent's", () => {
+  assert.deepEqual(validateAddedChild(good, "+7 701 000-00-00"), {});
+  assert.deepEqual(validateAddedChild(good, null), {}, "a parent without a phone in the session: the server checks");
+  assert.match(validateAddedChild(good, "8 777 123 45 67").phone ?? "", /отличаться/);
+  assert.equal(validateAddedChild({ ...good, firstName: "" }, null).firstName, "Укажите имя ребёнка");
+  assert.match(validateAddedChild({ ...good, phone: "12" }, "12").phone ?? "", /телефона ребёнка/, "a broken phone is named as broken, not as the parent's");
 });

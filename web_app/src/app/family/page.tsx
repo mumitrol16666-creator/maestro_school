@@ -27,6 +27,7 @@ import { familyApi } from "@/lib/family-api";
 import type { StudentHomeMonthlyPlan } from "@/types/api";
 import type { FamilyChild, FamilyMembership, FamilyNewsPost, FamilyResults, FamilySchoolSummary, FamilyVisit } from "@/types/family";
 import { FamilyCoursesCard } from "@/components/family-courses-card";
+import { AddChildForm } from "@/components/add-child-form";
 import { externalChildLine, isExternalChild } from "@/lib/course-access-format";
 import { GroupSectorPassBadge, SectorExamSummary } from "@/components/sector-exam-summary";
 import { sectorTitle } from "@/lib/sector-label";
@@ -66,6 +67,14 @@ export default function FamilyPage() {
   const childrenResource = useApiResource(() => familyApi.children(), []);
   const newsResource = useApiResource(() => familyApi.news(5), []);
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
+  const [addedChild, setAddedChild] = useState<FamilyChild | null>(null);
+
+  // The new child goes to the end of the list and is opened, without loading the page again.
+  function handleChildAdded(child: FamilyChild) {
+    childrenResource.setData((current) => [...(current ?? []).filter((item) => item.id !== child.id), child]);
+    setSelectedChildId(child.id);
+    setAddedChild(child);
+  }
 
   useEffect(() => {
     if (!childrenResource.data?.length) return;
@@ -82,7 +91,12 @@ export default function FamilyPage() {
   if (childrenResource.loading) return <LoadingState label="Загружаем семейный кабинет" />;
   if (childrenResource.error) return <ErrorState message={childrenResource.error} retry={childrenResource.reload} />;
   if (!childrenResource.data?.length) {
-    return <EmptyState title="Нет привязанных учеников" description="Администратор Maestro ещё не привязал ученика к этому профилю." />;
+    return (
+      <div className="space-y-6">
+        <EmptyState title="Нет привязанных учеников" description="Добавьте ребёнка: он будет входить в приложение по своему телефону. Ученика школы привязывает администратор Maestro." />
+        <AddChildForm onAdded={handleChildAdded} />
+      </div>
+    );
   }
 
   const selectedChild = childrenResource.data.find((child) => child.id === selectedChildId)
@@ -108,9 +122,18 @@ export default function FamilyPage() {
             </label>
           ) : null}
         </div>
+        <div className="mt-5">
+          <AddChildForm onAdded={handleChildAdded} />
+        </div>
       </header>
 
-      {isExternalChild(selectedChild) ? (
+      {addedChild && addedChild.id === selectedChild.id ? (
+        <p role="status" className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm font-semibold leading-6 text-emerald-900" data-testid="add-child-done">
+          Аккаунт создан: {addedChild.fullName}. Ребёнок входит по своему телефону и паролю, который вы указали.
+        </p>
+      ) : null}
+
+      {isExternalChild(selectedChild) && addedChild?.id !== selectedChild.id ? (
         // Registered in the app, no card in the school: nothing to ask the school for, so no school overview
         // and no «не удалось получить данные» — the sentence and the child's courses.
         <p className="text-lg font-semibold text-ink" data-testid="family-external-note">{externalChildLine(selectedChild.firstName)}</p>
@@ -137,25 +160,27 @@ const noticeSections: Record<string, { section: string; label: string }> = {
   course: { section: "courses", label: "Курсы ребёнка" },
 };
 
-function useNotice() {
+function useNotice(childId: string) {
   const [notice, setNotice] = useState<{ section: string; label: string; event: string | null } | null>(null);
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const target = noticeSections[params.get("notice") ?? ""];
-    if (target) setNotice({ ...target, event: params.get("event") });
-  }, []);
+    // A notification is about one child: another child opened later (or just added) is not highlighted.
+    const student = params.get("student");
+    if (target && (!student || student === childId)) setNotice({ ...target, event: params.get("event") });
+  }, [childId]);
   return notice;
 }
 
 /** Stage 4: the courses of the child, opened at once when the notification came from a course payment. */
 function FamilyCourses({ child }: { child: FamilyChild }) {
-  const notice = useNotice();
+  const notice = useNotice(child.id);
   return <FamilyCoursesCard child={child} highlighted={notice?.section === "courses"} />;
 }
 
 function ChildOverview({ child }: { child: FamilyChild }) {
   const resource = useApiResource(() => familyApi.childOverview(child.id), [child.id]);
-  const notice = useNotice();
+  const notice = useNotice(child.id);
   useEffect(() => {
     if (!notice || !resource.data) return;
     const target = (notice.event && document.getElementById(`visit-${notice.event}`))

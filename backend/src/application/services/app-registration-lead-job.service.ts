@@ -1,6 +1,6 @@
 import { prisma } from "../../infrastructure/database/prisma.js";
 import { normalizePhoneDigits } from "../../lib/phone.js";
-import { parentRegistrationLeadComment, sendAppRegistrationLead } from "./app-registration.service.js";
+import { parentRegistrationLeadComment, sendAddedChildLead, sendAppRegistrationLead } from "./app-registration.service.js";
 
 /**
  * Stage 4: a registration in the app is a lead in CRM, sent right after the account is stored. If CRM
@@ -74,19 +74,29 @@ export async function retryPendingAppRegistrationLeads(now = new Date()) {
           take: 1,
           select: { student: { select: { firstName: true, lastName: true, phone: true } } },
         },
+        // A child that the parent added in the family cabinet: the lead names the parent to call.
+        parentLinksAsStudent: {
+          where: { revokedAt: null, isActive: true, parent: { isActive: true, deletedAt: null } },
+          orderBy: { createdAt: "asc" },
+          take: 1,
+          select: { createdById: true, parent: { select: { id: true, firstName: true, lastName: true, phone: true } } },
+        },
       },
     });
     let failures = 0;
     for (const user of pending) {
       const child = user.role.slug === "parent" ? user.parentLinksAsParent[0]?.student : undefined;
-      const sent = await sendAppRegistrationLead({
-        userId: user.id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        phone: normalizePhoneDigits(user.phone),
-        logFailure: false,
-        ...(child ? { comment: parentRegistrationLeadComment(child) } : {}),
-      });
+      const addedBy = user.role.slug === "student" ? user.parentLinksAsStudent[0] : undefined;
+      const sent = addedBy && addedBy.createdById === addedBy.parent.id
+        ? await sendAddedChildLead(addedBy.parent, user, { logFailure: false })
+        : await sendAppRegistrationLead({
+          userId: user.id,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          phone: normalizePhoneDigits(user.phone),
+          logFailure: false,
+          ...(child ? { comment: parentRegistrationLeadComment(child) } : {}),
+        });
       if (sent) {
         result.sent += 1;
         failures = 0;

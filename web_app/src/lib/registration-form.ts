@@ -98,6 +98,18 @@ export function validateParentRegistration(input: ParentRegistrationFields): Par
   return { parent, child };
 }
 
+/**
+ * «Добавить ребёнка» in the family cabinet: the child of the registration form, and the phone must
+ * not be the signed-in parent's own.
+ */
+export function validateAddedChild(child: PersonFields, parentPhone?: string | null): PersonErrors {
+  const errors = validatePerson(child, CHILD_LABELS);
+  if (!errors.phone && parentPhone && phoneDigits(parentPhone) === phoneDigits(child.phone)) {
+    errors.phone = "Телефон ребёнка должен отличаться от вашего: ребёнок входит по своему номеру";
+  }
+  return errors;
+}
+
 export function hasErrors(errors: PersonErrors | StudentRegistrationErrors): boolean {
   return Object.keys(errors).length > 0;
 }

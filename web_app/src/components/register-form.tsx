@@ -3,7 +3,7 @@
 import { Eye, EyeOff, LoaderCircle, UserRound, UsersRound } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useEffect, useId, useRef, useState, type MutableRefObject } from "react";
+import { FormEvent, useEffect, useId, useRef, useState, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { ApiError, storeSession } from "@/lib/api-client";
 import { registerParent } from "@/lib/course-access-api";
@@ -24,7 +24,7 @@ type Tab = "student" | "parent";
 const EMPTY_PERSON: PersonFields = { firstName: "", lastName: "", phone: "", password: "" };
 
 /** The words the person reads instead of an English or empty server answer. */
-function registrationErrorText(reason: unknown): string {
+export function registrationErrorText(reason: unknown): string {
   if (reason instanceof ApiError) {
     if (reason.code === "NETWORK_ERROR") {
       return typeof navigator !== "undefined" && !navigator.onLine
@@ -141,7 +141,7 @@ function PasswordField({
   );
 }
 
-function PersonFieldset({
+export function PersonFieldset({
   prefix,
   title,
   person,
@@ -155,12 +155,13 @@ function PersonFieldset({
   title?: string;
   person: PersonFields;
   errors: PersonErrors;
-  onChange: (next: PersonFields) => void;
+  /** A state setter: each field is written over the latest person, so fast typing or autofill loses nothing. */
+  onChange: Dispatch<SetStateAction<PersonFields>>;
   phoneHint: string;
   passwordHint?: string;
   autoCompleteUser: boolean;
 }) {
-  const set = (key: keyof PersonFields) => (value: string) => onChange({ ...person, [key]: value });
+  const set = (key: keyof PersonFields) => (value: string) => onChange((current) => ({ ...current, [key]: value }));
   return (
     <div className="space-y-4">
       {title ? <h2 className="font-display text-2xl">{title}</h2> : null}

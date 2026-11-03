@@ -11,6 +11,9 @@ import type { StudentMonthlyPlansResponse } from "@/types/api";
 
 export const familyApi = {
   children: () => apiRequest<FamilyChild[]>("/parents/me/children"),
+  /** Stage 4: «Добавить ребёнка» — a child account with its own phone, linked to this parent. */
+  addChild: (child: { firstName: string; lastName: string; phone: string; password: string }) =>
+    apiRequest<FamilyChild>("/parents/me/children", { method: "POST", body: JSON.stringify(child) }),
   childOverview: (studentId: string) =>
     apiRequest<FamilyChildOverview>(
       `/parents/me/children/${encodeURIComponent(studentId)}/offline-summary`,

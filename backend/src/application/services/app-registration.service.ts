@@ -37,21 +37,21 @@ async function lockRegistrationPhones(tx: Tx, phones: string[]) {
   }
 }
 
-function duplicatePhone(label: string) {
+function duplicatePhone(label: string, message?: string) {
   return new ConflictError(
-    `${label} уже зарегистрирован. Войдите в аккаунт или укажите другой номер.`,
+    message ?? `${label} уже зарегистрирован. Войдите в аккаунт или укажите другой номер.`,
     "PHONE_ALREADY_REGISTERED",
   );
 }
 
 /** Refuses a phone that an active account already has. Must run after `lockRegistrationPhones`. */
-async function assertPhonesFree(tx: Tx, phones: Array<{ phone: string; label: string }>) {
+async function assertPhonesFree(tx: Tx, phones: Array<{ phone: string; label: string; message?: string }>) {
   const taken = await tx.user.findMany({
     where: { phoneNormalized: { in: phones.map((item) => item.phone) }, deletedAt: null, isActive: true },
     select: { phoneNormalized: true },
   });
   for (const item of phones) {
-    if (taken.some((row) => row.phoneNormalized === item.phone)) throw duplicatePhone(item.label);
+    if (taken.some((row) => row.phoneNormalized === item.phone)) throw duplicatePhone(item.label, item.message);
   }
 }
 
@@ -219,6 +219,108 @@ export async function registerParentWithChild(input: {
     }
     throw error;
   }
+}
+
+/** How many children a parent can add themselves (the registration form counts as one). More — through the school. */
+const MAX_CHILDREN_ADDED_BY_PARENT = 5;
+
+/**
+ * «Добавить ребёнка» in the family cabinet: a signed-in parent makes another child account (role
+ * student, no CRM link, outside the league) and the link to it, in one transaction. The rules are those
+ * of the registration form: the child has their own phone, not the parent's and not one an account has.
+ * The child carries the lead flag: the school gets one lead per added child, with the parent to call.
+ */
+export async function addChildByParent(parentUserId: string, input: ParentRegistrationPerson) {
+  const childPhone = normalizePhoneDigits(input.phone);
+  if (!isValidPhone(input.phone)) throw new BadRequestError("Укажите корректный номер телефона ребёнка", "CHILD_PHONE_INVALID");
+
+  const [parent, studentRole] = await Promise.all([
+    prisma.user.findUnique({ where: { id: parentUserId }, select: { phone: true, phoneNormalized: true } }),
+    prisma.role.findUnique({ where: { slug: "student" } }),
+  ]);
+  if (!parent) throw new BadRequestError("Аккаунт родителя не найден", "PARENT_NOT_FOUND");
+  if (!studentRole) throw new Error("Student role is not configured. Run the production seed.");
+  const parentPhones = [parent.phoneNormalized, parent.phone].filter((value): value is string => Boolean(value)).map(normalizePhoneDigits);
+  if (parentPhones.includes(childPhone)) {
+    throw new BadRequestError(
+      "У ребёнка должен быть свой номер телефона, отличный от вашего: по нему он будет входить в приложение.",
+      "CHILD_PHONE_SAME_AS_PARENT",
+    );
+  }
+
+  const [childLogin, childHash] = await Promise.all([reserveLogin("s", childPhone), bcrypt.hash(input.password, 10)]);
+
+  try {
+    return await prisma.$transaction(async (tx) => {
+      // The parent's lock first, then the phone's: two adds by one parent at once cannot both pass the limit.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`parent-add-child:${parentUserId}`}))`;
+      // Counted like the family list: a child the school unlinked or switched off frees the place.
+      const added = await tx.parentStudentLink.count({
+        where: {
+          parentUserId,
+          createdById: parentUserId,
+          isActive: true,
+          revokedAt: null,
+          student: { deletedAt: null, isActive: true },
+        },
+      });
+      if (added >= MAX_CHILDREN_ADDED_BY_PARENT) {
+        throw new ConflictError(
+          `Самостоятельно можно добавить не больше ${MAX_CHILDREN_ADDED_BY_PARENT} детей. Остальных детей привязывает администратор школы.`,
+          "CHILD_LIMIT_REACHED",
+        );
+      }
+      await lockRegistrationPhones(tx, [childPhone]);
+      // The parent is signed in already: «войдите в аккаунт» of the registration form does not fit here.
+      await assertPhonesFree(tx, [{
+        phone: childPhone,
+        label: "Номер телефона ребёнка",
+        message: "У этого номера уже есть аккаунт в Maestro: укажите другой номер. Если это аккаунт вашего ребёнка, его привязывает администратор школы.",
+      }]);
+      const child = await tx.user.create({
+        data: {
+          login: childLogin,
+          email: null,
+          phone: childPhone,
+          phoneNormalized: childPhone,
+          passwordHash: childHash,
+          firstName: input.firstName.trim(),
+          lastName: input.lastName.trim(),
+          roleId: studentRole.id,
+          leagueEligible: false,
+          crmLeadPendingSince: new Date(),
+        },
+      });
+      await tx.parentStudentLink.create({
+        data: { parentUserId, studentUserId: child.id, relationship: "guardian", createdById: parentUserId },
+      });
+      return child;
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      throw new ConflictError("Не удалось создать аккаунт: логин уже занят. Попробуйте ещё раз.", "REGISTRATION_CONFLICT");
+    }
+    throw error;
+  }
+}
+
+/**
+ * The lead of a child that a parent added: the parent is the one to call, the child is named in the
+ * comment. The `externalSourceId` is the child's, so each added child is its own lead in CRM.
+ */
+export function sendAddedChildLead(
+  parent: { firstName: string; lastName: string; phone: string },
+  child: { id: string; firstName: string; lastName: string; phone: string },
+  options: { logFailure?: boolean } = {},
+) {
+  return sendAppRegistrationLead({
+    userId: child.id,
+    firstName: parent.firstName,
+    lastName: parent.lastName,
+    phone: normalizePhoneDigits(parent.phone),
+    comment: parentRegistrationLeadComment(child),
+    ...options,
+  });
 }
 
 /** The comment of the lead that a parent's registration sends: who the child is. */
