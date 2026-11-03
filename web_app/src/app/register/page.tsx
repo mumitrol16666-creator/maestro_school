@@ -5,9 +5,8 @@ import Link from "next/link";
 import { BackButton } from "@/components/back-button";
 import { AuthHeroPanel } from "@/components/auth-hero-panel";
 import { Brand } from "@/components/brand";
+import { TRIAL_BOOKING_URL } from "@/lib/trial-booking";
 
-const TRIAL_LANDING_URL =
-  process.env.NEXT_PUBLIC_TRIAL_LANDING_URL ?? "https://crm.maestro.com.kz/trial.html";
 
 export default function RegisterPage() {
   return (
@@ -33,7 +32,7 @@ export default function RegisterPage() {
               Запишитесь на пробный урок по ссылке. Мы получим заявку, свяжемся с вами и поможем выбрать направление.
             </p>
             <a
-              href={TRIAL_LANDING_URL}
+              href={TRIAL_BOOKING_URL}
               className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-ink px-5 py-4 text-sm font-bold text-white transition hover:bg-stone-800"
             >
               Записаться на пробный урок <ArrowRight size={17} />

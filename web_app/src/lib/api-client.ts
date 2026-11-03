@@ -20,8 +20,6 @@ import type {
   StudentEconomyProfile,
   StudentMonthlyPlansResponse,
   StudentPointsReadModel,
-  TrialBookingInput,
-  TrialBookingResponse,
 } from "@/types/api";
 import type { StudentOfflineSummary } from "@/types/school-offline";
 import type { UnifiedTaskFilters, UnifiedTasksData, UnifiedTasksMeta } from "@/types/unified-tasks";
@@ -209,11 +207,6 @@ export const api = {
     }),
   register: (body: RegisterInput) =>
     apiRequest<LoginResponse>("/auth/register", {
-      method: "POST",
-      body: JSON.stringify(body),
-    }),
-  createTrialBooking: (body: TrialBookingInput) =>
-    apiRequest<TrialBookingResponse>("/trial-bookings", {
       method: "POST",
       body: JSON.stringify(body),
     }),

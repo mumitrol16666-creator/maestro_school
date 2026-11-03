@@ -56,28 +56,6 @@ export interface RegisterInput {
   password: string;
 }
 
-export interface TrialBookingInput {
-  firstName: string;
-  lastName: string;
-  middleName?: string;
-  phone: string;
-  direction: string;
-  level: string;
-  preferredTime: string;
-  comment?: string;
-  marketingClientId?: string;
-  marketingSessionId?: string;
-  attribution?: Record<string, unknown>;
-  landingUrl?: string;
-  referrerUrl?: string;
-}
-
-export interface TrialBookingResponse {
-  bookingId: string;
-  status: string;
-  replyChannel: "whatsapp";
-}
-
 export interface ApiCourseSummary {
   id: string;
   directionId: string;

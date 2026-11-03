@@ -18,6 +18,7 @@ import { useAuth } from "@/components/auth-provider";
 import { ApiError } from "@/lib/api-client";
 import { getConnectionStatus, subscribeConnectionStatus } from "@/lib/connection-status";
 import { homePathForRole, isStaffRole } from "@/lib/role-labels";
+import { TRIAL_BOOKING_URL } from "@/lib/trial-booking";
 
 function safeNextPath(next: string | null, role?: string | null) {
   if (!next || !next.startsWith("/") || next.startsWith("//")) {
@@ -49,8 +50,6 @@ function loginErrorText(reason: unknown, fallback: string) {
   return reason instanceof ApiError ? reason.message : fallback;
 }
 
-const TRIAL_LANDING_URL =
-  process.env.NEXT_PUBLIC_TRIAL_LANDING_URL ?? "https://crm.maestro.com.kz/trial.html";
 
 const LOGIN_COPY = {
   student: {
@@ -280,7 +279,7 @@ export default function LoginPage() {
                 Запишитесь на пробный урок на сайте. Администратор свяжется с вами и подберёт удобное время.
               </p>
               <a
-                href={TRIAL_LANDING_URL}
+                href={TRIAL_BOOKING_URL}
                 className="mt-2 inline-flex min-h-11 items-center gap-2 text-sm font-bold text-gold-ink transition hover:text-ink"
               >
                 Записаться на пробный урок <ArrowRight size={15} />

@@ -40,6 +40,16 @@ const nextConfig = {
       },
     ];
   },
+  async redirects() {
+    // 03.11 (Vladislav): a trial lesson is booked only on the school site; old links answer 307 at once.
+    return [
+      {
+        source: "/trial-lesson",
+        destination: process.env.NEXT_PUBLIC_TRIAL_LANDING_URL || "https://maestro.com.kz/?utm_source=app#zapis",
+        permanent: false,
+      },
+    ];
+  },
   async headers() {
     return [
       {
