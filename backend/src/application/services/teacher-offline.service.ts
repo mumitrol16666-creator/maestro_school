@@ -354,6 +354,8 @@ export async function teacherOfflineSubmit(
         ? (lesson as Record<string, unknown>).classType as string
         : null,
       group: (lesson as Record<string, unknown>).group,
+      trialBooking: (lesson as Record<string, unknown>).trialBooking,
+      trialParticipant: (lesson as Record<string, unknown>).trialParticipant,
     },
     students: roster.students,
     payload: crmPayload,

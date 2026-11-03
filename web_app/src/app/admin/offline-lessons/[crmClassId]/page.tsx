@@ -41,6 +41,17 @@ import {
 } from "@/components/learning-lesson-v2-panel";
 import { StudentWorkspaceDrawer } from "@/components/student-workspace-drawer";
 import { LessonReportPreview, LessonStepNav, LessonStepper, visibleLessonSteps, type LessonStep } from "@/components/lesson-steps";
+import {
+  TrialBeforeLesson,
+  TrialDiagnostics,
+  TrialRecommendation,
+  TrialReportSummary,
+  isTrialReportV3,
+  mergeTrialReport,
+  trialReportIssues,
+  trialStepsForDirection,
+  useTrialStepTemplates,
+} from "@/components/trial-diagnostics";
 import { LessonStudentStrip } from "@/components/lesson-student-strip";
 import { LessonTextHints } from "@/components/lesson-text-hints";
 import { LessonSectorDrawer } from "@/components/lesson-sector-drawer";
@@ -129,86 +140,6 @@ const attendanceClasses: Record<string, string> = {
   unexcused_absence: "bg-red-50 text-red-800",
   emergency_freeze: "bg-amber-50 text-amber-900",
 };
-
-const trialObjectionOptions = [
-  ["price", "Цена"],
-  ["schedule", "Расписание"],
-  ["distance", "Далеко"],
-  ["format", "Формат"],
-  ["teacher", "Преподаватель"],
-  ["child_interest", "Интерес ребенка"],
-  ["thinking", "Думают"],
-  ["other", "Другое"],
-] as const;
-
-type TrialSectionUpdater = <K extends keyof TrialLessonReport>(
-  section: K,
-  patch: NonNullable<TrialLessonReport[K]>,
-) => void;
-
-const defaultTrialReport: TrialLessonReport = {
-  version: 2,
-  attendance: { outcome: "attended", arrivedWith: "unknown", parentAccompanied: false, parentPresent: false },
-  studentProfile: { priorExperience: "unknown", motivation: "unclear" },
-  teacherAssessment: {
-    interestLevel: null,
-    contactLevel: null,
-    focusLevel: null,
-    rhythm: null,
-    hearing: null,
-    coordination: null,
-    memory: null,
-    techniqueBase: null,
-    emotionalReadiness: null,
-  },
-  lessonFacts: {},
-  recommendation: {
-    recommendedFormat: "undecided",
-    recommendedFrequency: "undecided",
-    recommendedLevel: "beginner",
-    nextStep: "manager_call",
-  },
-  salesSignals: {
-    buyProbability: null,
-    priceSensitivity: "unknown",
-    scheduleFit: "unknown",
-    parentObjections: [],
-  },
-  raw: {},
-};
-
-function mergeTrialReport(report?: TrialLessonReport | null): TrialLessonReport {
-  return {
-    ...defaultTrialReport,
-    ...(report ?? {}),
-    attendance: { ...defaultTrialReport.attendance, ...(report?.attendance ?? {}) },
-    studentProfile: { ...defaultTrialReport.studentProfile, ...(report?.studentProfile ?? {}) },
-    teacherAssessment: { ...defaultTrialReport.teacherAssessment, ...(report?.teacherAssessment ?? {}) },
-    lessonFacts: { ...defaultTrialReport.lessonFacts, ...(report?.lessonFacts ?? {}) },
-    recommendation: { ...defaultTrialReport.recommendation, ...(report?.recommendation ?? {}) },
-    salesSignals: { ...defaultTrialReport.salesSignals, ...(report?.salesSignals ?? {}) },
-    raw: { ...defaultTrialReport.raw, ...(report?.raw ?? {}) },
-  };
-}
-
-function scoreFromInput(value: string) {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return null;
-  return Math.min(5, Math.max(1, Math.round(parsed)));
-}
-
-function trialReportReady(report: TrialLessonReport) {
-  // The teacher confirms only what was observed during the lesson. Sales
-  // readiness, objections and follow-up belong to the manager and must not
-  // block lesson submission.
-  return Boolean(
-    report.attendance?.outcome
-      && report.teacherAssessment?.interestLevel
-      && report.teacherAssessment?.contactLevel
-      && report.lessonFacts?.whatWasTested?.trim()
-      && report.lessonFacts?.whatWorkedWell?.trim()
-  );
-}
 
 function lessonStartDateTime(date: string | Date, startTime: string) {
   const base = new Date(date);
@@ -602,7 +533,6 @@ export default function AdminOfflineLessonDetailPage() {
   }, [crmClassId, hasLinkedStudent, isTrialLesson, lesson]);
   const students = loadedStudents.length ? loadedStudents : trialLeadFallback ? [trialLeadFallback] : loadedStudents;
   const hasTrialRosterFallback = Boolean(trialLeadFallback);
-  const isTrialReportReady = isTrialLesson ? trialReportReady(trialReport) : true;
   const availablePlanTopics = useMemo(() => {
     const list = [
       ...students.flatMap((s) => ("monthlyPlan" in s && s.monthlyPlan?.items ? s.monthlyPlan.items.map((i: { title: string }) => i.title) : [])),
@@ -618,6 +548,13 @@ export default function AdminOfflineLessonDetailPage() {
   );
   const canEditAdminReview = isAdmin && effectiveLessonStatus === "pending_admin_review";
   const canEditReport = canEditTeacherReport;
+  // 03.11 (document 23): the trial report v3 — four diagnostic blocks, the parent report and the start step.
+  const trialDirection = lesson?.trialParticipant?.direction || lesson?.trialBooking?.direction || null;
+  const trialTemplates = useTrialStepTemplates(Boolean(isTrialLesson && canEditReport), isAdmin);
+  const trialIssues = trialReportIssues(trialReport, {
+    stepsAvailable: trialStepsForDirection(trialTemplates.templates, trialDirection).length > 0,
+  });
+  const isTrialReportReady = isTrialLesson ? trialIssues.ready : true;
   const allowedLearningReportTopicIds = useMemo(
     () => new Set(learningTopicIdsForReport(learningV2, canEditAdminReview)),
     [canEditAdminReview, learningV2],
@@ -720,9 +657,10 @@ export default function AdminOfflineLessonDetailPage() {
   // Plan 1.14 / 01.11: a started lesson with one student means the student came, for the exam and
   // the admin «за преподавателя» too; «Отменить урок» is the other way. Several students — a
   // checkbox each, an unticked student is «Не пришёл», the admin decides the kind of absence in CRM.
-  const withAttendanceStep = !isIndividualLesson;
+  // 03.11 (document 23, answer 1): a started trial lesson means the lead came; «Отменить урок» is the other way.
+  const withAttendanceStep = !isIndividualLesson && !isTrialLesson;
   const autoPresent = Boolean(
-    canEditTeacherReport && !withAttendanceStep && isLearningLessonV2 && draftHydrated,
+    canEditTeacherReport && !withAttendanceStep && (isLearningLessonV2 || isTrialLesson) && draftHydrated,
   );
   // 1.3: cancelling before the lesson time would leave the lesson started and the absence rejected by CRM.
   const lessonStartsAt = lesson ? lessonStartDateTime(lesson.date, lesson.startTime).getTime() : null;
@@ -810,7 +748,7 @@ export default function AdminOfflineLessonDetailPage() {
     }
     if (lesson.teacherComment) setComment(lesson.teacherComment);
     if (isTrialLesson) {
-      setTrialReport(mergeTrialReport(lesson.trialReport));
+      setTrialReport(mergeTrialReport(lesson.trialReport, lesson.trialParticipant?.direction || lesson.trialBooking?.direction));
     }
   }, [isTrialLesson, learningV2?.pendingResults, lesson]);
 
@@ -982,7 +920,9 @@ export default function AdminOfflineLessonDetailPage() {
         })) ?? [],
       );
       setComment(lesson.teacherComment ?? "");
-      setTrialReport(isTrialLesson ? mergeTrialReport(lesson.trialReport) : mergeTrialReport());
+      setTrialReport(isTrialLesson
+        ? mergeTrialReport(lesson.trialReport, lesson.trialParticipant?.direction || lesson.trialBooking?.direction)
+        : mergeTrialReport());
       setNotHeldReason("");
       setStudentCheckDrafts(Object.fromEntries(
         students.map((student) => [
@@ -1118,36 +1058,7 @@ export default function AdminOfflineLessonDetailPage() {
     }
   }
 
-  const updateTrialSection: TrialSectionUpdater = function updateTrialSection<K extends keyof TrialLessonReport>(
-    section: K,
-    patch: NonNullable<TrialLessonReport[K]>,
-  ) {
-    setTrialReport((current) => ({
-      ...current,
-      [section]: {
-        ...((current[section] ?? {}) as object),
-        ...(patch as object),
-      },
-    }));
-  };
-
-  function toggleTrialObjection(value: string) {
-    setTrialReport((current) => {
-      const selected = new Set(current.salesSignals?.parentObjections ?? []);
-      if (selected.has(value)) {
-        selected.delete(value);
-      } else {
-        selected.add(value);
-      }
-      return {
-        ...current,
-        salesSignals: {
-          ...current.salesSignals,
-          parentObjections: Array.from(selected),
-        },
-      };
-    });
-  }
+  const updateTrialReport = (next: (report: TrialLessonReport) => TrialLessonReport) => setTrialReport(next);
 
   async function runAction(action: string, fn: () => Promise<unknown>) {
     const reloadLessonContext = async () => {
@@ -1192,7 +1103,9 @@ export default function AdminOfflineLessonDetailPage() {
           title: "Урок отправлен на проверку",
           description: canActForTeacher
             ? "Отчёт сохранён за назначенного преподавателя. Теперь урок можно проверить и подтвердить."
-            : "Посещаемость, результат домашнего задания и отчёт сохранены. Администратор проверит урок и опубликует новое задание ученику.",
+            : isTrialLesson
+              ? "Диагностика отправлена администратору."
+              : "Посещаемость, результат домашнего задания и отчёт сохранены. Администратор проверит урок и опубликует новое задание ученику.",
         });
       } else if (action === "submit-absence") {
         setSuccess({
@@ -1202,7 +1115,9 @@ export default function AdminOfflineLessonDetailPage() {
       } else if (action === "start") {
         setSuccess({
           title: "Урок начат",
-          description: "Теперь можно отметить посещаемость, проверить прошлое домашнее задание и заполнить итог урока.",
+          description: isTrialLesson
+            ? "Урок начат — значит, ученик пришёл. Заполните диагностику по шагам."
+            : "Теперь можно отметить посещаемость, проверить прошлое домашнее задание и заполнить итог урока.",
         });
       } else if (action === "approve") {
         setSuccess({
@@ -1310,7 +1225,7 @@ export default function AdminOfflineLessonDetailPage() {
     }
 
     if (isTrialLesson && !isTrialReportReady) {
-      return "Заполните обязательные пункты анкеты пробного урока.";
+      return trialIssues.diagnostics ?? trialIssues.recommendation ?? "Заполните анкету пробного урока.";
     }
     if (!isTrialLesson && !topic.trim()) return "Укажите тему урока.";
     if (!isTrialLesson && !lessonSummary.trim()) return "Заполните итог урока.";
@@ -1472,7 +1387,8 @@ export default function AdminOfflineLessonDetailPage() {
             .map((url) => materialEntries.find((item) => item.url === url) ?? ({ type: "link", url, title: url }))
             // CRM opens these on its own site: uploaded files go with the school's address.
             .map((item) => (item.url.startsWith("/api/v1/media/") ? { ...item, url: `${window.location.origin}${item.url}` } : item)),
-          comment: absenceOnly ? undefined : comment.trim() || undefined,
+          // A trial keeps its note in the report («Заметка для школы»); the hidden lesson comment is not sent.
+          comment: absenceOnly || isTrialLesson ? undefined : comment.trim() || undefined,
           trialReport: isTrialLesson && !absenceOnly
             ? { ...trialReport, capturedAt: new Date().toISOString() }
             : undefined,
@@ -1563,10 +1479,15 @@ export default function AdminOfflineLessonDetailPage() {
   );
   // The report is filled in short steps (02 §3.4, plan 1.14) when a learning lesson is edited:
   // four for a lesson with one student, five with attendance when there are several;
-  // trial lessons and absence-only reports keep one page.
-  const useLessonSteps = Boolean(canEditTeacherReport && isLearningLessonV2 && !isTrialLesson && !isAbsenceOnly);
+  // a trial lesson goes «Перед уроком → Диагностика → Рекомендация → Отправка» (document 23);
+  // absence-only reports keep one page.
+  const useLessonSteps = Boolean(canEditTeacherReport && (isLearningLessonV2 || isTrialLesson) && !isAbsenceOnly);
   const showStep = (step: LessonStep) => !useLessonSteps || lessonStep === step;
-  const stepList = visibleLessonSteps(withAttendanceStep);
+  // The trial lesson goes the same steps with its own content (document 23 §5.1).
+  const trialStepTitles: Partial<Record<LessonStep, string>> = { 1: "Перед уроком", 3: "Диагностика", 4: "Рекомендация", 5: "Отправка" };
+  const stepList = isTrialLesson
+    ? visibleLessonSteps(false).map((item) => ({ ...item, title: trialStepTitles[item.key] ?? item.title, short: trialStepTitles[item.key] ?? item.short }))
+    : visibleLessonSteps(withAttendanceStep);
   const moveStep = (direction: 1 | -1) => {
     const index = stepList.findIndex((item) => item.key === lessonStep);
     const next = stepList[Math.min(stepList.length - 1, Math.max(0, index + direction))];
@@ -1644,7 +1565,8 @@ export default function AdminOfflineLessonDetailPage() {
     2: isCompactGroupLesson
       ? (nobodyMarked ? "Отметьте, кто пришёл" : null)
       : unmarkedCount > 0 ? `Не отмечено: ${unmarkedCount}` : null,
-    3: pendingLearningDecisions > 0 ? `Без решения по ДЗ: ${pendingLearningDecisions}` : null,
+    3: isTrialLesson ? trialIssues.diagnostics : pendingLearningDecisions > 0 ? `Без решения по ДЗ: ${pendingLearningDecisions}` : null,
+    4: isTrialLesson ? trialIssues.recommendation : null,
     5: teacherSubmissionIssue,
   };
   const attendedStudentIds = new Set(
@@ -1819,7 +1741,7 @@ export default function AdminOfflineLessonDetailPage() {
         </p>
       ) : null}
 
-      {useLessonSteps ? (
+      {useLessonSteps && !isTrialLesson ? (
         <LessonStudentStrip
           students={overviewStudents}
           loading={studentsOverviewLoading}
@@ -1832,7 +1754,52 @@ export default function AdminOfflineLessonDetailPage() {
         <LessonStepper step={lessonStep} steps={stepList} issues={stepIssues} onSelect={setLessonStep} />
       ) : null}
 
-      {useLessonSteps && lessonStep === 1 ? (
+      {isTrialLesson && !useLessonSteps && students[0] ? (
+        <section className="mb-7 rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft" data-testid="trial-lead">
+          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-700">Пробный урок</p>
+          <p className="mt-2 text-xl font-bold text-ink">{students[0].name}</p>
+          <p className="mt-1 text-sm text-stone-500">{[trialDirection, students[0].phone].filter(Boolean).join(" · ")}</p>
+          {students[0].attendanceStatus && students[0].attendanceStatus !== "unmarked" ? (
+            <p className="mt-2 text-sm text-stone-600">Посещение: {attendanceLabels[students[0].attendanceStatus] ?? students[0].attendanceStatus}</p>
+          ) : null}
+          {!students[0].isLead ? (
+            <button type="button" onClick={() => setOpenStudentId(students[0].crmStudentId)} className="mt-3 min-h-11 rounded-2xl border border-stone-200 px-4 text-sm font-bold text-ink hover:border-gold">
+              Статистика ученика
+            </button>
+          ) : null}
+        </section>
+      ) : null}
+
+      {useLessonSteps && isTrialLesson && lessonStep === 1 ? (
+        <section className="mb-7 rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft" data-testid="trial-step-before">
+          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-700">Шаг 1</p>
+          <h2 className="font-display mt-1 text-3xl">Перед уроком</h2>
+          <p className="mt-2 text-sm text-stone-500">Пробный урок: кто пришёл и что хочет играть.</p>
+          <p className="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900" data-testid="trial-auto-present">
+            Урок начат — значит, ученик пришёл. Если не пришёл, нажмите «Отменить урок» внизу страницы.
+          </p>
+          <div className="mt-5">
+            <TrialBeforeLesson
+              report={trialReport}
+              lead={students[0] ? { name: students[0].name, phone: students[0].phone, direction: trialDirection } : null}
+              disabled={!canEditReport}
+              update={updateTrialReport}
+            />
+          </div>
+        </section>
+      ) : null}
+
+      {useLessonSteps && isTrialLesson && lessonStep === 3 ? (
+        <section className="mb-7 rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft" data-testid="trial-step-diagnostics">
+          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-700">Шаг 2</p>
+          <h2 className="font-display mt-1 text-3xl">Диагностика</h2>
+          <div className="mt-5">
+            <TrialDiagnostics report={trialReport} disabled={!canEditReport} update={updateTrialReport} />
+          </div>
+        </section>
+      ) : null}
+
+      {useLessonSteps && !isTrialLesson && lessonStep === 1 ? (
         <section className="mb-7 rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft" data-testid="lesson-context-step">
           <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-700">Шаг 1</p>
           <h2 className="font-display mt-1 text-3xl">Перед уроком</h2>
@@ -1911,7 +1878,7 @@ export default function AdminOfflineLessonDetailPage() {
         </section>
       ) : null}
 
-      {showStep(2) ? (
+      {showStep(2) && (!isTrialLesson || isAbsenceOnly) ? (
       <div className="mb-7">
         <StudentRoster
           students={students}
@@ -1988,13 +1955,13 @@ export default function AdminOfflineLessonDetailPage() {
         <section className={`space-y-7 ${useLessonSteps ? "" : "order-last xl:order-none"}`}>
           <form onSubmit={handleSubmit} className={`rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8 ${useLessonSteps && lessonStep < 4 ? "hidden" : ""}`}>
             <h2 className="font-display text-3xl">
-              {isAbsenceOnly ? "Отметка отсутствия" : "Отчёт по уроку"}
+              {isAbsenceOnly ? "Отметка отсутствия" : isTrialLesson && useLessonSteps ? (lessonStep === 5 ? "Отправка" : "Рекомендация") : "Отчёт по уроку"}
             </h2>
             <p className="mt-2 text-sm text-stone-500">
               {isAbsenceOnly
                 ? "Все ученики отмечены отсутствующими. Тему, итог и домашнее задание заполнять не нужно."
                 : isTrialLesson
-                ? "Заполните диагностическую анкету пробного. Ответы помогут подготовить анализ и план обучения."
+                ? "С какой ступени начнём, формат и частота."
                 : isAdmin
                 ? "Подтверждение отчёта и списание выполняются в CRM. Здесь отображаются данные урока и результат проверки."
                 : "Заполните тему, итог и домашнее задание. Ученик увидит материалы после подтверждения администратором."}
@@ -2031,13 +1998,24 @@ export default function AdminOfflineLessonDetailPage() {
 
             <div className={isAbsenceOnly || !showStep(4) ? "hidden" : ""}>
             {isTrialLesson ? (
-              <TrialReportEditor
-                report={trialReport}
-                disabled={!canEditReport}
-                isAdmin={isAdmin}
-                updateSection={updateTrialSection}
-                toggleObjection={toggleTrialObjection}
-              />
+              canEditReport ? (
+                <div className="mt-6">
+                  <TrialRecommendation
+                    report={trialReport}
+                    disabled={!canEditReport}
+                    update={updateTrialReport}
+                    templates={trialTemplates.templates}
+                    templatesError={trialTemplates.error}
+                    direction={trialDirection}
+                  />
+                </div>
+              ) : isTrialReportV3(lesson.trialReport) ? (
+                <div className="mt-6"><TrialReportSummary report={mergeTrialReport(lesson.trialReport)} /></div>
+              ) : lesson.trialReport ? (
+                <p className="mt-6 rounded-2xl border border-stone-200 bg-white p-4 text-sm text-stone-600">
+                  Анкета пробного заполнена в старом формате. Её можно посмотреть в CRM, в карточке урока.
+                </p>
+              ) : null
             ) : (
               <>
                 {!isLearningLessonV2 && availablePlanTopics.length > 0 ? (
@@ -2277,7 +2255,14 @@ export default function AdminOfflineLessonDetailPage() {
             )}
             </div>
 
-            {useLessonSteps && lessonStep === 5 ? (
+            {useLessonSteps && isTrialLesson && lessonStep === 5 ? (
+              <div className="mt-6" data-testid="trial-preview">
+                <TrialReportSummary report={trialReport} />
+                {teacherSubmissionIssue ? <p className="mt-4 text-sm font-semibold text-amber-800">{teacherSubmissionIssue}</p> : null}
+              </div>
+            ) : null}
+
+            {useLessonSteps && !isTrialLesson && lessonStep === 5 ? (
               <LessonReportPreview
                 attendance={{ ...attendanceSummary, unmarked: isCompactGroupLesson ? 0 : unmarkedCount }}
                 topic={topic}
@@ -2525,6 +2510,8 @@ export default function AdminOfflineLessonDetailPage() {
                   ? isAdmin
                     ? "Подтвердите отметку посещаемости в CRM. Тема, итог и домашнее задание не требуются."
                     : "Администратор получил отметку об отсутствии. Отчёт по уроку заполнять не нужно."
+                  : isTrialLesson
+                  ? "Диагностика пробного передана администратору. Подтверждение выполняется в CRM."
                   : isAdmin
                   ? "Отчёт передан администратору. Подтверждение урока и списание выполняются в CRM."
                   : "Посещаемость и проверка прошлого ДЗ сохранены. Администратор подтвердит урок и опубликует новое задание."}
@@ -2549,7 +2536,9 @@ export default function AdminOfflineLessonDetailPage() {
           <div>
             <p className="text-sm font-bold text-stone-700">Начали по ошибке или урок не состоялся?</p>
             <p className="mt-1 text-sm text-stone-500">
-              Урок уйдёт администратору как отсутствие. Списывать ли занятие, администратор решит при подтверждении.
+              {isTrialLesson
+                ? "Пробный уйдёт администратору как неявка. С баланса у пробного ничего не списывается."
+                : "Урок уйдёт администратору как отсутствие. Списывать ли занятие, администратор решит при подтверждении."}
             </p>
           </div>
           <div className="flex flex-col items-end gap-1">
@@ -2578,7 +2567,7 @@ export default function AdminOfflineLessonDetailPage() {
         progress={submissionProgress}
         error={error}
         attendance={attendanceSummary}
-        learning={isLearningLessonV2 ? {
+        learning={isLearningLessonV2 && !isTrialLesson ? {
           pendingHomework: pendingLearningHomework,
           acceptedHomework: homeworkDecisionSummary.accepted,
           notCompletedHomework: homeworkDecisionSummary.notCompleted,
@@ -2610,6 +2599,7 @@ export default function AdminOfflineLessonDetailPage() {
           setNotHeldReason("");
         }}
         onConfirm={() => void confirmNotHeld()}
+        trial={isTrialLesson}
       />
 
       {canShowStartPrompt && lesson && (
@@ -2992,6 +2982,7 @@ function NotHeldConfirmation({
   onReasonChange,
   onClose,
   onConfirm,
+  trial = false,
 }: {
   open: boolean;
   lesson: { title: string; date: string; startTime: string };
@@ -3000,6 +2991,7 @@ function NotHeldConfirmation({
   onReasonChange: (value: string) => void;
   onClose: () => void;
   onConfirm: () => void;
+  trial?: boolean;
 }) {
   const dialogRef = useDialogBehavior(open, onClose, { canClose: !busy });
   if (!open) return null;
@@ -3042,7 +3034,9 @@ function NotHeldConfirmation({
           </button>
         </div>
         <p id="not-held-description" className="mt-4 text-sm leading-6 text-stone-600">
-          Ученики будут отмечены «Не пришёл», урок уйдёт администратору. При подтверждении он решит, списывать ли занятие: по умолчанию это прогул.
+          {trial
+            ? "Ученик будет отмечен «Не пришёл», пробный уйдёт администратору как неявка. С баланса у пробного ничего не списывается."
+            : "Ученики будут отмечены «Не пришёл», урок уйдёт администратору. При подтверждении он решит, списывать ли занятие: по умолчанию это прогул."}
         </p>
         <p className="mt-4 text-sm font-bold text-ink">{lesson.title}</p>
         <p className="mt-1 text-sm text-stone-500">
@@ -3082,270 +3076,6 @@ function NotHeldConfirmation({
         </div>
       </section>
     </div>
-  );
-}
-
-function TrialReportEditor({
-  report,
-  disabled,
-  isAdmin,
-  updateSection,
-  toggleObjection,
-}: {
-  report: TrialLessonReport;
-  disabled: boolean;
-  isAdmin: boolean;
-  updateSection: TrialSectionUpdater;
-  toggleObjection: (value: string) => void;
-}) {
-  const assessment = report.teacherAssessment ?? {};
-  const facts = report.lessonFacts ?? {};
-  const profile = report.studentProfile ?? {};
-  const recommendation = report.recommendation ?? {};
-  const sales = report.salesSignals ?? {};
-  const raw = report.raw ?? {};
-  const selectedObjections = new Set(sales.parentObjections ?? []);
-
-  return (
-    <div className="mt-6 space-y-6">
-      <div className="rounded-[24px] border border-amber-200 bg-amber-50 p-5">
-        <p className="text-sm font-bold text-amber-950">Пробный урок: диагностическая анкета</p>
-        <p className="mt-2 text-sm leading-6 text-amber-900/80">
-          Здесь только педагогические наблюдения по занятию. Коммерческие решения и следующий контакт заполняет менеджер отдельно.
-        </p>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
-          Итог посещения
-          <select
-            value={report.attendance?.outcome ?? "attended"}
-            onChange={(event) => updateSection("attendance", { outcome: event.target.value as any })}
-            disabled={disabled}
-            className="mt-2 w-full rounded-2xl border border-stone-200 px-4 py-3 text-sm"
-          >
-            <option value="attended">Пришел и занимался</option>
-            <option value="late">Опоздал, но занимался</option>
-            <option value="no_show">Не пришел</option>
-            <option value="rescheduled">Перенесли</option>
-          </select>
-        </label>
-        <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
-          Сопровождение взрослого
-          <select
-            value={report.attendance?.arrivedWith ?? "unknown"}
-            onChange={(event) => updateSection("attendance", { arrivedWith: event.target.value as any, parentAccompanied: event.target.value === "parent", parentPresent: false })}
-            disabled={disabled}
-            className="mt-2 w-full rounded-2xl border border-stone-200 px-4 py-3 text-sm"
-          >
-            <option value="unknown">Не указано</option>
-            <option value="parent">Родитель сопровождал</option>
-            <option value="alone">Самостоятельно</option>
-            <option value="other">Другое</option>
-          </select>
-        </label>
-        <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
-          Опыт до пробного
-          <select
-            value={profile.priorExperience ?? "unknown"}
-            onChange={(event) => updateSection("studentProfile", { priorExperience: event.target.value as any })}
-            disabled={disabled}
-            className="mt-2 w-full rounded-2xl border border-stone-200 px-4 py-3 text-sm"
-          >
-            <option value="unknown">Не понял</option>
-            <option value="none">С нуля</option>
-            <option value="basic">Базовый</option>
-            <option value="medium">Средний</option>
-            <option value="strong">Сильный</option>
-          </select>
-        </label>
-        {isAdmin ? (
-          <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
-            Мотивация (со слов семьи)
-            <select
-              value={profile.motivation ?? "unclear"}
-              onChange={(event) => updateSection("studentProfile", { motivation: event.target.value as any })}
-              disabled={disabled}
-              className="mt-2 w-full rounded-2xl border border-stone-200 px-4 py-3 text-sm"
-            >
-              <option value="unclear">Не ясно</option>
-              <option value="student">Хочет ученик</option>
-              <option value="parent">Хочет родитель</option>
-              <option value="both">Оба заинтересованы</option>
-            </select>
-          </label>
-        ) : null}
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-3">
-        <TrialScore label="Интерес" value={assessment.interestLevel} disabled={disabled} onChange={(value) => updateSection("teacherAssessment", { interestLevel: value })} />
-        <TrialScore label="Контакт" value={assessment.contactLevel} disabled={disabled} onChange={(value) => updateSection("teacherAssessment", { contactLevel: value })} />
-        <TrialScore label="Фокус" value={assessment.focusLevel} disabled={disabled} onChange={(value) => updateSection("teacherAssessment", { focusLevel: value })} />
-        <TrialScore label="Ритм" value={assessment.rhythm} disabled={disabled} onChange={(value) => updateSection("teacherAssessment", { rhythm: value })} />
-        <TrialScore label="Слух" value={assessment.hearing} disabled={disabled} onChange={(value) => updateSection("teacherAssessment", { hearing: value })} />
-        <TrialScore label="Координация" value={assessment.coordination} disabled={disabled} onChange={(value) => updateSection("teacherAssessment", { coordination: value })} />
-        <TrialScore label="Память" value={assessment.memory} disabled={disabled} onChange={(value) => updateSection("teacherAssessment", { memory: value })} />
-        <TrialScore label="Техника" value={assessment.techniqueBase} disabled={disabled} onChange={(value) => updateSection("teacherAssessment", { techniqueBase: value })} />
-        <TrialScore label="Готовность" value={assessment.emotionalReadiness} disabled={disabled} onChange={(value) => updateSection("teacherAssessment", { emotionalReadiness: value })} />
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        {isAdmin ? (
-          <TrialTextarea label="Цель родителя (со слов семьи)" value={profile.goalFromParent} disabled={disabled} onChange={(value) => updateSection("studentProfile", { goalFromParent: value })} />
-        ) : null}
-        <TrialTextarea label="Цель ученика" value={profile.goalFromStudent} disabled={disabled} onChange={(value) => updateSection("studentProfile", { goalFromStudent: value })} />
-        <TrialTextarea label="Что проверили" value={facts.whatWasTested} disabled={disabled} onChange={(value) => updateSection("lessonFacts", { whatWasTested: value })} />
-        <TrialTextarea label="Что получилось" value={facts.whatWorkedWell} disabled={disabled} onChange={(value) => updateSection("lessonFacts", { whatWorkedWell: value })} />
-        <TrialTextarea label="Трудности" value={facts.difficulties} disabled={disabled} onChange={(value) => updateSection("lessonFacts", { difficulties: value })} />
-        <TrialTextarea label="Реакция на задания" value={facts.reactionToTasks} disabled={disabled} onChange={(value) => updateSection("lessonFacts", { reactionToTasks: value })} />
-        {isAdmin ? (
-          <TrialTextarea label="Комментарий семьи (служебно)" value={facts.parentReaction} disabled={disabled} onChange={(value) => updateSection("lessonFacts", { parentReaction: value })} />
-        ) : null}
-        <TrialTextarea label="Дали домой" value={facts.homeworkGiven} disabled={disabled} onChange={(value) => updateSection("lessonFacts", { homeworkGiven: value })} />
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
-          Рекомендованный формат
-          <select value={recommendation.recommendedFormat ?? "undecided"} onChange={(event) => updateSection("recommendation", { recommendedFormat: event.target.value as any })} disabled={disabled} className="mt-2 w-full rounded-2xl border border-stone-200 px-4 py-3 text-sm">
-            <option value="undecided">Пока не ясно</option>
-            <option value="group">Группа</option>
-            <option value="individual">Индивидуально</option>
-            <option value="hybrid">Гибрид</option>
-          </select>
-        </label>
-        <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
-          Частота
-          <select value={recommendation.recommendedFrequency ?? "undecided"} onChange={(event) => updateSection("recommendation", { recommendedFrequency: event.target.value as any })} disabled={disabled} className="mt-2 w-full rounded-2xl border border-stone-200 px-4 py-3 text-sm">
-            <option value="undecided">Пока не ясно</option>
-            <option value="1_per_week">1 раз в неделю</option>
-            <option value="2_per_week">2 раза в неделю</option>
-            <option value="3_per_week">3 раза в неделю</option>
-            <option value="custom">Индивидуально</option>
-          </select>
-        </label>
-        <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
-          Уровень
-          <select value={recommendation.recommendedLevel ?? "beginner"} onChange={(event) => updateSection("recommendation", { recommendedLevel: event.target.value as any })} disabled={disabled} className="mt-2 w-full rounded-2xl border border-stone-200 px-4 py-3 text-sm">
-            <option value="beginner">Новичок</option>
-            <option value="basic">База</option>
-            <option value="intermediate">Средний</option>
-            <option value="advanced">Сильный</option>
-          </select>
-        </label>
-        {isAdmin ? (
-          <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
-            Следующий шаг (для менеджера)
-            <select value={recommendation.nextStep ?? "manager_call"} onChange={(event) => updateSection("recommendation", { nextStep: event.target.value as any })} disabled={disabled} className="mt-2 w-full rounded-2xl border border-stone-200 px-4 py-3 text-sm">
-              <option value="manager_call">Созвон менеджера</option>
-              <option value="sell_membership">Предложить абонемент</option>
-              <option value="second_trial">Второй пробный</option>
-              <option value="wait">Подождать решение</option>
-              <option value="reject">Не продолжать</option>
-            </select>
-          </label>
-        ) : null}
-        <TrialTextarea label="Фокус первого месяца" value={recommendation.firstMonthFocus} disabled={disabled} onChange={(value) => updateSection("recommendation", { firstMonthFocus: value })} />
-        {isAdmin ? (
-          <TrialTextarea label="Наблюдение для менеджера (служебно)" value={sales.teacherSalesComment} disabled={disabled} onChange={(value) => updateSection("salesSignals", { teacherSalesComment: value })} />
-        ) : null}
-      </div>
-
-      {isAdmin ? <div className="rounded-[24px] border border-amber-200 bg-amber-50 p-5">
-        <p className="text-sm font-bold text-amber-950">Коммерческий блок — только менеджеру</p>
-        <p className="mt-2 text-sm leading-6 text-amber-900/80">
-          Эти данные не участвуют в педагогическом отчёте для семьи и не требуются преподавателю для отправки урока.
-        </p>
-      <div className="mt-4 grid gap-4 md:grid-cols-3">
-        <TrialScore label="Вероятность покупки" value={sales.buyProbability} disabled={disabled} onChange={(value) => updateSection("salesSignals", { buyProbability: value })} />
-        <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
-          Чувствительность к цене
-          <select value={sales.priceSensitivity ?? "unknown"} onChange={(event) => updateSection("salesSignals", { priceSensitivity: event.target.value as any })} disabled={disabled} className="mt-2 w-full rounded-2xl border border-stone-200 px-4 py-3 text-sm">
-            <option value="unknown">Не ясно</option>
-            <option value="low">Низкая</option>
-            <option value="medium">Средняя</option>
-            <option value="high">Высокая</option>
-          </select>
-        </label>
-        <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
-          Подходит расписание
-          <select value={sales.scheduleFit ?? "unknown"} onChange={(event) => updateSection("salesSignals", { scheduleFit: event.target.value as any })} disabled={disabled} className="mt-2 w-full rounded-2xl border border-stone-200 px-4 py-3 text-sm">
-            <option value="unknown">Не ясно</option>
-            <option value="good">Да</option>
-            <option value="medium">Нужно подбирать</option>
-            <option value="bad">Плохо подходит</option>
-          </select>
-        </label>
-      </div>
-
-      <fieldset className="rounded-[24px] border border-stone-200 p-4">
-        <legend className="px-2 text-xs font-bold uppercase tracking-wider text-stone-500">Возражения родителя</legend>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {trialObjectionOptions.map(([value, label]) => (
-            <label key={value} className="inline-flex items-center gap-2 rounded-full border border-stone-200 px-3 py-2 text-xs font-bold text-stone-600">
-              <input type="checkbox" checked={selectedObjections.has(value)} disabled={disabled} onChange={() => toggleObjection(value)} />
-              {label}
-            </label>
-          ))}
-        </div>
-      </fieldset>
-      </div> : null}
-
-      <TrialTextarea label="Свободный комментарий преподавателя" value={raw.teacherFreeComment} disabled={disabled} onChange={(value) => updateSection("raw", { teacherFreeComment: value })} />
-    </div>
-  );
-}
-
-function TrialScore({
-  label,
-  value,
-  disabled,
-  onChange,
-}: {
-  label: string;
-  value?: number | null;
-  disabled: boolean;
-  onChange: (value: number | null) => void;
-}) {
-  return (
-    <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
-      {label}
-      <input
-        type="number"
-        min={1}
-        max={5}
-        step={1}
-        value={value ?? ""}
-        onChange={(event) => onChange(scoreFromInput(event.target.value))}
-        disabled={disabled}
-        className="mt-2 w-full rounded-2xl border border-stone-200 px-4 py-3 text-sm"
-        placeholder="1-5"
-      />
-    </label>
-  );
-}
-
-function TrialTextarea({
-  label,
-  value,
-  disabled,
-  onChange,
-}: {
-  label: string;
-  value?: string;
-  disabled: boolean;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
-      {label}
-      <textarea
-        value={value ?? ""}
-        onChange={(event) => onChange(event.target.value)}
-        disabled={disabled}
-        className="mt-2 min-h-24 w-full rounded-2xl border border-stone-200 px-4 py-3 text-sm"
-      />
-    </label>
   );
 }
 
