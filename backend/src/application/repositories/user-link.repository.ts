@@ -1,5 +1,6 @@
 import { prisma, notDeleted } from "../../infrastructure/database/prisma.js";
 import { normalizePhoneDigits } from "../../lib/phone.js";
+import { holdParentMadeAccess } from "../services/parent-link-hold.service.js";
 
 export async function findUsersByPhoneNormalized(phoneNormalized: string) {
   const digits = normalizePhoneDigits(phoneNormalized);
@@ -56,6 +57,8 @@ export async function applyUserLink(params: {
   crmTeacherId?: string;
   crmRole?: string;
   force?: boolean;
+  /** The student's new password when CRM sends one; used only if a parent made the account in the app. */
+  password?: string | null;
 }) {
   const digits = normalizePhoneDigits(params.phoneNormalized || params.phone || "");
   let user = null;
@@ -144,6 +147,12 @@ export async function applyUserLink(params: {
     });
   }
 
+  // A new CRM student card on the account: a parent who made it in the app is held until the school checks
+  // them, before the account gets the card.
+  const parentHold = params.crmStudentId && user.crmStudentId !== params.crmStudentId
+    ? await holdParentMadeAccess(user.id, params.crmStudentId, params.password)
+    : { passwordReplaced: false, heldParentLinks: [], temporaryPassword: null };
+
   const now = new Date();
   const data: Record<string, unknown> = {
     phoneNormalized: digits,
@@ -180,6 +189,7 @@ export async function applyUserLink(params: {
         phone: updated.phone,
         role: updated.role.slug,
       },
+      parentHold,
     },
   };
 }
