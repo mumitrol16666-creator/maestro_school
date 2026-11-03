@@ -11,27 +11,20 @@ export type TrialPlanStep = {
 /**
  * Trial report v3 (decision 03.11, document 23 §8): the methodology's four diagnostic blocks
  * («Работа с учеником», p.48), the parent report «навык, трудность, действие» (p.25) and the
- * start step with the next two as the plan for three months. Attendance is the fact of starting
- * the lesson, not a field; manager fields live outside the teacher's report.
+ * start step with the next two as the plan for three months. 03.11, document 23 §10: only what reaches
+ * the family sheet or opens the first sector is asked; attendance is the fact of starting the lesson.
  */
 export type TrialLessonReport = {
   version: 3;
   capturedAt?: string;
-  attendance: { arrivedWith: "adult" | "alone" | "unknown" };
-  studentProfile: {
-    direction?: string;
-    priorExperience: "unknown" | "none" | "basic" | "medium" | "strong";
-    goalAndSong?: string;
-  };
-  diagnostics: Record<TrialDiagnosticBlock, { level: TrialDiagnosticLevel | null; note?: string }>;
+  studentProfile: { direction?: string; goalAndSong?: string };
+  diagnostics: Record<TrialDiagnosticBlock, { level: TrialDiagnosticLevel | null }>;
   lessonFacts: { achieved?: string; difficulty?: string; homeAction?: string };
   recommendation: {
     startStep: TrialPlanStep | null;
     plan: TrialPlanStep[];
-    recommendedFormat: "undecided" | "group" | "individual" | "hybrid";
-    recommendedFrequency: "undecided" | "1_per_week" | "2_per_week" | "3_per_week" | "custom";
+    recommendedFrequency: "undecided" | "1_per_week" | "2_per_week" | "3_per_week";
   };
-  raw: { teacherNote?: string };
 };
 
 /** Trial report v1/v2 (before 03.11): nine 1–5 scores and the sales block. Read-only now. */

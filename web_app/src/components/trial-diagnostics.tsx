@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, LoaderCircle } from "lucide-react";
+import { Check, LoaderCircle, Printer } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { cmsApi } from "@/lib/cms-api";
 import { teacherStudentsApi } from "@/lib/teacher-students-api";
@@ -14,32 +14,18 @@ import type {
 import type { SectorTemplate } from "@/types/teacher-students";
 
 /**
- * The trial lesson in the app (decision 03.11, document 23 §8), built on the school methodology
+ * The trial lesson in the app (decision 03.11, document 23 §8, §10). Built on the school methodology
  * «Путь Maestro — Работа с учеником»: p.48 — diagnostics through four short musical actions,
- * «для выбора входа, а не для распределения детей на сильных и слабых»; p.25 — the parent hears
- * one learned skill, one current difficulty and one home action. No 1–5 scores.
+ * «для выбора входа, а не для распределения детей на сильных и слабых»; p.25 — the family hears one
+ * learned skill, one current difficulty and one home action. The teacher is asked only what reaches
+ * the family sheet or opens the first sector: four levels, three lines, the start step; the goal
+ * and the frequency are optional.
  */
 export const TRIAL_BLOCKS: Array<{ key: TrialDiagnosticBlock; title: string; hint: string }> = [
-  {
-    key: "instrument",
-    title: "Инструмент",
-    hint: "Посадка, размер гитары, ведущая рука; может ли расслабить плечи и сказать, если неудобно.",
-  },
-  {
-    key: "hearingPulse",
-    title: "Слух и пульс",
-    hint: "Повторить два звука, различить высокий и низкий, пройти ровные шаги, повторить короткий ритм.",
-  },
-  {
-    key: "movement",
-    title: "Движение",
-    hint: "Звук на открытой струне, один палец, движение правой руки на заглушённых струнах.",
-  },
-  {
-    key: "learnability",
-    title: "Обучаемость",
-    hint: "Дайте короткую подсказку и посмотрите, меняется ли следующая попытка.",
-  },
+  { key: "instrument", title: "Инструмент", hint: "Посадка, положение рук, может ли расслабить плечи." },
+  { key: "hearingPulse", title: "Слух и пульс", hint: "Повторить два звука, различить высокий и низкий, повторить короткий ритм." },
+  { key: "movement", title: "Движение", hint: "Первый звук на инструменте, одно простое движение." },
+  { key: "learnability", title: "Обучаемость", hint: "После короткой подсказки следующая попытка лучше?" },
 ];
 
 export const TRIAL_LEVELS: Array<{ key: TrialDiagnosticLevel; title: string }> = [
@@ -48,41 +34,24 @@ export const TRIAL_LEVELS: Array<{ key: TrialDiagnosticLevel; title: string }> =
   { key: "independent", title: "Сам" },
 ];
 
-const formatLabels: Record<TrialLessonReport["recommendation"]["recommendedFormat"], string> = {
-  undecided: "Пока не решили",
-  individual: "Индивидуально",
-  group: "В группе",
-  hybrid: "Смешанный",
-};
-const frequencyLabels: Record<TrialLessonReport["recommendation"]["recommendedFrequency"], string> = {
-  undecided: "Пока не решили",
-  "1_per_week": "1 раз в неделю",
-  "2_per_week": "2 раза в неделю",
-  "3_per_week": "3 раза в неделю",
-  custom: "Свой график",
-};
-const experienceLabels: Record<TrialLessonReport["studentProfile"]["priorExperience"], string> = {
-  unknown: "Не выяснили",
-  none: "С нуля",
-  basic: "Немного играл",
-  medium: "Играл уверенно",
-  strong: "Играет хорошо",
-};
+export const TRIAL_FREQUENCIES: Array<{ key: TrialLessonReport["recommendation"]["recommendedFrequency"]; title: string }> = [
+  { key: "1_per_week", title: "1 раз в неделю" },
+  { key: "2_per_week", title: "2 раза в неделю" },
+  { key: "3_per_week", title: "3 раза в неделю" },
+];
 
 export function emptyTrialReport(direction?: string | null): TrialLessonReport {
   return {
     version: 3,
-    attendance: { arrivedWith: "unknown" },
-    studentProfile: { direction: direction ?? undefined, priorExperience: "unknown", goalAndSong: "" },
+    studentProfile: { direction: direction ?? undefined, goalAndSong: "" },
     diagnostics: {
-      instrument: { level: null, note: "" },
-      hearingPulse: { level: null, note: "" },
-      movement: { level: null, note: "" },
-      learnability: { level: null, note: "" },
+      instrument: { level: null },
+      hearingPulse: { level: null },
+      movement: { level: null },
+      learnability: { level: null },
     },
     lessonFacts: { achieved: "", difficulty: "", homeAction: "" },
-    recommendation: { startStep: null, plan: [], recommendedFormat: "undecided", recommendedFrequency: "undecided" },
-    raw: { teacherNote: "" },
+    recommendation: { startStep: null, plan: [], recommendedFrequency: "undecided" },
   };
 }
 
@@ -92,35 +61,35 @@ export function isTrialReportV3(report: unknown): report is TrialLessonReport {
   return Number(value.version) === 3 || Boolean(value.diagnostics && typeof value.diagnostics === "object");
 }
 
-/** A saved v3 report or draft as is; an older report only gives the goal and experience. */
+const frequencyKeys = new Set(TRIAL_FREQUENCIES.map((item) => item.key));
+
+/** A saved v3 report or draft, reduced to the asked fields; an older report only gives the goal. */
 export function mergeTrialReport(report?: unknown, direction?: string | null): TrialLessonReport {
   const base = emptyTrialReport(direction);
   if (isTrialReportV3(report)) {
+    const frequency = report.recommendation?.recommendedFrequency;
     return {
-      ...base,
-      ...report,
       version: 3,
-      attendance: { ...base.attendance, ...(report.attendance ?? {}) },
-      studentProfile: { ...base.studentProfile, ...(report.studentProfile ?? {}) },
+      capturedAt: report.capturedAt,
+      studentProfile: {
+        direction: report.studentProfile?.direction ?? base.studentProfile.direction,
+        goalAndSong: report.studentProfile?.goalAndSong ?? "",
+      },
       diagnostics: Object.fromEntries(TRIAL_BLOCKS.map(({ key }) => [
         key,
-        { ...base.diagnostics[key], ...(report.diagnostics?.[key] ?? {}) },
+        { level: report.diagnostics?.[key]?.level ?? null },
       ])) as TrialLessonReport["diagnostics"],
       lessonFacts: { ...base.lessonFacts, ...(report.lessonFacts ?? {}) },
-      recommendation: { ...base.recommendation, ...(report.recommendation ?? {}) },
-      raw: { ...base.raw, ...(report.raw ?? {}) },
+      recommendation: {
+        startStep: report.recommendation?.startStep ?? null,
+        plan: report.recommendation?.plan ?? [],
+        recommendedFrequency: frequency && frequencyKeys.has(frequency) ? frequency : "undecided",
+      },
     };
   }
   const legacy = (report ?? {}) as LegacyTrialLessonReport;
   const goal = legacy.studentProfile?.goalFromStudent || legacy.studentProfile?.goalFromParent || "";
-  return {
-    ...base,
-    studentProfile: {
-      ...base.studentProfile,
-      priorExperience: legacy.studentProfile?.priorExperience ?? "unknown",
-      goalAndSong: goal,
-    },
-  };
+  return { ...base, studentProfile: { ...base.studentProfile, goalAndSong: goal } };
 }
 
 /** What still blocks sending, per step of the trial lesson. */
@@ -154,64 +123,18 @@ function choiceClass(selected: boolean) {
 
 type Update = (next: (report: TrialLessonReport) => TrialLessonReport) => void;
 
-export type TrialLead = { name: string; phone?: string | null; direction?: string | null };
-
-/** Step 1: who came and what they want. */
-export function TrialBeforeLesson({ report, lead, disabled, update }: {
-  report: TrialLessonReport;
-  lead: TrialLead | null;
-  disabled: boolean;
-  update: Update;
-}) {
+/** Step «Диагностика»: the optional goal, four levels and the three lines for the family. */
+export function TrialDiagnostics({ report, update }: { report: TrialLessonReport; update: Update }) {
+  const setFact = (key: keyof TrialLessonReport["lessonFacts"], value: string) =>
+    update((current) => ({ ...current, lessonFacts: { ...current.lessonFacts, [key]: value } }));
   return (
-    <div className="space-y-5" data-testid="trial-before-lesson">
-      {lead ? (
-        <div className="rounded-2xl border border-stone-200 bg-white p-4">
-          <p className="text-lg font-bold text-ink">{lead.name}</p>
-          <p className="mt-1 text-sm text-stone-500">
-            {[lead.direction, lead.phone].filter(Boolean).join(" · ") || "Пробный урок из заявки"}
-          </p>
-        </div>
-      ) : null}
-      <fieldset>
-        <legend className={labelClass}>С кем пришёл</legend>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {([["adult", "Со взрослым"], ["alone", "Сам"]] as const).map(([value, title]) => (
-            <button
-              key={value}
-              type="button"
-              disabled={disabled}
-              aria-pressed={report.attendance.arrivedWith === value}
-              className={choiceClass(report.attendance.arrivedWith === value)}
-              onClick={() => update((current) => ({ ...current, attendance: { arrivedWith: value } }))}
-            >
-              {title}
-            </button>
-          ))}
-        </div>
-      </fieldset>
+    <div className="space-y-5" data-testid="trial-diagnostics">
       <label className={labelClass}>
-        Опыт до пробного
-        <select
-          value={report.studentProfile.priorExperience}
-          disabled={disabled}
-          onChange={(event) => update((current) => ({
-            ...current,
-            studentProfile: { ...current.studentProfile, priorExperience: event.target.value as TrialLessonReport["studentProfile"]["priorExperience"] },
-          }))}
-          className={inputClass}
-        >
-          {Object.entries(experienceLabels).map(([value, title]) => <option key={value} value={value}>{title}</option>)}
-        </select>
-      </label>
-      <label className={labelClass}>
-        Цель и любимая песня
-        <textarea
+        Цель и любимая песня (если назвал)
+        <input
           value={report.studentProfile.goalAndSong ?? ""}
-          disabled={disabled}
-          maxLength={1000}
-          rows={2}
-          placeholder="Что хочет играть, какую песню — спросите в начале урока"
+          maxLength={300}
+          placeholder="Например: сыграть «Кукушку»"
           onChange={(event) => update((current) => ({
             ...current,
             studentProfile: { ...current.studentProfile, goalAndSong: event.target.value },
@@ -219,80 +142,52 @@ export function TrialBeforeLesson({ report, lead, disabled, update }: {
           className={inputClass}
         />
       </label>
-    </div>
-  );
-}
-
-/** Step 2: the four blocks and the parent report «навык, трудность, действие». */
-export function TrialDiagnostics({ report, disabled, update }: {
-  report: TrialLessonReport;
-  disabled: boolean;
-  update: Update;
-}) {
-  const setBlock = (key: TrialDiagnosticBlock, patch: Partial<TrialLessonReport["diagnostics"][TrialDiagnosticBlock]>) =>
-    update((current) => ({
-      ...current,
-      diagnostics: { ...current.diagnostics, [key]: { ...current.diagnostics[key], ...patch } },
-    }));
-  const setFact = (key: keyof TrialLessonReport["lessonFacts"], value: string) =>
-    update((current) => ({ ...current, lessonFacts: { ...current.lessonFacts, [key]: value } }));
-  return (
-    <div className="space-y-5" data-testid="trial-diagnostics">
       <p className="text-sm leading-6 text-stone-600">
-        Диагностика нужна, чтобы выбрать, с чего начать, а не чтобы оценить ученика. Отметьте, как получилось каждое действие.
+        Отметьте, как получилось каждое действие. Это нужно, чтобы выбрать, с чего начать, а не чтобы оценить ученика.
       </p>
       {TRIAL_BLOCKS.map((block) => {
-        const value = report.diagnostics[block.key];
+        const level = report.diagnostics[block.key]?.level ?? null;
         return (
           <fieldset key={block.key} className="rounded-2xl border border-stone-200 bg-white p-4" data-testid={`trial-block-${block.key}`}>
             <legend className="px-1 text-base font-bold text-ink">{block.title}</legend>
             <p className="text-sm leading-6 text-stone-500">{block.hint}</p>
             <div className="mt-3 grid gap-2 sm:grid-cols-3">
-              {TRIAL_LEVELS.map((level) => (
+              {TRIAL_LEVELS.map((option) => (
                 <button
-                  key={level.key}
+                  key={option.key}
                   type="button"
-                  disabled={disabled}
-                  aria-pressed={value.level === level.key}
-                  className={choiceClass(value.level === level.key)}
-                  onClick={() => setBlock(block.key, { level: level.key })}
+                  aria-pressed={level === option.key}
+                  className={choiceClass(level === option.key)}
+                  onClick={() => update((current) => ({
+                    ...current,
+                    diagnostics: { ...current.diagnostics, [block.key]: { level: option.key } },
+                  }))}
                 >
-                  {value.level === level.key ? <Check size={14} className="mr-1 inline" /> : null}
-                  {level.title}
+                  {level === option.key ? <Check size={14} className="mr-1 inline" /> : null}
+                  {option.title}
                 </button>
               ))}
             </div>
-            <input
-              value={value.note ?? ""}
-              disabled={disabled}
-              maxLength={500}
-              aria-label={`${block.title}: что делали`}
-              placeholder="Что делали, одной строкой"
-              onChange={(event) => setBlock(block.key, { note: event.target.value })}
-              className={inputClass}
-            />
           </fieldset>
         );
       })}
       <div className="grid gap-4">
         <label className={labelClass}>
           Получилось — один освоенный навык
-          <textarea rows={2} maxLength={1000} disabled={disabled} value={report.lessonFacts.achieved ?? ""} onChange={(event) => setFact("achieved", event.target.value)} className={inputClass} />
+          <textarea rows={2} maxLength={300} value={report.lessonFacts.achieved ?? ""} onChange={(event) => setFact("achieved", event.target.value)} className={inputClass} />
         </label>
         <label className={labelClass}>
           Поработаем — одна трудность
-          <textarea rows={2} maxLength={1000} disabled={disabled} value={report.lessonFacts.difficulty ?? ""} onChange={(event) => setFact("difficulty", event.target.value)} className={inputClass} />
+          <textarea rows={2} maxLength={300} value={report.lessonFacts.difficulty ?? ""} onChange={(event) => setFact("difficulty", event.target.value)} className={inputClass} />
         </label>
         <label className={labelClass}>
           Дома — одно конкретное действие
-          <textarea rows={2} maxLength={1000} disabled={disabled} value={report.lessonFacts.homeAction ?? ""} onChange={(event) => setFact("homeAction", event.target.value)} className={inputClass} />
+          <textarea rows={2} maxLength={300} value={report.lessonFacts.homeAction ?? ""} onChange={(event) => setFact("homeAction", event.target.value)} className={inputClass} />
         </label>
       </div>
     </div>
   );
 }
-
-type StepOption = { template: SectorTemplate; directionTitle: string };
 
 const normalizeDirection = (value?: string | null) => (value ?? "").trim().toLocaleLowerCase("ru");
 
@@ -304,7 +199,9 @@ const normalizeDirection = (value?: string | null) => (value ?? "").trim().toLoc
 export function trialStepsForDirection(templates: SectorTemplate[] | null, direction?: string | null) {
   const wanted = normalizeDirection(direction);
   if (!templates || !wanted) return [];
-  return templates.filter((template) => normalizeDirection(template.direction?.title) === wanted);
+  return templates
+    .filter((template) => normalizeDirection(template.direction?.title) === wanted)
+    .sort((a, b) => a.number - b.number);
 }
 
 function snapshot(template: SectorTemplate): TrialPlanStep {
@@ -332,28 +229,23 @@ export function useTrialStepTemplates(enabled: boolean, asAdmin: boolean) {
   return { templates, error };
 }
 
-/** Step 3: the start step and the next two as the plan for three months, format and frequency. */
-export function TrialRecommendation({ report, disabled, update, templates, templatesError, direction }: {
+/** Step «План»: the start step (the plan for three months follows from it) and the optional frequency. */
+export function TrialRecommendation({ report, update, templates, templatesError, direction }: {
   report: TrialLessonReport;
-  disabled: boolean;
   update: Update;
   templates: SectorTemplate[] | null;
   templatesError: string | null;
   direction?: string | null;
 }) {
-  const options = useMemo<StepOption[]>(() => (templates ?? [])
-    .map((template) => ({ template, directionTitle: template.direction?.title ?? "Все направления" }))
-    .sort((a, b) => a.directionTitle.localeCompare(b.directionTitle, "ru") || a.template.number - b.template.number), [templates]);
-  const own = options.filter((option) => normalizeDirection(option.directionTitle) === normalizeDirection(direction));
-  // Only the lead's own direction is offered; with no steps there, the report goes without a plan.
-  const inDirection = own;
+  const steps = useMemo(() => trialStepsForDirection(templates, direction), [templates, direction]);
 
-  function chooseStart(option: StepOption) {
-    const index = inDirection.findIndex((item) => item.template.id === option.template.id);
-    const plan = inDirection.slice(index, index + 3).map((item) => snapshot(item.template));
+  function chooseStart(template: SectorTemplate) {
+    const index = steps.findIndex((item) => item.id === template.id);
+    const plan = steps.slice(index, index + 3).map(snapshot);
+    const start = snapshot(template);
     update((current) => ({
       ...current,
-      recommendation: { ...current.recommendation, startStep: { ...snapshot(option.template), topics: undefined }, plan },
+      recommendation: { ...current.recommendation, startStep: { ...start, topics: undefined }, plan },
     }));
   }
 
@@ -363,30 +255,27 @@ export function TrialRecommendation({ report, disabled, update, templates, templ
         <p className={labelClass}>С какой ступени начнём</p>
         {templates === null ? (
           <p className="mt-2 flex items-center gap-2 text-sm text-stone-500"><LoaderCircle size={15} className="animate-spin" /> Загружаем ступени программы…</p>
-        ) : !inDirection.length ? (
+        ) : !steps.length ? (
           <p className="mt-2 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-950" data-testid="trial-no-steps">
             {templatesError ?? `Для направления «${direction || "не указано"}» ступени программы ещё не заведены. План на три месяца не сформируется; отправить отчёт можно.`}
           </p>
         ) : (
-          <>
-            <div className="mt-3 grid gap-2">
-              {inDirection.map((option) => {
-                const selected = report.recommendation.startStep?.templateId === option.template.id;
-                return (
-                  <button
-                    key={option.template.id}
-                    type="button"
-                    disabled={disabled}
-                    aria-pressed={selected}
-                    onClick={() => chooseStart(option)}
-                    className={`${choiceClass(selected)} text-left`}
-                  >
-                    Ступень {option.template.number} · {option.template.title}
-                  </button>
-                );
-              })}
-            </div>
-          </>
+          <div className="mt-3 grid gap-2">
+            {steps.map((template) => {
+              const selected = report.recommendation.startStep?.templateId === template.id;
+              return (
+                <button
+                  key={template.id}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => chooseStart(template)}
+                  className={`${choiceClass(selected)} text-left`}
+                >
+                  Ступень {template.number} · {template.title}
+                </button>
+              );
+            })}
+          </div>
         )}
         {report.recommendation.plan.length ? (
           <div className="mt-4 rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4 text-sm" data-testid="trial-plan">
@@ -395,74 +284,51 @@ export function TrialRecommendation({ report, disabled, update, templates, templ
               {report.recommendation.plan.map((step) => (
                 <li key={`${step.templateId}-${step.number}`}>
                   <span className="font-semibold text-ink">Ступень {step.number} · {step.title}</span>
-                  {step.topics?.length ? <span className="text-stone-600">: {step.topics.join(", ")}</span> : null}
+                  {step.topics?.length ? <span className="text-stone-600">: {step.topics.join(" · ")}</span> : null}
                 </li>
               ))}
             </ol>
           </div>
         ) : null}
       </div>
-      <div className="grid gap-4 md:grid-cols-2">
-        <label className={labelClass}>
-          Формат
-          <select
-            value={report.recommendation.recommendedFormat}
-            disabled={disabled}
-            onChange={(event) => update((current) => ({
-              ...current,
-              recommendation: { ...current.recommendation, recommendedFormat: event.target.value as TrialLessonReport["recommendation"]["recommendedFormat"] },
-            }))}
-            className={inputClass}
-          >
-            {Object.entries(formatLabels).map(([value, title]) => <option key={value} value={value}>{title}</option>)}
-          </select>
-        </label>
-        <label className={labelClass}>
-          Частота
-          <select
-            value={report.recommendation.recommendedFrequency}
-            disabled={disabled}
-            onChange={(event) => update((current) => ({
-              ...current,
-              recommendation: { ...current.recommendation, recommendedFrequency: event.target.value as TrialLessonReport["recommendation"]["recommendedFrequency"] },
-            }))}
-            className={inputClass}
-          >
-            {Object.entries(frequencyLabels).map(([value, title]) => <option key={value} value={value}>{title}</option>)}
-          </select>
-        </label>
-      </div>
-      <label className={labelClass}>
-        Заметка для школы
-        <textarea
-          rows={2}
-          maxLength={2000}
-          disabled={disabled}
-          value={report.raw.teacherNote ?? ""}
-          placeholder="Для администратора, семья её не увидит"
-          onChange={(event) => update((current) => ({ ...current, raw: { teacherNote: event.target.value } }))}
-          className={inputClass}
-        />
-      </label>
+      <fieldset>
+        <legend className={labelClass}>Рекомендуем заниматься (если уже понятно)</legend>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {TRIAL_FREQUENCIES.map((option) => {
+            const selected = report.recommendation.recommendedFrequency === option.key;
+            return (
+              <button
+                key={option.key}
+                type="button"
+                aria-pressed={selected}
+                className={choiceClass(selected)}
+                onClick={() => update((current) => ({
+                  ...current,
+                  recommendation: { ...current.recommendation, recommendedFrequency: selected ? "undecided" : option.key },
+                }))}
+              >
+                {option.title}
+              </button>
+            );
+          })}
+        </div>
+      </fieldset>
     </div>
   );
 }
 
-/** The report as the admin and the preview see it. */
+/** The report as the preview and the admin see it — the same parts as the family sheet. */
 export function TrialReportSummary({ report }: { report: TrialLessonReport }) {
-  const levelTitle = (level: TrialDiagnosticLevel | null) => TRIAL_LEVELS.find((item) => item.key === level)?.title ?? "—";
+  const levelTitle = (level: TrialDiagnosticLevel | null | undefined) => TRIAL_LEVELS.find((item) => item.key === level)?.title ?? "—";
+  const frequency = TRIAL_FREQUENCIES.find((item) => item.key === report.recommendation.recommendedFrequency)?.title;
   const rows: Array<[string, string | undefined]> = [
-    ["С кем пришёл", { adult: "Со взрослым", alone: "Сам", unknown: undefined }[report.attendance.arrivedWith]],
-    ["Опыт до пробного", report.studentProfile.priorExperience !== "unknown" ? experienceLabels[report.studentProfile.priorExperience] : undefined],
-    ["Цель и любимая песня", report.studentProfile.goalAndSong],
+    ["Цель", report.studentProfile.goalAndSong],
     ["Получилось", report.lessonFacts.achieved],
     ["Поработаем", report.lessonFacts.difficulty],
     ["Дома", report.lessonFacts.homeAction],
-    ["Начинаем", report.recommendation.startStep ? `Ступень ${report.recommendation.startStep.number} · ${report.recommendation.startStep.title}` : undefined],
-    ["Формат", report.recommendation.recommendedFormat !== "undecided" ? formatLabels[report.recommendation.recommendedFormat] : undefined],
-    ["Частота", report.recommendation.recommendedFrequency !== "undecided" ? frequencyLabels[report.recommendation.recommendedFrequency] : undefined],
-    ["План на три месяца", report.recommendation.plan.map((step) => `Ступень ${step.number} · ${step.title}${step.topics?.length ? `: ${step.topics.join(", ")}` : ""}`).join("\n") || undefined],
-    ["Заметка для школы", report.raw.teacherNote],
+    ["С чего начнём", report.recommendation.startStep ? `Ступень ${report.recommendation.startStep.number} · ${report.recommendation.startStep.title}` : undefined],
+    ["План на три месяца", report.recommendation.plan.map((step, index) => `${index + 1}-й месяц — Ступень ${step.number} · ${step.title}${step.topics?.length ? `: ${step.topics.join(" · ")}` : ""}`).join("\n") || undefined],
+    ["Рекомендуем заниматься", frequency],
   ];
   return (
     <div className="space-y-4" data-testid="trial-summary">
@@ -470,8 +336,7 @@ export function TrialReportSummary({ report }: { report: TrialLessonReport }) {
         {TRIAL_BLOCKS.map((block) => (
           <div key={block.key} className="rounded-2xl border border-stone-200 bg-white p-3">
             <dt className="text-xs font-bold uppercase tracking-wider text-stone-500">{block.title}</dt>
-            <dd className="mt-1 text-sm font-bold text-ink">{levelTitle(report.diagnostics[block.key]?.level ?? null)}</dd>
-            {report.diagnostics[block.key]?.note ? <dd className="mt-1 text-sm text-stone-600">{report.diagnostics[block.key].note}</dd> : null}
+            <dd className="mt-1 text-sm font-bold text-ink">{levelTitle(report.diagnostics[block.key]?.level)}</dd>
           </div>
         ))}
       </dl>
@@ -483,6 +348,56 @@ export function TrialReportSummary({ report }: { report: TrialLessonReport }) {
           </div>
         ))}
       </dl>
+    </div>
+  );
+}
+
+/**
+ * «Лист первого занятия» (document 23, step 2): CRM renders the A4 sheet from the submitted report,
+ * the app opens it in a new window and calls print. The window opens on the click itself so the
+ * browser does not block it while the sheet loads.
+ */
+export function TrialSheetPrintButton({ load }: { load: () => Promise<{ html: string }> }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function print() {
+    setError(null);
+    const tab = window.open("", "_blank");
+    if (!tab) {
+      setError("Разрешите браузеру открыть новое окно с листом.");
+      return;
+    }
+    tab.opener = null;
+    setBusy(true);
+    try {
+      const sheet = await load();
+      tab.document.open();
+      tab.document.write(sheet.html);
+      tab.document.close();
+      tab.focus();
+      tab.print();
+    } catch (cause) {
+      tab.close();
+      setError(cause instanceof Error ? cause.message : "Не удалось открыть лист первого занятия.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-3">
+      <button
+        type="button"
+        onClick={() => void print()}
+        disabled={busy}
+        data-testid="trial-sheet-print"
+        className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-stone-900 px-4 text-sm font-semibold text-white disabled:opacity-60"
+      >
+        {busy ? <LoaderCircle size={16} className="animate-spin" /> : <Printer size={16} />}
+        Распечатать лист первого занятия
+      </button>
+      {error ? <p role="alert" className="mt-2 text-sm text-red-700">{error}</p> : null}
     </div>
   );
 }

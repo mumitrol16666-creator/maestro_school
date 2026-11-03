@@ -77,6 +77,10 @@ export const adminOfflineApi = {
       `/admin/offline-lessons/${encodeURIComponent(crmClassId)}/draft`,
       { method: "DELETE" },
     ),
+  trialSheet: (crmClassId: string) =>
+    apiRequest<{ html: string }>(
+      `/admin/offline-lessons/${encodeURIComponent(crmClassId)}/trial-sheet`,
+    ),
   reportVersions: (crmClassId: string) =>
     apiRequest<OfflineLessonReportHistory | null>(
       `/admin/offline-lessons/${encodeURIComponent(crmClassId)}/report-versions`,

@@ -792,3 +792,10 @@ export function readStudentOfflineSummary(crmStudentId: string, options: { fresh
 export function invalidateStudentOfflineSummary(crmStudentId: string) {
   studentOfflineSummaryCache.invalidate(crmStudentId);
 }
+
+/** «Лист первого занятия» for a trial lesson: CRM renders it from the submitted v3 report (document 23, step 2). */
+export async function fetchTrialSheet(crmClassId: string) {
+  return crmGet<{ html: string }>(
+    `/api/integration/v1/classes/${encodeURIComponent(crmClassId)}/trial-sheet`,
+  );
+}

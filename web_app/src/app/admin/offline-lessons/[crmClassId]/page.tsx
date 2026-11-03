@@ -42,10 +42,10 @@ import {
 import { StudentWorkspaceDrawer } from "@/components/student-workspace-drawer";
 import { LessonReportPreview, LessonStepNav, LessonStepper, visibleLessonSteps, type LessonStep } from "@/components/lesson-steps";
 import {
-  TrialBeforeLesson,
   TrialDiagnostics,
   TrialRecommendation,
   TrialReportSummary,
+  TrialSheetPrintButton,
   isTrialReportV3,
   mergeTrialReport,
   trialReportIssues,
@@ -421,7 +421,7 @@ export default function AdminOfflineLessonDetailPage() {
   const router = useRouter();
   const crmClassId = params.crmClassId;
   const [openStudentId, setOpenStudentId] = useState<string | null>(null);
-  const [lessonStep, setLessonStep] = useState<LessonStep>(1);
+  const [chosenLessonStep, setLessonStep] = useState<LessonStep>(1);
   const { user } = useAuth();
   const isAdmin = isOfflineCoordinatorRole(user?.role);
   const canActForTeacher = isContentAdminRole(user?.role);
@@ -509,6 +509,8 @@ export default function AdminOfflineLessonDetailPage() {
   const learningV2 = overriddenLearningV2 ?? studentsResource.data?.learningV2 ?? null;
   const isLearningLessonV2 = Boolean(learningV2?.enabled);
   const isTrialLesson = lesson?.classType === "trial" || Boolean(lesson?.trialParticipant || lesson?.trialBooking);
+  // A trial starts at «Диагностика» (document 23 §10): it has no «Перед уроком» step.
+  const lessonStep: LessonStep = isTrialLesson && chosenLessonStep < 3 ? 3 : chosenLessonStep;
   const hasLinkedStudent = Boolean(lesson?.crmIndividualStudentId);
   const trialLeadFallback = useMemo(() => {
     if (!lesson || !isTrialLesson || hasLinkedStudent) return null;
@@ -1479,14 +1481,17 @@ export default function AdminOfflineLessonDetailPage() {
   );
   // The report is filled in short steps (02 §3.4, plan 1.14) when a learning lesson is edited:
   // four for a lesson with one student, five with attendance when there are several;
-  // a trial lesson goes «Перед уроком → Диагностика → Рекомендация → Отправка» (document 23);
+  // a trial lesson goes «Диагностика → План → Отправка» (document 23 §10);
   // absence-only reports keep one page.
   const useLessonSteps = Boolean(canEditTeacherReport && (isLearningLessonV2 || isTrialLesson) && !isAbsenceOnly);
   const showStep = (step: LessonStep) => !useLessonSteps || lessonStep === step;
   // The trial lesson goes the same steps with its own content (document 23 §5.1).
-  const trialStepTitles: Partial<Record<LessonStep, string>> = { 1: "Перед уроком", 3: "Диагностика", 4: "Рекомендация", 5: "Отправка" };
+  // 03.11 (document 23 §10): only what reaches the family sheet — «Диагностика → План → Отправка».
+  const trialStepTitles: Partial<Record<LessonStep, string>> = { 3: "Диагностика", 4: "План", 5: "Отправка" };
   const stepList = isTrialLesson
-    ? visibleLessonSteps(false).map((item) => ({ ...item, title: trialStepTitles[item.key] ?? item.title, short: trialStepTitles[item.key] ?? item.short }))
+    ? visibleLessonSteps(false)
+      .filter((item) => trialStepTitles[item.key])
+      .map((item) => ({ ...item, title: trialStepTitles[item.key]!, short: trialStepTitles[item.key]! }))
     : visibleLessonSteps(withAttendanceStep);
   const moveStep = (direction: 1 | -1) => {
     const index = stepList.findIndex((item) => item.key === lessonStep);
@@ -1754,7 +1759,7 @@ export default function AdminOfflineLessonDetailPage() {
         <LessonStepper step={lessonStep} steps={stepList} issues={stepIssues} onSelect={setLessonStep} />
       ) : null}
 
-      {isTrialLesson && !useLessonSteps && students[0] ? (
+      {isTrialLesson && students[0] ? (
         <section className="mb-7 rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft" data-testid="trial-lead">
           <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-700">Пробный урок</p>
           <p className="mt-2 text-xl font-bold text-ink">{students[0].name}</p>
@@ -1767,34 +1772,26 @@ export default function AdminOfflineLessonDetailPage() {
               Статистика ученика
             </button>
           ) : null}
-        </section>
-      ) : null}
-
-      {useLessonSteps && isTrialLesson && lessonStep === 1 ? (
-        <section className="mb-7 rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft" data-testid="trial-step-before">
-          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-700">Шаг 1</p>
-          <h2 className="font-display mt-1 text-3xl">Перед уроком</h2>
-          <p className="mt-2 text-sm text-stone-500">Пробный урок: кто пришёл и что хочет играть.</p>
-          <p className="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900" data-testid="trial-auto-present">
-            Урок начат — значит, ученик пришёл. Если не пришёл, нажмите «Отменить урок» внизу страницы.
-          </p>
-          <div className="mt-5">
-            <TrialBeforeLesson
-              report={trialReport}
-              lead={students[0] ? { name: students[0].name, phone: students[0].phone, direction: trialDirection } : null}
-              disabled={!canEditReport}
-              update={updateTrialReport}
-            />
-          </div>
+          {useLessonSteps ? (
+            <p className="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900" data-testid="trial-auto-present">
+              Урок начат — значит, ученик пришёл. Если не пришёл, нажмите «Отменить урок» внизу страницы.
+            </p>
+          ) : null}
         </section>
       ) : null}
 
       {useLessonSteps && isTrialLesson && lessonStep === 3 ? (
         <section className="mb-7 rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft" data-testid="trial-step-diagnostics">
-          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-700">Шаг 2</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-700">Шаг 1</p>
           <h2 className="font-display mt-1 text-3xl">Диагностика</h2>
           <div className="mt-5">
-            <TrialDiagnostics report={trialReport} disabled={!canEditReport} update={updateTrialReport} />
+            {/* Like the learning steps: the form waits for the saved draft, so a restored draft
+                never overwrites the first taps. */}
+            {draftHydrated ? (
+              <TrialDiagnostics report={trialReport} update={updateTrialReport} />
+            ) : (
+              <p className="text-sm text-stone-500" data-testid="trial-draft-loading">Загружаем черновик…</p>
+            )}
           </div>
         </section>
       ) : null}
@@ -1955,13 +1952,17 @@ export default function AdminOfflineLessonDetailPage() {
         <section className={`space-y-7 ${useLessonSteps ? "" : "order-last xl:order-none"}`}>
           <form onSubmit={handleSubmit} className={`rounded-[28px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8 ${useLessonSteps && lessonStep < 4 ? "hidden" : ""}`}>
             <h2 className="font-display text-3xl">
-              {isAbsenceOnly ? "Отметка отсутствия" : isTrialLesson && useLessonSteps ? (lessonStep === 5 ? "Отправка" : "Рекомендация") : "Отчёт по уроку"}
+              {isAbsenceOnly ? "Отметка отсутствия" : isTrialLesson && useLessonSteps ? (lessonStep === 5 ? "Отправка" : "План") : "Отчёт по уроку"}
             </h2>
             <p className="mt-2 text-sm text-stone-500">
               {isAbsenceOnly
                 ? "Все ученики отмечены отсутствующими. Тему, итог и домашнее задание заполнять не нужно."
+                : isTrialLesson && useLessonSteps
+                ? lessonStep === 5 ? "Главное из листа первого занятия. Проверьте и отправьте." : "С какой ступени начнём. План на три месяца сложится сам."
                 : isTrialLesson
-                ? "С какой ступени начнём, формат и частота."
+                ? isTrialReportV3(lesson.trialReport)
+                  ? "Диагностика отправлена. Лист первого занятия можно распечатать ниже."
+                  : "Диагностику пробного заполняют после начала урока."
                 : isAdmin
                 ? "Подтверждение отчёта и списание выполняются в CRM. Здесь отображаются данные урока и результат проверки."
                 : "Заполните тему, итог и домашнее задание. Ученик увидит материалы после подтверждения администратором."}
@@ -2002,7 +2003,6 @@ export default function AdminOfflineLessonDetailPage() {
                 <div className="mt-6">
                   <TrialRecommendation
                     report={trialReport}
-                    disabled={!canEditReport}
                     update={updateTrialReport}
                     templates={trialTemplates.templates}
                     templatesError={trialTemplates.error}
@@ -2010,7 +2010,15 @@ export default function AdminOfflineLessonDetailPage() {
                   />
                 </div>
               ) : isTrialReportV3(lesson.trialReport) ? (
-                <div className="mt-6"><TrialReportSummary report={mergeTrialReport(lesson.trialReport)} /></div>
+                <div className="mt-6">
+                  <TrialReportSummary report={mergeTrialReport(lesson.trialReport)} />
+                  {/* Norm 6: a substitute stops seeing the child once the lesson is approved. */}
+                  {isAdmin || !((lesson as { substitution?: boolean }).substitution && lesson.status === "completed") ? (
+                    <TrialSheetPrintButton
+                      load={() => (isAdmin ? adminOfflineApi : teacherOfflineApi).trialSheet(crmClassId)}
+                    />
+                  ) : null}
+                </div>
               ) : lesson.trialReport ? (
                 <p className="mt-6 rounded-2xl border border-stone-200 bg-white p-4 text-sm text-stone-600">
                   Анкета пробного заполнена в старом формате. Её можно посмотреть в CRM, в карточке урока.

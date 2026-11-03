@@ -2,10 +2,10 @@ import { expect, test, type APIRequestContext, type BrowserContext, type Page } 
 import { startQaLessonForTeacher } from "./qa-start";
 
 /**
- * Document 23 §8 (decision 03.11): the trial lesson in four steps on the methodology's diagnostics —
- * «Перед уроком», «Диагностика» (four blocks with a level, «получилось / поработаем / дома»),
- * «Рекомендация» (start step and the plan for three months), «Отправка». A started trial means the
- * lead came: there is no attendance step and no «Итог посещения». CRM keeps the report as v3.
+ * Document 23 §8 and §10 (decisions 03.11): the trial lesson keeps only what reaches the family's
+ * «Лист первого занятия» — «Диагностика» (goal, four blocks with a level, «получилось / поработаем /
+ * дома»), «План» (start step, three steps for three months, frequency) and «Отправка». A started trial
+ * means the lead came: no attendance step. After sending, the sheet prints from CRM through the app.
  * Needs published program steps on the stand (scripts/seed-guitar-steps.ts --publish).
  */
 const PASSWORD = "QaMaestro2026!";
@@ -51,33 +51,32 @@ async function noHorizontalScroll(page: Page) {
   expect(overflow).toBeLessThanOrEqual(1);
 }
 
-test("a trial lesson goes four steps on the methodology's diagnostics and reaches CRM as v3", async ({ page, request, context }) => {
+test("a trial lesson goes three steps, reaches CRM as v3 and prints the family sheet", async ({ page, request, context }) => {
   const token = await signIn(request, context);
   const crmClassId = await trialLesson(request);
   await page.goto(`/admin/offline-lessons/${crmClassId}`);
 
   const stepper = page.getByTestId("lesson-stepper");
-  await expect(stepper).toContainText("Шаг 1 из 4: Перед уроком");
+  await expect(stepper).toContainText("Шаг 1 из 3: Диагностика");
   await expect(page.getByText("Итог посещения")).toHaveCount(0);
   await expect(page.getByText("По каждому ученику")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Присутствовал" })).toHaveCount(0);
+  for (const removed of ["Со взрослым", "Опыт до пробного", "Формат", "Что делали"]) {
+    await expect(page.getByText(removed, { exact: false })).toHaveCount(0);
+  }
+  const lead = page.getByTestId("trial-lead");
+  await expect(lead).toContainText("Лид QA");
+  await expect(lead).toContainText("+77000009999");
+  await expect(page.getByTestId("trial-auto-present")).toBeVisible();
   await noHorizontalScroll(page);
 
-  const before = page.getByTestId("trial-step-before");
-  await expect(before).toContainText("Лид QA");
-  await expect(before).toContainText("+77000009999");
-  await before.getByRole("button", { name: "Со взрослым" }).click();
-  await page.getByLabel("Опыт до пробного").selectOption("none");
-  await page.getByLabel("Цель и любимая песня").fill("Сыграть «Кукушку»");
-  await page.getByRole("button", { name: /Далее/ }).click();
-
-  await expect(stepper).toContainText("Диагностика");
   await expect(stepper).toContainText("Отметьте, как получилось");
+  await page.getByLabel(/Цель и любимая песня/).fill("Сыграть «Кукушку»");
   for (const [key, level] of [["instrument", "Сам"], ["hearingPulse", "С подсказкой"], ["movement", "Пока не получилось"], ["learnability", "Сам"]] as const) {
     const block = page.getByTestId(`trial-block-${key}`);
     await block.getByRole("button", { name: level, exact: true }).click();
     await expect(block.getByRole("button", { name: level, exact: true })).toHaveAttribute("aria-pressed", "true");
-    await block.getByRole("textbox").fill(`что делали: ${key}`);
+    await expect(block.getByRole("textbox")).toHaveCount(0);
   }
   await page.getByLabel(/Получилось/).fill("Чистый звук на открытой струне");
   await page.getByLabel(/Поработаем/).fill("Левая рука быстро устаёт");
@@ -85,20 +84,21 @@ test("a trial lesson goes four steps on the methodology's diagnostics and reache
   await noHorizontalScroll(page);
   await page.getByRole("button", { name: /Далее/ }).click();
 
-  await expect(stepper).toContainText("Рекомендация");
+  await expect(stepper).toContainText("Шаг 2 из 3: План");
   await expect(stepper).toContainText("Выберите ступень");
   await page.getByTestId("trial-recommendation").getByRole("button", { name: /Ступень 1/ }).first().click();
   const plan = page.getByTestId("trial-plan");
   await expect(plan).toContainText("План на три месяца");
   await expect(plan.locator("li")).toHaveCount(3);
-  await page.getByLabel("Формат").selectOption("individual");
-  await page.getByLabel("Частота").selectOption("2_per_week");
+  await page.getByTestId("trial-recommendation").getByRole("button", { name: "2 раза в неделю" }).click();
   await noHorizontalScroll(page);
   await page.getByRole("button", { name: /К предпросмотру/ }).click();
 
+  await expect(stepper).toContainText("Шаг 3 из 3: Отправка");
   const preview = page.getByTestId("trial-preview");
   await expect(preview).toContainText("С подсказкой");
   await expect(preview).toContainText("Ступень 1");
+  await expect(preview).toContainText("2 раза в неделю");
   const submit = page.getByRole("button", { name: "Отправить на проверку" }).first();
   await expect(submit).toBeEnabled();
   await submit.click();
@@ -111,13 +111,22 @@ test("a trial lesson goes four steps on the methodology's diagnostics and reache
     const lesson = (await response.json()).data as { status?: string; trialReport?: { version?: number; diagnostics?: Record<string, { level?: string }> } };
     return `${lesson.status}|${lesson.trialReport?.version}|${lesson.trialReport?.diagnostics?.movement?.level}`;
   }, { timeout: 20_000 }).toBe("pending_admin_review|3|not_yet");
+
+  await page.reload();
+  const printButton = page.getByTestId("trial-sheet-print");
+  await expect(printButton).toBeVisible();
+  const [sheet] = await Promise.all([context.waitForEvent("page"), printButton.click()]);
+  await expect(sheet.locator("h1")).toHaveText("Лист первого занятия");
+  for (const text of ["Лид QA", "Сыграть «Кукушку»", "Пока не получилось", "Левая рука быстро устаёт", "План на три месяца", "2 раза в неделю"]) {
+    await expect(sheet.locator("main")).toContainText(text);
+  }
+  await sheet.close();
 });
 
 test("a lead whose direction has no program steps is sent without a plan, not with another direction's", async ({ page, request, context }) => {
   await signIn(request, context);
   const crmClassId = await trialLesson(request, "Вокал");
   await page.goto(`/admin/offline-lessons/${crmClassId}`);
-  await page.getByRole("button", { name: /Далее/ }).click();
   for (const key of ["instrument", "hearingPulse", "movement", "learnability"]) {
     await page.getByTestId(`trial-block-${key}`).getByRole("button", { name: "С подсказкой", exact: true }).click();
   }
