@@ -486,6 +486,10 @@ export function LearningLessonV2Panel({
                       <span className="mt-0.5 block text-[11px] font-semibold text-amber-700">
                         ждёт подтверждения
                       </span>
+                    ) : topic.percentConflict ? (
+                      <span className="mt-0.5 block text-[11px] font-semibold text-amber-700">
+                        процент у администратора
+                      </span>
                     ) : null}
                   </button>
                   {onRenameTopic || onRemoveTopic ? (
@@ -616,6 +620,12 @@ export function LearningLessonV2Panel({
                         {selectedTopic.progressPercent}% — по отчёту прошлого урока
                         {selectedTopic.pendingFromLesson.date ? ` ${pendingLessonDay(selectedTopic.pendingFromLesson.date)}` : ""},
                         он ждёт подтверждения админом. Сейчас в теме {selectedTopic.approvedPercent ?? 0}%.
+                      </p>
+                    ) : selectedTopic.percentConflict ? (
+                      <p className="mt-1 text-xs leading-5 text-amber-800" data-testid="topic-percent-conflict">
+                        Прошлый урок принят, но его {selectedTopic.percentConflict.toPercent}% не записаны:
+                        в теме уже было {selectedTopic.percentConflict.currentPercent}%. Какой процент оставить, решит администратор.
+                        Сейчас тема начинается с {selectedTopic.progressPercent}%.
                       </p>
                     ) : null}
                     {selectedTopicProgress && selectedTopicProgress.expectedPercent !== selectedTopic.progressPercent ? (

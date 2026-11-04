@@ -286,6 +286,12 @@ export type LearningLessonV2Context = {
         date: string | null;
         startTime: string | null;
       } | null;
+      /** 04.11: an approved lesson's percent for this topic waits for the admin's decision. */
+      percentConflict?: {
+        crmClassId: string;
+        toPercent: number;
+        currentPercent: number;
+      } | null;
       masteredAt: string | null;
       planCompletionRewardPoints: number;
       /** Plan 1.14: materials the step template keeps for this topic. */

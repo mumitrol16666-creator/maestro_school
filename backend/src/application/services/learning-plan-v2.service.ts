@@ -1131,6 +1131,19 @@ export type LearningTopicProgressFromLessonV2Input = {
   comment?: string;
 };
 
+/**
+ * 04.11 (Vladislav, rule of 26.09): a topic whose percent moved before the approval goes to the
+ * admin; attendance, rewards and homework of the approved lesson are not held back by it.
+ */
+export type SkippedLessonTopicUpdate = {
+  topicId: string;
+  title: string;
+  expectedPercent: number | null;
+  toPercent: number;
+  currentPercent: number;
+  reason: "stale" | "mastered" | "recorded";
+};
+
 type PreparedLearningTopicProgressFromLessonV2 = {
   update: LearningTopicProgressFromLessonV2Input;
   sourceKey: string;
@@ -1152,6 +1165,21 @@ function validateLessonTopicProgressPercent(toPercent: number) {
  * The earlier sent lesson whose report brings the topic to `expectedPercent`, as ««Название» (дата,
  * время)», or null. Approval of a later lesson waits (and retries) until that one is applied.
  */
+function skippedTopic(
+  scoped: { id: string; title?: string | null; progressPercent: number | null },
+  update: LearningTopicProgressFromLessonV2Input,
+  reason: SkippedLessonTopicUpdate["reason"],
+): SkippedLessonTopicUpdate {
+  return {
+    topicId: update.topicId,
+    title: scoped.title ?? "Тема",
+    expectedPercent: update.expectedPercent,
+    toPercent: update.toPercent,
+    currentPercent: scoped.progressPercent ?? 0,
+    reason,
+  };
+}
+
 async function earlierLessonAwaitingApproval(crmClassId: string, topicId: string, expectedPercent: number | null) {
   if (expectedPercent == null) return null;
   const projection = await prisma.offlineLessonProjection.findUnique({
@@ -1174,6 +1202,8 @@ export async function updateLearningTopicProgressBatchFromLessonV2(
   options: {
     occurredAt?: Date;
     rewardRecipientCrmStudentIds?: readonly string[];
+    /** Approval of a CRM-confirmed lesson: a mismatched topic is set aside instead of failing. */
+    skippedTopics?: SkippedLessonTopicUpdate[];
   } = {},
 ) {
   const topicIds = updates.map((update) => update.topicId);
@@ -1193,6 +1223,10 @@ export async function updateLearningTopicProgressBatchFromLessonV2(
       where: { sourceKey },
     });
     if (existingEvent) {
+      if (!sameLearningTopicProgressRequest(existingEvent, update) && options.skippedTopics) {
+        options.skippedTopics.push(skippedTopic(scoped, update, "recorded"));
+        continue;
+      }
       if (!sameLearningTopicProgressRequest(existingEvent, update)) {
         throw new ConflictError(
           "Прогресс этой темы уже зафиксирован в итогах урока",
@@ -1206,6 +1240,19 @@ export async function updateLearningTopicProgressBatchFromLessonV2(
         noChange: false,
         masteryStudents: [],
       });
+      continue;
+    }
+    if (options.skippedTopics && scoped.progressPercent === update.toPercent && scoped.progressPercent !== update.expectedPercent) {
+      // The topic already stands where this lesson would take it: nothing to write, nothing to ask.
+      prepared.push({ update, sourceKey, alreadyApplied: false, noChange: true, masteryStudents: [] });
+      continue;
+    }
+    if (scoped.progressPercent === 100 && scoped.progressPercent !== update.toPercent && options.skippedTopics) {
+      options.skippedTopics.push(skippedTopic(scoped, update, "mastered"));
+      continue;
+    }
+    if (scoped.progressPercent !== update.expectedPercent && options.skippedTopics) {
+      options.skippedTopics.push(skippedTopic(scoped, update, "stale"));
       continue;
     }
     if (scoped.progressPercent === 100) {

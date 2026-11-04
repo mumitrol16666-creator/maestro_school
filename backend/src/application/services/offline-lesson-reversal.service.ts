@@ -8,6 +8,7 @@ import {
   reopenOfflineLessonReport,
 } from "./offline-lesson-report.service.js";
 import { upsertAdminJournalEntry } from "./admin-journal.service.js";
+import { closeLessonTopicConflicts } from "./lesson-topic-conflicts.service.js";
 
 /**
  * Reverses everything a confirmed lesson report version awarded on the Platform:
@@ -493,6 +494,8 @@ export async function applyCrmOfflineLessonEvent(params: {
   });
   const actorUserId = version?.authorUserId ?? null;
 
+  // 04.11: a returned lesson's set-aside topic percents must never be written later.
+  await closeLessonTopicConflicts(params.crmClassId, "lesson_returned", reason);
   let reversal: OfflineLessonReversalSummary | null = null;
   if (report.confirmedVersion) {
     reversal = await reverseOfflineLessonApproval({ crmClassId: params.crmClassId, reason, actorUserId });

@@ -104,6 +104,7 @@ const syncStatusLabels: Record<string, string> = {
 const syncConflictLabels: Record<string, string> = {
   attendance_mismatch: "Посещаемость отличается от расписания",
   stale_projection_ignored: "Расписание содержит более новые данные",
+  topic_percent_mismatch: "Урок принят, проценты тем не записаны",
 };
 
 const REPORT_SUBMISSION_LEAD_MINUTES = 20;
@@ -2449,7 +2450,9 @@ export default function AdminOfflineLessonDetailPage() {
                           type="button"
                           disabled={busy != null}
                           onClick={() => {
-                            const reason = askReason("Повторно отправить сохранённую версию?");
+                            const reason = askReason(item.kind === "topic_percent_mismatch"
+                              ? "Записать в темы проценты из этого урока?"
+                              : "Повторно отправить сохранённую версию?");
                             if (reason) void runAction(
                               `conflict-retry-${item.id}`,
                               () => adminOfflineApi.resolveSyncConflict(item.id, "retry_local", reason),
@@ -2457,13 +2460,15 @@ export default function AdminOfflineLessonDetailPage() {
                           }}
                           className="min-h-10 rounded-[10px] border border-red-300 bg-white px-3 text-xs font-bold text-red-900 disabled:opacity-50"
                         >
-                          Отправить снова
+                          {item.kind === "topic_percent_mismatch" ? "Записать проценты урока" : "Отправить снова"}
                         </button>
                         <button
                           type="button"
                           disabled={busy != null}
                           onClick={() => {
-                            const reason = askReason("Принять данные из расписания и закрыть конфликт?");
+                            const reason = askReason(item.kind === "topic_percent_mismatch"
+                              ? "Оставить в темах текущие проценты и закрыть конфликт?"
+                              : "Принять данные из расписания и закрыть конфликт?");
                             if (reason) void runAction(
                               `conflict-accept-${item.id}`,
                               () => adminOfflineApi.resolveSyncConflict(item.id, "accept_crm", reason),
@@ -2471,7 +2476,7 @@ export default function AdminOfflineLessonDetailPage() {
                           }}
                           className="min-h-10 rounded-[10px] bg-red-900 px-3 text-xs font-bold text-white disabled:opacity-50"
                         >
-                          Принять расписание
+                          {item.kind === "topic_percent_mismatch" ? "Оставить как есть" : "Принять расписание"}
                         </button>
                       </div>
                     </div>

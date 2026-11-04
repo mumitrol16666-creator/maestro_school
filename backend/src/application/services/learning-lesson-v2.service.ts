@@ -13,7 +13,15 @@ import {
   createLearningHomeworkAssignmentForRecipients,
   reviewLearningHomework,
 } from "./learning-homework-v2.service.js";
-import { updateLearningTopicProgressBatchFromLessonV2 } from "./learning-plan-v2.service.js";
+import {
+  type SkippedLessonTopicUpdate,
+  updateLearningTopicProgressBatchFromLessonV2,
+} from "./learning-plan-v2.service.js";
+import {
+  applyWaitingLessonTopicConflicts,
+  openTopicConflictsFor,
+  recordLessonTopicConflicts,
+} from "./lesson-topic-conflicts.service.js";
 import { pendingTopicPercentsBefore } from "./lesson-pending-topics.service.js";
 import { listHomeworkCheckHistory } from "./learning-homework-v2.service.js";
 import { requireCrmTeacherId } from "./teacher-students.service.js";
@@ -426,10 +434,12 @@ async function withPendingTopicPercents(
   lesson: LessonCard,
   plans: Awaited<ReturnType<typeof lessonPlans>>,
 ) {
+  const topicIds = plans.flatMap((plan) => plan.topics.map((topic) => topic.id));
   const pending = await pendingTopicPercentsBefore(
     { crmClassId, date: lesson.date, startTime: lesson.startTime },
-    plans.flatMap((plan) => plan.topics.map((topic) => topic.id)),
+    topicIds,
   );
+  const conflicts = await openTopicConflictsFor(topicIds);
   return plans.map((plan) => ({
     ...plan,
     topics: plan.topics.map((topic) => {
@@ -445,6 +455,10 @@ async function withPendingTopicPercents(
               date: waiting.date,
               startTime: waiting.startTime,
             }
+          : null,
+        // 04.11: an approved earlier lesson whose percent the admin still has to decide on.
+        percentConflict: !waiting && conflicts.get(topic.id)?.crmClassId !== crmClassId
+          ? conflicts.get(topic.id) ?? null
           : null,
       };
     }),
@@ -727,6 +741,7 @@ async function applyValidatedLearningLessonV2Results(
     createdByUserId: string;
     recipientCrmStudentIds: string[];
   },
+  setAsideMismatchedTopics = false,
 ) {
   const assignmentRecipients = learningHomeworkAssignmentRecipientsForApproval(input, approval);
   const homeworkResults = [];
@@ -741,6 +756,9 @@ async function applyValidatedLearningLessonV2Results(
       checkedAtLesson: true,
     }));
   }
+  // 04.11: only a CRM-approved lesson sets a mismatched topic aside; the teacher's own apply
+  // keeps failing loudly so the teacher refreshes «было».
+  const skippedTopics: SkippedLessonTopicUpdate[] | undefined = setAsideMismatchedTopics ? [] : undefined;
   const topicResults = await updateLearningTopicProgressBatchFromLessonV2(
     actorUserId,
     crmClassId,
@@ -753,6 +771,7 @@ async function applyValidatedLearningLessonV2Results(
     {
       occurredAt: context.eventAt,
       rewardRecipientCrmStudentIds: approval?.recipientCrmStudentIds,
+      skippedTopics,
     },
   );
   const homeworkAssignment = input.homeworkAssignment && approval && assignmentRecipients
@@ -770,6 +789,7 @@ async function applyValidatedLearningLessonV2Results(
     homeworkResults,
     topicResults,
     homeworkAssignment,
+    skippedTopics: skippedTopics ?? [],
   };
 }
 
@@ -790,7 +810,20 @@ export async function applyApprovedLearningLessonV2Results(
   // retried after the current monthly plan has been republished or homework has been consumed
   // by an earlier partial attempt, so only snapshot-internal invariants are checked here.
   validateLearningLessonV2ResultDuplicates(input);
-  return applyValidatedLearningLessonV2Results(actorUserId, crmClassId, input, context, approval);
+  // Finalization runs only after CRM approved the lesson, so a mismatched topic is set aside.
+  const result = await applyValidatedLearningLessonV2Results(actorUserId, crmClassId, input, context, approval, true);
+  // Records the set-aside topics, or closes an older version's conflict when nothing is left.
+  await recordLessonTopicConflicts({
+    crmClassId,
+    reportVersion: approval?.reportVersion ?? null,
+    approvedBy: actorUserId,
+    recipientCrmStudentIds: approval?.recipientCrmStudentIds ?? null,
+    occurredAt: context.eventAt ?? null,
+    topics: result.skippedTopics,
+  });
+  const written = result.topicResults.map((topic) => topic.id);
+  if (written.length) await applyWaitingLessonTopicConflicts(written);
+  return result;
 }
 
 /**
