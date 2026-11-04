@@ -60,7 +60,7 @@ async function createFixture(t: Parameters<Parameters<typeof test>[1]>[0]) {
   return { prisma, suffix, crmStudentId, crmDirectionId, direction, student, teacher, otherTeacher };
 }
 
-integrationTest("a teacher closes the open sector early for the Points they write, once", async t => {
+integrationTest("an early close archives without rewards and cannot bypass the passed-exam policy", async t => {
   const fixture = await createFixture(t);
   const { prisma, crmStudentId, crmDirectionId, student, teacher } = fixture;
   const {
@@ -85,12 +85,13 @@ integrationTest("a teacher closes the open sector early for the Points they writ
     (error: { code?: string }) => error.code === "SECTOR_EARLY_CLOSE_POINTS_INVALID",
   );
 
-  const closed = await closeStudentSectorEarlyV2(teacher.id, crmStudentId, crmDirectionId, { points: 120 });
+  await assert.rejects(closeStudentSectorEarlyV2(teacher.id, crmStudentId, crmDirectionId, { points: 120 }), (error:{code?:string})=>error.code==="SECTOR_REWARD_REQUIRES_EXAM");
+  const closed = await closeStudentSectorEarlyV2(teacher.id, crmStudentId, crmDirectionId, { points: 0 });
   assert.equal(closed.status, "closed");
   assert.equal(closed.closeReason, "manual");
-  assert.equal(closed.awardedPoints, 120);
+  assert.equal(closed.awardedPoints, 0);
   const points = await prisma.pointsTransaction.findMany({ where: { studentId: student.id } });
-  assert.deepEqual(points.map((row) => [row.amount, row.sourceKey]), [[120, `learning-plan-completion:${closed.id}:${student.id}`]]);
+  assert.deepEqual(points, []);
   const note = await prisma.userNotification.findFirst({ where: { userId: student.id, dedupeKey: `sector-closed:${closed.id}` } });
   assert.ok(note, "the student is told the sector is closed");
 

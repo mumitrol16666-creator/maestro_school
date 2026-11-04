@@ -415,8 +415,8 @@ export async function ensureActiveEconomicEpochParticipant(
   }, { timeout: 30_000 });
 }
 
-export async function requireActiveEconomicEpochForEvent(eventAt: Date) {
-  const epoch = await prisma.economicEpoch.findFirst({
+export async function requireActiveEconomicEpochForEvent(eventAt: Date, client: DbClient = prisma) {
+  const epoch = await client.economicEpoch.findFirst({
     where: {
       status: EconomicEpochStatus.active,
       startsAt: { lte: eventAt },

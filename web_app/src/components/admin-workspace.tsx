@@ -127,7 +127,7 @@ export const adminWorkspaceSections: AdminWorkspaceSection[] = [
       },
       {
         href: "/admin/sector-templates",
-        label: "Ступени программы",
+        label: "Сектора программы",
         description: "Готовые секторы по направлениям: темы и критерии, которые преподаватель открывает ученику.",
         group: "Программы и контент",
         icon: Layers3,

@@ -29,6 +29,7 @@ export interface PreparedTheoryMaterial {
   title: string;
   introduction: string;
   readingMinutes: number;
+  source?: {title:string;section:string;pdfPages:number[];printedPages:number[]};
   sections: PreparedTheorySection[];
   remember: string[];
   practice: string[];

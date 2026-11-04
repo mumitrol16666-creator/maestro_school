@@ -1,6 +1,8 @@
 "use client";
 
 import { CheckCircle2, LoaderCircle, Plus, Save, Send, Trash2, Target, Flag, History, Lightbulb, ClipboardCheck } from "lucide-react";
+import { SectorStatistics } from "@/components/sector-statistics";
+import { NextLearningPlan } from "@/components/next-learning-plan";
 import { useEffect, useState } from "react";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { ApiError } from "@/lib/api-client";
@@ -10,7 +12,6 @@ import { LearningTopicProgressEditor } from "@/components/learning-topic-progres
 import { LearningHomeworkAssignmentComposer } from "@/components/learning-homework-assignment-composer";
 import { SectorHistoryList, SectorProposalsPanel, SectorTemplatePicker } from "@/components/sector-editor-parts";
 import { ProgressBar } from "@/components/progress-bar";
-import { SectorEarlyClose } from "@/components/sector-early-close";
 import { learningHomeworkApi } from "@/lib/learning-homework-api";
 import type {
   LearningPlanMode,
@@ -257,7 +258,7 @@ function StudentMonthlyPlanEditorContent({
                 onClick={() => setShowHistory((value) => !value)}
                 className="mt-1 inline-flex items-center gap-1 text-xs font-bold text-stone-500 hover:text-ink"
               >
-                <History size={13} /> Закрыто секторов: {history.length}
+                <History size={13} /> Предыдущие секторы: {history.length}
               </button>
             ) : null}
           </div>
@@ -291,16 +292,23 @@ function StudentMonthlyPlanEditorContent({
       </div>
 
       {showHistory && history.length ? <SectorHistoryList history={history} /> : null}
+      {sectors ? <SectorStatistics endpoint={`/teachers/me/students/${encodeURIComponent(crmStudentId)}/sector-statistics`} /> : null}
+
+      {sectors && draft.id && draft.publication?.isPublished && crmDirectionId ? (
+        <NextLearningPlan kind="students" ownerId={crmStudentId} planId={draft.id}
+          directionId={crmDirectionId} version={draft.version ?? 0}
+          disabled={!saved || hasUnpublishedChanges || saving || publishing} onOpened={() => resource.reload()} />
+      ) : null}
 
       {resource.error ? (
         <p className="mt-4 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700">{resource.error}</p>
       ) : null}
 
-      {isNewSector ? (
+      {isNewSector || (!draft.publication?.isPublished && !draft.items.some((item) => item.title.trim())) ? (
         <SectorTemplatePicker
           crmDirectionId={crmDirectionId}
           onPick={(template) => {
-            setDraft(planFromTemplate(template));
+            setDraft((current) => ({ ...planFromTemplate(template), id: current.id, version: current.version }));
             setSaved(false);
           }}
         />
@@ -531,20 +539,6 @@ function StudentMonthlyPlanEditorContent({
           {publishing ? "Публикуем…" : draft.publication?.isPublished ? "Обновить сектор ученику" : "Опубликовать ученику"}
         </button>
       </div>
-
-      {sectors && crmDirectionId && draft.publication?.isPublished && draft.status !== "closed" ? (
-        <SectorEarlyClose
-          crmStudentId={crmStudentId}
-          crmDirectionId={crmDirectionId}
-          sequence={draft.sequence ?? resource.data?.plan?.sequence ?? 1}
-          completed={draft.items.filter((item) => item.status === "completed").length}
-          total={draft.items.filter((item) => item.title.trim() && item.status !== "moved").length}
-          onClosed={(awarded) => {
-            window.alert(awarded ? `Сектор закрыт, начислено ${awarded} баллов.` : "Сектор закрыт без баллов.");
-            void resource.reload();
-          }}
-        />
-      ) : null}
 
       {draft.publication?.isPublished ? (
         <p className="mt-3 text-xs font-semibold text-emerald-700">

@@ -203,7 +203,7 @@ const masteryRows = (topicId: string) => prisma.pointsTransaction.findMany({
   where: { sourceKey: { startsWith: `learning-topic-mastery:${topicId}:` } },
 });
 
-integrationTest("a group topic written to 100 % by the admin pays the lesson's students, dated by the lesson", async (t) => {
+integrationTest("a legacy group topic written to 100 % retains the original attendance-snapshot award policy", async (t) => {
   const lessonAt = new Date("2026-10-28T06:00:00Z");
   if (!rewardEconomyV2AppliesToEvent(lessonAt)) {
     t.skip("mastery rewards need FEATURE_REWARD_ECONOMY_V2=true, as in production");
@@ -221,7 +221,7 @@ integrationTest("a group topic written to 100 % by the admin pays the lesson's s
   });
   await resolveLessonTopicConflict(conflict!.id, f.admin.id, "write_lesson", "урок правильный");
   const rows = await masteryRows(f.topic.id);
-  assert.equal(rows.length, 1, "the present student gets the 100 % reward once");
+  assert.equal(rows.length, 1, "the legacy report retains its original present-student award");
   const event = await prisma.learningTopicProgress.findUniqueOrThrow({
     where: { sourceKey: `offline-lesson:${f.crmClassId}:topic:${f.topic.id}` },
   });

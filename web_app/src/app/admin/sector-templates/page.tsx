@@ -100,7 +100,7 @@ export default function SectorTemplatesAdminPage() {
       await action();
       await templates.reload();
     } catch (reason) {
-      setError(reason instanceof ApiError ? reason.message : "Не удалось сохранить ступень");
+      setError(reason instanceof ApiError ? reason.message : "Не удалось сохранить сектор");
     } finally {
       setBusy(null);
     }
@@ -135,8 +135,8 @@ export default function SectorTemplatesAdminPage() {
     <>
       <PageHeader
         eyebrow="Программы и контент"
-        title="Ступени программы"
-        description="Готовые секторы по направлению. Преподаватель открывает ступень ученику одним нажатием и правит темы под него."
+        title="Сектора программы"
+        description="Готовые секторы по направлению. Преподаватель открывает сектор ученику одним нажатием и правит темы под него."
       />
 
       <div className="mb-5 flex flex-wrap items-center gap-3 border-y border-stone-200 py-4">
@@ -159,7 +159,7 @@ export default function SectorTemplatesAdminPage() {
           onClick={() => setDraft(draftFrom(null, nextNumber, crmDirectionId))}
           disabled={Boolean(draft)}
         >
-          <Plus size={16} /> Новая ступень
+          <Plus size={16} /> Новый сектор
         </button>
       </div>
 
@@ -176,12 +176,12 @@ export default function SectorTemplatesAdminPage() {
         />
       ) : null}
 
-      {templates.loading && !templates.data ? <LoadingState label="Загружаем ступени" /> : null}
+      {templates.loading && !templates.data ? <LoadingState label="Загружаем сектора" /> : null}
       {templates.error ? <ErrorState message={templates.error} retry={templates.reload} /> : null}
       {templates.data && !list.length && !draft ? (
         <EmptyState
-          title="Ступеней пока нет"
-          description="Создайте первую ступень: номер, цель, темы по линиям и тест. После публикации она появится у преподавателей."
+          title="Секторов пока нет"
+          description="Создайте первый сектор: номер, цель, темы по линиям и тест. После публикации она появится у преподавателей."
         />
       ) : null}
 
@@ -264,7 +264,7 @@ function TemplateForm({
   return (
     <section className="mb-6 rounded-2xl border border-amber-200 bg-amber-50/40 p-4 sm:p-5">
       <p className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-wider text-amber-900">
-        <Layers3 size={15} /> {draft.id ? "Изменить ступень" : "Новая ступень"}
+        <Layers3 size={15} /> {draft.id ? "Изменить сектор" : "Новый сектор"}
       </p>
       <div className="mt-4 grid gap-3 sm:grid-cols-[120px_minmax(0,1fr)]">
         <label className="text-[10px] font-black uppercase tracking-wider text-stone-500">
@@ -272,7 +272,7 @@ function TemplateForm({
           <input type="number" min={1} value={draft.number} onChange={(event) => set("number", event.target.value)} className={`${inputClass} mt-1`} />
         </label>
         <label className="text-[10px] font-black uppercase tracking-wider text-stone-500">
-          Название ступени
+          Название сектора
           <input value={draft.title} onChange={(event) => set("title", event.target.value)} placeholder="Например: Первые аккорды и бой" className={`${inputClass} mt-1 normal-case tracking-normal`} />
         </label>
       </div>
@@ -286,12 +286,12 @@ function TemplateForm({
         </label>
       </div>
       <label className="mt-3 block text-[10px] font-black uppercase tracking-wider text-stone-500">
-        Что ученик умеет после ступени
+        Что ученик умеет после сектора
         <textarea value={draft.summary} onChange={(event) => set("summary", event.target.value)} rows={2} className={`${inputClass} mt-1 min-h-[64px] normal-case tracking-normal`} />
       </label>
 
       <div className="mt-5 flex items-center justify-between">
-        <p className="text-[10px] font-black uppercase tracking-wider text-stone-500">Темы ступени</p>
+        <p className="text-[10px] font-black uppercase tracking-wider text-stone-500">Темы сектора</p>
         <button type="button" className={`${secondaryButton} inline-flex items-center gap-1`} onClick={() => set("topics", [...draft.topics, emptyTopic()])}>
           <Plus size={14} /> Тема
         </button>

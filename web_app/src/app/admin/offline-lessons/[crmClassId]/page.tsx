@@ -377,6 +377,8 @@ function learningResultsV2Draft(
 ): LearningLessonV2Draft {
   if (!results) return emptyLearningLessonV2Draft();
   return {
+    readySectorIds: results.readySectorIds ?? [],
+    studiedPlanIds: results.studiedPlanIds ?? [],
     topicId: results.homeworkAssignment?.topicId ?? results.topicUpdates[0]?.topicId ?? null,
     homeworkTopicId: results.homeworkAssignment?.topicId ?? null,
     topicProgress: Object.fromEntries(results.topicUpdates.map((topic) => [
@@ -1433,9 +1435,14 @@ export default function AdminOfflineLessonDetailPage() {
           instructions: homework.trim(),
         }
       : undefined;
-    if (!homeworkDecisions.length && !topicUpdates.length && !homeworkAssignment) return undefined;
+    const readySectorIds = learningV2Draft.readySectorIds ?? [];
+    const studiedTopics = new Set([...topicUpdates.map(update => update.topicId), ...(learningV2Draft.topicId ? [learningV2Draft.topicId] : [])]);
+    const studiedPlanIds = [...new Set([...(learningV2Draft.studiedPlanIds ?? []), ...learningV2.plans.filter(plan => plan.topics.some(topic => studiedTopics.has(topic.id))).map(plan => plan.planId)])];
+    if (!homeworkDecisions.length && !topicUpdates.length && !homeworkAssignment && !readySectorIds.length && !studiedPlanIds.length) return undefined;
     return {
       ...(homeworkAssignment ? { homeworkAssignment } : {}),
+      readySectorIds,
+      studiedPlanIds,
       homeworkDecisions,
       topicUpdates,
     };

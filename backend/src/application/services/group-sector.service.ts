@@ -4,7 +4,7 @@ import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from ".
 import { NON_EMPTY_PLAN_COMPLETION_POINTS } from "../../domain/product-economy-v2.js";
 import { requireCrmTeacherId } from "./teacher-students.service.js";
 import { fetchTeacherGroupsForAccess } from "./teacher-substitution.service.js";
-import { awardSystemPoints } from "./points.service.js";
+import { awardSystemPointsInTransaction } from "./points.service.js";
 
 /**
  * Plan 1.13: a group's sector. On the group's lessons only its topics move (one percent for the
@@ -76,65 +76,44 @@ async function notifyMember(crmStudentId: string, message: { title: string; body
  * returns the saved pass. A manual pass cancels the member's exam that has not started yet.
  */
 export async function recordSectorMemberPass(input: {
-  planId: string;
-  crmStudentId: string;
-  method: "exam" | "manual";
-  examId?: string | null;
-  passedById: string;
-  now?: Date;
-}) {
+  planId: string; crmStudentId: string; method: "exam" | "manual";
+  examId?: string | null; passedById: string; now?: Date; tx?: Prisma.TransactionClient;
+}): Promise<{pass: import("@prisma/client").SectorMemberPass; awardedPoints: number; created: boolean}> {
+  if (!input.tx) {
+    const result = await prisma.$transaction(tx => recordSectorMemberPass({...input, tx}));
+    if (result.created) await notifyMember(input.crmStudentId, {
+      title: "Сектор группы сдан", body: `${input.method === "exam" ? "Экзамен сдан." : "Преподаватель засчитал сектор."}${result.awardedPoints ? ` Начислено ${result.awardedPoints} баллов.` : ""}`,
+      dedupeKey: `sector-member-pass:${result.pass.id}`,
+    });
+    return result;
+  }
+  const tx = input.tx;
   const now = input.now ?? new Date();
-  const plan = await prisma.learningPlan.findUnique({ where: { id: input.planId } });
+  await tx.$queryRaw`SELECT id FROM learning_plans WHERE id=${input.planId}::uuid FOR UPDATE`;
+  const plan = await tx.learningPlan.findUnique({ where: { id: input.planId } });
   if (!plan?.crmGroupId) throw new NotFoundError("Сектор группы");
-  let pass;
-  try {
-    pass = await prisma.sectorMemberPass.create({
-      data: {
-        planId: plan.id,
-        crmStudentId: input.crmStudentId,
-        method: input.method,
-        examId: input.examId ?? null,
-        passedById: input.passedById,
-        passedAt: now,
-      },
-    });
-  } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-      const existing = await prisma.sectorMemberPass.findUnique({
-        where: { planId_crmStudentId: { planId: plan.id, crmStudentId: input.crmStudentId } },
-      });
-      return { pass: existing!, awardedPoints: 0, created: false };
-    }
-    throw error;
-  }
-  if (input.method === "manual") {
-    await prisma.sectorExam.updateMany({
-      where: { planId: plan.id, crmStudentId: input.crmStudentId, status: { in: ["draft", "awaiting_schedule", "scheduled"] } },
-      data: { status: "cancelled", cancelledAt: now, cancelReason: "Сектор засчитан без экзамена" },
-    });
-  }
-  const user = await studentUser(input.crmStudentId);
+  if (plan.isSharedGroupPlan) throw new ConflictError("Общий план не подтверждает личное освоение. Используйте личный сектор ученика.", "GROUP_PLAN_REQUIRES_PERSONAL_EXAMS");
+  const existing = await tx.sectorMemberPass.findUnique({where:{planId_crmStudentId:{planId:plan.id,crmStudentId:input.crmStudentId}}});
+  if (existing) return {pass:existing,awardedPoints:0,created:false};
+  let pass = await tx.sectorMemberPass.create({data:{
+    planId:plan.id, crmStudentId:input.crmStudentId, method:input.method,
+    examId:input.examId ?? null, passedById:input.passedById, passedAt:now,
+  }});
+  if (input.method === "manual") await tx.sectorExam.updateMany({
+    where:{planId:plan.id,crmStudentId:input.crmStudentId,status:{in:["draft","awaiting_schedule","scheduled"]}},
+    data:{status:"cancelled",cancelledAt:now,cancelReason:"Сектор засчитан без экзамена"},
+  });
+  const user = await tx.user.findFirst({where:{crmStudentId:input.crmStudentId,deletedAt:null,isActive:true,role:{slug:"student"}},select:{id:true}});
   let awardedPoints = 0;
-  // Like the exam close of an individual sector, a pass is live after the economy cutover.
   if (user) {
-    const award = await awardSystemPoints({
-      studentId: user.id,
-      amount: NON_EMPTY_PLAN_COMPLETION_POINTS,
-      reason: `Сдан сектор группы ${plan.sequence}`,
-      sourceKey: `learning-plan-completion:${plan.id}:${user.id}`,
-      eventAt: now,
+    const award = await awardSystemPointsInTransaction(tx, {
+      studentId:user.id,amount:NON_EMPTY_PLAN_COMPLETION_POINTS,reason:`Сдан сектор группы ${plan.sequence}`,
+      sourceKey:`learning-plan-completion:${plan.id}:${user.id}`,eventAt:now,
     });
     awardedPoints = award.awarded ? NON_EMPTY_PLAN_COMPLETION_POINTS : 0;
-    if (awardedPoints) {
-      pass = await prisma.sectorMemberPass.update({ where: { id: pass.id }, data: { pointsAwarded: awardedPoints } });
-    }
+    if (awardedPoints) pass = await tx.sectorMemberPass.update({where:{id:pass.id},data:{pointsAwarded:awardedPoints}});
   }
-  await notifyMember(input.crmStudentId, {
-    title: `Сектор группы ${plan.sequence} сдан`,
-    body: `${input.method === "exam" ? "Экзамен сдан." : "Преподаватель засчитал сектор."}${awardedPoints ? ` Начислено ${awardedPoints} баллов.` : ""}`,
-    dedupeKey: `sector-member-pass:${pass.id}`,
-  });
-  return { pass, awardedPoints, created: true };
+  return {pass,awardedPoints,created:true};
 }
 
 /** The teacher counts a member's group sector as passed without an exam. */

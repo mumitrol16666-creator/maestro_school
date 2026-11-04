@@ -430,11 +430,14 @@ button.card-hover:focus-visible {
   }
 
   [data-theory-print],
-  [data-theory-print] * {
+  [data-theory-print] *,
+  [data-certificate-print],
+  [data-certificate-print] * {
     visibility: visible;
   }
 
-  [data-theory-print] {
+  [data-theory-print],
+  [data-certificate-print] {
     position: absolute;
     inset: 0;
     width: 100%;

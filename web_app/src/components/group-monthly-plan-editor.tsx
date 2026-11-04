@@ -11,6 +11,7 @@ import {
   Send,
   Trash2,
 } from "lucide-react";
+import { NextLearningPlan } from "@/components/next-learning-plan";
 import { useEffect, useState } from "react";
 import { LearningTopicProgressEditor } from "@/components/learning-topic-progress-editor";
 import { LearningHomeworkAssignmentComposer } from "@/components/learning-homework-assignment-composer";
@@ -172,12 +173,12 @@ function GroupMonthlyPlanEditorContent({
       return plan;
     } catch (reason) {
       if (reason instanceof ApiError && reason.code === "MONTHLY_PLAN_STALE_DRAFT") {
-        setError("Сектор группы уже изменился. Обновите данные перед сохранением.");
+        setError("План группы уже изменился. Обновите данные перед сохранением.");
         setStaleDraft(true);
       } else if (reason instanceof ApiError) {
         setError(reason.message);
       } else {
-        setError("Не удалось сохранить сектор группы. Проверьте интернет и повторите.");
+        setError("Не удалось сохранить план группы. Проверьте интернет и повторите.");
       }
       return null;
     } finally {
@@ -202,12 +203,12 @@ function GroupMonthlyPlanEditorContent({
       await resource.reload();
     } catch (reason) {
       if (reason instanceof ApiError && reason.code === "MONTHLY_PLAN_STALE_DRAFT") {
-        setError("Сектор группы уже изменился. Обновите данные перед публикацией.");
+        setError("План группы уже изменился. Обновите данные перед публикацией.");
         setStaleDraft(true);
       } else if (reason instanceof ApiError) {
         setError(reason.message);
       } else {
-        setError("Не удалось опубликовать сектор группы. Проверьте цель и темы.");
+        setError("Не удалось опубликовать план группы. Проверьте цель и темы.");
       }
     } finally {
       setPublishing(false);
@@ -215,7 +216,7 @@ function GroupMonthlyPlanEditorContent({
   }
 
   if (resource.loading) {
-    return <p className="py-6 text-sm text-stone-500">Загружаем сектор группы…</p>;
+    return <p className="py-6 text-sm text-stone-500">Загружаем план группы…</p>;
   }
 
   return (
@@ -227,7 +228,7 @@ function GroupMonthlyPlanEditorContent({
           </p>
           <h3 className="mt-1 font-display text-xl">
             {mode.mode === "v2"
-              ? (resource.data?.plan ? `Сектор группы ${draft.sequence ?? resource.data.plan.sequence ?? 1}` : `Открываем сектор группы ${resource.data?.nextSequence ?? 1}`)
+              ? (resource.data?.plan ? `План группы ${draft.sequence ?? resource.data.plan.sequence ?? 1}` : `Открываем план группы ${resource.data?.nextSequence ?? 1}`)
               : "План и материалы"}
           </h3>
           {mode.mode === "v2" && resource.data?.history?.length ? (
@@ -236,7 +237,7 @@ function GroupMonthlyPlanEditorContent({
               onClick={() => setShowHistory((value) => !value)}
               className="mt-1 inline-flex min-h-8 items-center gap-1 text-xs font-bold text-stone-500 hover:text-ink"
             >
-              <History size={13} /> Закрыто секторов: {resource.data.history.length}
+              <History size={13} /> Предыдущие планы: {resource.data.history.length}
             </button>
           ) : null}
         </div>
@@ -262,6 +263,14 @@ function GroupMonthlyPlanEditorContent({
         </div>
       </div>
 
+      {mode.mode === "v2" && draft.id && draft.isSharedGroupPlan === false ? <p className="mt-4 rounded-xl bg-amber-50 p-4 text-sm text-amber-950">Это прежний общий сектор. Его история и правила начислений сохранены. Кнопка «Открыть следующий план» начнёт новый общий план; личное освоение тем и готовность отмечайте у участников отдельно.</p> : null}
+      {mode.mode === "v2" && draft.id && draft.publication?.isPublished && crmDirectionId ? (
+        <NextLearningPlan kind="groups" ownerId={crmGroupId} planId={draft.id}
+          directionId={crmDirectionId} version={draft.version ?? 0}
+          disabled={!saved || Boolean(draft.publication?.hasUnpublishedChanges) || saving || publishing}
+          onOpened={() => resource.reload()} />
+      ) : null}
+
       {resource.error ? (
         <p className="mt-4 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700">
           {resource.error}
@@ -269,7 +278,7 @@ function GroupMonthlyPlanEditorContent({
       ) : null}
 
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
-        <PlanField label="Цель сектора" value={draft.goal} onChange={(value) => setField("goal", value)} />
+        <PlanField label="Цель плана" value={draft.goal} onChange={(value) => setField("goal", value)} />
         <PlanField label="Ожидаемый результат" value={draft.expectedResult} onChange={(value) => setField("expectedResult", value)} />
         <PlanField label="Навыки для закрепления" value={draft.skills} onChange={(value) => setField("skills", value)} />
         <PlanField label="Контрольная точка" value={draft.checkpoint} onChange={(value) => setField("checkpoint", value)} />
@@ -277,7 +286,7 @@ function GroupMonthlyPlanEditorContent({
 
       {showHistory && resource.data?.history?.length ? <SectorHistoryList history={resource.data.history} /> : null}
 
-      {mode.mode === "v2" && !resource.data?.plan ? (
+      {mode.mode === "v2" && (!resource.data?.plan || (!draft.publication?.isPublished && !draft.items.some((item) => item.title.trim()))) ? (
         <SectorTemplatePicker
           crmDirectionId={crmDirectionId}
           onPick={(template: SectorTemplate) => {

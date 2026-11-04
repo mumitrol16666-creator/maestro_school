@@ -1,3 +1,5 @@
+import { reverseSectorStudy } from "./sector-study.service.js";
+import { reverseSectorReadiness } from "./sector-readiness.service.js";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../infrastructure/database/prisma.js";
 import { closeLessonSubstitutions, reopenLessonSubstitutions } from "./teacher-substitution.service.js";
@@ -160,6 +162,16 @@ async function reversePointsTransaction(
 ) {
   const original = await tx.pointsTransaction.findUnique({ where: { sourceKey } });
   if (!original || original.amount <= 0) return 0;
+  const topicAward = sourceKey.match(/^learning-topic-mastery:([^:]+):([^:]+)$/);
+  if (topicAward && await tx.pointsTransaction.findFirst({where:{
+    sourceKey:{startsWith:`account-recovery:${topicAward[1]}:${original.studentId}:`},
+    studentId:original.studentId,economicEpochId:original.economicEpochId,amount:-original.amount,
+    reason:`Перенос баллов в действующий кабинет: ${original.id}`,
+  },select:{id:true}})) {
+    // This original was already offset by a transfer. The target's canonical receipt is
+    // reversed by the same topic loop; debiting the old account again would make it negative.
+    return 0;
+  }
   const correctionKey = reversalKey(sourceKey, reportVersion);
   const existing = await tx.pointsTransaction.findUnique({ where: { sourceKey: correctionKey } });
   if (existing) return 0;
@@ -431,6 +443,8 @@ export async function reverseOfflineLessonApproval(params: {
       throw new ConflictError("Подтверждённая версия отчёта не найдена", "LESSON_REPORT_VERSION_MISSING");
     }
     const learningResults = readOfflineLessonLearningResultsV2(version.payload);
+    await reverseSectorReadiness(tx, params.crmClassId, reportVersion, actorUserId, at);
+    await reverseSectorStudy(tx, params.crmClassId, reportVersion, actorUserId, at);
 
     const attendance = await reverseAttendanceRewards(tx, params.crmClassId, reportVersion, reason, actorUserId, at);
     const homework = learningResults

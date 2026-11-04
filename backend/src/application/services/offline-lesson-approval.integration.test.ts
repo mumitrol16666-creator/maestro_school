@@ -17,6 +17,8 @@ const integrationTest = process.env.RUN_DB_INTEGRATION_TESTS === "1"
 type ApprovalFixture = Awaited<ReturnType<typeof createApprovalFixture>>;
 
 const firstResults: LearningLessonV2ResultsInput = {
+  readySectorIds:["33333333-3333-4333-8333-333333333333"],
+  studiedPlanIds:["33333333-3333-4333-8333-333333333333"],
   homeworkDecisions: [{
     recipientId: "11111111-1111-4111-8111-111111111111",
     cycleNumber: 1,

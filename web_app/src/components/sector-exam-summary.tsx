@@ -60,7 +60,7 @@ export function SectorExamSummary({ exam }: { exam: PublicSectorExam | null | un
           </ul>
           {exam.certificate ? (
             <p className="inline-flex items-center gap-1.5 text-sm font-bold text-emerald-800">
-              <Award size={15} /> Сертификат {exam.certificate.number}
+              <Award size={15} /> Сертификат {exam.certificate.number} <a className="min-h-11 inline-flex items-center underline" href={`/certificates/${encodeURIComponent(exam.id)}`}>Открыть и распечатать</a>
             </p>
           ) : null}
         </>

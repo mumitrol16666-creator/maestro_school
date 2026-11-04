@@ -124,7 +124,7 @@ export async function getLessonStudentsOverview(teacherUserId: string, crmClassI
       listPublishedLearningPlansV2(student.crmStudentId, groupIds).catch(() => []),
       economyOf(appUserId, now),
     ]);
-    const sector = sectors.find((item) => item.status !== "closed") ?? null;
+    const sector = sectors.find((item) => item.status === "active" && item.scope === "student") ?? null;
     const history = (crm?.attendanceHistory ?? []).filter((item) => item.crmClassId !== crmClassId);
     const recent = history.slice(0, RECENT_ATTENDANCE);
     return {

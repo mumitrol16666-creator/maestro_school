@@ -22,6 +22,7 @@ import {
 import { useEffect, useState } from "react";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
 import { ProgressBar } from "@/components/progress-bar";
+import { SectorStatistics } from "@/components/sector-statistics";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { familyApi } from "@/lib/family-api";
 import type { StudentHomeMonthlyPlan } from "@/types/api";
@@ -373,6 +374,7 @@ function MonthlyPlans({ studentId }: { studentId: string }) {
           </div>
         </>
       )}
+      <SectorStatistics endpoint={`/parents/me/children/${encodeURIComponent(studentId)}/sector-statistics`} />
       {resource.data?.recentExams?.length ? (
         <div className="mt-6 grid gap-3" data-testid="family-recent-exams">
           {resource.data.recentExams.map((plan) => (

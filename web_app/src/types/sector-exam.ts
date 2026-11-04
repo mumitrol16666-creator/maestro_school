@@ -35,11 +35,12 @@ export type SectorExam = {
   items: SectorExamItem[];
 };
 
-export type SectorProgressSummary = { completed: number; total: number; percent: number; ready: boolean };
+export type SectorProgressSummary = { completed: number; total: number; percent: number; ready: boolean; readyAt?: string | null; studyFinishedAt?: string | null };
 
 export type AdminSectorExamRow = {
   planId: string;
   sequence: number;
+  curriculumNumber?: number;
   crmStudentId: string;
   studentName: string;
   direction: { id: string; title: string; crmDirectionId: string | null };

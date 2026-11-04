@@ -20,7 +20,7 @@ import {
   NON_EMPTY_PLAN_COMPLETION_POINTS,
   TOPIC_COMPLETION_POINTS,
 } from "../../domain/product-economy-v2.js";
-import { awardSystemPoints } from "./points.service.js";
+import { awardSystemPoints, awardSystemPointsInTransaction } from "./points.service.js";
 import { aqtobeMonthKey } from "../../lib/aqtobe-month.js";
 import { pendingTopicPercentsBefore } from "./lesson-pending-topics.service.js";
 
@@ -194,11 +194,15 @@ function versionDto(plan: PlanWithVersions, versionNumber = plan.currentVersionN
   return {
     id: plan.id,
     model: "learning_topics_v2" as const,
+    isSharedGroupPlan: plan.isSharedGroupPlan,
     month: plan.month,
     sequence: plan.sequence,
     status: plan.status,
     closedAt: plan.closedAt,
     closeReason: plan.closeReason,
+    studyStartedAt: plan.studyStartedAt,
+    studyFinishedAt: plan.studyFinishedAt,
+    examReadyAt: plan.examReadyAt,
     templateStepId: plan.templateStepId,
     direction: {
       id: plan.direction.id,
@@ -264,7 +268,7 @@ async function listClosedSectors(scope: ResolvedScope) {
   const plans = await prisma.learningPlan.findMany({
     where: {
       directionId: scope.direction.id,
-      status: "closed",
+      status: { in: ["closed", "awaiting_exam"] },
       ...ownerWhere(scope.owner),
     },
     include: planInclude,
@@ -279,6 +283,10 @@ async function listClosedSectors(scope: ResolvedScope) {
       goal: dto.goal,
       closedAt: plan.closedAt,
       closeReason: plan.closeReason,
+      status: plan.status,
+      studyStartedAt: plan.studyStartedAt,
+      studyFinishedAt: plan.studyFinishedAt,
+      examReadyAt: plan.examReadyAt,
       completedAt: plan.completedAt,
       topicsTotal: dto.progress.total,
       topicsCompleted: dto.progress.completed,
@@ -358,6 +366,7 @@ async function savePlan(
           month: aqtobeMonthKey(),
           sequence: await nextSectorSequence(tx, scope),
           status: "active",
+          isSharedGroupPlan: scope.owner.kind === "group",
           templateStepId: template?.id ?? null,
           createdById: teacherUserId,
           ...ownerWhere(scope.owner),
@@ -531,6 +540,7 @@ async function savePlan(
         id: plan.id,
         currentVersionNumber: plan.currentVersionNumber,
         lockedAt: null,
+        status: "active",
       },
       data: { currentVersionNumber: nextVersion },
     });
@@ -675,15 +685,10 @@ export async function publishStudentLearningPlanV2(
   return publishPlan(teacherUserId, scope, expectedVersion);
 }
 
-/** The most a teacher may pay for a sector closed early: the full completion reward. */
+/** Historical request range; positive early-close rewards are now rejected. */
 export const SECTOR_EARLY_CLOSE_MAX_POINTS = NON_EMPTY_PLAN_COMPLETION_POINTS;
 
-/**
- * Decision 19.10: the teacher may close the open sector before every topic is
- * at 100 % and writes the Points it is worth, 0–250. The payment uses the same
- * completion key as the automatic one, so a sector is never paid twice, and
- * the next sector can be opened right after.
- */
+/** Legacy archive action: closes without a certificate or reward. New teaching uses next-sector. */
 export async function closeStudentSectorEarlyV2(
   teacherUserId: string,
   crmStudentId: string,
@@ -702,6 +707,9 @@ export async function closeStudentSectorEarlyV2(
   if (plan.publishedVersionNumber === null) {
     throw new BadRequestError("Сектор ещё не опубликован ученику: закрывать нечего", "SECTOR_NOT_PUBLISHED");
   }
+  if (input.points > 0) {
+    throw new BadRequestError("Баллы за сектор начисляются после сдачи экзамена. Для продолжения обучения откройте следующий сектор.", "SECTOR_REWARD_REQUIRES_EXAM");
+  }
   const now = input.now ?? new Date();
   const completionSourceKey = `learning-plan-completion:${plan.id}`;
   const closed = await prisma.learningPlan.updateMany({
@@ -710,6 +718,7 @@ export async function closeStudentSectorEarlyV2(
       status: "closed",
       closedAt: now,
       closeReason: "manual",
+      studyFinishedAt: plan.studyFinishedAt ?? now,
       completedAt: plan.completedAt ?? now,
       lockedAt: plan.lockedAt ?? now,
       completionRewardSourceKey: plan.completionRewardSourceKey ?? completionSourceKey,
@@ -729,16 +738,6 @@ export async function closeStudentSectorEarlyV2(
     select: { id: true },
   });
   let awardedPoints = 0;
-  if (studentUser && input.points > 0 && !plan.completionRewardSourceKey) {
-    const award = await awardSystemPoints({
-      studentId: studentUser.id,
-      amount: input.points,
-      reason: `Сектор ${plan.sequence} закрыт досрочно`,
-      sourceKey: `${completionSourceKey}:${studentUser.id}`,
-      eventAt: now,
-    });
-    awardedPoints = award.awarded ? input.points : 0;
-  }
   if (studentUser) {
     try {
       const { deliverUserNotification } = await import("./notification.service.js");
@@ -817,7 +816,7 @@ export async function listPublishedLearningPlansV2(
   const plans = await prisma.learningPlan.findMany({
     where: {
       publishedVersionNumber: { not: null },
-      ...(options.includeClosed ? {} : { status: "active" }),
+      ...(options.includeClosed ? {} : { status: { in: ["active", "awaiting_exam"] as const } }),
       OR: ownerScope,
     },
     include: planInclude,
@@ -844,6 +843,9 @@ export async function listPublishedLearningPlansV2(
       month: plan.month,
       sequence: plan.sequence,
       status: plan.status,
+      studyStartedAt: plan.studyStartedAt,
+      studyFinishedAt: plan.studyFinishedAt,
+      examReadyAt: plan.examReadyAt,
       closedAt: plan.closedAt,
       exam: examByPlan.get(plan.id) ?? null,
       memberPass: plan.crmGroupId
@@ -1062,12 +1064,11 @@ async function requireLessonTopicScope(actorUserId: string, topicId: string) {
 
 /**
  * Who receives the 100 Points for a topic closed in a lesson.
- * A group topic is paid only to the students present in the immutable attendance
- * snapshot of the approved report version; without a snapshot nobody is paid,
- * because the live CRM roster also lists students who missed the lesson.
+ * Personal mastery is credited to its owner in the immutable attendance snapshot.
+ * Shared group coverage is not evidence of an individual student's mastery.
  */
 export function topicRewardCrmStudentIds(
-  topic: { crmStudentId: string | null; crmGroupId: string | null },
+  topic: { crmStudentId: string | null; crmGroupId: string | null; sharedGroupPlan?: boolean },
   immutableRecipientCrmStudentIds?: readonly string[],
 ) {
   if (topic.crmStudentId) {
@@ -1075,16 +1076,24 @@ export function topicRewardCrmStudentIds(
     const present = new Set(immutableRecipientCrmStudentIds.map((id) => id.trim()).filter(Boolean));
     return present.has(topic.crmStudentId) ? [topic.crmStudentId] : [];
   }
-  if (!topic.crmGroupId || immutableRecipientCrmStudentIds === undefined) return [];
-  return [...new Set(immutableRecipientCrmStudentIds.map((id) => id.trim()).filter(Boolean))];
+  if (topic.crmGroupId && topic.sharedGroupPlan === false) {
+    return [...new Set((immutableRecipientCrmStudentIds ?? []).map(id => id.trim()).filter(Boolean))];
+  }
+  // A shared group plan records what was covered together. It cannot certify every member's
+  // personal mastery. Existing rewards remain in the ledger; new mastery is marked personally.
+  return [];
 }
 
 async function resolveTopicRewardStudents(
-  topic: { crmStudentId: string | null; crmGroupId: string | null },
+  topic: { id: string; crmStudentId: string | null; crmGroupId: string | null },
   _crmClassId: string,
   immutableRecipientCrmStudentIds?: readonly string[],
 ) {
-  const crmStudentIds = topicRewardCrmStudentIds(topic, immutableRecipientCrmStudentIds);
+  const commonPlan = topic.crmGroupId ? await prisma.learningPlan.findFirst({
+    where: { crmGroupId: topic.crmGroupId, isSharedGroupPlan: true, versions: { some: { topics: { some: { topicId: topic.id } } } } },
+    select: { id:true },
+  }) : null;
+  const crmStudentIds = topicRewardCrmStudentIds({...topic,sharedGroupPlan:Boolean(commonPlan)}, immutableRecipientCrmStudentIds);
 
   return prisma.user.findMany({
     where: {
@@ -1481,43 +1490,96 @@ export function publicSectorExamDto(exam: {
   };
 }
 
-/**
- * Plan 1.10: the teacher closes an individual sector after its exam, whatever the outcome.
- * Pays the 250 Points of a closed sector with the same key as every other close, so a
- * sector is never paid twice. Returns false when the sector was already closed.
- */
-export async function closeStudentSectorByExam(planId: string, input: { now?: Date } = {}) {
+/** Close and reward a passed personal sector in the exam's transaction. */
+export async function closeStudentSectorByExam(planId: string, input: { now?: Date; tx?: Prisma.TransactionClient } = {}): Promise<{closed: boolean; awardedPoints: number}> {
+  if (!input.tx) return prisma.$transaction(tx => closeStudentSectorByExam(planId, {...input, tx}));
+  const tx = input.tx;
   const now = input.now ?? new Date();
-  const plan = await prisma.learningPlan.findUnique({ where: { id: planId } });
-  if (!plan?.crmStudentId) return { closed: false, awardedPoints: 0 };
+  await tx.$queryRaw`SELECT id FROM learning_plans WHERE id=${planId}::uuid FOR UPDATE`;
+  const plan = await tx.learningPlan.findUnique({ where: { id: planId } });
+  if (!plan?.crmStudentId || plan.status === "closed") return { closed: false, awardedPoints: 0 };
   const completionSourceKey = `learning-plan-completion:${plan.id}`;
-  const closed = await prisma.learningPlan.updateMany({
-    where: { id: plan.id, status: "active" },
-    data: {
-      status: "closed",
-      closedAt: now,
-      closeReason: "exam",
-      completedAt: plan.completedAt ?? now,
-      lockedAt: plan.lockedAt ?? now,
-      completionRewardSourceKey: plan.completionRewardSourceKey ?? completionSourceKey,
-    },
-  });
-  if (closed.count === 0) return { closed: false, awardedPoints: 0 };
-  const studentUser = await prisma.user.findFirst({
-    where: { crmStudentId: plan.crmStudentId, deletedAt: null, isActive: true, role: { slug: "student" } },
-    select: { id: true },
+  await tx.learningPlan.update({ where: { id: plan.id }, data: {
+    status: "closed", closedAt: now, closeReason: "exam", studyFinishedAt: plan.studyFinishedAt ?? now,
+    completedAt: plan.completedAt ?? now, lockedAt: plan.lockedAt ?? now,
+    completionRewardSourceKey: plan.completionRewardSourceKey ?? completionSourceKey,
+  } });
+  const student = await tx.user.findFirst({
+    where: { crmStudentId: plan.crmStudentId, deletedAt: null, isActive: true, role: { slug: "student" } }, select: { id: true },
   });
   let awardedPoints = 0;
-  // Like the early close, an exam close happens live after the economy cutover: no legacy gate.
-  if (studentUser && !plan.completionRewardSourceKey) {
-    const award = await awardSystemPoints({
-      studentId: studentUser.id,
-      amount: NON_EMPTY_PLAN_COMPLETION_POINTS,
-      reason: `Закрыт сектор ${plan.sequence}`,
-      sourceKey: `${completionSourceKey}:${studentUser.id}`,
-      eventAt: now,
+  if (student && !plan.completionRewardSourceKey) {
+    const award = await awardSystemPointsInTransaction(tx, {
+      studentId: student.id, amount: NON_EMPTY_PLAN_COMPLETION_POINTS,
+      reason: `Закрыт сектор ${plan.sequence}`, sourceKey: `${completionSourceKey}:${student.id}`, eventAt: now,
     });
     awardedPoints = award.awarded ? NON_EMPTY_PLAN_COMPLETION_POINTS : 0;
   }
-  return { closed: true, awardedPoints, sequence: plan.sequence, studentUserId: studentUser?.id ?? null };
+  return { closed: true, awardedPoints };
+}
+
+/** A manual transition of teaching, independent of an exam and without a reward. */
+async function openNextLearningPlan(
+  actorUserId: string,
+  scope: ResolvedScope,
+  input: { planId: string; expectedVersion: number },
+) {
+  const nextId = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM learning_plans WHERE id = ${input.planId}::uuid FOR UPDATE`;
+    const previous = await tx.learningPlan.findFirst({
+      where: { id: input.planId, directionId: scope.direction.id, ...ownerWhere(scope.owner) },
+    });
+    if (!previous) throw new BadRequestError("Учебный план не найден", "MONTHLY_PLAN_NOT_FOUND");
+    const replay = await tx.learningSectorEvent.findUnique({ where: { sourceKey: `sector-next:${previous.id}` } });
+    const replayNext = replay?.details && typeof replay.details === "object" && !Array.isArray(replay.details)
+      ? replay.details.nextPlanId : null;
+    if (typeof replayNext === "string") return replayNext;
+    if (previous.status !== "active") throw new ConflictError("Обучение по этому плану уже завершено", "SECTOR_STUDY_ALREADY_FINISHED");
+    assertExpectedLearningPlanVersion(previous.currentVersionNumber, input.expectedVersion);
+    if (previous.publishedVersionNumber === null || previous.publishedVersionNumber !== previous.currentVersionNumber) {
+      throw new ConflictError("Сначала опубликуйте текущий план и изменения", "SECTOR_PUBLISH_BEFORE_NEXT");
+    }
+    const at = new Date();
+    await tx.learningPlan.update({
+      where: { id: previous.id },
+      data: {
+        status: scope.owner.kind === "student" ? "awaiting_exam" : "closed",
+        studyFinishedAt: at,
+        ...(scope.owner.kind === "group" ? { closedAt: at, closeReason: "plan_replaced" } : {}),
+      },
+    });
+    const next = await tx.learningPlan.create({
+      data: {
+        directionId: scope.direction.id, ...ownerWhere(scope.owner),
+        isSharedGroupPlan: scope.owner.kind === "group",
+        month: aqtobeMonthKey(), sequence: await nextSectorSequence(tx, scope),
+        currentVersionNumber: 1, createdById: actorUserId,
+        versions: { create: { version: 1, createdById: actorUserId } },
+      },
+    });
+    await tx.learningSectorEvent.create({ data: {
+      planId: previous.id, kind: "study_finished", actorUserId,
+      sourceKey: `sector-next:${previous.id}`, occurredAt: at, details: { nextPlanId: next.id },
+    } });
+    await tx.learningSectorEvent.create({ data: {
+      planId: next.id, kind: "opened", actorUserId,
+      sourceKey: `sector-opened:${next.id}`, occurredAt: at, details: { previousPlanId: previous.id },
+    } });
+    return next.id;
+  });
+  return versionDto(await loadPlan(nextId));
+}
+
+export async function openNextStudentSector(
+  actorUserId: string, crmStudentId: string, crmDirectionId: string,
+  input: { planId: string; expectedVersion: number },
+) {
+  return openNextLearningPlan(actorUserId, await resolveStudentScope(actorUserId, crmStudentId, crmDirectionId), input);
+}
+
+export async function openNextGroupPlan(
+  actorUserId: string, crmGroupId: string, crmDirectionId: string,
+  input: { planId: string; expectedVersion: number },
+) {
+  return openNextLearningPlan(actorUserId, await resolveGroupScope(actorUserId, crmGroupId, crmDirectionId), input);
 }

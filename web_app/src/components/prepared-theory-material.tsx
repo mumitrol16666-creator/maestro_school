@@ -81,6 +81,7 @@ export function PreparedTheoryMaterialView({
           </section>
         </div>
 
+        {material.source ? <p className="text-sm leading-6 text-stone-500">По материалам: {material.source.title}, раздел {material.source.section}, стр. {material.source.printedPages.join(", ")}.</p> : null}
         <div data-print-hide className="flex flex-col gap-3 border-t border-stone-200 pt-6 sm:flex-row sm:items-center sm:justify-between">
           <button type="button" onClick={() => window.print()} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-stone-300 bg-white px-5 py-3.5 text-sm font-bold hover:border-gold">
             <Printer size={17} /> Распечатать урок

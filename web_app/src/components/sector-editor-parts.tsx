@@ -26,6 +26,7 @@ const closeReasonLabel: Record<string, string> = {
   completed: "закрыт",
   exam: "закрыт после экзамена",
   manual: "закрыт преподавателем",
+  plan_replaced: "план завершён преподавателем",
 };
 
 /** Closed sectors of the owner in this direction, newest first. */
@@ -38,7 +39,7 @@ export function SectorHistoryList({ history }: { history: SectorHistoryEntry[] }
           <div className="min-w-0 flex-1">
             <p className="truncate font-bold text-ink">{entry.goal || `Сектор ${entry.sequence}`}</p>
             <p className="text-xs text-stone-500">
-              {entry.topicsCompleted} из {entry.topicsTotal} тем · {closeReasonLabel[entry.closeReason ?? ""] ?? "закрыт без завершения"} {shortDate(entry.closedAt)}
+              {entry.topicsCompleted} из {entry.topicsTotal} тем · {entry.status === "awaiting_exam" ? "Обучение завершено · экзамен ещё не подтверждён" : closeReasonLabel[entry.closeReason ?? ""] ?? "завершён"} {shortDate(entry.studyFinishedAt ?? entry.closedAt)}
             </p>
           </div>
           <CheckCircle2 size={16} className={entry.closeReason === "completed" || entry.closeReason === "exam" ? "text-emerald-600" : "text-stone-300"} />
@@ -58,20 +59,20 @@ export function SectorTemplatePicker({
 }) {
   const templates = useApiResource(() => teacherStudentsApi.sectorTemplates(crmDirectionId || undefined), [crmDirectionId]);
   const [picked, setPicked] = useState<string | null>(null);
-  if (templates.loading) return <p className="mt-4 text-xs text-stone-500">Загружаем ступени программы…</p>;
+  if (templates.loading) return <p className="mt-4 text-xs text-stone-500">Загружаем секторы программы…</p>;
   if (!templates.data?.length) {
     return (
       <p className="mt-4 rounded-xl border border-dashed border-amber-300 bg-white p-3 text-xs text-stone-600">
-        Ступеней программы для этого направления пока нет — заполните сектор вручную.
+        Секторов программы для этого направления пока нет — заполните сектор вручную.
       </p>
     );
   }
   return (
     <div className="mt-4 rounded-2xl border border-amber-200 bg-white p-4">
       <p className="inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-amber-900">
-        <Sparkles size={14} className="text-gold-ink" /> Ступень программы
+        <Sparkles size={14} className="text-gold-ink" /> Сектор программы
       </p>
-      <p className="mt-1 text-[11px] text-stone-500">Темы ступени станут темами сектора, их можно править под ученика.</p>
+      <p className="mt-1 text-[11px] text-stone-500">Темы шаблона станут темами сектора, их можно править под ученика.</p>
       <div className="mt-3 grid gap-2 sm:grid-cols-2">
         {templates.data.map((template) => (
           <button

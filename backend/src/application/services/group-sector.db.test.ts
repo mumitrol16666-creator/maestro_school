@@ -48,6 +48,7 @@ async function createFixture(t: Parameters<Parameters<typeof test>[1]>[0]) {
   t.after(async () => {
     await prisma.sectorExam.deleteMany({ where: { directionId: direction.id } });
     await prisma.pointsTransaction.deleteMany({ where: { studentId: { in: [first.id, second.id] } } });
+    await prisma.learningSectorEvent.deleteMany({where:{plan:{directionId:direction.id}}});
     await prisma.learningPlan.deleteMany({ where: { directionId: direction.id } });
     await prisma.learningTopic.deleteMany({ where: { directionId: direction.id } });
     await prisma.userNotification.deleteMany({ where: { userId: { in: users.map((user) => user.id) } } });
@@ -82,6 +83,8 @@ async function createFixture(t: Parameters<Parameters<typeof test>[1]>[0]) {
     expectedVersion: 0,
   });
   const published = await plans.publishGroupLearningPlanV2(teacher.id, crmGroupId, crmDirectionId, draft.version);
+  // Existing historical group sectors keep their original result/award path.
+  await prisma.learningPlan.update({where:{id:published.id},data:{isSharedGroupPlan:false}});
   const topicIds = published.items.map((item) => item.id);
   await prisma.learningTopic.updateMany({ where: { id: { in: topicIds } }, data: { progressPercent: 100 } });
   return { prisma, suffix, crmGroupId, crmDirectionId, first, second, teacher, stranger, planId: published.id, plans };
@@ -215,4 +218,23 @@ integrationTest("the teacher counts a member without an exam: 250 once, the memb
   assert.equal((await f.prisma.learningPlan.findUniqueOrThrow({ where: { id: f.planId } })).closeReason, "manual");
   const draftLeft = await f.prisma.sectorExam.findUniqueOrThrow({ where: { id: next.created[0]!.id } });
   assert.equal(draftLeft.status, "cancelled", "a draft nobody sent is dropped when the group moves on");
+});
+
+
+integrationTest("a group deliberately moves to a common plan without copying personal mastery or awarding shared coverage",async t=>{
+  const f=await createFixture(t);
+  const before=await f.prisma.learningPlan.findUniqueOrThrow({where:{id:f.planId}});
+  const next=await f.plans.openNextGroupPlan(f.teacher.id,f.crmGroupId,f.crmDirectionId,{planId:f.planId,expectedVersion:before.currentVersionNumber});
+  assert.equal(next.isSharedGroupPlan,true);
+  assert.equal(next.sequence,2);
+  assert.equal((await f.prisma.learningPlan.findUniqueOrThrow({where:{id:f.planId}})).status,"closed");
+  assert.equal((await f.plans.openNextGroupPlan(f.teacher.id,f.crmGroupId,f.crmDirectionId,{planId:f.planId,expectedVersion:before.currentVersionNumber})).id,next.id);
+  const saved=await f.plans.saveGroupLearningPlanV2(f.teacher.id,f.crmGroupId,f.crmDirectionId,{goal:"Новый общий план",expectedResult:"",skills:"",checkpoint:"",note:"",items:[{id:"new-common-topic",title:"Ритм",status:"planned"}],expectedVersion:next.version});
+  const published=await f.plans.publishGroupLearningPlanV2(f.teacher.id,f.crmGroupId,f.crmDirectionId,saved.version);
+  await f.plans.updateLearningTopicProgressBatchFromLessonV2(f.teacher.id,`common-${f.planId}`,[{topicId:published.items[0]!.id,expectedPercent:0,toPercent:100}],{rewardRecipientCrmStudentIds:[f.first.crmStudentId!,f.second.crmStudentId!],occurredAt:new Date()});
+  assert.equal(await f.prisma.pointsTransaction.count({where:{studentId:{in:[f.first.id,f.second.id]}}}),0);
+  const exams=await import("./sector-exam.service.js");
+  await assert.rejects(exams.createGroupSectorExams(f.teacher.id,{planId:next.id,crmStudentIds:[f.first.crmStudentId!],items:[{kind:"custom",title:"Песня"}]}),rejectsWith("GROUP_PLAN_REQUIRES_PERSONAL_EXAMS"));
+  const view=await exams.listTeacherGroupSectorExams(f.teacher.id,f.crmGroupId);
+  assert.equal(view.sectors.some(row=>row.planId===next.id),false);
 });

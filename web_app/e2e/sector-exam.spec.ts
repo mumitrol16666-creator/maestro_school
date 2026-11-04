@@ -62,7 +62,7 @@ test("the teacher marks every point before closing the sector or sending to a re
   await page.goto("/admin/my-students/student/QA-STUDENT-1");
   const panel = page.getByTestId("sector-exam-panel");
   await expect(panel).toContainText("Экзамен сектора 1");
-  const close = panel.getByRole("button", { name: "Завершить сектор" });
+  const close = panel.getByRole("button", { name: "Сдал · завершить сектор" });
   const retake = panel.getByRole("button", { name: "Пересдача" });
   await expect(close).toBeDisabled();
   await expect(retake).toBeDisabled();
@@ -75,8 +75,10 @@ test("the teacher marks every point before closing the sector or sending to a re
   await expect(close).toBeDisabled();
   await items.nth(2).getByRole("button", { name: "Не сделано" }).click();
   await expect(items.nth(2).getByRole("button", { name: "Не сделано" })).toHaveAttribute("aria-pressed", "true");
-  await expect(close).toBeEnabled();
+  await expect(close).toBeDisabled();
   await expect(retake).toBeEnabled();
+  await items.nth(2).getByRole("button", { name: "Сделано", exact: true }).click();
+  await expect(close).toBeEnabled();
 });
 
 test("the admin board lists the QA student's sector with its exam", async ({ page, request, context }) => {

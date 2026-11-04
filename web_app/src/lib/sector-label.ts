@@ -7,6 +7,6 @@ export function sectorTitle(
   audience: "student" | "other" = "other",
 ) {
   const number = plan.sequence ? ` ${plan.sequence}` : "";
-  if (plan.scope === "group") return `Сектор группы${number}`;
+  if (plan.scope === "group") return `План группы${number}`;
   return audience === "student" ? `Мой сектор${number}` : `Сектор${number}`;
 }

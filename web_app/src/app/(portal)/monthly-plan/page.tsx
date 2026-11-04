@@ -17,6 +17,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { ScreenError } from "@/components/app-error-screen";
 import { EmptyState } from "@/components/data-states";
+import { SectorStatistics } from "@/components/sector-statistics";
 import { ProgressBar } from "@/components/progress-bar";
 import { ScreenSkeleton } from "@/components/screen-skeleton";
 import { useApiResource } from "@/hooks/use-api-resource";
@@ -105,6 +106,8 @@ export default function SectorPage() {
           </button>
         </div>
       </header>
+
+      <SectorStatistics endpoint="/students/me/sector-statistics" />
 
       {resource.loading && !resource.data ? (
         <div className="mt-7"><ScreenSkeleton variant="section" label="Открываем сектор" /></div>

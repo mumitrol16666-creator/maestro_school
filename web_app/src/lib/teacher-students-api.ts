@@ -17,6 +17,10 @@ import type {
 import type { TeacherStudentWorkspace } from "@/types/teacher-student-workspace";
 
 export const teacherStudentsApi = {
+  openNextSector: (kind: "students" | "groups", ownerId: string, planId: string, crmDirectionId: string, expectedVersion: number) =>
+    apiRequest<StudentMonthlyPlan>(`/teachers/me/${kind}/${encodeURIComponent(ownerId)}/sectors/${encodeURIComponent(planId)}/next`, {
+      method: "POST", body: JSON.stringify({ crmDirectionId, expectedVersion }),
+    }),
   list: () => apiRequest<TeacherStudentsResponse>("/teachers/me/students"),
   openDialog: (studentUserId: string, recipient: "student" | "parent") =>
     apiRequest<{ conversationId: string; recipients: string[] }>(

@@ -3,6 +3,7 @@
 import { ArrowLeft, Users } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { StudentMonthlyPlanEditor } from "@/components/student-monthly-plan-editor";
 import { useState } from "react";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
 import { GroupMonthlyPlanEditor } from "@/components/group-monthly-plan-editor";
@@ -17,9 +18,11 @@ export default function GroupPlanPage() {
   const groupsResource = useApiResource(() => teacherStudentsApi.groups(), []);
   // Closing the group's sector re-opens the editor on the next sector.
   const [editorKey, setEditorKey] = useState(0);
+  const [openedStudents, setOpenedStudents] = useState<Set<string>>(new Set());
+  const [legacyOpened, setLegacyOpened] = useState(false);
 
   if (groupsResource.loading) {
-    return <LoadingState label="Открываем сектор группы" />;
+    return <LoadingState label="Открываем план группы" />;
   }
 
   if (groupsResource.error) {
@@ -47,9 +50,9 @@ export default function GroupPlanPage() {
       </Link>
 
       <PageHeader
-        eyebrow="Сектор группы"
+        eyebrow="План обучения группы"
         title={group.name}
-        description="Цель сектора, темы и прогресс группы, экзамен каждого участника и переход к следующему сектору."
+        description="Общие темы и материалы занятий. Личные сектора и готовность участников учитываются отдельно."
       />
 
       <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm font-semibold text-stone-500">
@@ -66,7 +69,21 @@ export default function GroupPlanPage() {
         directionTitle={group.direction}
       />
 
-      <GroupSectorExamPanel crmGroupId={group.crmGroupId} onSectorClosed={() => setEditorKey((value) => value + 1)} />
+      <section className="mt-6 space-y-3">
+        <h2 className="font-display text-2xl">Личные сектора участников</h2>
+        <p className="text-sm text-stone-600">Откройте ученика, чтобы выбрать его программу и продолжить следующий сектор независимо от общего плана.</p>
+        {group.students.map(student => <details key={student.crmStudentId} onToggle={event => {
+          if (event.currentTarget.open) setOpenedStudents(ids => new Set(ids).add(student.crmStudentId));
+        }} className="rounded-2xl border border-stone-200 bg-white p-4">
+          <summary className="min-h-11 cursor-pointer py-2 text-base font-bold">{student.name}</summary>
+          {openedStudents.has(student.crmStudentId) ? <StudentMonthlyPlanEditor crmStudentId={student.crmStudentId} directionTitles={[group.direction]} /> : null}
+        </details>)}
+      </section>
+      <details onToggle={event => { if (event.currentTarget.open) setLegacyOpened(true); }} className="mt-6 rounded-2xl border border-stone-200 p-4">
+        <summary className="min-h-11 cursor-pointer py-2 text-sm font-bold">Прежние общие экзамены группы</summary>
+        <p className="mt-2 text-sm text-stone-600">История и незавершённые экзамены прежней модели сохраняются. Новые экзамены готовятся по личным секторам учеников.</p>
+        {legacyOpened ? <GroupSectorExamPanel crmGroupId={group.crmGroupId} onSectorClosed={() => setEditorKey((value) => value + 1)} /> : null}
+      </details>
     </div>
   );
 }

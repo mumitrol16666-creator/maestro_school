@@ -74,20 +74,20 @@ test("outside a lesson a teacher can set only 0-99 percent", () => {
   );
 });
 
-test("group topic rewards exclude students absent from the immutable approval snapshot", () => {
+test("shared group coverage does not award personal mastery even to present students", () => {
   const topic = { crmStudentId: null, crmGroupId: "group-1" };
 
   assert.deepEqual(
     topicRewardCrmStudentIds(topic, ["student-present", "student-late"]),
-    ["student-present", "student-late"],
+    [],
   );
 });
 
-test("group topic reward recipients are deduplicated and trimmed from the snapshot", () => {
+test("repeated group recipients cannot turn shared coverage into personal rewards", () => {
   const topic = { crmStudentId: null, crmGroupId: "group-1" };
   const submittedRecipients = [" student-present ", "student-late", "student-present"];
 
-  assert.deepEqual(topicRewardCrmStudentIds(topic, submittedRecipients), ["student-present", "student-late"]);
+  assert.deepEqual(topicRewardCrmStudentIds(topic, submittedRecipients), []);
 });
 
 test("a group topic without an attendance snapshot pays nobody", () => {
