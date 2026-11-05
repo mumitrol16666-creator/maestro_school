@@ -7,7 +7,7 @@ import { StudentMonthlyPlanEditor } from "@/components/student-monthly-plan-edit
 import { useState } from "react";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
 import { GroupMonthlyPlanEditor } from "@/components/group-monthly-plan-editor";
-import { GroupSectorExamPanel } from "@/components/group-sector-exam-panel";
+import { SectorExamPanel } from "@/components/sector-exam-panel";
 import { PageHeader } from "@/components/page-header";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { teacherStudentsApi } from "@/lib/teacher-students-api";
@@ -16,10 +16,7 @@ export default function GroupPlanPage() {
   const params = useParams<{ crmGroupId: string }>();
   const crmGroupId = params.crmGroupId;
   const groupsResource = useApiResource(() => teacherStudentsApi.groups(), []);
-  // Closing the group's sector re-opens the editor on the next sector.
-  const [editorKey, setEditorKey] = useState(0);
   const [openedStudents, setOpenedStudents] = useState<Set<string>>(new Set());
-  const [legacyOpened, setLegacyOpened] = useState(false);
 
   if (groupsResource.loading) {
     return <LoadingState label="Открываем план группы" />;
@@ -64,7 +61,6 @@ export default function GroupPlanPage() {
       </div>
 
       <GroupMonthlyPlanEditor
-        key={editorKey}
         crmGroupId={group.crmGroupId}
         directionTitle={group.direction}
       />
@@ -76,14 +72,10 @@ export default function GroupPlanPage() {
           if (event.currentTarget.open) setOpenedStudents(ids => new Set(ids).add(student.crmStudentId));
         }} className="rounded-2xl border border-stone-200 bg-white p-4">
           <summary className="min-h-11 cursor-pointer py-2 text-base font-bold">{student.name}</summary>
-          {openedStudents.has(student.crmStudentId) ? <StudentMonthlyPlanEditor crmStudentId={student.crmStudentId} directionTitles={[group.direction]} /> : null}
+          {openedStudents.has(student.crmStudentId) ? <><StudentMonthlyPlanEditor crmStudentId={student.crmStudentId} directionTitles={[group.direction]} /><SectorExamPanel crmStudentId={student.crmStudentId} /></> : null}
         </details>)}
       </section>
-      <details onToggle={event => { if (event.currentTarget.open) setLegacyOpened(true); }} className="mt-6 rounded-2xl border border-stone-200 p-4">
-        <summary className="min-h-11 cursor-pointer py-2 text-sm font-bold">Прежние общие экзамены группы</summary>
-        <p className="mt-2 text-sm text-stone-600">История и незавершённые экзамены прежней модели сохраняются. Новые экзамены готовятся по личным секторам учеников.</p>
-        {legacyOpened ? <GroupSectorExamPanel crmGroupId={group.crmGroupId} onSectorClosed={() => setEditorKey((value) => value + 1)} /> : null}
-      </details>
+
     </div>
   );
 }

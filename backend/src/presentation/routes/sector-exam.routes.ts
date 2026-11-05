@@ -4,7 +4,7 @@ import { getParentVisibility } from "../../application/services/parent-visibilit
 import { ForbiddenError } from "../../domain/errors.js";
 import { getSectorCertificate } from "../../application/services/sector-certificate.service.js";
 import { prisma } from "../../infrastructure/database/prisma.js";
-import { examProgramInput, examSessionInput, listExamPrograms, saveExamProgram, createExamSession, listExamSessions, sendExamSession, examSessionParticipantsInput, updateExamSessionParticipants, examSessionScheduleInput, scheduleExamSession } from "../../application/services/sector-exam-program.service.js";
+import { examProgramInput, examSessionInput, listExamPrograms, saveExamProgram, createExamSession, listExamSessions, cancelExamSession, examSessionParticipantsInput, updateExamSessionParticipants, examSessionScheduleInput, scheduleExamSession } from "../../application/services/sector-exam-program.service.js";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import {
@@ -15,37 +15,17 @@ import {
 } from "../guards/auth.guards.js";
 import { writeAuditLog } from "../../application/services/audit.service.js";
 import {
-  SECTOR_EXAM_MAX_ITEMS,
   getExamSessionWorkspace,
   listExamSessionsForLesson,
   getPersonalExam,
-  cancelSectorExam,
-  createGroupSectorExams,
-  createSectorExam,
   finishSectorExam,
   listAdminSectorExamBoard,
-  listTeacherGroupSectorExams,
   listTeacherStudentSectorExams,
   markSectorExamItem,
-  sectorExamTemplate,
-  sendSectorExamForSchedule,
   startSectorExam,
-  updateSectorExamItems,
 } from "../../application/services/sector-exam.service.js";
-import { closeGroupSector, passGroupSectorMemberManually } from "../../application/services/group-sector.service.js";
 
-/**
- * Plan 1.10: the sector exam. The admin prepares it, CRM books it, the teacher holds it at the school.
- * Plan 1.13: a group sector's exam is one exam per chosen member; the group's teacher closes the
- * group's sector and may count a member as passed without an exam.
- */
-
-const itemsSchema = z.array(z.object({
-  kind: z.enum(["topic", "custom"]),
-  topicId: z.string().uuid().nullable().optional(),
-  title: z.string().trim().min(1).max(255),
-  criteria: z.string().max(2000).nullable().optional(),
-})).min(1).max(SECTOR_EXAM_MAX_ITEMS);
+/** The session builder is the only preparation and assignment flow. */
 
 const examParams = z.object({ examId: z.string().uuid() });
 
@@ -130,73 +110,16 @@ export async function sectorExamRoutes(app: FastifyInstance) {
     await writeAuditLog({entityType:"exam_session",entityId:id,action:"update",actorId:request.user!.id,payload:{event:"participants_updated",participants:session.exams.length}});
     return {data:session};
   });
-  app.post("/admin/exam-sessions/:id/send", { preHandler: coordinatorWrite }, async request => {
+  app.post("/admin/exam-sessions/:id/cancel", { preHandler: coordinatorWrite }, async request => {
     const {id}=z.object({id:z.string().uuid()}).parse(request.params);
-    const session=await sendExamSession(id);
-    await writeAuditLog({entityType:"exam_session",entityId:id,action:"update",actorId:request.user!.id,payload:{event:"sent_for_schedule"}});
-    return {data:session};
+    const result=await cancelExamSession(id);
+    await writeAuditLog({entityType:"exam_session",entityId:id,action:"update",actorId:request.user!.id,payload:{event:"cancelled"}});
+    return {data:result};
   });
 
   app.get("/admin/sector-exams", { preHandler: coordinatorRead }, async () => ({
     data: await listAdminSectorExamBoard(),
   }));
-
-  app.get("/admin/sector-exams/template/:planId", { preHandler: coordinatorRead }, async (request) => {
-    const { planId } = z.object({ planId: z.string().uuid() }).parse(request.params);
-    return { data: await sectorExamTemplate(planId) };
-  });
-
-  app.post("/admin/sector-exams", { preHandler: coordinatorWrite }, async (request, reply) => {
-    const body = z.object({ planId: z.string().uuid(), items: itemsSchema, send: z.boolean().optional() }).parse(request.body);
-    const exam = await createSectorExam(request.user!.id, body);
-    await writeAuditLog({
-      entityType: "sector_exam", entityId: exam.id, action: "create", actorId: request.user!.id,
-      payload: { planId: exam.planId, items: exam.items.length, status: exam.status },
-    });
-    return reply.status(201).send({ data: exam });
-  });
-
-  app.post("/admin/sector-exams/group", { preHandler: coordinatorWrite }, async (request, reply) => {
-    const body = z.object({
-      planId: z.string().uuid(),
-      crmStudentIds: z.array(z.string().trim().min(1).max(128)).min(1).max(30),
-      items: itemsSchema,
-      send: z.boolean().optional(),
-    }).parse(request.body);
-    const result = await createGroupSectorExams(request.user!.id, body);
-    await writeAuditLog({
-      entityType: "sector_exam", entityId: body.planId, action: "create", actorId: request.user!.id,
-      payload: { group: true, created: result.created.map((exam) => exam.id), skipped: result.skipped },
-    });
-    return reply.status(201).send({ data: result });
-  });
-
-  app.put("/admin/sector-exams/:examId/items", { preHandler: coordinatorWrite }, async (request) => {
-    const { examId } = examParams.parse(request.params);
-    const body = z.object({ items: itemsSchema }).parse(request.body);
-    return { data: await updateSectorExamItems(examId, body.items) };
-  });
-
-  app.post("/admin/sector-exams/:examId/send", { preHandler: coordinatorWrite }, async (request) => {
-    const { examId } = examParams.parse(request.params);
-    const exam = await sendSectorExamForSchedule(examId);
-    await writeAuditLog({
-      entityType: "sector_exam", entityId: exam.id, action: "update", actorId: request.user!.id,
-      payload: { event: "sent_for_schedule" },
-    });
-    return { data: exam };
-  });
-
-  app.post("/admin/sector-exams/:examId/cancel", { preHandler: coordinatorWrite }, async (request) => {
-    const { examId } = examParams.parse(request.params);
-    const body = z.object({ reason: z.string().max(255).nullable().optional() }).parse(request.body ?? {});
-    const exam = await cancelSectorExam(examId, body.reason ?? null);
-    await writeAuditLog({
-      entityType: "sector_exam", entityId: exam.id, action: "update", actorId: request.user!.id,
-      payload: { event: "cancelled", reason: exam.cancelReason },
-    });
-    return { data: exam };
-  });
 
   app.get("/teachers/me/students/:crmStudentId/sector-exams", { preHandler: teacherRead }, async (request) => {
     const { crmStudentId } = z.object({ crmStudentId: z.string().min(1).max(128) }).parse(request.params);
@@ -217,7 +140,7 @@ export async function sectorExamRoutes(app: FastifyInstance) {
   app.post("/teachers/me/sector-exams/:examId/finish", { preHandler: teacherWrite }, async (request) => {
     const { examId } = examParams.parse(request.params);
     const body = z.object({
-      decision: z.enum(["close_sector", "pass", "retake"]),
+      decision: z.enum(["pass", "retake"]),
       comment: z.string().max(2000).nullable().optional(),
     }).parse(request.body);
     const result = await finishSectorExam(request.user!.id, examId, body);
@@ -231,30 +154,4 @@ export async function sectorExamRoutes(app: FastifyInstance) {
     return { data: result };
   });
 
-  app.get("/teachers/me/groups/:crmGroupId/sector-exams", { preHandler: teacherRead }, async (request) => {
-    const { crmGroupId } = z.object({ crmGroupId: z.string().min(1).max(128) }).parse(request.params);
-    return { data: await listTeacherGroupSectorExams(request.user!.id, crmGroupId) };
-  });
-
-  const groupSectorParams = z.object({ crmGroupId: z.string().min(1).max(128), planId: z.string().uuid() });
-
-  app.post("/teachers/me/groups/:crmGroupId/sectors/:planId/close", { preHandler: teacherWrite }, async (request) => {
-    const { crmGroupId, planId } = groupSectorParams.parse(request.params);
-    const result = await closeGroupSector(request.user!.id, crmGroupId, planId);
-    await writeAuditLog({
-      entityType: "group_monthly_plan", entityId: planId, action: "update", actorId: request.user!.id,
-      payload: { event: "group_sector_closed", crmGroupId },
-    });
-    return { data: result };
-  });
-
-  app.post("/teachers/me/groups/:crmGroupId/sectors/:planId/members/:crmStudentId/pass", { preHandler: teacherWrite }, async (request) => {
-    const params = groupSectorParams.extend({ crmStudentId: z.string().min(1).max(128) }).parse(request.params);
-    const result = await passGroupSectorMemberManually(request.user!.id, params.crmGroupId, params.planId, params.crmStudentId);
-    await writeAuditLog({
-      entityType: "group_monthly_plan", entityId: params.planId, action: "update", actorId: request.user!.id,
-      payload: { event: "member_passed_manually", crmStudentId: params.crmStudentId, awardedPoints: result.awardedPoints },
-    });
-    return { data: result };
-  });
 }

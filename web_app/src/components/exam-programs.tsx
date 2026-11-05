@@ -10,7 +10,7 @@ import type { AdminSectorExamRow } from "@/types/sector-exam";
 
 type Item = { title: string; criteria: string };
 type Program = { id: string; directionId: string; sectorNumber: number; title: string; durationMinutes: number; revision: number; items: Item[]; direction: { title: string } };
-type Session = { id: string; title: string; programId: string; programRevision: number; programSnapshot: Omit<Program, "id" | "revision" | "direction">; exams: Array<{ id: string; planId: string; studentNameSnapshot: string | null; crmStudentId: string; status: string; scheduledAt: string | null; plan?: { examReadyAt: string | null } }> };
+type Session = { id: string; title: string; programId: string; programRevision: number; programSnapshot: Omit<Program, "id" | "revision" | "direction">; exams: Array<{ id: string; planId: string; studentNameSnapshot: string | null; crmStudentId: string; status: string; scheduledAt: string | null; crmClassId?:string|null; plan?: { examReadyAt: string | null } }> };
 type Options = { teachers: Array<{ id: string; name: string }>; rooms: Array<{ id: string; name: string }> };
 const input = "min-h-11 w-full rounded-xl border border-stone-300 bg-white px-3 py-2 text-sm text-ink";
 const button = "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-ink px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50";
@@ -129,7 +129,7 @@ export function ExamPrograms({ sectors, onChanged }: { sectors: AdminSectorExamR
         <div className="grid max-h-96 gap-2 overflow-y-auto">{visible.map(row => <label key={row.planId} className="flex min-h-14 cursor-pointer items-center gap-3 rounded-lg border border-stone-200 bg-stone-50 p-3 text-sm">
           <input type="checkbox" checked={selected.includes(row.planId)} disabled={!selected.includes(row.planId) && selected.length >= 20} onChange={event => { setRequestKey(null); setSelected(ids => event.target.checked ? [...ids, row.planId] : ids.filter(id => id !== row.planId)); }} />
           <span className="min-w-0 flex-1"><span className="block font-semibold">{row.studentName}</span><span className="text-xs text-stone-600">Сектор {row.curriculumNumber ?? row.sequence}</span></span>
-          <span className={`shrink-0 rounded-lg px-2 py-1 text-xs font-bold ${row.progress.ready ? "bg-emerald-100 text-emerald-900" : "bg-amber-50 text-amber-900"}`}>{row.progress.ready ? "Готов к экзамену" : "Готовность не отмечена"}</span>
+          <span className={`shrink-0 rounded-lg px-2 py-1 text-xs font-bold ${row.progress.ready ? "bg-emerald-100 text-emerald-900" : "bg-amber-50 text-amber-900"}`}>{row.exam?.status==="completed"&&row.exam.decision==="retake"?"Нужен повторный экзамен":row.progress.ready ? "Готов к экзамену" : "Готовность не отмечена"}</span>
         </label>)}</div>
         {!visible.length ? <p className="text-sm text-stone-600">{search ? "По этому имени ученики не найдены." : "Нет доступных учеников этого направления и сектора. Ученик с уже открытым экзаменом в другой состав не добавляется."}</p> : null}
         <div className="flex flex-wrap gap-2"><button type="button" disabled={!selected.length || busy !== null} onClick={() => void run("session", prepare)} className={button}>{busy === "session" ? <LoaderCircle className="animate-spin" size={16} /> : <Plus size={16} />} {rosterSession ? "Сохранить состав" : `Подготовить экзамен · ${selected.length} участников`}</button>
@@ -148,14 +148,15 @@ export function ExamPrograms({ sectors, onChanged }: { sectors: AdminSectorExamR
 function SessionCard({ session, busy, run, onChanged, onEdit }: { session: Session; busy: string | null; run: (key: string, action: () => Promise<void>) => Promise<void>; onChanged: () => void; onEdit: () => void }) {
   const [booking, setBooking] = useState(false);
   const editable = session.exams.length > 0 && session.exams.every(exam => exam.status === "draft");
+  const cancellable=session.exams.every(exam=>exam.status==="draft"&&!exam.crmClassId);
   const waiting = session.exams.some(exam => ["draft", "awaiting_schedule"].includes(exam.status));
   const ready = session.exams.filter(exam => Boolean(exam.plan?.examReadyAt)).length;
   const date = session.exams.find(exam => exam.scheduledAt)?.scheduledAt ?? null;
   return <div className="grid gap-3 rounded-xl border border-stone-200 p-4" data-testid="prepared-exam-session">
     <div className="flex flex-wrap items-start justify-between gap-3"><div><h4 className="text-base font-bold">{session.title} · {session.exams.length} участников</h4><p className="mt-1 text-sm text-stone-600">{date ? formatExamDate(date) : `Дата пока не назначена · готовы ${ready} из ${session.exams.length}`}</p></div><Link href={`/admin/exam-sessions/${session.id}`} className={outline}>Открыть экзамен и результаты</Link></div>
     <ul className="grid gap-1 text-sm text-stone-700">{session.exams.map(exam => <li key={exam.id}>{exam.studentNameSnapshot ?? "Ученик без кабинета"} · {sectorExamStatusLabel[exam.status] ?? exam.status}{exam.status === "draft" && !exam.plan?.examReadyAt ? " · нужна отметка готовности" : ""}</li>)}</ul>
-    <div className="flex flex-wrap gap-2">{editable ? <button type="button" className={outline} disabled={busy !== null} onClick={onEdit}>Изменить участников</button> : null}
-      {waiting ? <button type="button" disabled={busy !== null} className={button} onClick={() => setBooking(value => !value)}><CalendarClock size={16} /> Назначить дату и преподавателя</button> : <span className="inline-flex items-center gap-2 text-sm text-emerald-800"><CheckCircle2 size={16} /> Экзамен назначен</span>}</div>
+    <div className="flex flex-wrap gap-2">{cancellable?<button type="button" className={outline} disabled={busy!==null} onClick={()=>void run(`cancel-${session.id}`,async()=>{await apiRequest(`/admin/exam-sessions/${session.id}/cancel`,{method:"POST",body:"{}"});onChanged();})}>Отменить черновик экзамена</button>:null}{editable ? <button type="button" className={outline} disabled={busy !== null} onClick={onEdit}>Изменить участников</button> : null}
+      {waiting ? <button type="button" disabled={busy !== null} className={button} onClick={() => setBooking(value => !value)}><CalendarClock size={16} /> Назначить дату и преподавателя</button> : <span className="inline-flex items-center gap-2 text-sm text-emerald-800"><CheckCircle2 size={16} /> {session.exams.every(exam=>exam.status==="completed")?"Экзамен завершён":"Экзамен назначен"}</span>}</div>
     {booking ? <ScheduleForm session={session} busy={busy} run={run} onDone={() => { setBooking(false); onChanged(); }} /> : null}
   </div>;
 }

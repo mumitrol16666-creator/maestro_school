@@ -6,7 +6,7 @@ import { useAuth } from "@/components/auth-provider";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { apiRequest } from "@/lib/api-client";
 import { formatExamDate, sectorExamStatusLabel } from "@/lib/sector-exams-api";
-import { PastResult } from "@/components/sector-exam-panel";
+import { PastResult } from "@/components/exam-assessment";
 import type { SectorExam } from "@/types/sector-exam";
 export default function PersonalExamPage() {
   const { examId } = useParams<{ examId: string }>(); const { user, loading } = useAuth(); const router = useRouter();

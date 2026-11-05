@@ -12,13 +12,13 @@ export type SectorExamItem = {
 };
 
 export type SectorExam = {
-  sessionId?: string | null;
+  sessionId: string;
   sessionTitle?: string | null;
   programTitle?: string | null;
   id: string;
   planId: string;
   crmStudentId: string;
-  /** Plan 1.13: set when this is one member's exam of a group sector. */
+  /** Historical group context; new attempts belong to the pupil's personal sector. */
   crmGroupId: string | null;
   direction: { id: string; title: string; crmDirectionId: string | null };
   status: SectorExamStatus;
@@ -50,50 +50,6 @@ export type AdminSectorExamRow = {
   goal: string;
   progress: SectorProgressSummary;
   exam: SectorExam | null;
-};
-
-export type SectorMemberPass = { method: "exam" | "manual"; passedAt: string; points: number };
-
-export type GroupSectorMember = {
-  crmStudentId: string;
-  name: string;
-  inGroup: boolean;
-  exam: SectorExam | null;
-  pass: SectorMemberPass | null;
-};
-
-/** Plan 1.13: an open group sector on the admin's board, with each member's exam and pass. */
-export type AdminGroupSectorRow = {
-  planId: string;
-  sequence: number;
-  crmGroupId: string;
-  groupName: string | null;
-  rosterAvailable: boolean;
-  direction: { id: string; title: string; crmDirectionId: string | null };
-  goal: string;
-  progress: SectorProgressSummary;
-  members: GroupSectorMember[];
-};
-
-/** Plan 1.13: the group page — the open sector and closed ones where a member still has an exam. */
-export type TeacherGroupSectorExams = {
-  group: { crmGroupId: string; name: string };
-  sectors: Array<{
-    planId: string;
-    sequence: number;
-    status: "active" | "closed";
-    closedAt: string | null;
-    direction: { id: string; title: string; crmDirectionId: string | null };
-    progress: SectorProgressSummary;
-    members: Array<GroupSectorMember & { canStart: boolean }>;
-  }>;
-};
-
-export type SectorExamItemDraft = {
-  kind: "topic" | "custom";
-  topicId?: string | null;
-  title: string;
-  criteria?: string | null;
 };
 
 export type TeacherSectorExamRow = {

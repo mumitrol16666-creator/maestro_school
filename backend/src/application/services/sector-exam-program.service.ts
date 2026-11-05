@@ -1,3 +1,4 @@
+import { assertPersonalExamPlan, assertExamReadiness } from "./exam-admission.js";
 import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
@@ -27,8 +28,16 @@ export async function saveExamProgram(actorUserId: string, input: z.infer<typeof
 
 export const examSessionInput = z.object({
   programId: z.string().uuid(), programRevision: z.number().int().positive(),
-  title: z.string().trim().min(1).max(255), planIds: z.array(z.string().uuid()).min(1).max(30), requestKey: z.string().uuid(),
+  title: z.string().trim().min(1).max(255), planIds: z.array(z.string().uuid()).min(1).max(20), requestKey: z.string().uuid(),
 });
+
+/** Every attempt, including a retake, is created here by a session, with one lineage. */
+async function nextAttempt(tx: Prisma.TransactionClient, planId: string, crmStudentId: string) {
+  const last = await tx.sectorExam.findFirst({ where:{planId,crmStudentId},orderBy:[{attempt:"desc"},{createdAt:"desc"}] });
+  if (!last) return {attempt:1,previousExamId:null};
+  if (!["completed","cancelled"].includes(last.status)) throw new ConflictError("У ученика уже есть открытый экзамен", "SECTOR_EXAM_ALREADY_OPEN");
+  return {attempt:last.attempt+(last.status==="completed"?1:0),previousExamId:last.id};
+}
 
 export async function createExamSession(actorUserId: string, raw: z.infer<typeof examSessionInput>) {
   const input = examSessionInput.parse(raw);
@@ -53,15 +62,14 @@ export async function createExamSession(actorUserId: string, raw: z.infer<typeof
       for (const planId of payload.planIds) {
         await tx.$queryRaw`SELECT id FROM learning_plans WHERE id=${planId}::uuid FOR UPDATE`;
         const plan = await tx.learningPlan.findUnique({ where: { id: planId }, include: { templateStep: { select: { number: true } } } });
-        if (!plan || !plan.crmStudentId || plan.crmGroupId || plan.status === "closed" || plan.publishedVersionNumber === null) {
-          throw new ConflictError("У одного из учеников сектор не опубликован или уже завершён", "EXAM_SESSION_STUDENT_NOT_READY");
-        }
+        if (!plan) throw new NotFoundError("Сектор ученика");
+        assertPersonalExamPlan(plan);
         if (plan.directionId !== program.directionId || (plan.templateStep?.number ?? plan.sequence) !== program.sectorNumber) {
           throw new BadRequestError("Программа не соответствует направлению и сектору ученика", "EXAM_SESSION_PROGRAM_MISMATCH");
         }
         if (studentIds.has(plan.crmStudentId)) throw new BadRequestError("Ученик добавлен дважды", "EXAM_SESSION_DUPLICATE_STUDENT");
         studentIds.add(plan.crmStudentId);
-        plans.push(plan);
+        plans.push({...plan, ...await nextAttempt(tx,plan.id,plan.crmStudentId)});
       }
       const students = await tx.user.findMany({ where: { crmStudentId: { in: [...studentIds] }, deletedAt: null, role: { slug: "student" } }, select: { crmStudentId: true, firstName: true, lastName: true, middleName: true } });
       const names = new Map(students.map(student => [student.crmStudentId, [student.lastName, student.firstName, student.middleName].filter(Boolean).join(" ")]));
@@ -69,7 +77,7 @@ export async function createExamSession(actorUserId: string, raw: z.infer<typeof
         programId: program.id, programRevision: program.revision, title: input.title, requestKey, requestFingerprint: fingerprint, createdById: actorUserId,
         programSnapshot: { title: program.title, directionId: program.directionId, sectorNumber: program.sectorNumber, durationMinutes: program.durationMinutes, items },
         exams: { create: plans.map(plan => ({
-          planId: plan.id, crmStudentId: plan.crmStudentId!, directionId: plan.directionId, createdById: actorUserId,
+          planId: plan.id, crmStudentId: plan.crmStudentId!, directionId: plan.directionId, createdById: actorUserId, attempt:plan.attempt, previousExamId:plan.previousExamId,
           programTitleSnapshot: program.title, studentNameSnapshot: names.get(plan.crmStudentId!) ?? null,
           items: { create: items.map((item, index) => ({ kind: "custom" as const, title: item.title, criteria: item.criteria, position: index })) },
         })) },
@@ -82,7 +90,7 @@ export async function createExamSession(actorUserId: string, raw: z.infer<typeof
 }
 
 export async function listExamSessions() {
-  return prisma.sectorExamSession.findMany({ orderBy: { createdAt: "desc" }, take: 100, include: { exams: { where: { status: { not: "cancelled" } }, select: { id: true, planId: true, crmStudentId: true, studentNameSnapshot: true, status: true, scheduledAt: true, plan: { select: { examReadyAt: true } } } } } });
+  return prisma.sectorExamSession.findMany({ where:{exams:{some:{status:{not:"cancelled"}}}}, orderBy: { createdAt: "desc" }, take: 100, include: { exams: { where: { status: { not: "cancelled" } }, select: { id: true, planId: true, crmStudentId: true, studentNameSnapshot: true, status: true, scheduledAt: true, crmClassId:true, plan: { select: { examReadyAt: true } } } } } });
 }
 
 export async function sendExamSession(sessionId: string) {
@@ -93,8 +101,12 @@ export async function sendExamSession(sessionId: string) {
     const active = session.exams.filter(exam => exam.status !== "cancelled");
     if (!active.length) throw new ConflictError("Добавьте участников экзамена", "EXAM_SESSION_EMPTY");
     if (active.some(exam => !["draft", "awaiting_schedule", "scheduled"].includes(exam.status))) throw new ConflictError("Экзамен уже начат или завершён", "EXAM_SESSION_ROSTER_LOCKED");
-    const plans = await tx.learningPlan.findMany({where:{id:{in:active.map(exam=>exam.planId)}},select:{id:true,examReadyAt:true,status:true}});
-    const unready = active.filter(exam => !plans.some(plan => plan.id===exam.planId && plan.examReadyAt && plan.status!=="closed"));
+    const plans = await tx.learningPlan.findMany({where:{id:{in:active.map(exam=>exam.planId)}},select:{id:true,examReadyAt:true,status:true,crmStudentId:true,crmGroupId:true,publishedVersionNumber:true}});
+    const unready = active.filter(exam => {
+      const plan=plans.find(plan=>plan.id===exam.planId);
+      if (!plan) return true;
+      try {assertExamReadiness(plan,exam.crmStudentId);return false;} catch {return true;}
+    });
     if (unready.length) throw new ConflictError(`Нужна отметка преподавателя о готовности: ${unready.map(exam=>exam.studentNameSnapshot||exam.crmStudentId).join(", ")}`,"EXAM_SESSION_STUDENT_NOT_READY");
     await tx.sectorExam.updateMany({ where: { sessionId, status: "draft" }, data: { status: "awaiting_schedule", sentForScheduleAt: new Date() } });
     return tx.sectorExamSession.findUniqueOrThrow({ where: { id: sessionId }, include: { exams: true } });
@@ -103,8 +115,8 @@ export async function sendExamSession(sessionId: string) {
 
 
 export const examSessionParticipantsInput = z.object({
-  planIds: z.array(z.string().uuid()).min(1).max(30),
-  expectedExamIds: z.array(z.string().uuid()).max(30),
+  planIds: z.array(z.string().uuid()).min(1).max(20),
+  expectedExamIds: z.array(z.string().uuid()).max(20),
 });
 
 /** Edit the roster only while every participant is still a draft; preserve removed entries. */
@@ -126,9 +138,8 @@ export async function updateExamSessionParticipants(actorUserId: string, session
       for (const planId of [...input.planIds].sort()) {
         await tx.$queryRaw`SELECT id FROM learning_plans WHERE id=${planId}::uuid FOR UPDATE`;
         const plan = await tx.learningPlan.findUnique({ where: { id: planId }, include: { templateStep: { select: { number: true } } } });
-        if (!plan || !plan.crmStudentId || plan.crmGroupId || plan.status === "closed" || plan.publishedVersionNumber === null) {
-          throw new ConflictError("У одного из учеников сектор не опубликован или уже завершён", "EXAM_SESSION_STUDENT_NOT_READY");
-        }
+        if (!plan) throw new NotFoundError("Сектор ученика");
+        assertPersonalExamPlan(plan);
         if (plan.directionId !== snapshot.directionId || (plan.templateStep?.number ?? plan.sequence) !== snapshot.sectorNumber) {
           throw new BadRequestError("Программа не соответствует направлению и сектору ученика", "EXAM_SESSION_PROGRAM_MISMATCH");
         }
@@ -144,7 +155,7 @@ export async function updateExamSessionParticipants(actorUserId: string, session
       for (const plan of plans) {
         if (kept.has(plan.id)) continue;
         await tx.sectorExam.create({ data: { sessionId, planId: plan.id, crmStudentId: plan.crmStudentId!, directionId: plan.directionId,
-          createdById: actorUserId, programTitleSnapshot: snapshot.title, studentNameSnapshot: nameById.get(plan.crmStudentId!) ?? null,
+          createdById: actorUserId, ...await nextAttempt(tx,plan.id,plan.crmStudentId!), programTitleSnapshot: snapshot.title, studentNameSnapshot: nameById.get(plan.crmStudentId!) ?? null,
           items: { create: snapshot.items.map((item, position) => ({ kind: "custom", title: item.title, criteria: item.criteria, position })) } } });
       }
       return tx.sectorExamSession.findUniqueOrThrow({ where: { id: sessionId }, include: { exams: { where: { status: { not: "cancelled" } } } } });
@@ -178,4 +189,16 @@ export async function scheduleExamSession(actorUserId:string,sessionId:string,ra
   const lessonAt=new Date(`${day}T${result.class.startTime}:00+05:00`);
   for (const exam of participants) await scheduleSectorExamFromCrm(exam.id,{crmClassId:result.class.id,lessonAt,crmTeacherId:result.class.teacherId});
   return {sessionId:session.id,crmClassId:result.class.id,scheduledAt:lessonAt,alreadyBooked:result.alreadyBooked};
+}
+
+/** Only an unbooked whole session may be cancelled here; scheduled lessons use the CRM calendar. */
+export async function cancelExamSession(sessionId:string) {
+  return prisma.$transaction(async tx=>{
+    await tx.$queryRaw`SELECT id FROM sector_exam_sessions WHERE id=${sessionId}::uuid FOR UPDATE`;
+    const session=await tx.sectorExamSession.findUnique({where:{id:sessionId},include:{exams:{where:{status:{not:"cancelled"}}}}});
+    if(!session)throw new NotFoundError("Экзамен");
+    if(session.exams.some(exam=>exam.status!=="draft"||exam.crmClassId))throw new ConflictError("Назначение уже отправлено. Проверьте урок в расписании CRM", "EXAM_SESSION_ALREADY_BOOKED");
+    await tx.sectorExam.updateMany({where:{sessionId,status:"draft",crmClassId:null},data:{status:"cancelled",cancelledAt:new Date(),cancelReason:"Отменён администратором до назначения"}});
+    return {sessionId,cancelled:true};
+  });
 }

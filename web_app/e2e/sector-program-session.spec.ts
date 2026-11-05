@@ -74,7 +74,7 @@ test("the appointed teacher conducts all six pupils on their saved exam checklis
       if(match){const person=participants.find(p=>p.exam.id===match[1])!;const action=match[2];
         if(action==="start")person.exam.status="in_progress";
         if(action.startsWith("items/"))person.exam.items[0].done=route.request().postDataJSON().done;
-        if(action==="finish"){person.exam.status="completed";Object.assign(person.exam,{outcome:"passed",certificate:{number:`MS-2026-${person.exam.id}`}});data={exam:person.exam,awardedPoints:250};}
+        if(action==="finish"){expect(route.request().postDataJSON().decision).toBe("pass");person.exam.status="completed";Object.assign(person.exam,{outcome:"passed",certificate:{number:`MS-2026-${person.exam.id}`}});data={exam:person.exam,awardedPoints:250};}
         else data=person.exam;
       }
     }

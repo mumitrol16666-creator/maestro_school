@@ -8,7 +8,7 @@ import { apiRequest, ApiError } from "@/lib/api-client";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { ErrorState, LoadingState } from "@/components/data-states";
 import { PageHeader } from "@/components/page-header";
-import { InProgress, PastResult } from "@/components/sector-exam-panel";
+import { InProgress, PastResult } from "@/components/exam-assessment";
 import { sectorExamsApi, formatExamDate, sectorExamStatusLabel, sectorExamOutcomeLabel } from "@/lib/sector-exams-api";
 import type { ExamSessionWorkspace, SectorExam } from "@/types/sector-exam";
 
@@ -52,7 +52,7 @@ function Participant({ participant, onChanged }: { participant: ExamSessionWorks
     <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-lg font-bold">{participant.studentName}</h2><span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-bold">{sectorExamStatusLabel[exam.status]}</span></div>
     {exam.scheduledAt ? <p className="mt-2 inline-flex items-center gap-2 text-sm"><CalendarClock size={16} />{formatExamDate(exam.scheduledAt)}</p> : <p className="mt-2 text-sm text-stone-600">Дата пока не назначена.</p>}
     {exam.status === "scheduled" && participant.canConduct ? <div className="mt-3 grid gap-2"><button type="button" className={`${button} justify-self-start`} disabled={!participant.canStart || busy !== null} onClick={() => void run("start", () => sectorExamsApi.start(exam.id))}>{busy === "start" ? <LoaderCircle size={16} className="animate-spin" /> : <GraduationCap size={16} />} Начать экзамен ученика</button>{!participant.canStart ? <p className="text-sm text-amber-900">Преподаватель ещё не подтвердил готовность ученика.</p> : null}</div> : null}
-    {exam.status === "in_progress" && participant.canConduct ? <InProgress exam={exam} busy={busy} run={run} decisions={[{ decision: exam.crmGroupId ? "pass" : "close_sector", label: "Сдал экзамен", primary: true }, { decision: "retake", label: "Пересдача" }]} /> : null}
+    {exam.status === "in_progress" && participant.canConduct ? <InProgress exam={exam} busy={busy} run={run} /> : null}
     {exam.status === "completed" ? <PastResult exam={exam} /> : null}
     {!participant.canConduct && exam.status !== "completed" ? <div className="mt-3"><p className="text-sm text-stone-600">Результаты отмечает назначенный принимающий преподаватель из своего кабинета.</p><ol className="mt-2 grid list-inside list-decimal gap-1 text-sm text-stone-700">{exam.items.map(item => <li key={item.id}>{item.title}{item.done !== null ? ` · ${item.done ? "Сделано" : "Не сделано"}` : ""}</li>)}</ol></div> : null}
     {error ? <p role="alert" className="mt-3 text-sm text-red-700">{error}</p> : null}
