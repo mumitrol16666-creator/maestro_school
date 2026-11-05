@@ -1096,7 +1096,7 @@ model SectorExam {
   outcome             SectorExamOutcome?
   decision            String?            @db.VarChar(32)
   comment             String?            @db.Text
-  sessionId           String?            @map("session_id") @db.Uuid
+  sessionId           String             @map("session_id") @db.Uuid
   studentNameSnapshot String?            @map("student_name_snapshot") @db.VarChar(255)
   programTitleSnapshot String?           @map("program_title_snapshot") @db.VarChar(255)
   certificateSnapshot Json?               @map("certificate_snapshot") @db.JsonB
@@ -1107,7 +1107,7 @@ model SectorExam {
   createdAt           DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt           DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  session      SectorExamSession? @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  session      SectorExamSession @relation(fields: [sessionId], references: [id], onDelete: Restrict)
   plan         LearningPlan       @relation(fields: [planId], references: [id], onDelete: Restrict)
   direction    Direction          @relation(fields: [directionId], references: [id], onDelete: Restrict)
   previousExam SectorExam?        @relation("SectorExamRetake", fields: [previousExamId], references: [id], onDelete: SetNull)
@@ -1134,7 +1134,7 @@ model SectorExamProgram {
   items           Json     @db.JsonB
   revision        Int      @default(1)
   archivedAt      DateTime? @map("archived_at") @db.Timestamptz(6)
-  createdById     String   @map("created_by_id") @db.Uuid
+  createdById     String?   @map("created_by_id") @db.Uuid
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
   direction Direction @relation(fields: [directionId], references: [id], onDelete: Restrict, map: "sector_exam_programs_direction_fkey")
@@ -1152,7 +1152,7 @@ model SectorExamSession {
   programSnapshot    Json     @map("program_snapshot") @db.JsonB
   requestKey         String   @unique @map("request_key") @db.Uuid
   requestFingerprint String   @map("request_fingerprint") @db.VarChar(64)
-  createdById        String   @map("created_by_id") @db.Uuid
+  createdById        String?   @map("created_by_id") @db.Uuid
   createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   program SectorExamProgram @relation(fields: [programId], references: [id], onDelete: Restrict, map: "sector_exam_sessions_program_fkey")
   exams SectorExam[]
@@ -1160,8 +1160,7 @@ model SectorExamSession {
   @@map("sector_exam_sessions")
 }
 
-/// Plan 1.13: a member of a group who passed the group's sector, by exam or counted by the
-/// teacher without one. Each pass pays that member the sector's 250 Points once.
+/// Read-only historical group passes. New exam results always belong to a personal sector.
 model SectorMemberPass {
   id            String   @id @default(uuid()) @db.Uuid
   planId        String   @map("plan_id") @db.Uuid

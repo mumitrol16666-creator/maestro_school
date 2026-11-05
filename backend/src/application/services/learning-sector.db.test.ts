@@ -1,3 +1,4 @@
+import { testExamTasks,prepareTestExam,sendTestExam,bookTestExam } from "../../../test-support/exam-fixtures.js";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
@@ -31,6 +32,8 @@ integrationTest("sectors follow each other: save opens 1, the exam closes it, th
   });
   t.after(async () => {
     await prisma.sectorExam.deleteMany({ where: { directionId: direction.id } });
+    await prisma.sectorExamSession.deleteMany({where:{program:{directionId:direction.id}}});
+    await prisma.sectorExamProgram.deleteMany({where:{directionId:direction.id}});
     await prisma.pointsTransaction.deleteMany({ where: { studentId: student.id } });
     await prisma.learningSectorEvent.deleteMany({ where: { plan: { directionId: direction.id } } });
     await prisma.learningPlan.deleteMany({ where: { directionId: direction.id } });
@@ -72,14 +75,14 @@ integrationTest("sectors follow each other: save opens 1, the exam closes it, th
   let current = await getStudentLearningPlanV2(teacher.id, crmStudentId, crmDirectionId);
   assert.equal(current.plan?.status, "active");
 
-  const template = await exams.sectorExamTemplate(first.id);
-  const exam = await exams.createSectorExam(teacher.id, { planId: first.id, items: template.items, send: true });
-  await exams.scheduleSectorExamFromCrm(exam.id, { crmClassId: `exam-class-${suffix}`, lessonAt: new Date() });
+  const template = await testExamTasks(first.id);
+  const exam = await prepareTestExam(teacher.id, { planId: first.id, items: template.items, send: true });
+  await bookTestExam(exam.id, { crmClassId: `exam-class-${suffix}`, lessonAt: new Date() });
   const { applyApprovedSectorReadiness } = await import("./sector-readiness.service.js");
   await applyApprovedSectorReadiness({planIds:[first.id], recipientCrmStudentIds:[crmStudentId], crmClassId:`ready-${suffix}`, actorUserId:teacher.id, reportVersion:1, eventAt:new Date()});
   await exams.startSectorExam(teacher.id, exam.id);
-  await exams.markSectorExamItem(teacher.id, exam.id, exam.items[0]!.id, true);
-  await exams.finishSectorExam(teacher.id, exam.id, { decision: "close_sector" });
+  for(const item of exam.items) await exams.markSectorExamItem(teacher.id, exam.id, item.id, true);
+  await exams.finishSectorExam(teacher.id, exam.id, { decision: "pass" });
   current = await getStudentLearningPlanV2(teacher.id, crmStudentId, crmDirectionId);
   assert.equal(current.plan, null, "no open sector after closing");
   assert.equal(current.history[0]?.sequence, 1);

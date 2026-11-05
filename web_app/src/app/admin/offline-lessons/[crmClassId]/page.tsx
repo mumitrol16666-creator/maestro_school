@@ -1712,21 +1712,7 @@ export default function AdminOfflineLessonDetailPage() {
           <p>
             Бесплатный экзамен без списания из абонемента. Откройте проведение, чтобы отметить задания и результаты всех участников.
           </p>
-          <LessonExamSessionLinks crmClassId={crmClassId}>
-          {students.length ? (
-            <p className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
-              {students.map((student) => (
-                <Link
-                  key={student.crmStudentId}
-                  href={`/admin/my-students/student/${encodeURIComponent(student.crmStudentId)}`}
-                  className="font-bold underline"
-                >
-                  {student.name}: открыть экзамен
-                </Link>
-              ))}
-            </p>
-          ) : null}
-          </LessonExamSessionLinks>
+          <LessonExamSessionLinks crmClassId={crmClassId} />
         </div>
       ) : null}
 

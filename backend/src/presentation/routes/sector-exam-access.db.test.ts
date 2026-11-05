@@ -45,6 +45,16 @@ dbtest("new exam routes enforce current roles even when a student or parent has 
   }
   for(const headers of [student,parent]) assert.equal((await app.inject({method:"GET",url:`/exam-sessions/${randomUUID()}`,headers})).statusCode,403);
   assert.equal((await app.inject({method:"GET",url:"/admin/exam-programs",headers:admin})).statusCode,200);
+  for(const request of [
+    {method:"GET" as const,url:`/admin/sector-exams/template/${randomUUID()}`},
+    {method:"POST" as const,url:"/admin/sector-exams"},
+    {method:"POST" as const,url:"/admin/sector-exams/group"},
+    {method:"PUT" as const,url:`/admin/sector-exams/${randomUUID()}/items`},
+    {method:"POST" as const,url:`/admin/sector-exams/${randomUUID()}/send`},
+    {method:"POST" as const,url:`/teachers/me/groups/g/sectors/${randomUUID()}/members/s/pass`},
+    {method:"POST" as const,url:`/teachers/me/groups/g/sectors/${randomUUID()}/close`},
+  ]) assert.equal((await app.inject({...request,headers:admin})).statusCode,404,`retired route ${request.url}`);
+
   const direction=await prisma.direction.create({data:{title:"Access test",slug:`sector-access-${randomUUID()}`,crmDirectionId:randomUUID(),crmIsActive:true}});directionId=direction.id;
   const payload={directionId:direction.id,sectorNumber:1,title:"Экзамен",durationMinutes:15,items:[{title:"Песня",criteria:"Ритм"}]};
   assert.equal((await app.inject({method:"POST",url:"/admin/exam-programs",payload,headers:teacher})).statusCode,403);

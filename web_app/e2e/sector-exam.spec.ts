@@ -10,13 +10,13 @@ const teacher = { id: "00000000-0000-4000-8000-000000000011", firstName: "Учи
 
 function examFixture(done: Array<boolean | null>) {
   return {
-    id: "11111111-1111-4111-8111-111111111111", planId: "22222222-2222-4222-8222-222222222222", crmStudentId: "QA-STUDENT-1",
+    id: "11111111-1111-4111-8111-111111111111", sessionId:"session-1", planId: "22222222-2222-4222-8222-222222222222", crmStudentId: "QA-STUDENT-1",
     direction: { id: "d", title: "Гитара", crmDirectionId: "QA-DIRECTION-GUITAR" },
     status: "in_progress", attempt: 1, previousExamId: null, sentForScheduleAt: null, crmClassId: "QA-EXAM",
     scheduledAt: "2026-10-20T07:00:00.000Z", startedAt: "2026-10-20T07:05:00.000Z", finishedAt: null,
     outcome: null, decision: null, comment: null, certificate: null, cancelledAt: null, cancelReason: null,
     items: ["Стабильный бой восьмыми", "Чистые переходы аккордов", "Сыграть песню целиком"].map((title, index) => ({
-      id: `33333333-3333-4333-8333-33333333333${index}`, kind: index < 2 ? "topic" : "custom", topicId: null,
+      id: `33333333-3333-4333-8333-33333333333${index}`, kind: "custom", topicId: null,
       title, criteria: "", position: index, done: done[index] ?? null,
     })),
   };
@@ -32,6 +32,7 @@ async function mockTeacher(context: BrowserContext, page: Page) {
     const request = route.request();
     const path = new URL(request.url()).pathname.replace(/^.*\/api\/v1/, "");
     if (path === "/auth/me") return route.fulfill({ json: { data: teacher } });
+    if(path==="/exam-sessions/session-1") return route.fulfill({json:{data:{id:"session-1",title:"Один экзамен",program:{items:examFixture(marks).items},participants:[{studentName:"Казыбаев Камбар",ready:true,canConduct:true,canStart:false,exam:examFixture(marks)}]}}});
     if (path.endsWith("/sector-exams") && path.includes("/students/")) {
       return route.fulfill({ json: { data: [{
         planId: "22222222-2222-4222-8222-222222222222", sequence: 1,
@@ -57,12 +58,12 @@ async function mockTeacher(context: BrowserContext, page: Page) {
   });
 }
 
-test("the teacher marks every point before closing the sector or sending to a retake", async ({ page, context }) => {
+test("the common exam workspace has one pass/retake rule and requires all saved tasks", async ({ page, context }) => {
   await mockTeacher(context, page);
-  await page.goto("/admin/my-students/student/QA-STUDENT-1");
-  const panel = page.getByTestId("sector-exam-panel");
-  await expect(panel).toContainText("Экзамен сектора 1");
-  const close = panel.getByRole("button", { name: "Сдал · завершить сектор" });
+  await page.goto("/admin/exam-sessions/session-1");
+  const panel = page.getByTestId("exam-session-participant");
+  await expect(panel).toContainText("Казыбаев Камбар");
+  const close = panel.getByRole("button", { name: "Сдал экзамен" });
   const retake = panel.getByRole("button", { name: "Пересдача" });
   await expect(close).toBeDisabled();
   await expect(retake).toBeDisabled();
@@ -81,20 +82,11 @@ test("the teacher marks every point before closing the sector or sending to a re
   await expect(close).toBeEnabled();
 });
 
-test("the admin board lists the QA student's sector with its exam", async ({ page, request, context }) => {
-  const response = await request.post("/api/v1/auth/login", { data: { phone: "qa_admin", password: PASSWORD, profile: "staff" } });
-  expect(response.ok(), await response.text()).toBe(true);
-  const payload = await response.json();
-  await context.addInitScript(({ token, user }) => {
-    window.localStorage.setItem("maestro_access_token", token);
-    window.localStorage.setItem("maestro_auth_user", JSON.stringify(user));
-  }, payload.data);
-  await page.goto("/admin/sector-exams");
-  await expect(page.getByRole("heading", { name: "Экзамены секторов" })).toBeVisible();
-  await page.getByRole("button", { name: /Все секторы/ }).click();
-  const row = page.getByTestId("sector-exam-row").filter({ hasText: "Казыбаев" }).first();
-  await expect(row).toBeVisible();
-  await expect(row.getByTestId("sector-exam-status").or(row.getByText("Экзамен не готовился"))).toBeVisible();
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-  expect(overflow).toBeLessThanOrEqual(1);
+test("a pupil card only links to the exam and cannot assess it by sector topics",async({page,context})=>{
+  await mockTeacher(context,page);
+  await page.goto("/admin/my-students/student/QA-STUDENT-1");
+  const panel=page.getByTestId("sector-exam-panel");
+  await expect(panel.getByRole("link",{name:"Открыть экзамен и результат ученика"})).toHaveAttribute("href","/exams/11111111-1111-4111-8111-111111111111");
+  await expect(panel.getByRole("button")).toHaveCount(0);
+  await expect(panel.getByTestId("sector-exam-item")).toHaveCount(0);
 });
