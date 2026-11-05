@@ -145,13 +145,19 @@ function conversationWhere(
 ): Prisma.LearningConversationWhereInput {
   const archiveFilter = archive === "all"
     ? {}
-    : {
-        members: archive === "archived"
-          ? { some: { userId: actor.userId, archivedAt: { not: null } } }
-          : isLearningDialogCuratorRole(actor.roleSlug)
+    : archive === "archived"
+      ? {
+          OR: [
+            { status: { not: "active" as const } },
+            { members: { some: { userId: actor.userId, archivedAt: { not: null } } } },
+          ],
+        }
+      : {
+          status: "active" as const,
+          members: isLearningDialogCuratorRole(actor.roleSlug)
             ? { none: { userId: actor.userId, archivedAt: { not: null } } }
             : { some: { userId: actor.userId, archivedAt: null } },
-      };
+        };
   return isLearningDialogCuratorRole(actor.roleSlug)
     ? archiveFilter
     : {

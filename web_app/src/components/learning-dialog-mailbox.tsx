@@ -543,8 +543,8 @@ export function LearningDialogMailbox({ role, className }: { role: MailboxRole; 
         data-testid="learning-dialog-mailbox"
         data-mobile-thread-active={active ? "true" : undefined}
       >
-        <div className="grid h-full min-h-0 md:grid-cols-[320px_minmax(0,1fr)] xl:grid-cols-[350px_minmax(0,1fr)]">
-          <aside className={`${active ? "hidden md:flex" : "flex"} min-w-0 flex-col border-stone-200 md:border-r`}>
+        <div className="grid h-full min-h-0 grid-rows-[minmax(0,1fr)] md:grid-cols-[320px_minmax(0,1fr)] xl:grid-cols-[350px_minmax(0,1fr)]">
+          <aside className={`${active ? "hidden md:flex" : "flex"} min-h-0 min-w-0 flex-col overflow-hidden border-stone-200 md:border-r`}>
             <div className="border-b border-stone-200 p-3 sm:p-4">
               <div className="flex items-center gap-2">
                 <div className="grid min-w-0 flex-1 grid-cols-2 gap-2 rounded-lg bg-stone-100 p-1" aria-label="Папка диалогов">
@@ -615,7 +615,7 @@ export function LearningDialogMailbox({ role, className }: { role: MailboxRole; 
                             <span className="grid min-h-5 min-w-5 shrink-0 place-items-center rounded-full bg-gold px-1 text-xs font-black text-ink">{conversation.unreadCount > 99 ? "99+" : conversation.unreadCount}</span>
                           ) : null}
                         </span>
-                        <span className="mt-1 block truncate text-xs font-bold uppercase tracking-wide text-stone-500">{typeLabels[conversation.type]}</span>
+                        <span className="mt-1 block truncate text-xs font-bold uppercase tracking-wide text-stone-500">{typeLabels[conversation.type]}{conversation.status !== "active" ? " · Только чтение" : ""}</span>
                       </span>
                       <ChevronRight size={15} className="shrink-0 text-stone-300 md:hidden" />
                     </button>
@@ -646,7 +646,7 @@ export function LearningDialogMailbox({ role, className }: { role: MailboxRole; 
                   </div>
                   <button type="button" onClick={() => setMembersOpen((value) => !value)} className={`grid h-11 w-11 shrink-0 place-items-center rounded-lg border ${membersOpen ? "border-gold bg-amber-50 text-amber-800" : "border-stone-200 text-stone-500"}`} aria-label="Участники диалога" title="Участники"><UsersRound size={17} /></button>
                   <button type="button" onClick={() => void changePreferences({ notificationsMuted: !active.notificationsMuted })} className="grid h-11 w-11 shrink-0 place-items-center rounded-lg border border-stone-200 text-stone-500" aria-label={active.notificationsMuted ? "Включить уведомления" : "Отключить уведомления"} title={active.notificationsMuted ? "Включить уведомления" : "Отключить уведомления"}>{active.notificationsMuted ? <BellOff size={17} /> : <Bell size={17} />}</button>
-                  <button type="button" onClick={() => void changePreferences({ archived: !active.archivedAt })} className="grid h-11 w-11 shrink-0 place-items-center rounded-lg border border-stone-200 text-stone-500" aria-label={active.archivedAt ? "Вернуть из архива" : "В архив"} title={active.archivedAt ? "Вернуть из архива" : "В архив"}>{active.archivedAt ? <ArchiveRestore size={17} /> : <Archive size={17} />}</button>
+                  {active.status === "active" ? <button type="button" onClick={() => void changePreferences({ archived: !active.archivedAt })} className="grid h-11 w-11 shrink-0 place-items-center rounded-lg border border-stone-200 text-stone-500" aria-label={active.archivedAt ? "Вернуть из архива" : "В архив"} title={active.archivedAt ? "Вернуть из архива" : "В архив"}>{active.archivedAt ? <ArchiveRestore size={17} /> : <Archive size={17} />}</button> : null}
                 </header>
 
                 {membersOpen ? (
