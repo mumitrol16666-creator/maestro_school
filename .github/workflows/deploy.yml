@@ -74,6 +74,17 @@ jobs:
       - name: Test backend
         working-directory: backend
         run: npm test
+      - name: Verify unified exam lifecycle
+        working-directory: backend
+        env:
+          RUN_DB_INTEGRATION_TESTS: "1"
+          MAESTRO_QA_LOCAL: "true"
+        run: >-
+          npx tsx --test --test-force-exit --test-concurrency=1
+          src/application/services/sector-exam.db.test.ts
+          src/application/services/group-sector.db.test.ts
+          src/application/services/learning-sector.db.test.ts
+          src/presentation/routes/sector-exam-access.db.test.ts
       - name: Build backend
         working-directory: backend
         run: npm run build
