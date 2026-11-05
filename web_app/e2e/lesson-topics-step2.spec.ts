@@ -58,7 +58,7 @@ test("a topic is renamed and removed from the lesson; last homework checks are o
 
   // Step 1: the student's last homework with the teacher's percent.
   await expect(page.getByTestId("lesson-recent-homework")).toBeVisible();
-  await expect(page.getByTestId("lesson-recent-homework")).toContainText("Последние ДЗ");
+  await expect(page.getByTestId("lesson-recent-homework")).toContainText("Последние проверки ДЗ");
   await expect(page.getByText(/Продолжить тему/)).toHaveCount(0);
 
   const nav = page.getByTestId("lesson-step-nav");

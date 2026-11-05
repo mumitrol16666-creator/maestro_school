@@ -315,6 +315,7 @@ export type LearningLessonV2Context = {
     recentHomework?: Array<{
       recipientId: string;
       topicTitle: string;
+      directionTitle?: string;
       instructions: string;
       assignedAt: string;
       state: string;

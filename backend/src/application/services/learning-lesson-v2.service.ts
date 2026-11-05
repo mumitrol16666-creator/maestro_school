@@ -537,10 +537,18 @@ export async function getLearningLessonV2Context(actorUserId: string, crmClassId
   const RECENT_HOMEWORK = 3;
   const homeworkHistory = scope.reportOnly
     ? []
-    : await listHomeworkCheckHistory(scope.roster.students.map((student) => student.crmStudentId));
+    : await listHomeworkCheckHistory(scope.roster.students.map((student) => student.crmStudentId), {
+        directionIds: [...new Set(plans.map((plan) => plan.direction.id))],
+        reviewedOnly: true,
+      });
+  homeworkHistory.sort((left, right) => (
+    (right.reviews[right.reviews.length - 1]?.reviewedAt.getTime() ?? 0)
+    - (left.reviews[left.reviews.length - 1]?.reviewedAt.getTime() ?? 0)
+  ));
   const recentHomeworkByStudent = new Map<string, Array<{
     recipientId: string;
     topicTitle: string;
+    directionTitle: string;
     instructions: string;
     assignedAt: Date;
     state: string;
@@ -556,6 +564,7 @@ export async function getLearningLessonV2Context(actorUserId: string, crmClassId
     list.push({
       recipientId: item.recipientId,
       topicTitle: item.topic.title,
+      directionTitle: item.directionTitle,
       instructions: item.instructions,
       assignedAt: item.assignedAt,
       state: item.state,

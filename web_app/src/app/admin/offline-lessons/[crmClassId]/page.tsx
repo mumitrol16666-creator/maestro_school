@@ -1845,7 +1845,7 @@ export default function AdminOfflineLessonDetailPage() {
           <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-700">Шаг 1</p>
           <h2 className="font-display mt-1 text-3xl">Перед уроком</h2>
           <p className="mt-2 text-sm text-stone-500">
-            Что было на прошлом уроке и какие работы ждут проверки. «Статистика ученика» открывает сектор, тесты, задания и динамику.
+            Задание с прошлого урока и результаты предыдущих проверок. Полная история по всем направлениям — в статистике ученика.
           </p>
           {autoPresent ? (
             <p className="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900" data-testid="lesson-auto-present">
@@ -1864,7 +1864,7 @@ export default function AdminOfflineLessonDetailPage() {
                     <p className="font-semibold text-ink">{student.name}</p>
                     <div className="flex items-center gap-2">
                       {pendingCount ? (
-                        <span className="rounded-md bg-sky-50 px-2 py-0.5 text-[11px] font-bold text-sky-900">Ждёт проверки: {pendingCount}</span>
+                        <button type="button" onClick={() => setLessonStep(3)} className="min-h-11 rounded-lg bg-sky-50 px-3 py-2 text-xs font-bold text-sky-900 hover:bg-sky-100">Проверить ДЗ на уроке: {pendingCount}</button>
                       ) : null}
                       <button
                         type="button"
@@ -1881,24 +1881,29 @@ export default function AdminOfflineLessonDetailPage() {
                     showHomeworkStatus={!isLearningLessonV2 && Boolean(previousHomeworkLesson(student))}
                   />
                   {(() => {
-                    const recent = learningV2?.students.find((item) => item.crmStudentId === student.crmStudentId)?.recentHomework ?? [];
+                    const recent = (learningV2?.students.find((item) => item.crmStudentId === student.crmStudentId)?.recentHomework ?? [])
+                      .filter((item) => item.reviewedAt && item.decision);
                     if (!recent.length) return null;
                     return (
                       <div className="mt-3 rounded-xl border border-stone-200 bg-stone-50 p-3" data-testid="lesson-recent-homework">
-                        <p className="text-[11px] font-black uppercase tracking-wider text-stone-500">Последние ДЗ</p>
-                        <ul className="mt-1.5 space-y-1">
+                        <p className="text-xs font-black uppercase tracking-wider text-stone-500">Последние проверки ДЗ</p>
+                        <p className="mt-1 text-xs text-stone-500">По направлениям этого урока. Дата — когда результат сохранён в системе.</p>
+                        <ul className="mt-3 space-y-3">
                           {recent.map((item) => (
                             <li key={item.recipientId} className="flex flex-wrap items-center gap-x-2 text-xs text-stone-700">
                               <span className="font-semibold text-ink">{item.topicTitle}</span>
-                              <span className="text-stone-500">{new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short" }).format(new Date(item.assignedAt))}</span>
+                              {item.directionTitle ? <span className="text-stone-500">· {item.directionTitle}</span> : null}
+                              <span className="text-stone-500">Результат сохранён {new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short" }).format(new Date(item.reviewedAt!))}</span>
                               <span className={`rounded-md px-1.5 py-0.5 text-[11px] font-black ${
-                                item.completionPercent == null ? (item.decision ? "bg-emerald-50 text-emerald-800" : "bg-stone-200 text-stone-600")
+                                item.decision === "revision" ? "bg-amber-100 text-amber-900"
+                                  : item.decision === "not_completed" ? "bg-red-50 text-red-700"
+                                  : item.completionPercent == null ? "bg-emerald-50 text-emerald-800"
                                   : item.completionPercent >= 100 ? "bg-emerald-600 text-white"
                                   : item.completionPercent > 0 ? "bg-amber-100 text-amber-900" : "bg-red-50 text-red-700"
                               }`}>
-                                {item.completionPercent != null ? `${item.completionPercent}%`
-                                  : item.decision === "revision" ? "на доработку"
-                                  : item.decision ? "принято" : "ждёт урока"}
+                                {item.completionPercent != null ? `Выполнено: ${item.completionPercent}%`
+                                  : item.decision === "revision" ? "На доработку"
+                                  : item.decision === "not_completed" ? "Не выполнено" : "Принято"}
                               </span>
                               {item.comment ? <span className="text-stone-500">· {item.comment}</span> : null}
                             </li>
@@ -4378,7 +4383,7 @@ function StudentPreviousContext({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <span className="text-[11px] font-black uppercase tracking-[0.14em] text-gold-ink">
-            {compact ? student.name : "Контекст прошлого урока"}
+            {compact ? student.name : "Прошлый урок"}
           </span>
           <span className="text-xs text-stone-500 font-semibold">
             · {new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short" }).format(new Date(latest.date))}
@@ -4392,8 +4397,8 @@ function StudentPreviousContext({
 
       <div className={`mt-3 grid gap-2 text-xs ${showHomeworkStatus ? "sm:grid-cols-2" : ""}`}>
         <div className="rounded-xl bg-white/80 p-2.5">
-          <span className="block text-[10px] font-bold uppercase tracking-wider text-stone-400">Было задано на дом:</span>
-          <strong className="mt-1 block text-stone-800 leading-snug">{latest.homework || "Не задавалось"}</strong>
+          <span className="block text-xs font-bold uppercase tracking-wider text-stone-500">Домашнее задание:</span>
+          <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-stone-800">{latest.homework || "Не задавалось"}</p>
         </div>
         {showHomeworkStatus ? (
           <div className="rounded-xl bg-white/80 p-2.5">
