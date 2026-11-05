@@ -32,6 +32,7 @@ export function SectorExamSummary({ exam }: { exam: PublicSectorExam | null | un
           <CalendarClock size={15} className="shrink-0" /> В школе {formatExamDate(exam.scheduledAt)}
         </p>
       ) : null}
+      {["scheduled", "in_progress", "completed"].includes(exam.status) ? <a className="inline-flex min-h-11 items-center justify-self-start text-sm font-bold text-sky-900 underline" href={`/exams/${encodeURIComponent(exam.id)}`}>Открыть экзамен и задания</a> : null}
       {exam.status === "in_progress" ? <p className="text-sm text-stone-700">Экзамен идёт.</p> : null}
       {exam.status !== "completed" && exam.items.length ? (
         <div>

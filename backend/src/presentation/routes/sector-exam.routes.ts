@@ -4,7 +4,7 @@ import { getParentVisibility } from "../../application/services/parent-visibilit
 import { ForbiddenError } from "../../domain/errors.js";
 import { getSectorCertificate } from "../../application/services/sector-certificate.service.js";
 import { prisma } from "../../infrastructure/database/prisma.js";
-import { examProgramInput, examSessionInput, listExamPrograms, saveExamProgram, createExamSession, listExamSessions, sendExamSession } from "../../application/services/sector-exam-program.service.js";
+import { examProgramInput, examSessionInput, listExamPrograms, saveExamProgram, createExamSession, listExamSessions, sendExamSession, examSessionParticipantsInput, updateExamSessionParticipants, examSessionScheduleInput, scheduleExamSession } from "../../application/services/sector-exam-program.service.js";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import {
@@ -16,6 +16,9 @@ import {
 import { writeAuditLog } from "../../application/services/audit.service.js";
 import {
   SECTOR_EXAM_MAX_ITEMS,
+  getExamSessionWorkspace,
+  listExamSessionsForLesson,
+  getPersonalExam,
   cancelSectorExam,
   createGroupSectorExams,
   createSectorExam,
@@ -77,6 +80,16 @@ export async function sectorExamRoutes(app: FastifyInstance) {
     return {data:await getSectorCertificate(request.user!.id,examId)};
   });
 
+  app.get("/admin/exam-scheduling-options", {preHandler:coordinatorRead},async()=>{
+    const {fetchExamSchedulingOptions}=await import("../../infrastructure/crm/crm-client.js");
+    return {data:await fetchExamSchedulingOptions()};
+  });
+  app.post("/admin/exam-sessions/:id/schedule",{preHandler:coordinatorWrite},async request=>{
+    const {id}=z.object({id:z.string().uuid()}).parse(request.params);
+    const result=await scheduleExamSession(request.user!.id,id,examSessionScheduleInput.parse(request.body));
+    await writeAuditLog({entityType:"exam_session",entityId:id,action:"update",actorId:request.user!.id,payload:{event:"scheduled",crmClassId:result.crmClassId}});
+    return {data:result};
+  });
   app.get("/admin/exam-program-directions", { preHandler: coordinatorRead }, async () => ({ data: await prisma.direction.findMany({ where: { crmIsActive: true, deletedAt: null }, select: { id: true, title: true }, orderBy: { title: "asc" } }) }));
   app.get("/admin/exam-programs", { preHandler: coordinatorRead }, async () => ({ data: await listExamPrograms() }));
   app.post("/admin/exam-programs", { preHandler: coordinatorWrite }, async request => {
@@ -91,10 +104,30 @@ export async function sectorExamRoutes(app: FastifyInstance) {
     await writeAuditLog({entityType:"exam_program",entityId:id,action:"update",actorId:request.user!.id,payload:{revision:program.revision}});
     return {data:program};
   });
+  app.get("/teachers/me/offline-classes/:crmClassId/exam-sessions", {preHandler:teacherRead}, async request=>{
+    const {crmClassId}=z.object({crmClassId:z.string().min(1).max(128)}).parse(request.params);
+    return {data:await listExamSessionsForLesson(request.user!.id,crmClassId)};
+  });
+  app.get("/personal-exams/:examId",{preHandler:[authenticate]},async request=>{
+    const role=request.user!.roleSlug;
+    await requirePermission(role==="parent"?"family.read":role==="student"?"progress.read":"offline_school.read")(request);
+    const {examId}=examParams.parse(request.params);
+    return {data:await getPersonalExam(request.user!.id,examId)};
+  });
+  app.get("/exam-sessions/:id", { preHandler: [authenticate, requirePermission("offline_school.read")] }, async request => {
+    const {id}=z.object({id:z.string().uuid()}).parse(request.params);
+    return {data:await getExamSessionWorkspace(request.user!.id,id)};
+  });
   app.get("/admin/exam-sessions", { preHandler: coordinatorRead }, async () => ({data:await listExamSessions()}));
   app.post("/admin/exam-sessions", { preHandler: coordinatorWrite }, async request => {
     const session=await createExamSession(request.user!.id,examSessionInput.parse(request.body));
     await writeAuditLog({entityType:"exam_session",entityId:session.id,action:"create",actorId:request.user!.id,payload:{participants:session.exams.length}});
+    return {data:session};
+  });
+  app.put("/admin/exam-sessions/:id/participants", { preHandler: coordinatorWrite }, async request => {
+    const {id}=z.object({id:z.string().uuid()}).parse(request.params);
+    const session=await updateExamSessionParticipants(request.user!.id,id,examSessionParticipantsInput.parse(request.body));
+    await writeAuditLog({entityType:"exam_session",entityId:id,action:"update",actorId:request.user!.id,payload:{event:"participants_updated",participants:session.exams.length}});
     return {data:session};
   });
   app.post("/admin/exam-sessions/:id/send", { preHandler: coordinatorWrite }, async request => {

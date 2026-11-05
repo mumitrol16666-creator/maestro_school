@@ -792,3 +792,11 @@ export function readStudentOfflineSummary(crmStudentId: string, options: { fresh
 export function invalidateStudentOfflineSummary(crmStudentId: string) {
   studentOfflineSummaryCache.invalidate(crmStudentId);
 }
+
+
+export function fetchExamSchedulingOptions() {
+  return crmGet<{ teachers: Array<{id:string;name:string}>; rooms: Array<{id:string;name:string;workingStart:string;workingEnd:string}> }>("/api/integration/v1/exam-scheduling-options");
+}
+export function bookExamSessionInCrm(payload: {examIds:string[];date:string;startTime:string;endTime:string;teacherId:string;roomId:string;actorAppUserId:string}) {
+  return crmPost<{class:{id:string;date:string;startTime:string;endTime:string;teacherId:string;roomId:string};alreadyBooked:boolean;platformConfirmed:boolean}>("/api/integration/v1/sector-exams/book",payload);
+}

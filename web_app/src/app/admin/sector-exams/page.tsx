@@ -57,7 +57,7 @@ export default function SectorExamsPage() {
       <PageHeader
         eyebrow="Учебный контроль"
         title="Экзамены секторов"
-        description="Экзамен проходит вживую в школе как бесплатный дополнительный урок. Здесь вы готовите список того, что проверяет преподаватель, и отправляете его в CRM на назначение."
+        description="Создайте экзамен со своими заданиями, соберите участников и назначьте дату, кабинет и принимающего преподавателя. После назначения ученики увидят экзамен в приложении."
       />
 
       <ExamPrograms sectors={board.data?.sectors ?? []} onChanged={() => { void board.reload(); }} />
@@ -186,17 +186,18 @@ function SectorRow({ row, editing, onEdit, onClose, onChanged }: {
       {!editing ? (
         <div className="flex flex-wrap gap-2">
           {examNeeded(row) ? (
-            <button type="button" className={primaryButton} onClick={onEdit}><Plus size={14} /> Подготовить экзамен</button>
+            <a className={primaryButton} href="#exam-session-composer">Добавить в экзамен выше</a>
           ) : null}
-          {exam && (exam.status === "draft" || exam.status === "awaiting_schedule") ? (
+          {exam?.sessionId ? <a className={primaryButton} href={`/admin/exam-sessions/${exam.sessionId}`}>Открыть общий экзамен</a> : null}
+          {exam && !exam.sessionId && (exam.status === "draft" || exam.status === "awaiting_schedule") ? (
             <button type="button" className={secondaryButton} onClick={onEdit}>Изменить пункты</button>
           ) : null}
-          {exam?.status === "draft" ? (
+          {exam?.status === "draft" && !exam.sessionId ? (
             <button type="button" className={primaryButton} disabled={busy} onClick={() => void run(() => sectorExamsApi.send(exam.id))}>
               <Send size={14} /> Отправить на назначение
             </button>
           ) : null}
-          {exam && ["draft", "awaiting_schedule", "scheduled"].includes(exam.status) ? (
+          {exam && !exam.sessionId && ["draft", "awaiting_schedule", "scheduled"].includes(exam.status) ? (
             <button type="button" className={secondaryButton} disabled={busy} onClick={() => void run(() => sectorExamsApi.cancel(exam.id))}>
               <X size={14} /> Отменить экзамен
             </button>
