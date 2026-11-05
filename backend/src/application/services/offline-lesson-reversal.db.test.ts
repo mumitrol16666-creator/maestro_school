@@ -331,3 +331,21 @@ integrationTest("a CRM return of a confirmed lesson reverses rewards and makes t
   const untouched = await applyCrmOfflineLessonEvent({ event: "reopened", crmClassId: fixture.crmClassId, message: "Пересмотр списания" });
   assert.equal(untouched.reversal, null);
 });
+
+
+integrationTest("returning a lesson after account recovery debits the current award without making the old account negative",async t=>{
+  const f=await createRewardedLessonFixture();
+  const suffix=randomUUID().slice(0,8);
+  const target=await prisma.user.create({data:{login:`recover-reverse-${suffix}`,phone:`reverse-${suffix}`,passwordHash:"x",firstName:"Новый",lastName:"Кабинет",roleId:f.student.roleId}});
+  t.after(async()=>{await prisma.pointsTransaction.deleteMany({where:{studentId:target.id}});await prisma.user.delete({where:{id:target.id}});await removeRewardedLessonFixture(f)});
+  const original=await prisma.pointsTransaction.findUniqueOrThrow({where:{sourceKey:`learning-topic-mastery:${f.topic.id}:${f.student.id}`}});
+  await prisma.pointsTransaction.createMany({data:[
+    {studentId:target.id,economicEpochId:f.epoch.id,amount:100,reason:original.reason,createdAt:original.createdAt,sourceKey:`learning-topic-mastery:${f.topic.id}:${target.id}`},
+    {studentId:f.student.id,economicEpochId:f.epoch.id,amount:-100,reason:`Перенос баллов в действующий кабинет: ${original.id}`,sourceKey:`account-recovery:${f.topic.id}:${f.student.id}:${target.id}`},
+  ]});
+  const result=await reverseOfflineLessonApproval({crmClassId:f.crmClassId,reason:"Урок исправляется"});
+  assert.equal(result.topics[0]?.masteryPoints,100,"only the effective current award is removed");
+  const balance=async(studentId:string)=>(await prisma.pointsTransaction.aggregate({where:{studentId},_sum:{amount:true}}))._sum.amount;
+  assert.equal(await balance(f.student.id),0);
+  assert.equal(await balance(target.id),0);
+});

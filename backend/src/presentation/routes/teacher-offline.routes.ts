@@ -1,3 +1,4 @@
+import { openNextStudentSector, openNextGroupPlan } from "../../application/services/learning-plan-v2.service.js";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { getLessonStudentsOverview } from "../../application/services/lesson-students-overview.service.js";
@@ -61,6 +62,20 @@ const readGuards = [authenticate, requirePermission("offline_school.read")];
 const writeGuards = [authenticate, requirePermission("offline_school.write")];
 
 export async function teacherOfflineRoutes(app: FastifyInstance) {
+  for (const kind of ["students", "groups"] as const) {
+    app.post(`/teachers/me/${kind}/:ownerId/sectors/:planId/next`, {
+      preHandler: [authenticate, requireTeacher, requirePermission("offline_school.write")],
+    }, async (request) => {
+      const { ownerId, planId } = z.object({ ownerId: z.string().min(1).max(128), planId: z.string().uuid() }).parse(request.params);
+      const body = z.object({ crmDirectionId: z.string().min(1).max(128), expectedVersion: z.number().int().positive() }).parse(request.body);
+      const action = kind === "students" ? openNextStudentSector : openNextGroupPlan;
+      const plan = await action(request.user!.id, ownerId, body.crmDirectionId, { planId, expectedVersion: body.expectedVersion });
+      await writeAuditLog({ entityType: "learning_plan", entityId: planId, action: "update", actorId: request.user!.id,
+        payload: { event: "next_plan_opened", nextPlanId: plan.id, kind } });
+      return { data: plan };
+    });
+  }
+
   app.get("/teachers/me/students/:crmStudentId/homework", {
     preHandler: [authenticate, requireTeacher, requirePermission("offline_school.read")],
   }, async request => {

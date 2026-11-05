@@ -1,5 +1,7 @@
 "use client";
 
+import { ExamPrograms } from "@/components/exam-programs";
+
 import { CalendarClock, CheckCircle2, LoaderCircle, Plus, Send, Trash2, Users, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { inputClass, primaryButton, secondaryButton } from "@/components/admin-ui";
@@ -58,6 +60,8 @@ export default function SectorExamsPage() {
         description="Экзамен проходит вживую в школе как бесплатный дополнительный урок. Здесь вы готовите список того, что проверяет преподаватель, и отправляете его в CRM на назначение."
       />
 
+      <ExamPrograms sectors={board.data?.sectors ?? []} onChanged={() => { void board.reload(); }} />
+
       <nav aria-label="Отбор секторов" className="flex gap-1 overflow-x-auto rounded-2xl border border-stone-200 bg-white p-1">
         {filters.map((item) => (
           <button
@@ -78,7 +82,7 @@ export default function SectorExamsPage() {
       {board.data && !rows.length ? (
         <EmptyState
           title="Здесь пусто"
-          description={filter === "ready" ? "Пока ни один ученик не закрыл все темы сектора." : "В этом отборе нет секторов."}
+          description={filter === "ready" ? "Преподаватели пока не отметили учеников готовыми к экзамену." : "В этом отборе нет секторов."}
         />
       ) : null}
 
@@ -150,7 +154,7 @@ function SectorRow({ row, editing, onEdit, onClose, onChanged }: {
       <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[10px] font-black uppercase tracking-[0.16em] text-amber-800">
-            Сектор {row.sequence} · {row.direction.title}
+            Сектор {row.curriculumNumber ?? row.sequence} · {row.direction.title}
           </p>
           <h2 className="mt-1 break-words text-base font-bold text-ink">{row.studentName}</h2>
           {row.goal ? <p className="mt-0.5 break-words text-xs text-stone-500">{row.goal}</p> : null}
@@ -175,7 +179,8 @@ function SectorRow({ row, editing, onEdit, onClose, onChanged }: {
             <CalendarClock size={13} /> {formatExamDate(exam.scheduledAt)}
           </span>
         ) : null}
-        {!row.progress.ready ? <span className="text-[11px] text-stone-500">Начать экзамен можно, когда все темы на 100 %</span> : null}
+        {exam?.certificate ? <a className="inline-flex min-h-11 items-center text-sm font-semibold underline" href={`/certificates/${encodeURIComponent(exam.id)}`}>Открыть сертификат</a> : null}
+        {!row.progress.ready ? <span className="text-[11px] text-stone-500">Готовность к экзамену ещё не отмечена преподавателем</span> : null}
       </div>
 
       {!editing ? (

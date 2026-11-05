@@ -1,3 +1,5 @@
+import { additionalTheoryMaterials } from "./prepared-test-theory-additional.js";
+
 export interface PreparedTheorySection {
   title: string;
   paragraphs: string[];
@@ -9,6 +11,7 @@ export interface PreparedTheoryMaterial {
   title: string;
   introduction: string;
   readingMinutes: number;
+  source?: { title:string; section:string; pdfPages:number[]; printedPages:number[] };
   sections: PreparedTheorySection[];
   remember: string[];
   practice: string[];
@@ -209,12 +212,26 @@ const materials: PreparedTheoryMaterial[] = [
   },
 ];
 
-const materialsByTestId = new Map(materials.map((material) => [material.testId, material]));
+// PDF page positions differ from the printed theory-page numbers by twenty pages.
+const bookPages:Record<string,number[]> = {
+  "1-1":[21],"1-2":[22],"1-3":[23,24],"1-4":[25,26],"1-5":[27,28],
+  "2-1":[29,30],"2-2":[31,32],"2-3":[33,34,35],"2-4":[36,37],"2-5":[38,39],
+  "3-1":[40,41],"3-2":[42,43],"3-3":[44,45],"3-4":[46,47],
+  "4-1":[48,49],"4-2":[50,51],"4-3":[52,53],"4-4":[54,55],"4-5":[56,57],"4-6":[58,59,60],
+  "5-1":[61,62],"5-2":[63,64],"5-3":[65],"5-4":[66,67],"5-5":[68],
+};
+const completeMaterials = [...materials,...additionalTheoryMaterials].map(material=>{
+  const code=material.testId.replace("theory-","");
+  const pdfPages=bookPages[code];
+  if(!pdfPages) throw new Error(`Missing book source: ${material.testId}`);
+  return {...material,source:{title:"Учебное пособие Maestro",section:code.replace("-","."),pdfPages,printedPages:pdfPages.map(page=>page-20)}};
+});
+const materialsByTestId = new Map(completeMaterials.map((material) => [material.testId, material]));
 
 export function getPreparedTestTheory(testId: string): PreparedTheoryMaterial | null {
   return materialsByTestId.get(testId) ?? null;
 }
 
 export function listPreparedTestTheoryMaterials(): PreparedTheoryMaterial[] {
-  return [...materials];
+  return [...completeMaterials];
 }

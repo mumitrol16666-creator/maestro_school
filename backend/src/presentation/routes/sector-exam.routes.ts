@@ -1,3 +1,10 @@
+import { studentSectorStatistics } from "../../application/services/sector-study.service.js";
+import { assertParentChildLink } from "../../application/services/family.service.js";
+import { getParentVisibility } from "../../application/services/parent-visibility.service.js";
+import { ForbiddenError } from "../../domain/errors.js";
+import { getSectorCertificate } from "../../application/services/sector-certificate.service.js";
+import { prisma } from "../../infrastructure/database/prisma.js";
+import { examProgramInput, examSessionInput, listExamPrograms, saveExamProgram, createExamSession, listExamSessions, sendExamSession } from "../../application/services/sector-exam-program.service.js";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import {
@@ -44,6 +51,58 @@ export async function sectorExamRoutes(app: FastifyInstance) {
   const coordinatorWrite = [authenticate, requireOfflineCoordinator, requirePermission("offline_school.write")];
   const teacherRead = [authenticate, requireTeacher, requirePermission("offline_school.read")];
   const teacherWrite = [authenticate, requireTeacher, requirePermission("offline_school.write")];
+
+  app.get("/teachers/me/students/:crmStudentId/sector-statistics", { preHandler: teacherRead }, async request => {
+    const {crmStudentId}=z.object({crmStudentId:z.string().min(1).max(128)}).parse(request.params);
+    await listTeacherStudentSectorExams(request.user!.id,crmStudentId);
+    return {data:await studentSectorStatistics(crmStudentId)};
+  });
+  app.get("/students/me/sector-statistics", { preHandler: [authenticate, requirePermission("progress.read")] }, async request => {
+    if (request.user!.roleSlug !== "student") throw new ForbiddenError("Доступно ученику");
+    const user=await prisma.user.findUniqueOrThrow({where:{id:request.user!.id},select:{crmStudentId:true}});
+    return {data:user.crmStudentId?await studentSectorStatistics(user.crmStudentId):[]};
+  });
+  app.get("/parents/me/children/:studentId/sector-statistics", { preHandler: [authenticate, requirePermission("family.read")] }, async request => {
+    if (request.user!.roleSlug !== "parent") throw new ForbiddenError("Доступно родителю");
+    const {studentId}=z.object({studentId:z.string().uuid()}).parse(request.params);
+    const link=await assertParentChildLink(request.user!.id,studentId);
+    if (!(await getParentVisibility(studentId)).showPlanProgress) throw new ForbiddenError("Учебные результаты скрыты настройками семейного доступа");
+    return {data:link.student.crmStudentId?await studentSectorStatistics(link.student.crmStudentId):[]};
+  });
+
+  app.get("/sector-certificates/:examId", { preHandler: [authenticate] }, async request => {
+    const role = request.user!.roleSlug;
+    await requirePermission(role === "parent" ? "family.read" : role === "student" ? "progress.read" : "offline_school.read")(request);
+    const {examId}=examParams.parse(request.params);
+    return {data:await getSectorCertificate(request.user!.id,examId)};
+  });
+
+  app.get("/admin/exam-program-directions", { preHandler: coordinatorRead }, async () => ({ data: await prisma.direction.findMany({ where: { crmIsActive: true, deletedAt: null }, select: { id: true, title: true }, orderBy: { title: "asc" } }) }));
+  app.get("/admin/exam-programs", { preHandler: coordinatorRead }, async () => ({ data: await listExamPrograms() }));
+  app.post("/admin/exam-programs", { preHandler: coordinatorWrite }, async request => {
+    const program = await saveExamProgram(request.user!.id, examProgramInput.parse(request.body));
+    await writeAuditLog({entityType:"exam_program",entityId:program.id,action:"create",actorId:request.user!.id,payload:{revision:program.revision}});
+    return { data: program };
+  });
+  app.put("/admin/exam-programs/:id", { preHandler: coordinatorWrite }, async request => {
+    const {id}=z.object({id:z.string().uuid()}).parse(request.params);
+    const body=examProgramInput.extend({expectedRevision:z.number().int().positive()}).parse(request.body);
+    const program=await saveExamProgram(request.user!.id,body,id,body.expectedRevision);
+    await writeAuditLog({entityType:"exam_program",entityId:id,action:"update",actorId:request.user!.id,payload:{revision:program.revision}});
+    return {data:program};
+  });
+  app.get("/admin/exam-sessions", { preHandler: coordinatorRead }, async () => ({data:await listExamSessions()}));
+  app.post("/admin/exam-sessions", { preHandler: coordinatorWrite }, async request => {
+    const session=await createExamSession(request.user!.id,examSessionInput.parse(request.body));
+    await writeAuditLog({entityType:"exam_session",entityId:session.id,action:"create",actorId:request.user!.id,payload:{participants:session.exams.length}});
+    return {data:session};
+  });
+  app.post("/admin/exam-sessions/:id/send", { preHandler: coordinatorWrite }, async request => {
+    const {id}=z.object({id:z.string().uuid()}).parse(request.params);
+    const session=await sendExamSession(id);
+    await writeAuditLog({entityType:"exam_session",entityId:id,action:"update",actorId:request.user!.id,payload:{event:"sent_for_schedule"}});
+    return {data:session};
+  });
 
   app.get("/admin/sector-exams", { preHandler: coordinatorRead }, async () => ({
     data: await listAdminSectorExamBoard(),

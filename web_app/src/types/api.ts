@@ -237,7 +237,7 @@ export interface StudentHomeMonthlyPlan {
   /** Month the sector was opened in; informational only. */
   month: string;
   sequence?: number;
-  status?: "active" | "closed";
+  status?: "active" | "awaiting_exam" | "closed";
   closedAt?: string | null;
   /** Plan 1.10: the sector exam held at the school, once it has left the admin's draft. */
   exam?: PublicSectorExam | null;

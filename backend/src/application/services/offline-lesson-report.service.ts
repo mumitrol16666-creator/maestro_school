@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../../infrastructure/database/prisma.js";
 import { BadRequestError, ConflictError } from "../../domain/errors.js";
 import type { TeacherSubmitPayload } from "../../infrastructure/crm/crm-client.js";
+import { closeLessonTopicConflicts } from "./lesson-topic-conflicts.service.js";
 import {
   withInferredTopicHomeworkAssignment,
   type LearningLessonV2ResultsInput,
@@ -743,6 +744,8 @@ export async function reserveOfflineLessonCorrection(
         "LESSON_APPROVAL_IN_PROGRESS",
       );
     }
+    // 04.11: the reopened report replaces the approved version, so its set-aside topic percents go.
+    await closeLessonTopicConflicts(crmClassId, "report_reopened", normalizedReason, tx);
     if (approvalAfterClaim?.status === "cancelled") {
       await tx.crmSyncConflict.updateMany({
         where: {

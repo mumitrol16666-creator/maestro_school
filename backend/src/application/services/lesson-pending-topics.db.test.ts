@@ -111,6 +111,9 @@ integrationTest("a topic continues from the latest earlier lesson that is sent b
     });
     try {
       assert.equal((await pendingTopicPercentsBefore(friday, [topic.id])).get(topic.id)?.percent, 75);
+      // 04.11: the admin closed that approval's conflict on the lesson page — nothing waits any more.
+      await prisma.crmOutboxEvent.update({ where: { id: approval.id }, data: { status: "resolved" } });
+      assert.equal((await pendingTopicPercentsBefore(friday, [topic.id])).size, 0, "a resolved approval is not waited for");
     } finally {
       await prisma.crmOutboxEvent.delete({ where: { id: approval.id } });
     }

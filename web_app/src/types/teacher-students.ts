@@ -145,6 +145,10 @@ export type LearningPlanMode = {
 export type SectorPreparedTest = { id: string; title: string; passedAt: string | null };
 
 export type SectorHistoryEntry = {
+  status?: "active" | "awaiting_exam" | "closed";
+  studyStartedAt?: string | null;
+  studyFinishedAt?: string | null;
+  examReadyAt?: string | null;
   id: string;
   sequence: number;
   goal: string;
@@ -158,10 +162,11 @@ export type SectorHistoryEntry = {
 export type StudentMonthlyPlan = {
   id?: string;
   model?: "learning_topics_v2";
+  isSharedGroupPlan?: boolean;
   /** Month the sector was opened in; informational only. */
   month?: string;
   sequence?: number;
-  status?: "active" | "closed";
+  status?: "active" | "awaiting_exam" | "closed";
   closedAt?: string | null;
   closeReason?: string | null;
   templateStepId?: string | null;

@@ -44,6 +44,8 @@ export const offlineLessonStudentCheckSchema = z.object({
 });
 
 export const learningLessonResultsSchema = z.object({
+  readySectorIds: z.array(z.string().uuid()).max(100).optional(),
+  studiedPlanIds: z.array(z.string().uuid()).max(100).optional(),
   homeworkAssignment: z.object({
     topicId: z.string().uuid(),
     instructions: z.string().trim().min(1).max(5000),

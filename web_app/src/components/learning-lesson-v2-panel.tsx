@@ -22,6 +22,8 @@ export type LearningLessonTopicProgressDraft = {
 };
 
 export type LearningLessonV2Draft = {
+  readySectorIds?: string[];
+  studiedPlanIds?: string[];
   topicId: string | null;
   homeworkTopicId: string | null;
   topicProgress: Record<string, LearningLessonTopicProgressDraft>;
@@ -39,6 +41,8 @@ function pendingLessonDay(date: string) {
 
 export function emptyLearningLessonV2Draft(): LearningLessonV2Draft {
   return {
+    readySectorIds: [],
+    studiedPlanIds: [],
     topicId: null,
     homeworkTopicId: null,
     topicProgress: {},
@@ -102,7 +106,9 @@ export function normalizeLearningLessonV2Draft(value: unknown): LearningLessonV2
     };
   }
 
-  return { topicId, homeworkTopicId, topicProgress, homeworkDecisions };
+  const readySectorIds = Array.isArray(candidate.readySectorIds) ? [...new Set(candidate.readySectorIds.filter((id): id is string => typeof id === "string"))] : [];
+  const studiedPlanIds = Array.isArray(candidate.studiedPlanIds) ? [...new Set(candidate.studiedPlanIds.filter((id): id is string => typeof id === "string"))] : [];
+  return { topicId, homeworkTopicId, topicProgress, homeworkDecisions, readySectorIds, studiedPlanIds };
 }
 
 export function pendingLearningHomeworkCount(context?: LearningLessonV2Context | null) {
@@ -257,7 +263,8 @@ export function LearningLessonV2Panel({
   const [quickDirectionId, setQuickDirectionId] = useState("");
   // Plan 1.6: a quick topic goes only into an open published sector, so the direction is chosen
   // from the sectors this lesson shows.
-  const sectorDirections = context.plans.map((plan) => plan.direction);
+  const sectorDirections = context.plans.filter(plan => plan.canEditTopics !== false && (context.owner.kind !== "group" || plan.scope === "group")).map((plan) => plan.direction)
+    .filter((direction, index, all) => all.findIndex(other => other.id === direction.id) === index);
   const canQuickAdd = Boolean(onQuickAddTopic) && !disabled && sectorDirections.length > 0;
 
   async function handleAddTopicSubmit(e: React.FormEvent) {
@@ -302,8 +309,8 @@ export function LearningLessonV2Panel({
   }
 
   const topics = context.plans.flatMap((plan) => (
-    plan.topics.map((topic) => ({ ...topic, directionTitle: plan.direction.title }))
-  ));
+    plan.topics.map((topic) => ({ ...topic, directionTitle: plan.direction.title, ownerName: plan.ownerName, scope: plan.scope, sequence: plan.sequence, canEditTopics: plan.canEditTopics, sharedGroupPlan:plan.sharedGroupPlan }))
+  )).filter((topic, index, all) => all.findIndex(other => other.id === topic.id) === index);
   const directionTitles = new Set(
     context.plans.map((plan) => plan.direction.title.trim()).filter(Boolean),
   );
@@ -364,6 +371,21 @@ export function LearningLessonV2Panel({
         </span>
       </div>
 
+      {context.examReadiness?.length ? <div className="mt-5 rounded-xl border border-sky-200 bg-sky-50 p-4">
+        <p className="text-sm font-bold text-ink">Готовность к экзамену</p>
+        <p className="mt-1 text-sm text-stone-600">Решение преподавателя при любом прогрессе тем. Администратор увидит его после подтверждения урока в CRM.</p>
+        <div className="mt-3 grid gap-2">
+          {context.examReadiness.map(plan => <label key={plan.planId} className="flex min-h-11 items-center gap-3 rounded-lg bg-white p-3 text-sm">
+            <input type="checkbox" disabled={disabled || Boolean(plan.readyAt)}
+              checked={Boolean(plan.readyAt) || Boolean(draft.readySectorIds?.includes(plan.planId))}
+              onChange={event => onChange({ ...draft, readySectorIds: event.target.checked
+                ? [...new Set([...(draft.readySectorIds ?? []), plan.planId])]
+                : (draft.readySectorIds ?? []).filter(id => id !== plan.planId) })} />
+            <span>{plan.studentName} · сектор {plan.sequence} · {plan.direction}{plan.readyAt ? " · готовность подтверждена" : " · готов к экзамену"}</span>
+          </label>)}
+        </div>
+      </div> : null}
+
       <div className="mt-5 border-t border-stone-200 pt-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm font-black text-ink">Прогресс тем</p>
@@ -377,7 +399,7 @@ export function LearningLessonV2Panel({
               className="inline-flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-900 transition hover:bg-amber-100"
             >
               <Plus size={14} className="text-amber-700" />
-              {showAddForm ? "Скрыть форму" : "+ Добавить тему в сектор"}
+              {showAddForm ? "Скрыть форму" : context.owner.kind === "group" ? "+ Добавить тему в план группы" : "+ Добавить тему в сектор"}
             </button>
           ) : null}
         </div>
@@ -472,7 +494,7 @@ export function LearningLessonV2Panel({
                         : "border-stone-200 bg-white text-stone-700 hover:border-amber-400"
                     }`}
                   >
-                    <span className="block">{topic.title}</span>
+                    <span className="block">{context.owner.kind === "group" && topic.ownerName ? `${topic.ownerName} · ` : ""}{topic.title}</span>
                     <span className="mt-0.5 block text-xs font-semibold opacity-65">
                       {showDirectionTitle ? `${topic.directionTitle} · ` : ""}{topicDraft && topicDraft.toPercent !== topic.progressPercent
                         ? `${topic.progressPercent}% → ${topicDraft.toPercent}%`
@@ -486,13 +508,17 @@ export function LearningLessonV2Panel({
                       <span className="mt-0.5 block text-[11px] font-semibold text-amber-700">
                         ждёт подтверждения
                       </span>
+                    ) : topic.percentConflict ? (
+                      <span className="mt-0.5 block text-[11px] font-semibold text-amber-700">
+                        процент у администратора
+                      </span>
                     ) : null}
                   </button>
-                  {onRenameTopic || onRemoveTopic ? (
+                  {topic.canEditTopics !== false && (onRenameTopic || onRemoveTopic) ? (
                     <button
                       type="button"
                       disabled={disabled || topicBusy}
-                      aria-label={`Действия с темой «${topic.title}»`}
+                      aria-label={`Действия с темой «${context.owner.kind === "group" && topic.ownerName ? `${topic.ownerName} · ` : ""}{topic.title}»`}
                       aria-expanded={topicMenuId === topic.id}
                       onClick={() => { setTopicMenuId(topicMenuId === topic.id ? null : topic.id); setTopicError(null); }}
                       className="ml-1 grid w-8 place-items-center self-center rounded-lg border border-stone-200 bg-white text-stone-500 hover:border-amber-400 hover:text-ink disabled:opacity-50"
@@ -525,8 +551,8 @@ export function LearningLessonV2Panel({
                           onClick={async () => {
                             const progress = topic.approvedPercent ?? topic.progressPercent;
                             const question = progress > 0
-                              ? `Убрать тему «${topic.title}» из сектора? У неё уже ${progress}% — тема отложится, проценты и баллы останутся.`
-                              : `Убрать тему «${topic.title}» из сектора?`;
+                              ? `Убрать тему «${context.owner.kind === "group" && topic.ownerName ? `${topic.ownerName} · ` : ""}{topic.title}» из сектора? У неё уже ${progress}% — тема отложится, проценты и баллы останутся.`
+                              : `Убрать тему «${context.owner.kind === "group" && topic.ownerName ? `${topic.ownerName} · ` : ""}{topic.title}» из сектора?`;
                             if (!window.confirm(question)) return;
                             setTopicMenuId(null);
                             setTopicBusy(true);
@@ -617,6 +643,12 @@ export function LearningLessonV2Panel({
                         {selectedTopic.pendingFromLesson.date ? ` ${pendingLessonDay(selectedTopic.pendingFromLesson.date)}` : ""},
                         он ждёт подтверждения админом. Сейчас в теме {selectedTopic.approvedPercent ?? 0}%.
                       </p>
+                    ) : selectedTopic.percentConflict ? (
+                      <p className="mt-1 text-xs leading-5 text-amber-800" data-testid="topic-percent-conflict">
+                        Прошлый урок принят, но его {selectedTopic.percentConflict.toPercent}% не записаны:
+                        в теме уже было {selectedTopic.percentConflict.currentPercent}%. Какой процент оставить, решит администратор.
+                        Сейчас тема начинается с {selectedTopic.progressPercent}%.
+                      </p>
                     ) : null}
                     {selectedTopicProgress && selectedTopicProgress.expectedPercent !== selectedTopic.progressPercent ? (
                       <div className="mt-2 rounded-lg border border-red-200 bg-red-50 p-3 text-xs leading-5 text-red-800" data-testid="topic-start-changed">
@@ -676,7 +708,7 @@ export function LearningLessonV2Panel({
                           : "border-stone-200 bg-white text-stone-700"
                       }`}
                     >
-                      {value === 100 ? "100% · Освоено" : `${value}%`}
+                      {value === 100 ? selectedTopic?.sharedGroupPlan ? "100% · Пройдено группой" : "100% · Освоено" : `${value}%`}
                     </button>
                   ))}
                 </div>

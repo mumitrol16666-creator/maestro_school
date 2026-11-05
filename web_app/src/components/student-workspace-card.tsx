@@ -291,7 +291,7 @@ function SectorBlock({ sector, onChanged }: { sector: StudentHomeMonthlyPlan; on
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[10px] font-black uppercase tracking-[0.16em] text-amber-800">
-            {sector.scope === "group" ? "Сектор группы" : "Сектор"} {sector.sequence ?? ""}{sector.direction?.title ? ` · ${sector.direction.title}` : ""}
+            {sector.scope === "group" ? "План группы" : "Сектор"} {sector.sequence ?? ""}{sector.direction?.title ? ` · ${sector.direction.title}` : ""}
           </p>
           <h3 className="font-display mt-1 break-words text-xl text-ink">{sector.goal || "Цель не задана"}</h3>
         </div>
@@ -647,7 +647,7 @@ function DynamicsTab({ data }: { data: TeacherStudentWorkspace }) {
           <ul className="mt-2 divide-y divide-stone-100">
             {dynamics.sectors.map((sector) => (
               <li key={sector.id} className="flex items-center justify-between gap-3 py-2 text-sm">
-                <span className="font-semibold text-ink">{sector.scope === "group" ? "Сектор группы" : "Сектор"} {sector.sequence} · {sector.direction}</span>
+                <span className="font-semibold text-ink">{sector.scope === "group" ? "План группы" : "Сектор"} {sector.sequence} · {sector.direction}</span>
                 <span className="text-xs text-stone-500">{sector.completed}/{sector.total} тем · {sector.percent}%{sector.exam?.status === "completed" ? " · экзамен проведён" : sector.exam?.scheduledAt ? " · экзамен назначен" : ""}</span>
               </li>
             ))}
@@ -769,7 +769,7 @@ function SectorsTab({ data }: { data: TeacherStudentWorkspace }) {
           <ul className="mt-2 divide-y divide-stone-100">
             {open.map((sector) => (
               <li key={sector.id} className="flex items-center justify-between gap-3 py-2 text-sm">
-                <span className="font-semibold text-ink">{sector.scope === "group" ? "Сектор группы" : "Сектор"} {sector.sequence} · {sector.direction}</span>
+                <span className="font-semibold text-ink">{sector.scope === "group" ? "План группы" : "Сектор"} {sector.sequence} · {sector.direction}</span>
                 <span className="text-xs text-stone-500">{sector.completed}/{sector.total} тем · {sector.percent}%</span>
               </li>
             ))}
@@ -777,15 +777,15 @@ function SectorsTab({ data }: { data: TeacherStudentWorkspace }) {
         )}
       </section>
       <section className="rounded-2xl border border-stone-200 bg-white p-4">
-        <p className="inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-stone-600"><CheckCircle2 size={14} /> Пройденные · {closed.length}</p>
+        <p className="inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-stone-600"><CheckCircle2 size={14} /> Предыдущие · {closed.length}</p>
         {!closed.length ? <p className="mt-2 text-xs text-stone-500">Закрытых секторов пока нет.</p> : (
           <ul className="mt-2 divide-y divide-stone-100">
             {closed.map((sector) => (
               <li key={sector.id} className="py-2.5">
                 <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-                  <span className="font-semibold text-ink">{sector.scope === "group" ? "Сектор группы" : "Сектор"} {sector.sequence} · {sector.direction}</span>
+                  <span className="font-semibold text-ink">{sector.scope === "group" ? "План группы" : "Сектор"} {sector.sequence} · {sector.direction}</span>
                   <span className="text-xs text-stone-500">
-                    {sector.closedAt ? `закрыт ${formatDate(sector.closedAt)}` : sector.status}
+                    {sector.status === "awaiting_exam" ? "Обучение завершено · ожидает подтверждения экзаменом" : sector.closedAt ? `закрыт ${formatDate(sector.closedAt)}` : sector.status}
                     {sector.exam?.status === "completed" ? ` · экзамен${sector.exam.outcome ? ` (${sector.exam.outcome})` : ""}` : ""}
                     {sector.memberPass ? ` · ${sector.memberPass.method === "exam" ? "сдал на экзамене" : "зачтено без экзамена"}, ${sector.memberPass.points} баллов` : ""}
                   </span>

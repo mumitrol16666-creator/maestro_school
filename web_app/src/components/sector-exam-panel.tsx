@@ -11,8 +11,8 @@ const control = "inline-flex min-h-11 items-center justify-center gap-1.5 rounde
 
 /**
  * Plan 1.10: the exam of each open sector, as the teacher holds it live at the school.
- * Start once every topic is at 100 % and CRM booked the lesson; mark every point;
- * then close the sector or send the student to a retake, whatever the outcome.
+ * Start after confirmed readiness and CRM booking; complete every required item
+ * to pass, otherwise create a retake without a reward.
  */
 export function SectorExamPanel({ crmStudentId, onChanged }: { crmStudentId: string; onChanged?: () => void }) {
   const resource = useApiResource(() => sectorExamsApi.forStudent(crmStudentId), [crmStudentId]);
@@ -66,8 +66,8 @@ function ExamCard({ row, onChanged }: { row: TeacherSectorExamRow; onChanged: ()
       {!shown ? (
         <p className="mt-2 text-xs leading-5 text-stone-600">
           {row.progress.ready
-            ? "Все темы на 100 %. Экзамен готовит администратор школы, потом CRM назначит урок."
-            : `Темы сектора: ${row.progress.completed} из ${row.progress.total}. Экзамен проводится, когда все темы на 100 %.`}
+            ? "Готовность отмечена преподавателем. Администратор подготовит экзамен и назначит время в CRM."
+            : `Темы сектора: ${row.progress.completed} из ${row.progress.total}. Готовность к экзамену преподаватель отмечает при заполнении урока.`}
         </p>
       ) : null}
 
@@ -80,8 +80,8 @@ function ExamCard({ row, onChanged }: { row: TeacherSectorExamRow; onChanged: ()
           <p className="inline-flex items-center gap-1.5 text-sm font-bold text-ink">
             <CalendarClock size={15} /> {formatExamDate(shown.scheduledAt) || "Дата назначена"}
           </p>
-          {!row.progress.ready ? (
-            <p className="text-xs text-amber-900">Начать можно, когда все темы на 100 %: сейчас {row.progress.completed} из {row.progress.total}.</p>
+          {!row.canStart ? (
+            <p className="text-xs text-amber-900">Для начала экзамена отметьте готовность ученика в отчёте урока.</p>
           ) : null}
           <button
             type="button"
@@ -111,7 +111,7 @@ export type ExamDecisionButton = {
 };
 
 const individualDecisions: ExamDecisionButton[] = [
-  { decision: "close_sector", label: "Завершить сектор", primary: true },
+  { decision: "close_sector", label: "Сдал · завершить сектор", primary: true },
   { decision: "retake", label: "Пересдача" },
 ];
 
@@ -125,6 +125,7 @@ export function InProgress({ exam, busy, run, decisions }: {
   const [comment, setComment] = useState("");
   const marked = exam.items.filter((item) => item.done !== null).length;
   const allMarked = marked === exam.items.length;
+  const allDone = exam.items.length > 0 && exam.items.every(item => item.done === true);
   return (
     <div className="mt-3 grid min-w-0 gap-3">
       <ol className="grid min-w-0 grid-cols-1 gap-2">
@@ -172,7 +173,7 @@ export function InProgress({ exam, busy, run, decisions }: {
             key={button.decision}
             type="button"
             className={`${control} ${button.primary ? "bg-ink text-white" : "border border-stone-200 bg-white text-stone-700"}`}
-            disabled={!allMarked || busy !== null}
+            disabled={!allMarked || busy !== null || (button.decision !== "retake" && !allDone)}
             onClick={() => void run(button.decision, async () => (await sectorExamsApi.finish(exam.id, button.decision, comment)).exam, true)}
           >
             {busy === button.decision
@@ -183,6 +184,7 @@ export function InProgress({ exam, busy, run, decisions }: {
         ))}
       </div>
       {!allMarked ? <p className="text-[11px] text-stone-500">Завершить можно, когда каждый пункт отмечен.</p> : null}
+      {allMarked && !allDone ? <p className="text-sm text-stone-600">Для сдачи нужны все выполненные пункты. Сейчас можно назначить пересдачу без начисления баллов.</p> : null}
     </div>
   );
 }
@@ -203,7 +205,7 @@ export function PastResult({ exam }: { exam: SectorExam }) {
         ))}
       </ul>
       {exam.certificate ? (
-        <p className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-800"><Award size={13} /> Сертификат {exam.certificate.number}</p>
+        <p className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-800"><Award size={13} /> Сертификат {exam.certificate.number} <a className="min-h-11 inline-flex items-center underline" href={`/certificates/${encodeURIComponent(exam.id)}`}>Открыть и распечатать</a></p>
       ) : null}
       {exam.comment ? <p className="break-words text-xs text-stone-500">{exam.comment}</p> : null}
     </div>

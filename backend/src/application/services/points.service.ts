@@ -428,6 +428,24 @@ export async function awardSystemPoints(params: {
   };
 }
 
+/** For an enclosing business transaction. Send its user notice only after commit. */
+export async function awardSystemPointsInTransaction(tx: Prisma.TransactionClient, params: {
+  studentId: string; amount: number; reason: string; sourceKey: string; eventAt: Date;
+}) {
+  const epoch = rewardEconomyV2AppliesToEvent(params.eventAt)
+    ? await requireActiveEconomicEpochForEvent(params.eventAt, tx) : null;
+  const existing = await tx.pointsTransaction.findUnique({ where: { sourceKey: params.sourceKey } });
+  if (existing) {
+    assertMatchingSystemPointsReceipt(existing, params);
+    return { awarded: false, transactionId: existing.id };
+  }
+  const receipt = await tx.pointsTransaction.create({ data: {
+    studentId: params.studentId, economicEpochId: epoch?.id ?? null,
+    amount: params.amount, reason: params.reason, sourceKey: params.sourceKey, createdAt: params.eventAt,
+  } });
+  return { awarded: true, transactionId: receipt.id };
+}
+
 export async function assertLessonPointsNotAwarded(
   studentId: string,
   lessonId: string,

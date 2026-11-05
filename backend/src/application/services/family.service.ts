@@ -355,7 +355,7 @@ export async function listParentChildren(parentUserId: string) {
   }));
 }
 
-async function assertParentChildLink(parentUserId: string, studentUserId: string) {
+export async function assertParentChildLink(parentUserId: string, studentUserId: string) {
   const link = await prisma.parentStudentLink.findFirst({
     where: {
       parentUserId,

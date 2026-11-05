@@ -21,6 +21,7 @@ import {
   upsertAdminJournalEntry,
 } from "./admin-journal.service.js";
 import { finalizeOfflineLessonApproval } from "./offline-lesson-finalization.service.js";
+import { LESSON_TOPIC_CONFLICT_KIND, resolveLessonTopicConflict } from "./lesson-topic-conflicts.service.js";
 import { buildOfflineLessonApprovalSnapshot } from "./offline-lesson-approval-snapshot.js";
 import {
   withInferredTopicHomeworkAssignment,
@@ -1754,6 +1755,15 @@ export async function resolveCrmSyncConflict(
   const conflict = await prisma.crmSyncConflict.findUnique({ where: { id: conflictId } });
   if (!conflict) throw new BadRequestError("Конфликт не найден", "CRM_CONFLICT_NOT_FOUND");
   if (conflict.status === "resolved") return conflict;
+  if (conflict.kind === LESSON_TOPIC_CONFLICT_KIND) {
+    // «Отправить снова» writes the lesson's percents, «Принять расписание» keeps the topic as it is.
+    return resolveLessonTopicConflict(
+      conflictId,
+      actorId,
+      resolution === "retry_local" ? "write_lesson" : "keep_current",
+      reason,
+    );
+  }
 
   const localPayload = conflict.localPayload as Record<string, unknown>;
   const crmPayload = conflict.crmPayload as Record<string, unknown> | null;

@@ -24,7 +24,7 @@ import { RefreshAppButton } from "./refresh-app-button";
 const cmsNavigation = [
   { href: "/admin", label: "Обзор", icon: LayoutDashboard },
   { href: "/admin/directions", label: "Направления", icon: FolderKanban },
-  { href: "/admin/sector-templates", label: "Ступени программы", icon: Layers3 },
+  { href: "/admin/sector-templates", label: "Сектора программы", icon: Layers3 },
   { href: "/admin/lesson-templates", label: "Шаблоны урока", icon: MessageSquareText },
   { href: "/admin/sector-exams", label: "Экзамены секторов", icon: GraduationCap },
   { href: "/admin/materials", label: "Библиотека материалов", icon: LibraryBig },

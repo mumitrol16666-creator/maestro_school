@@ -1,3 +1,5 @@
+import { recordApprovedSectorStudy } from "./sector-study.service.js";
+import { applyApprovedSectorReadiness } from "./sector-readiness.service.js";
 import { LearningPlanTopicState, LearningTopicProgressSource } from "@prisma/client";
 import { productFeatureConfig, rewardEconomyV2AppliesToEvent } from "../../config/product-features.js";
 import { fetchTeacherGroupsForAccess, fetchTeacherStudentsForAccess } from "./teacher-substitution.service.js";
@@ -13,7 +15,15 @@ import {
   createLearningHomeworkAssignmentForRecipients,
   reviewLearningHomework,
 } from "./learning-homework-v2.service.js";
-import { updateLearningTopicProgressBatchFromLessonV2 } from "./learning-plan-v2.service.js";
+import {
+  type SkippedLessonTopicUpdate,
+  updateLearningTopicProgressBatchFromLessonV2,
+} from "./learning-plan-v2.service.js";
+import {
+  applyWaitingLessonTopicConflicts,
+  openTopicConflictsFor,
+  recordLessonTopicConflicts,
+} from "./lesson-topic-conflicts.service.js";
 import { pendingTopicPercentsBefore } from "./lesson-pending-topics.service.js";
 import { listHomeworkCheckHistory } from "./learning-homework-v2.service.js";
 import { requireCrmTeacherId } from "./teacher-students.service.js";
@@ -74,6 +84,8 @@ export type LearningLessonTopicUpdate = {
 };
 
 export type LearningLessonV2ResultsInput = {
+  readySectorIds?: string[];
+  studiedPlanIds?: string[];
   homeworkAssignment?: {
     topicId: string;
     instructions: string;
@@ -339,14 +351,17 @@ async function resolveLessonScope(actorUserId: string, crmClassId: string): Prom
 
 async function lessonPlans(scope: LessonScope) {
   if (scope.reportOnly) return [];
-  // One open sector per direction is what the lesson works with.
+  // Previous personal sectors remain available while their exams are pending.
   const plans = await prisma.learningPlan.findMany({
     where: {
       publishedVersionNumber: { not: null },
-      status: "active",
+      status: { in: ["active", "awaiting_exam"] },
       ...(scope.owner.kind === "student"
         ? { crmStudentId: scope.owner.id, crmGroupId: null }
-        : { crmStudentId: null, crmGroupId: scope.owner.id }),
+        : { OR: [
+            { crmStudentId: null, crmGroupId: scope.owner.id },
+            { crmStudentId: { in: scope.roster.students.map(student => student.crmStudentId) }, crmGroupId: null },
+          ] }),
       ...(scope.allowedDirectionTitles
         ? { direction: { title: { in: scope.allowedDirectionTitles } } }
         : {}),
@@ -363,13 +378,11 @@ async function lessonPlans(scope: LessonScope) {
       },
     },
     orderBy: [{ sequence: "desc" }, { updatedAt: "desc" }],
-    take: 24,
   });
   const selectedByDirection = new Map<string, typeof plans[number]>();
   for (const plan of plans) {
-    if (!selectedByDirection.has(plan.directionId)) {
-      selectedByDirection.set(plan.directionId, plan);
-    }
+    const key = `${plan.crmStudentId ?? plan.crmGroupId}:${plan.id}`;
+    selectedByDirection.set(key, plan);
   }
   // Plan 1.14: the lesson suggests materials for homework — the sector's own and, per topic, the
   // ones the step template keeps for a topic of the same title.
@@ -388,6 +401,12 @@ async function lessonPlans(scope: LessonScope) {
     // (a group's 250 goes to members who passed), so no topic promises the sector reward.
     return [{
       planId: plan.id,
+      sequence: plan.sequence,
+      scope: plan.crmGroupId ? "group" as const : "student" as const,
+      sharedGroupPlan:plan.isSharedGroupPlan,
+      ownerStudentId: plan.crmStudentId,
+      canEditTopics: plan.status === "active" && (scope.owner.kind === "student" || plan.crmGroupId === scope.owner.id),
+      ownerName: plan.crmStudentId ? scope.roster.students.find(student => student.crmStudentId === plan.crmStudentId)?.name ?? "Ученик" : "Общий план группы",
       month: plan.month,
       planCompletionRewardPoints: 0,
       direction: {
@@ -426,10 +445,12 @@ async function withPendingTopicPercents(
   lesson: LessonCard,
   plans: Awaited<ReturnType<typeof lessonPlans>>,
 ) {
+  const topicIds = plans.flatMap((plan) => plan.topics.map((topic) => topic.id));
   const pending = await pendingTopicPercentsBefore(
     { crmClassId, date: lesson.date, startTime: lesson.startTime },
-    plans.flatMap((plan) => plan.topics.map((topic) => topic.id)),
+    topicIds,
   );
+  const conflicts = await openTopicConflictsFor(topicIds);
   return plans.map((plan) => ({
     ...plan,
     topics: plan.topics.map((topic) => {
@@ -445,6 +466,10 @@ async function withPendingTopicPercents(
               date: waiting.date,
               startTime: waiting.startTime,
             }
+          : null,
+        // 04.11: an approved earlier lesson whose percent the admin still has to decide on.
+        percentConflict: !waiting && conflicts.get(topic.id)?.crmClassId !== crmClassId
+          ? conflicts.get(topic.id) ?? null
           : null,
       };
     }),
@@ -477,11 +502,27 @@ export async function getLearningLessonV2Context(actorUserId: string, crmClassId
       rewardsEnabled: false,
       canApply: false,
       plans: [],
+      examReadiness: [],
       students: [],
       rewardPreview: [],
     };
   }
   const plans = await withPendingTopicPercents(crmClassId, scope.lesson, await lessonPlans(scope));
+  const readinessPlans = scope.reportOnly ? [] : await prisma.learningPlan.findMany({
+    where: {
+      crmStudentId: { in: scope.roster.students.map(student => student.crmStudentId) }, crmGroupId: null,
+      publishedVersionNumber: { not: null },
+      OR: [{ status: { in: ["active", "awaiting_exam"] } }, { lifecycleEvents: { some: { kind: "exam_ready", crmClassId } } }],
+      ...(scope.allowedDirectionTitles ? { direction: { title: { in: scope.allowedDirectionTitles } } } : {}),
+    },
+    select: { id: true, crmStudentId: true, sequence: true, examReadyAt: true, templateStep:{select:{number:true}}, direction: { select: { title: true } } },
+    orderBy: [{ sequence: "desc" }],
+  });
+  const examReadiness = readinessPlans.map(plan => ({
+    planId: plan.id, crmStudentId: plan.crmStudentId!, sequence: plan.templateStep?.number ?? plan.sequence,
+    studentName: scope.roster.students.find(student => student.crmStudentId === plan.crmStudentId)?.name ?? "Ученик",
+    direction: plan.direction.title, readyAt: plan.examReadyAt,
+  }));
   const topicIds = new Set(plans.flatMap((plan) => plan.topics.map((topic) => topic.id)));
   // Every open homework of the roster on the lesson's topics waits for the
   // teacher's check at the lesson, whether or not the student sent an answer.
@@ -542,6 +583,7 @@ export async function getLearningLessonV2Context(actorUserId: string, crmClassId
     rewardsEnabled,
     canApply: scope.canApply,
     plans,
+    examReadiness,
     students: scope.roster.students.map((student) => ({
       crmStudentId: student.crmStudentId,
       appUserId: student.appUserId ?? null,
@@ -583,12 +625,21 @@ function validateLearningLessonV2Input(
       !input.homeworkDecisions.length
       && !input.topicUpdates.length
       && !input.homeworkAssignment
+      && !input.studiedPlanIds?.length
+      && !input.readySectorIds?.length
     ) return;
     throw new ForbiddenError(
       context.reason === "one_time_replacement"
         ? "Разовая замена заполняет только отчёт урока без доступа к учебной истории"
         : "Учебные действия для этого урока недоступны",
     );
+  }
+  if ((input.studiedPlanIds ?? []).some(id => !context.plans.some(plan => plan.planId === id))) {
+    throw new ForbiddenError("Учебный план не относится к этому уроку");
+  }
+  const readinessIds = input.readySectorIds ?? [];
+  if (new Set(readinessIds).size !== readinessIds.length || readinessIds.some(id => !context.examReadiness.some(plan => plan.planId === id))) {
+    throw new ForbiddenError("Сектор не относится к ученикам и направлению этого урока");
   }
   if (options.requireEditable && !context.canApply) {
     throw new BadRequestError(
@@ -620,6 +671,9 @@ function validateLearningLessonV2Input(
 }
 
 export function validateLearningLessonV2ResultDuplicates(input: LearningLessonV2ResultsInput) {
+  if (new Set(input.readySectorIds ?? []).size !== (input.readySectorIds ?? []).length) {
+    throw new BadRequestError("Один сектор готовности указан несколько раз", "SECTOR_READINESS_DUPLICATE");
+  }
   const topicIds = input.topicUpdates.map((item) => item.topicId);
   if (new Set(topicIds).size !== topicIds.length) {
     throw new BadRequestError("Одна тема указана несколько раз", "LESSON_TOPIC_DUPLICATE");
@@ -673,6 +727,17 @@ export async function validateLearningLessonV2ResultsForSubmission(
     additionalAllowedTopicIds: options.additionalAllowedTopicIds,
   });
   validateLearningHomeworkAssignmentRecipients(input, presentStudentIds);
+  for (const plan of context.plans) {
+    if (!plan.ownerStudentId || presentStudentIds.has(plan.ownerStudentId)) continue;
+    if (input.topicUpdates.some(update => plan.topics.some(topic => topic.id === update.topicId))
+      || plan.topics.some(topic => topic.id === input.homeworkAssignment?.topicId)) {
+      throw new BadRequestError("Личный прогресс и ДЗ можно указать только присутствующему ученику", "PERSONAL_LEARNING_STUDENT_ABSENT");
+    }
+  }
+
+  if ((input.readySectorIds ?? []).some(id => !presentStudentIds.has(context.examReadiness.find(plan => plan.planId === id)?.crmStudentId ?? ""))) {
+    throw new BadRequestError("Готовность к экзамену можно отметить только присутствующему ученику", "SECTOR_READINESS_STUDENT_ABSENT");
+  }
   if (!context.available) return context;
   const missing = missingLearningHomeworkDecisions(
     context.students,
@@ -727,7 +792,11 @@ async function applyValidatedLearningLessonV2Results(
     createdByUserId: string;
     recipientCrmStudentIds: string[];
   },
+  setAsideMismatchedTopics = false,
 ) {
+  if ((input.readySectorIds?.length || input.studiedPlanIds?.length) && !approval) {
+    throw new BadRequestError("Готовность к экзамену применяется после подтверждения урока в CRM", "SECTOR_READINESS_REQUIRES_APPROVAL");
+  }
   const assignmentRecipients = learningHomeworkAssignmentRecipientsForApproval(input, approval);
   const homeworkResults = [];
   for (const decision of input.homeworkDecisions) {
@@ -741,6 +810,9 @@ async function applyValidatedLearningLessonV2Results(
       checkedAtLesson: true,
     }));
   }
+  // 04.11: only a CRM-approved lesson sets a mismatched topic aside; the teacher's own apply
+  // keeps failing loudly so the teacher refreshes «было».
+  const skippedTopics: SkippedLessonTopicUpdate[] | undefined = setAsideMismatchedTopics ? [] : undefined;
   const topicResults = await updateLearningTopicProgressBatchFromLessonV2(
     actorUserId,
     crmClassId,
@@ -753,23 +825,45 @@ async function applyValidatedLearningLessonV2Results(
     {
       occurredAt: context.eventAt,
       rewardRecipientCrmStudentIds: approval?.recipientCrmStudentIds,
+      skippedTopics,
     },
   );
-  const homeworkAssignment = input.homeworkAssignment && approval && assignmentRecipients
+  // A report can be finalized again after its plan closes. Resolve ownership from the topic,
+  // rather than today's open plans, so personal homework never fans out to the whole group.
+  const homeworkOwner = input.homeworkAssignment ? (await prisma.learningTopic.findUnique({
+    where: { id: input.homeworkAssignment.topicId }, select: { crmStudentId: true },
+  }))?.crmStudentId : null;
+  const homeworkRecipients = homeworkOwner ? assignmentRecipients?.filter(id => id === homeworkOwner) : assignmentRecipients;
+  const homeworkAssignment = input.homeworkAssignment && approval && homeworkRecipients?.length
     ? await createLearningHomeworkAssignmentForRecipients({
         createdByUserId: approval.createdByUserId,
         topicId: input.homeworkAssignment.topicId,
-        crmStudentIds: assignmentRecipients,
+        crmStudentIds: homeworkRecipients,
         instructions: input.homeworkAssignment.instructions,
         sourceLessonId: crmClassId,
         idempotencyKey: `offline-lesson:${crmClassId}:v${approval.reportVersion}:assignment`,
       })
     : null;
+  if (approval && input.studiedPlanIds?.length) {
+    await recordApprovedSectorStudy({
+      planIds: input.studiedPlanIds, crmClassId, reportVersion: approval.reportVersion,
+      actorUserId: approval.createdByUserId, eventAt: context.eventAt!,
+      recipientCrmStudentIds: approval.recipientCrmStudentIds,
+      groupId: context.owner.kind === "group" ? context.owner.id : null,
+    });
+  }
+  const sectorReadiness = approval && input.readySectorIds?.length
+    ? await applyApprovedSectorReadiness({
+        planIds: input.readySectorIds, recipientCrmStudentIds: approval.recipientCrmStudentIds,
+        crmClassId, actorUserId: approval.createdByUserId, reportVersion: approval.reportVersion, eventAt: context.eventAt!,
+      }) : { applied: [], skipped: [] };
   return {
     crmClassId,
+    sectorReadiness,
     homeworkResults,
     topicResults,
     homeworkAssignment,
+    skippedTopics: skippedTopics ?? [],
   };
 }
 
@@ -790,7 +884,20 @@ export async function applyApprovedLearningLessonV2Results(
   // retried after the current monthly plan has been republished or homework has been consumed
   // by an earlier partial attempt, so only snapshot-internal invariants are checked here.
   validateLearningLessonV2ResultDuplicates(input);
-  return applyValidatedLearningLessonV2Results(actorUserId, crmClassId, input, context, approval);
+  // Finalization runs only after CRM approved the lesson, so a mismatched topic is set aside.
+  const result = await applyValidatedLearningLessonV2Results(actorUserId, crmClassId, input, context, approval, true);
+  // Records the set-aside topics, or closes an older version's conflict when nothing is left.
+  await recordLessonTopicConflicts({
+    crmClassId,
+    reportVersion: approval?.reportVersion ?? null,
+    approvedBy: actorUserId,
+    recipientCrmStudentIds: approval?.recipientCrmStudentIds ?? null,
+    occurredAt: context.eventAt ?? null,
+    topics: result.skippedTopics,
+  });
+  const written = result.topicResults.map((topic) => topic.id);
+  if (written.length) await applyWaitingLessonTopicConflicts(written);
+  return result;
 }
 
 /**

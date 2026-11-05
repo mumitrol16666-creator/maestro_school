@@ -255,6 +255,7 @@ export type LearningLessonV2Homework = {
 };
 
 export type LearningLessonV2Context = {
+  examReadiness?: Array<{ planId: string; crmStudentId: string; studentName: string; sequence: number; direction: string; readyAt: string | null }>;
   enabled: true;
   available: boolean;
   reason: "trial_lesson" | "sector_exam" | "one_time_replacement" | null;
@@ -264,6 +265,12 @@ export type LearningLessonV2Context = {
   canApply: boolean;
   plans: Array<{
     planId: string;
+    sequence?: number;
+    scope?: "student" | "group";
+    ownerStudentId?: string | null;
+    canEditTopics?: boolean;
+    sharedGroupPlan?: boolean;
+    ownerName?: string;
     month: string;
     planCompletionRewardPoints: number;
     direction: {
@@ -285,6 +292,12 @@ export type LearningLessonV2Context = {
         title: string | null;
         date: string | null;
         startTime: string | null;
+      } | null;
+      /** 04.11: an approved lesson's percent for this topic waits for the admin's decision. */
+      percentConflict?: {
+        crmClassId: string;
+        toPercent: number;
+        currentPercent: number;
       } | null;
       masteredAt: string | null;
       planCompletionRewardPoints: number;
@@ -332,6 +345,8 @@ export type LearningLessonV2Context = {
 };
 
 export type LearningLessonV2ResultsInput = {
+  readySectorIds?: string[];
+  studiedPlanIds?: string[];
   homeworkAssignment?: {
     topicId: string;
     instructions: string;

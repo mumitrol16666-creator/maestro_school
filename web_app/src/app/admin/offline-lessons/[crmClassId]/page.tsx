@@ -104,6 +104,7 @@ const syncStatusLabels: Record<string, string> = {
 const syncConflictLabels: Record<string, string> = {
   attendance_mismatch: "Посещаемость отличается от расписания",
   stale_projection_ignored: "Расписание содержит более новые данные",
+  topic_percent_mismatch: "Урок принят, проценты тем не записаны",
 };
 
 const REPORT_SUBMISSION_LEAD_MINUTES = 20;
@@ -376,6 +377,8 @@ function learningResultsV2Draft(
 ): LearningLessonV2Draft {
   if (!results) return emptyLearningLessonV2Draft();
   return {
+    readySectorIds: results.readySectorIds ?? [],
+    studiedPlanIds: results.studiedPlanIds ?? [],
     topicId: results.homeworkAssignment?.topicId ?? results.topicUpdates[0]?.topicId ?? null,
     homeworkTopicId: results.homeworkAssignment?.topicId ?? null,
     topicProgress: Object.fromEntries(results.topicUpdates.map((topic) => [
@@ -1432,9 +1435,14 @@ export default function AdminOfflineLessonDetailPage() {
           instructions: homework.trim(),
         }
       : undefined;
-    if (!homeworkDecisions.length && !topicUpdates.length && !homeworkAssignment) return undefined;
+    const readySectorIds = learningV2Draft.readySectorIds ?? [];
+    const studiedTopics = new Set([...topicUpdates.map(update => update.topicId), ...(learningV2Draft.topicId ? [learningV2Draft.topicId] : [])]);
+    const studiedPlanIds = [...new Set([...(learningV2Draft.studiedPlanIds ?? []), ...learningV2.plans.filter(plan => plan.topics.some(topic => studiedTopics.has(topic.id))).map(plan => plan.planId)])];
+    if (!homeworkDecisions.length && !topicUpdates.length && !homeworkAssignment && !readySectorIds.length && !studiedPlanIds.length) return undefined;
     return {
       ...(homeworkAssignment ? { homeworkAssignment } : {}),
+      readySectorIds,
+      studiedPlanIds,
       homeworkDecisions,
       topicUpdates,
     };
@@ -2449,7 +2457,9 @@ export default function AdminOfflineLessonDetailPage() {
                           type="button"
                           disabled={busy != null}
                           onClick={() => {
-                            const reason = askReason("Повторно отправить сохранённую версию?");
+                            const reason = askReason(item.kind === "topic_percent_mismatch"
+                              ? "Записать в темы проценты из этого урока?"
+                              : "Повторно отправить сохранённую версию?");
                             if (reason) void runAction(
                               `conflict-retry-${item.id}`,
                               () => adminOfflineApi.resolveSyncConflict(item.id, "retry_local", reason),
@@ -2457,13 +2467,15 @@ export default function AdminOfflineLessonDetailPage() {
                           }}
                           className="min-h-10 rounded-[10px] border border-red-300 bg-white px-3 text-xs font-bold text-red-900 disabled:opacity-50"
                         >
-                          Отправить снова
+                          {item.kind === "topic_percent_mismatch" ? "Записать проценты урока" : "Отправить снова"}
                         </button>
                         <button
                           type="button"
                           disabled={busy != null}
                           onClick={() => {
-                            const reason = askReason("Принять данные из расписания и закрыть конфликт?");
+                            const reason = askReason(item.kind === "topic_percent_mismatch"
+                              ? "Оставить в темах текущие проценты и закрыть конфликт?"
+                              : "Принять данные из расписания и закрыть конфликт?");
                             if (reason) void runAction(
                               `conflict-accept-${item.id}`,
                               () => adminOfflineApi.resolveSyncConflict(item.id, "accept_crm", reason),
@@ -2471,7 +2483,7 @@ export default function AdminOfflineLessonDetailPage() {
                           }}
                           className="min-h-10 rounded-[10px] bg-red-900 px-3 text-xs font-bold text-white disabled:opacity-50"
                         >
-                          Принять расписание
+                          {item.kind === "topic_percent_mismatch" ? "Оставить как есть" : "Принять расписание"}
                         </button>
                       </div>
                     </div>

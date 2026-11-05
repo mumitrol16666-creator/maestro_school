@@ -32,6 +32,7 @@ integrationTest("sectors follow each other: save opens 1, the exam closes it, th
   t.after(async () => {
     await prisma.sectorExam.deleteMany({ where: { directionId: direction.id } });
     await prisma.pointsTransaction.deleteMany({ where: { studentId: student.id } });
+    await prisma.learningSectorEvent.deleteMany({ where: { plan: { directionId: direction.id } } });
     await prisma.learningPlan.deleteMany({ where: { directionId: direction.id } });
     await prisma.learningTopic.deleteMany({ where: { directionId: direction.id } });
     await prisma.userNotification.deleteMany({ where: { userId: { in: [student.id, teacher.id] } } });
@@ -74,6 +75,8 @@ integrationTest("sectors follow each other: save opens 1, the exam closes it, th
   const template = await exams.sectorExamTemplate(first.id);
   const exam = await exams.createSectorExam(teacher.id, { planId: first.id, items: template.items, send: true });
   await exams.scheduleSectorExamFromCrm(exam.id, { crmClassId: `exam-class-${suffix}`, lessonAt: new Date() });
+  const { applyApprovedSectorReadiness } = await import("./sector-readiness.service.js");
+  await applyApprovedSectorReadiness({planIds:[first.id], recipientCrmStudentIds:[crmStudentId], crmClassId:`ready-${suffix}`, actorUserId:teacher.id, reportVersion:1, eventAt:new Date()});
   await exams.startSectorExam(teacher.id, exam.id);
   await exams.markSectorExamItem(teacher.id, exam.id, exam.items[0]!.id, true);
   await exams.finishSectorExam(teacher.id, exam.id, { decision: "close_sector" });

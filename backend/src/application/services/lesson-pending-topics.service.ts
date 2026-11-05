@@ -11,7 +11,8 @@ export const SENT_REPORT_STATUSES = [...SENT_NOT_APPLIED_REPORT_STATUSES, "confi
  */
 const PENDING_CHAIN_LOOKBACK_DAYS = 14;
 /** Outbox states of an approval whose results (topic percents, rewards) are not applied yet. */
-const APPROVAL_DONE_EVENT_STATUSES = ["succeeded", "cancelled"];
+// «resolved»: the admin closed the approval conflict on the lesson page; nothing is in flight.
+const APPROVAL_DONE_EVENT_STATUSES = ["succeeded", "cancelled", "resolved"];
 
 export type PendingTopicPercent = {
   percent: number;

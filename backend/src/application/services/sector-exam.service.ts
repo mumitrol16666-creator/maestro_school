@@ -6,7 +6,7 @@ import { requireCrmTeacherId } from "./teacher-students.service.js";
 import { fetchTeacherStudentsForAccess } from "./teacher-substitution.service.js";
 import { closeStudentSectorByExam, publicSectorExamDto } from "./learning-plan-v2.service.js";
 import { recordSectorMemberPass, requireTeacherGroup } from "./group-sector.service.js";
-import { fetchGroupRosters } from "../../infrastructure/crm/crm-client.js";
+import { fetchGroupRosters, fetchStudentOfflineSummary } from "../../infrastructure/crm/crm-client.js";
 
 /**
  * Plan 1.10: the sector exam. It is held live at the school as a free extra lesson. The platform
@@ -14,7 +14,7 @@ import { fetchGroupRosters } from "../../infrastructure/crm/crm-client.js";
  * date CRM schedules it for, the teacher's "done / not done" marks and the outcome.
  *
  * draft → awaiting_schedule (admin sends it to CRM) → scheduled (CRM booked the lesson)
- *       → in_progress (teacher starts it once every topic is at 100 %) → completed.
+ *       → in_progress (teacher starts it after personal readiness is confirmed) → completed.
  * Finishing either closes the sector (250 Points, certificate when every point is done) or
  * opens a retake: a new exam with the same points, linked to this one, back in the CRM queue.
  *
@@ -37,12 +37,14 @@ export type SectorExamItemInput = {
 const examInclude = {
   items: { orderBy: { position: "asc" } },
   results: true,
+  session: { select: { title: true, programSnapshot: true } },
   direction: { select: { id: true, title: true, crmDirectionId: true } },
 } satisfies Prisma.SectorExamInclude;
 
 type ExamRow = Prisma.SectorExamGetPayload<{ include: typeof examInclude }>;
 
 const sectorInclude = {
+  templateStep: { select: { number: true } },
   direction: { select: { id: true, title: true, crmDirectionId: true } },
   versions: {
     include: {
@@ -68,7 +70,9 @@ function sectorProgress(plan: SectorRow) {
     completed,
     total: topics.length,
     percent: topics.length ? Math.round((completed / topics.length) * 100) : 0,
-    ready: topics.length > 0 && completed === topics.length,
+    ready: plan.crmGroupId ? topics.length > 0 && completed === topics.length : Boolean(plan.examReadyAt),
+    readyAt: plan.examReadyAt,
+    studyFinishedAt: plan.studyFinishedAt,
   };
 }
 
@@ -76,6 +80,9 @@ function examDto(exam: ExamRow) {
   const resultByItem = new Map(exam.results.map((result) => [result.itemId, result]));
   return {
     id: exam.id,
+    sessionId: exam.sessionId,
+    sessionTitle: exam.session?.title ?? null,
+    programTitle: exam.programTitleSnapshot,
     planId: exam.planId,
     crmStudentId: exam.crmStudentId,
     crmGroupId: exam.crmGroupId,
@@ -124,12 +131,12 @@ async function studentNames(crmStudentIds: string[]) {
   const users = crmStudentIds.length
     ? await prisma.user.findMany({
         where: { crmStudentId: { in: crmStudentIds }, deletedAt: null, role: { slug: "student" } },
-        select: { id: true, crmStudentId: true, firstName: true, lastName: true },
+        select: { id: true, crmStudentId: true, firstName: true, lastName: true, middleName: true },
       })
     : [];
   return new Map(users.map((user) => [
     user.crmStudentId!,
-    { userId: user.id, name: [user.lastName, user.firstName].filter(Boolean).join(" ") || "Ученик" },
+    { userId: user.id, name: [user.lastName, user.firstName, user.middleName].filter(Boolean).join(" ") || "Ученик" },
   ]));
 }
 
@@ -164,7 +171,7 @@ function normalizeItems(plan: SectorRow, items: SectorExamItemInput[]) {
 
 function requirePublished(plan: SectorRow) {
   // A group moves on without the members who have not passed: they still sit its exam.
-  if (plan.status !== "active" && !plan.crmGroupId) {
+  if (plan.status === "closed" && !plan.crmGroupId) {
     throw new ConflictError("Сектор уже закрыт", "SECTOR_ALREADY_CLOSED");
   }
   if (plan.publishedVersionNumber === null) {
@@ -236,10 +243,9 @@ function formatExamDate(value: Date) {
 /** Every open individual sector with its progress and the exam prepared for it. */
 export async function listAdminSectorExamBoard() {
   const plans = await prisma.learningPlan.findMany({
-    where: { status: "active", crmStudentId: { not: null }, crmGroupId: null, publishedVersionNumber: { not: null } },
+    where: { status: { in: ["active", "awaiting_exam"] }, crmStudentId: { not: null }, crmGroupId: null, publishedVersionNumber: { not: null } },
     include: sectorInclude,
     orderBy: [{ updatedAt: "desc" }],
-    take: 500,
   });
   const exams = await prisma.sectorExam.findMany({
     where: { planId: { in: plans.map((plan) => plan.id) }, status: { not: "cancelled" } },
@@ -255,6 +261,7 @@ export async function listAdminSectorExamBoard() {
     return {
       planId: plan.id,
       sequence: plan.sequence,
+      curriculumNumber: plan.templateStep?.number ?? plan.sequence,
       crmStudentId: plan.crmStudentId!,
       studentName: names.get(plan.crmStudentId!)?.name ?? plan.crmStudentId!,
       direction: plan.direction,
@@ -281,7 +288,7 @@ export async function listAdminSectorExamBoard() {
  */
 async function listAdminGroupSectorBoard() {
   const plans = await prisma.learningPlan.findMany({
-    where: { status: "active", crmGroupId: { not: null }, publishedVersionNumber: { not: null } },
+    where: { status: "active", isSharedGroupPlan:false, crmGroupId: { not: null }, publishedVersionNumber: { not: null } },
     include: sectorInclude,
     orderBy: [{ updatedAt: "desc" }],
     take: 200,
@@ -390,6 +397,7 @@ export async function createGroupSectorExams(adminUserId: string, input: {
 }) {
   const plan = await loadSector(input.planId);
   if (!plan.crmGroupId) throw new BadRequestError("Это сектор ученика, а не группы", "SECTOR_NOT_GROUP");
+  if (plan.isSharedGroupPlan) throw new ConflictError("Экзамен готовится по личным секторам участников", "GROUP_PLAN_REQUIRES_PERSONAL_EXAMS");
   requirePublished(plan);
   const crmStudentIds = [...new Set(input.crmStudentIds.map((id) => id.trim()).filter(Boolean))];
   if (!crmStudentIds.length) {
@@ -492,7 +500,11 @@ export async function listSectorExamsAwaitingSchedule() {
     examId: exam.id,
     crmStudentId: exam.crmStudentId,
     crmGroupId: exam.crmGroupId,
-    studentName: names.get(exam.crmStudentId)?.name ?? null,
+    studentName: exam.studentNameSnapshot ?? names.get(exam.crmStudentId)?.name ?? null,
+    sessionId: exam.sessionId,
+    sessionTitle: exam.session?.title ?? null,
+    programTitle: exam.programTitleSnapshot,
+    durationMinutes: exam.session?.programSnapshot && typeof exam.session.programSnapshot === "object" && !Array.isArray(exam.session.programSnapshot) ? exam.session.programSnapshot.durationMinutes : null,
     crmDirectionId: exam.direction.crmDirectionId,
     directionTitle: exam.direction.title,
     sectorSequence: sequenceByPlan.get(exam.planId) ?? null,
@@ -630,7 +642,7 @@ async function requireTeacherExam(teacherUserId: string, examId: string) {
 export async function listTeacherStudentSectorExams(teacherUserId: string, crmStudentId: string) {
   await requireTeacherStudent(teacherUserId, crmStudentId);
   const plans = await prisma.learningPlan.findMany({
-    where: { crmStudentId, crmGroupId: null, status: "active", publishedVersionNumber: { not: null } },
+    where: { crmStudentId, crmGroupId: null, status: { in: ["active", "awaiting_exam"] }, publishedVersionNumber: { not: null } },
     include: sectorInclude,
     orderBy: { sequence: "desc" },
   });
@@ -646,12 +658,12 @@ export async function listTeacherStudentSectorExams(teacherUserId: string, crmSt
     const previous = exam?.previousExamId ? planExams.find((item) => item.id === exam.previousExamId) ?? null : null;
     return {
       planId: plan.id,
-      sequence: plan.sequence,
+      sequence: plan.templateStep?.number ?? plan.sequence,
       direction: plan.direction,
       progress,
       exam: exam && exam.status !== "draft" ? examDto(exam) : null,
       previousExam: previous ? examDto(previous) : null,
-      canStart: Boolean(exam && exam.status === "scheduled" && progress.ready),
+      canStart: Boolean(exam && exam.status === "scheduled" && (progress.ready || (!exam.requiresReadinessConfirmation && progress.total > 0 && progress.completed === progress.total))),
     };
   });
 }
@@ -670,6 +682,7 @@ export async function listTeacherGroupSectorExams(teacherUserId: string, crmGrou
     where: {
       crmGroupId,
       crmStudentId: null,
+      isSharedGroupPlan:false,
       publishedVersionNumber: { not: null },
       OR: [{ status: "active" }, { id: { in: [...new Set(openExams.map((exam) => exam.planId))] } }],
     },
@@ -729,10 +742,11 @@ export async function startSectorExam(teacherUserId: string, examId: string, now
     throw new ConflictError("Экзамен ещё не назначен в расписании", "SECTOR_EXAM_NOT_SCHEDULED");
   }
   const plan = await loadSector(exam.planId);
-  if (plan.status !== "active" && !plan.crmGroupId) throw new ConflictError("Сектор уже закрыт", "SECTOR_ALREADY_CLOSED");
+  if (plan.status === "closed" && !plan.crmGroupId) throw new ConflictError("Сектор уже закрыт", "SECTOR_ALREADY_CLOSED");
   // A member's retake after the group moved on does not wait for the closed sector's topics.
-  if (plan.status === "active" && !sectorProgress(plan).ready) {
-    throw new ConflictError("Начать экзамен можно, когда все темы сектора на 100 %", "SECTOR_EXAM_TOPICS_INCOMPLETE");
+  const legacyReady = !exam.requiresReadinessConfirmation && sectorProgress(plan).total > 0 && sectorProgress(plan).completed === sectorProgress(plan).total;
+  if (!plan.crmGroupId && !plan.examReadyAt && !legacyReady) {
+    throw new ConflictError("Преподаватель ещё не отметил готовность ученика к экзамену", "SECTOR_EXAM_NOT_READY");
   }
   await prisma.sectorExam.updateMany({
     where: { id: examId, status: "scheduled" },
@@ -747,10 +761,15 @@ export async function markSectorExamItem(teacherUserId: string, examId: string, 
     throw new ConflictError("Отмечать пункты можно только во время экзамена", "SECTOR_EXAM_NOT_IN_PROGRESS");
   }
   if (!exam.items.some((item) => item.id === itemId)) throw new NotFoundError("Пункт экзамена");
-  await prisma.sectorExamResult.upsert({
-    where: { itemId_crmStudentId: { itemId, crmStudentId: exam.crmStudentId } },
-    create: { examId, itemId, crmStudentId: exam.crmStudentId, done, markedById: teacherUserId },
-    update: { done, markedById: teacherUserId, markedAt: new Date() },
+  await prisma.$transaction(async tx => {
+    await tx.$queryRaw`SELECT id FROM sector_exams WHERE id=${examId}::uuid FOR UPDATE`;
+    const current = await tx.sectorExam.findUniqueOrThrow({where:{id:examId}});
+    if (current.status !== "in_progress") throw new ConflictError("Экзамен уже завершён", "SECTOR_EXAM_NOT_IN_PROGRESS");
+    await tx.sectorExamResult.upsert({
+      where: { itemId_crmStudentId: { itemId, crmStudentId: exam.crmStudentId } },
+      create: { examId, itemId, crmStudentId: exam.crmStudentId, done, markedById: teacherUserId },
+      update: { done, markedById: teacherUserId, markedAt: new Date() },
+    });
   });
   return examDto(await loadExam(examId));
 }
@@ -761,7 +780,7 @@ function certificateNumber(examId: string, at: Date) {
 
 /**
  * Ends the exam with the teacher's decision. Every point must be marked. "close_sector" closes
- * the sector whatever the outcome (250 Points; a certificate only when every point is done);
+ * a passed sector (250 Points and a certificate only when every point is done);
  * "retake" leaves the sector open and puts a new exam with the same points in the CRM queue.
  * Repeating the same decision returns the saved result.
  */
@@ -795,7 +814,40 @@ export async function finishSectorExam(teacherUserId: string, examId: string, in
   const outcome = doneCount === exam.items.length ? "passed" : doneCount === 0 ? "failed" : "partial";
   const now = input.now ?? new Date();
   const passed = outcome === "passed";
-  const finished = await prisma.sectorExam.updateMany({
+  if (!passed && input.decision !== "retake") {
+    throw new BadRequestError("Для сдачи выполните все пункты экзамена. Иначе выберите пересдачу.", "SECTOR_EXAM_NOT_PASSED");
+  }
+  let certificateSnapshot: Prisma.InputJsonValue | undefined;
+  if (passed && input.decision !== "retake") {
+    let studentName = exam.studentNameSnapshot ?? (await studentNames([exam.crmStudentId])).get(exam.crmStudentId)?.name;
+    if (!studentName) {
+      const summary = await fetchStudentOfflineSummary(exam.crmStudentId);
+      const profile = summary.profile as { name?: unknown } | undefined;
+      studentName = typeof profile?.name === "string" ? profile.name.trim() : undefined;
+    }
+    if (!studentName) throw new BadRequestError("Проверьте имя ученика перед выдачей сертификата", "CERTIFICATE_STUDENT_NAME_REQUIRED");
+    const [plan, examiner] = await Promise.all([
+      loadSector(exam.planId), prisma.user.findUnique({ where: { id: teacherUserId }, select: { firstName: true, lastName: true, middleName: true } }),
+    ]);
+    certificateSnapshot = {
+      studentName, direction: exam.direction.title, sectorNumber: plan.templateStep?.number ?? plan.sequence,
+      programTitle: exam.programTitleSnapshot ?? `Сектор ${plan.templateStep?.number ?? plan.sequence}`,
+      examinerName: examiner ? [examiner.lastName, examiner.firstName, examiner.middleName].filter(Boolean).join(" ") : "",
+      issuedAt: now.toISOString(), examAt: (exam.scheduledAt ?? now).toISOString(),
+    };
+  }
+  const completion = await prisma.$transaction(async tx => {
+    await tx.$queryRaw`SELECT id FROM sector_exams WHERE id=${examId}::uuid FOR UPDATE`;
+    const current = await tx.sectorExam.findUniqueOrThrow({where:{id:examId},include:examInclude});
+    if (current.status === "completed") {
+      if (current.decision !== input.decision) throw new ConflictError("Экзамен завершён с другим решением", "SECTOR_EXAM_ALREADY_FINISHED");
+      return {retakeExamId:null,awardedPoints:0,replayed:true};
+    }
+    if (current.status !== "in_progress") throw new ConflictError("Экзамен ещё не начат", "SECTOR_EXAM_NOT_IN_PROGRESS");
+    if (current.results.length !== exam.results.length || current.results.some(result => marks.get(result.itemId) !== result.done)) {
+      throw new ConflictError("Отметки экзамена изменились. Проверьте результат ещё раз.", "SECTOR_EXAM_RESULTS_CHANGED");
+    }
+    await tx.sectorExam.updateMany({
     where: { id: examId, status: "in_progress" },
     data: {
       status: "completed",
@@ -804,27 +856,25 @@ export async function finishSectorExam(teacherUserId: string, examId: string, in
       outcome,
       decision: input.decision,
       comment: input.comment?.trim().slice(0, 2000) || null,
+      certificateSnapshot,
       certificateNumber: passed && input.decision !== "retake" ? certificateNumber(examId, now) : null,
       certificateIssuedAt: passed && input.decision !== "retake" ? now : null,
     },
   });
-  if (!finished.count) return { exam: examDto(await loadExam(examId)), retakeExamId: null, awardedPoints: 0 };
 
   let retakeExamId: string | null = null;
   let awardedPoints = 0;
   if (input.decision === "close_sector") {
-    const closed = await closeStudentSectorByExam(exam.planId, { now });
+    const closed = await closeStudentSectorByExam(exam.planId, { now, tx });
     awardedPoints = closed.awardedPoints;
   } else if (input.decision === "pass") {
-    // recordSectorMemberPass tells the member and parents itself.
     const recorded = await recordSectorMemberPass({
-      planId: exam.planId, crmStudentId: exam.crmStudentId, method: "exam", examId: exam.id, passedById: teacherUserId, now,
+      planId: exam.planId, crmStudentId: exam.crmStudentId, method: "exam", examId: exam.id, passedById: teacherUserId, now, tx,
     });
     awardedPoints = recorded.awardedPoints;
-    return { exam: examDto(await loadExam(examId)), retakeExamId: null, awardedPoints };
   } else {
     retakeExamId = randomUUID();
-    await prisma.sectorExam.create({
+    await tx.sectorExam.create({
       data: {
         id: retakeExamId,
         planId: exam.planId,
@@ -834,6 +884,9 @@ export async function finishSectorExam(teacherUserId: string, examId: string, in
         status: "awaiting_schedule",
         attempt: exam.attempt + 1,
         previousExamId: exam.id,
+        requiresReadinessConfirmation:exam.requiresReadinessConfirmation,
+        programTitleSnapshot: exam.programTitleSnapshot,
+        studentNameSnapshot: exam.studentNameSnapshot,
         sentForScheduleAt: now,
         createdById: teacherUserId,
         items: {
@@ -842,11 +895,16 @@ export async function finishSectorExam(teacherUserId: string, examId: string, in
           })),
         },
       },
-    }).catch(openExamConflict);
+    });
   }
 
+    return {retakeExamId,awardedPoints,replayed:false};
+  });
+  const {retakeExamId,awardedPoints} = completion;
+  if (completion.replayed) return {exam:examDto(await loadExam(examId)),retakeExamId,awardedPoints};
+
   const summary = `${doneCount} из ${exam.items.length} пунктов`;
-  await notifyStudentAndParents(exam.crmStudentId, input.decision === "close_sector"
+  await notifyStudentAndParents(exam.crmStudentId, input.decision !== "retake"
     ? {
         title: passed ? "Экзамен сдан, сектор закрыт" : "Сектор закрыт после экзамена",
         body: `${exam.direction.title}: ${summary}.${passed ? " Выдан сертификат." : ""}${awardedPoints ? ` Начислено ${awardedPoints} баллов.` : ""}`,

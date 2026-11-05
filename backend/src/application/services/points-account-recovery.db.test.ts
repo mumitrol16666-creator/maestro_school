@@ -1,0 +1,47 @@
+import assert from "node:assert/strict";
+import {randomUUID} from "node:crypto";
+import test from "node:test";
+import {prisma} from "../../infrastructure/database/prisma.js";
+import {applyPointsAccountRecovery,previewPointsAccountRecovery} from "./points-account-recovery.service.js";
+const dbtest=process.env.RUN_DB_INTEGRATION_TESTS==="1"?test:test.skip;
+
+dbtest("account recovery is previewed without writes, conserved, replayable, and blocks a future duplicate topic award",async t=>{
+  const suffix=randomUUID();
+  const studentRole=await prisma.role.upsert({where:{slug:"student"},create:{slug:"student",name:"student"},update:{}});
+  const adminRole=await prisma.role.upsert({where:{slug:"admin"},create:{slug:"admin",name:"admin"},update:{}});
+  const create=(kind:string)=>prisma.user.create({data:{login:`recover-${kind}-${suffix}`,phone:`+779${suffix.replace(/\D/g,"").padEnd(7,"4").slice(0,7)}${kind==="old"?1:kind==="new"?2:3}`,passwordHash:"x",firstName:"Ученица",lastName:"Примерова",roleId:kind==="operator"?adminRole.id:studentRole.id,...kind==="old"?{deletedAt:new Date(),isActive:false}:{},...kind==="new"?{crmStudentId:`recover-${suffix}`}:{}}});
+  const old=await create("old"),current=await create("new"),actor=await create("operator");
+  const existingEpoch=await prisma.economicEpoch.findFirst({where:{status:"active"}});
+  const epoch=existingEpoch??await prisma.economicEpoch.create({data:{code:`recover-${suffix}`,sourceKey:`recover-${suffix}`,name:"Recovery test",status:"active",startsAt:new Date("2026-01-01T00:00:00Z")}});
+  const topicId=randomUUID();
+  const input={oldStudentId:old.id,studentId:current.id,crmStudentId:current.crmStudentId!,epochId:epoch.id,topicIds:[topicId]};
+  t.after(async()=>{
+    await prisma.auditLog.deleteMany({where:{entityType:"points_account_recovery",actorId:actor.id}});
+    await prisma.pointsTransaction.deleteMany({where:{studentId:{in:[old.id,current.id]}}});
+    if(!existingEpoch) await prisma.economicEpoch.delete({where:{id:epoch.id}});
+    await prisma.user.deleteMany({where:{id:{in:[old.id,current.id,actor.id]}}});
+  });
+  await prisma.economicEpochParticipant.createMany({data:[old,current].map(user=>({epochId:epoch.id,studentId:user.id,sourceKey:`recover:${user.id}`,activatedAt:new Date()}))});
+  const source=await prisma.pointsTransaction.create({data:{economicEpochId:epoch.id,studentId:old.id,amount:100,reason:"Освоена тема «Ритм»",sourceKey:`learning-topic-mastery:${topicId}:${old.id}`,createdAt:new Date("2026-10-23T06:00:00Z")}});
+  const count=await prisma.pointsTransaction.count({where:{studentId:{in:[old.id,current.id]}}});
+  const preview=await previewPointsAccountRecovery(input);
+  assert.equal(preview.pending,100);
+  assert.equal(await prisma.pointsTransaction.count({where:{studentId:{in:[old.id,current.id]}}}),count,"preview is read only");
+  await assert.rejects(applyPointsAccountRecovery(input,"stale",actor.id));
+  assert.equal(await prisma.pointsTransaction.count({where:{studentId:{in:[old.id,current.id]}}}),count);
+  assert.equal((await applyPointsAccountRecovery(input,preview.fingerprint,actor.id)).transferred,100);
+  const sum=async(studentId:string)=>(await prisma.pointsTransaction.aggregate({where:{studentId,economicEpochId:epoch.id},_sum:{amount:true}}))._sum.amount;
+  assert.equal(await sum(old.id),0);
+  assert.equal(await sum(current.id),100);
+  assert.equal((await applyPointsAccountRecovery(input,preview.fingerprint,actor.id)).alreadyApplied,true);
+  assert.equal((await prisma.pointsTransaction.findUniqueOrThrow({where:{id:source.id}})).sourceKey,`${source.sourceKey}:reversed:account-recovery`);
+  const canonical=await prisma.pointsTransaction.findUniqueOrThrow({where:{sourceKey:`learning-topic-mastery:${topicId}:${current.id}`}});
+  assert.equal(canonical.reason,source.reason);
+  assert.equal(canonical.createdAt.toISOString(),source.createdAt.toISOString());
+  const {ensureSystemPointsTransaction}=await import("./points.service.js");
+  const replay=await ensureSystemPointsTransaction({findBySourceKey:key=>prisma.pointsTransaction.findUnique({where:{sourceKey:key}}),create:()=>{throw new Error("must not award twice")}}, {...canonical,sourceKey:canonical.sourceKey!});
+  assert.equal(replay.awarded,false);
+  assert.equal(await prisma.auditLog.count({where:{entityType:"points_account_recovery",actorId:actor.id}}),1);
+  await prisma.user.update({where:{id:current.id},data:{crmStudentId:`other-${suffix}`}});
+  await assert.rejects(previewPointsAccountRecovery(input));
+});
