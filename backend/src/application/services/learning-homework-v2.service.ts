@@ -726,6 +726,7 @@ export type HomeworkCheckHistoryItem = {
   assignmentId: string;
   crmStudentId: string;
   topic: { id: string; title: string };
+  directionTitle: string;
   instructions: string;
   assignedAt: Date;
   sourceLessonId: string | null;
@@ -745,13 +746,20 @@ export type HomeworkCheckHistoryItem = {
  */
 export async function listHomeworkCheckHistory(
   crmStudentIds: readonly string[],
-  options: { take?: number } = {},
+  options: { take?: number; directionIds?: readonly string[]; reviewedOnly?: boolean } = {},
 ): Promise<HomeworkCheckHistoryItem[]> {
   if (!crmStudentIds.length) return [];
   const recipients = await prisma.learningHomeworkRecipient.findMany({
-    where: { crmStudentId: { in: [...crmStudentIds] }, assignment: { archivedAt: null } },
+    where: {
+      crmStudentId: { in: [...crmStudentIds] },
+      assignment: {
+        archivedAt: null,
+        ...(options.directionIds ? { topic: { directionId: { in: [...options.directionIds] } } } : {}),
+      },
+      ...(options.reviewedOnly ? { reviews: { some: {} } } : {}),
+    },
     include: {
-      assignment: { select: { id: true, instructions: true, assignedAt: true, sourceLessonId: true, topic: { select: { id: true, title: true } } } },
+      assignment: { select: { id: true, instructions: true, assignedAt: true, sourceLessonId: true, topic: { select: { id: true, title: true, direction: { select: { title: true } } } } } },
       reviews: { orderBy: { reviewedAt: "asc" }, select: { cycleNumber: true, decision: true, completionPercent: true, comment: true, reviewedAt: true } },
     },
     orderBy: { assignment: { assignedAt: "desc" } },
@@ -761,7 +769,8 @@ export async function listHomeworkCheckHistory(
     recipientId: recipient.id,
     assignmentId: recipient.assignment.id,
     crmStudentId: recipient.crmStudentId,
-    topic: recipient.assignment.topic,
+    topic: { id: recipient.assignment.topic.id, title: recipient.assignment.topic.title },
+    directionTitle: recipient.assignment.topic.direction.title,
     instructions: recipient.assignment.instructions,
     assignedAt: recipient.assignment.assignedAt,
     sourceLessonId: recipient.assignment.sourceLessonId,
