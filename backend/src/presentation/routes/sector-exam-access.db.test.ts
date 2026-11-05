@@ -39,6 +39,11 @@ dbtest("new exam routes enforce current roles even when a student or parent has 
   const admin=await account("admin"),teacher=await account("teacher"),student=await account("student"),parent=await account("parent");
   assert.equal((await app.inject({method:"GET",url:"/admin/exam-programs"})).statusCode,401);
   for(const headers of [teacher,student,parent]) assert.equal((await app.inject({method:"GET",url:"/admin/exam-programs",headers})).statusCode,403);
+  for(const headers of [teacher,student,parent]) {
+    assert.equal((await app.inject({method:"GET",url:"/admin/exam-scheduling-options",headers})).statusCode,403);
+    for(const endpoint of ["schedule","participants"]) assert.equal((await app.inject({method:endpoint==="schedule"?"POST":"PUT",url:`/admin/exam-sessions/${randomUUID()}/${endpoint}`,headers,payload:{}})).statusCode,403);
+  }
+  for(const headers of [student,parent]) assert.equal((await app.inject({method:"GET",url:`/exam-sessions/${randomUUID()}`,headers})).statusCode,403);
   assert.equal((await app.inject({method:"GET",url:"/admin/exam-programs",headers:admin})).statusCode,200);
   const direction=await prisma.direction.create({data:{title:"Access test",slug:`sector-access-${randomUUID()}`,crmDirectionId:randomUUID(),crmIsActive:true}});directionId=direction.id;
   const payload={directionId:direction.id,sectorNumber:1,title:"Экзамен",durationMinutes:15,items:[{title:"Песня",criteria:"Ритм"}]};

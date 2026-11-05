@@ -2,6 +2,7 @@
 
 import { Award, CalendarClock, Check, GraduationCap, LoaderCircle, RotateCcw, X } from "lucide-react";
 import { useState } from "react";
+import Link from "next/link";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { ApiError } from "@/lib/api-client";
 import { formatExamDate, sectorExamOutcomeLabel, sectorExamsApi, sectorExamStatusLabel } from "@/lib/sector-exams-api";
@@ -62,6 +63,7 @@ function ExamCard({ row, onChanged }: { row: TeacherSectorExamRow; onChanged: ()
       </div>
 
       {row.previousExam && shown?.status !== "completed" ? <PastResult exam={row.previousExam} /> : null}
+      {shown?.sessionId ? <Link href={`/admin/exam-sessions/${shown.sessionId}`} className="mt-3 inline-flex min-h-11 items-center text-sm font-bold underline">Открыть общий экзамен с участниками</Link> : null}
 
       {!shown ? (
         <p className="mt-2 text-xs leading-5 text-stone-600">

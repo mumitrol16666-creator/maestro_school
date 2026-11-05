@@ -189,7 +189,7 @@ function openExamConflict(error: unknown): never {
 /* ─── Notifications ─────────────────────────────────────────────────── */
 
 async function notifyStudentAndParents(crmStudentId: string, message: {
-  title: string; body: string; dedupeKey: string; parentBody?: string;
+  title: string; body: string; dedupeKey: string; parentBody?: string; url?: string;
 }) {
   try {
     const student = await prisma.user.findFirst({
@@ -202,12 +202,12 @@ async function notifyStudentAndParents(crmStudentId: string, message: {
     const { deliverUserNotification } = await import("./notification.service.js");
     await deliverUserNotification({
       userId: student.id, type: "sector_exam_updated", title: message.title, body: message.body,
-      url: "/monthly-plan", tag: message.dedupeKey, dedupeKey: `${message.dedupeKey}:student`,
+      url: message.url ?? "/monthly-plan", tag: message.dedupeKey, dedupeKey: `${message.dedupeKey}:student`,
     });
     await Promise.allSettled(parentIds.map((parentUserId) => deliverUserNotification({
       userId: parentUserId, type: "sector_exam_updated", title: message.title,
       body: message.parentBody ?? `${student.firstName ?? "Ученик"}: ${message.body}`,
-      url: familySectorNoticeUrl(student.id), tag: message.dedupeKey, dedupeKey: `${message.dedupeKey}:parent:${parentUserId}`,
+      url: message.url ?? familySectorNoticeUrl(student.id), tag: message.dedupeKey, dedupeKey: `${message.dedupeKey}:parent:${parentUserId}`,
     })));
   } catch {
     // The exam state is saved even when delivery is temporarily unavailable.
@@ -541,14 +541,15 @@ export async function scheduleSectorExamFromCrm(examId: string, input: {
   const when = formatExamDate(input.lessonAt);
   const key = `sector-exam:${examId}:scheduled:${input.lessonAt.toISOString()}`;
   await notifyStudentAndParents(exam.crmStudentId, {
-    title: "Экзамен сектора назначен",
+    title: exam.programTitleSnapshot ? `Назначен экзамен «${exam.programTitleSnapshot}»` : "Экзамен сектора назначен",
+    url: `/exams/${exam.id}`,
     body: `${exam.direction.title}: экзамен в школе ${when}.`,
     dedupeKey: key,
   });
   await notifyTeacher(input.crmTeacherId ?? null, {
     title: "Вам назначен экзамен сектора",
     body: `${exam.direction.title}, ${when}.`,
-    url: examTeacherUrl(exam),
+    url: exam.sessionId ? `/admin/exam-sessions/${exam.sessionId}` : examTeacherUrl(exam),
     dedupeKey: `${key}:teacher`,
   });
   return examDto(await loadExam(examId));
@@ -632,7 +633,14 @@ async function requireTeacherStudent(teacherUserId: string, crmStudentId: string
 
 async function requireTeacherExam(teacherUserId: string, examId: string) {
   const exam = await loadExam(examId);
-  // A group sector's exam belongs to the group's teacher.
+  // CRM's appointed examiner can assess pupils of other teachers in one session.
+  // This grants access to the exam only, not to their personal teaching workspace.
+  if (exam.crmTeacherId) {
+    if (await requireCrmTeacherId(teacherUserId) !== exam.crmTeacherId) {
+      throw new ForbiddenError("Этот экзамен принимает другой назначенный преподаватель");
+    }
+    return exam;
+  }
   if (exam.crmGroupId) await requireTeacherGroup(teacherUserId, exam.crmGroupId);
   else await requireTeacherStudent(teacherUserId, exam.crmStudentId);
   return exam;
@@ -641,6 +649,7 @@ async function requireTeacherExam(teacherUserId: string, examId: string) {
 /** The student's open sectors with the exam for each: what the teacher may do with it now. */
 export async function listTeacherStudentSectorExams(teacherUserId: string, crmStudentId: string) {
   await requireTeacherStudent(teacherUserId, crmStudentId);
+  const teacherId = await requireCrmTeacherId(teacherUserId);
   const plans = await prisma.learningPlan.findMany({
     where: { crmStudentId, crmGroupId: null, status: { in: ["active", "awaiting_exam"] }, publishedVersionNumber: { not: null } },
     include: sectorInclude,
@@ -663,7 +672,7 @@ export async function listTeacherStudentSectorExams(teacherUserId: string, crmSt
       progress,
       exam: exam && exam.status !== "draft" ? examDto(exam) : null,
       previousExam: previous ? examDto(previous) : null,
-      canStart: Boolean(exam && exam.status === "scheduled" && (progress.ready || (!exam.requiresReadinessConfirmation && progress.total > 0 && progress.completed === progress.total))),
+      canStart: Boolean(exam && (!exam.crmTeacherId || exam.crmTeacherId === teacherId) && exam.status === "scheduled" && (progress.ready || (!exam.requiresReadinessConfirmation && progress.total > 0 && progress.completed === progress.total))),
     };
   });
 }
@@ -919,3 +928,57 @@ export async function finishSectorExam(teacherUserId: string, examId: string, in
 }
 
 export { publicSectorExamDto };
+
+
+/** One examination event: the program's saved checklist and each participant's result. */
+export async function getExamSessionWorkspace(actorUserId: string, sessionId: string) {
+  const actor = await prisma.user.findFirst({ where: { id: actorUserId, isActive: true, deletedAt: null }, include: { role: true } });
+  if (!actor) throw new ForbiddenError();
+  const coordinator = ["admin", "owner", "super_admin", "curator", "branch_manager"].includes(actor.role.slug);
+  if (!coordinator && (actor.role.slug !== "teacher" || !actor.crmTeacherId)) throw new ForbiddenError();
+  const session = await prisma.sectorExamSession.findUnique({ where: { id: sessionId },
+    include: { exams: { where: { status: { not: "cancelled" } }, include: { ...examInclude,
+      plan: { select: { examReadyAt: true, status: true } } }, orderBy: { studentNameSnapshot: "asc" } } } });
+  if (!session) throw new NotFoundError("Проведение экзамена");
+  const exams = [];
+  for (const exam of session.exams) {
+    let canConduct = false;
+    if (actor.role.slug === "teacher") {
+      try { await requireTeacherExam(actorUserId, exam.id); canConduct = true; }
+      catch (error) { if (error instanceof ForbiddenError) continue; throw error; }
+    }
+    exams.push({ studentName: exam.studentNameSnapshot || exam.crmStudentId,
+      ready: Boolean(exam.plan.examReadyAt), canConduct,
+      canStart: canConduct && exam.status === "scheduled" && Boolean(exam.plan.examReadyAt),
+      exam: examDto(exam) });
+  }
+  if (!coordinator && !exams.length) throw new ForbiddenError("Вы не назначены принимать этот экзамен");
+  return { id: session.id, title: session.title, program: session.programSnapshot, participants: exams };
+}
+
+
+export async function listExamSessionsForLesson(actorUserId:string,crmClassId:string) {
+  const teacherId=await requireCrmTeacherId(actorUserId);
+  const sessions=await prisma.sectorExamSession.findMany({where:{exams:{some:{crmClassId,crmTeacherId:teacherId,status:{not:"cancelled"}}}},select:{id:true,title:true}});
+  return sessions;
+}
+
+/** The pupil sees the assigned exam itself, without access to the other participants. */
+export async function getPersonalExam(actorUserId:string,examId:string) {
+  const actor=await prisma.user.findFirst({where:{id:actorUserId,isActive:true,deletedAt:null},include:{role:{select:{slug:true}}}});
+  if(!actor) throw new ForbiddenError();
+  const exam=await loadExam(examId);
+  if(["draft","awaiting_schedule","cancelled"].includes(exam.status)) throw new NotFoundError("Экзамен ещё не назначен");
+  const role=actor.role.slug;
+  if(role==="student") {
+    if(!actor.crmStudentId || actor.crmStudentId!==exam.crmStudentId) throw new NotFoundError("Экзамен");
+  } else if(role==="parent") {
+    const link=await prisma.parentStudentLink.findFirst({where:{parentUserId:actor.id,isActive:true,
+      student:{crmStudentId:exam.crmStudentId,isActive:true,deletedAt:null,role:{slug:"student"}}},select:{studentUserId:true}});
+    if(!link) throw new NotFoundError("Экзамен");
+    const {getParentVisibility}=await import("./parent-visibility.service.js");
+    if(!(await getParentVisibility(link.studentUserId)).showPlanProgress) throw new ForbiddenError("Учебные результаты скрыты настройками семейного доступа");
+  } else if(role==="teacher") await requireTeacherExam(actorUserId,examId);
+  else if(!["admin","owner","super_admin","curator","branch_manager"].includes(role)) throw new ForbiddenError();
+  return {studentName:exam.studentNameSnapshot??null,exam:examDto(exam)};
+}

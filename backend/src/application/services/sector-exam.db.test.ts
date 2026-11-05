@@ -13,6 +13,8 @@ async function createFixture(t: Parameters<Parameters<typeof test>[1]>[0]) {
   const { resetTeacherSubstitutionRefresh } = await import("./teacher-substitution.service.js");
   resetTeacherSubstitutionRefresh();
   const suffix = randomUUID().slice(0, 8);
+  const existingEpoch = await prisma.economicEpoch.findFirst({ where: { status: "active" } });
+  const epoch = existingEpoch ?? await prisma.economicEpoch.create({ data: { code: `exam-${suffix}`, sourceKey: `exam-${suffix}`, name: "Exam test", status: "active", startsAt: new Date("2026-01-01T00:00:00Z") } });
   const digits = suffix.replace(/\D/g, "").padEnd(7, "5").slice(0, 7);
   const crmStudentId = `crm-exam-${suffix}`;
   const crmDirectionId = `crm-dir-exam-${suffix}`;
@@ -39,18 +41,21 @@ async function createFixture(t: Parameters<Parameters<typeof test>[1]>[0]) {
       firstName: "Чужой", lastName: suffix, roleId: teacherRole.id, crmTeacherId: `crm-teacher-stranger-${suffix}`, externalLinkStatus: "linked",
     },
   });
+  const extraStudents: Array<{id:string;crmStudentId:string}> = [];
+  const rosterStudents = [{ crmStudentId, name: "Ученик", firstName: "Ученик", lastName: suffix, phone: "+7", accountBalance: 0, directions: [direction.title], assignedDirectly: true, groups: [], schedules: [], attendanceHistory: [], memberships: [] }];
   t.after(async () => {
     await prisma.sectorExam.deleteMany({ where: { directionId: direction.id } });
     await prisma.sectorExamSession.deleteMany({ where: { program: { directionId: direction.id } } });
     await prisma.sectorExamProgram.deleteMany({ where: { directionId: direction.id } });
-    await prisma.pointsTransaction.deleteMany({ where: { studentId: student.id } });
+    await prisma.pointsTransaction.deleteMany({ where: { studentId: {in:[student.id,...extraStudents.map(user=>user.id)]} } });
     await prisma.learningSectorEvent.deleteMany({ where: { plan: { directionId: direction.id } } });
     await prisma.learningHomeworkAssignment.deleteMany({ where: { topic: { directionId: direction.id } } });
     await prisma.learningPlan.deleteMany({ where: { directionId: direction.id } });
     await prisma.learningTopic.deleteMany({ where: { directionId: direction.id } });
-    await prisma.userNotification.deleteMany({ where: { userId: { in: [student.id, teacher.id, stranger.id] } } });
-    await prisma.user.deleteMany({ where: { id: { in: [student.id, teacher.id, stranger.id] } } });
+    await prisma.userNotification.deleteMany({ where: { userId: { in: [student.id, teacher.id, stranger.id,...extraStudents.map(user=>user.id)] } } });
+    await prisma.user.deleteMany({ where: { id: { in: [student.id, teacher.id, stranger.id,...extraStudents.map(user=>user.id)] } } });
     await prisma.direction.delete({ where: { id: direction.id } });
+    if (!existingEpoch) await prisma.economicEpoch.delete({ where: { id: epoch.id } });
   });
   t.mock.method(globalThis, "fetch", async (input: string | URL | Request) => {
     const url = String(input);
@@ -60,7 +65,7 @@ async function createFixture(t: Parameters<Parameters<typeof test>[1]>[0]) {
       : url.includes("/offline-classes")
         ? { classes: [] }
         : { teacher: { crmTeacherId: "x", name: "Учитель", directions: [direction.title] },
-            students: own ? [{ crmStudentId, name: "Ученик", firstName: "Ученик", lastName: suffix, phone: "+7", accountBalance: 0, directions: [direction.title], assignedDirectly: true, groups: [], schedules: [], attendanceHistory: [], memberships: [] }] : [],
+            students: own ? rosterStudents : [],
             groups: [] };
     return new Response(JSON.stringify({ success: true, data: body }), { status: 200, headers: { "Content-Type": "application/json" } });
   });
@@ -82,7 +87,16 @@ async function createFixture(t: Parameters<Parameters<typeof test>[1]>[0]) {
     return applyApprovedSectorReadiness({planIds:[published.id], recipientCrmStudentIds:[crmStudentId],
       crmClassId:`ready-${suffix}`, actorUserId:teacher.id, reportVersion:1, eventAt:new Date()});
   };
-  return { markReady, prisma, suffix, crmStudentId, crmDirectionId, student, teacher, stranger, planId: published.id, topicIds, allTopicsDone, plans };
+  const addStudent = async () => {
+    const id=randomUUID(); const nextCrmId=`extra-${id}`;
+    const next=await prisma.user.create({data:{login:`extra-${id}`,phone:id.slice(0,20),passwordHash:"x",firstName:"Участник",lastName:String(extraStudents.length+2),roleId:studentRole.id,crmStudentId:nextCrmId}});
+    extraStudents.push({id:next.id,crmStudentId:nextCrmId});
+    rosterStudents.push({...rosterStudents[0]!,crmStudentId:nextCrmId,name:`Участник ${extraStudents.length+1}`});
+    const draft=await plans.saveStudentLearningPlanV2(teacher.id,nextCrmId,crmDirectionId,{goal:"Сектор",expectedResult:"",skills:"",checkpoint:"",note:"",items:[{id:"a",title:"Тема сектора",status:"planned"}],expectedVersion:0});
+    const plan=await plans.publishStudentLearningPlanV2(teacher.id,nextCrmId,crmDirectionId,draft.version);
+    return {student:next,planId:plan.id,crmStudentId:nextCrmId};
+  };
+  return { markReady, prisma, suffix, crmStudentId, crmDirectionId, student, teacher, stranger, planId: published.id, topicIds, allTopicsDone, plans, addStudent };
 }
 
 const rejectsWith = (code: string) => (error: { code?: string }) => {
@@ -337,19 +351,21 @@ integrationTest("a reusable program creates an immutable participant exam and se
   assert.equal(queued?.durationMinutes,20);
 });
 
-integrationTest("a stale program or unready student cannot produce a partial exam session", async t => {
+integrationTest("a draft may include an unready student, but assigning it requires readiness and stale programs still fail", async t => {
   const f=await createFixture(t);
-  const {saveExamProgram,createExamSession}=await import("./sector-exam-program.service.js");
+  const {saveExamProgram,createExamSession,sendExamSession}=await import("./sector-exam-program.service.js");
   const directionId=(await f.prisma.learningPlan.findUniqueOrThrow({where:{id:f.planId}})).directionId;
   const data={directionId,sectorNumber:1,title:"Проверка",durationMinutes:15,items:[{title:"Ритм",criteria:"Счёт"}]};
   const program=await saveExamProgram(f.teacher.id,data);
   const request={programId:program.id,programRevision:1,title:"Проверка",planIds:[f.planId],requestKey:randomUUID()};
-  await assert.rejects(createExamSession(f.teacher.id,request),rejectsWith("EXAM_SESSION_STUDENT_NOT_READY"));
-  assert.equal(await f.prisma.sectorExamSession.count({where:{programId:program.id}}),0);
+  const draftSession=await createExamSession(f.teacher.id,request);
+  assert.equal(draftSession.exams[0]?.status,"draft");
+  assert.equal((await f.prisma.learningPlan.findUniqueOrThrow({where:{id:f.planId}})).examReadyAt,null);
+  await assert.rejects(sendExamSession(draftSession.id),rejectsWith("EXAM_SESSION_STUDENT_NOT_READY"));
   await f.markReady();
   await saveExamProgram(f.teacher.id,{...data,title:"Обновлённая"},program.id,1);
   await assert.rejects(createExamSession(f.teacher.id,{...request,requestKey:randomUUID()}),rejectsWith("EXAM_PROGRAM_STALE"));
-  assert.equal(await f.prisma.sectorExam.count({where:{planId:f.planId}}),0);
+  assert.equal(await f.prisma.sectorExam.count({where:{planId:f.planId}}),1);
 });
 
 
@@ -473,4 +489,79 @@ integrationTest("an already booked legacy exam keeps its original admission with
   assert.equal((await exams.listTeacherStudentSectorExams(f.teacher.id,f.crmStudentId))[0]?.canStart,true);
   assert.equal((await exams.startSectorExam(f.teacher.id,exam.id)).status,"in_progress");
   assert.equal((await f.prisma.learningPlan.findUniqueOrThrow({where:{id:f.planId}})).examReadyAt,null);
+});
+
+
+integrationTest("one six-pupil exam uses its own checklist, an appointed examiner, individual results and certificates",async t=>{
+  const f=await createFixture(t);
+  const participants=[{student:f.student,crmStudentId:f.crmStudentId,planId:f.planId}];
+  for(let i=0;i<5;i++)participants.push(await f.addStudent());
+  const programs=await import("./sector-exam-program.service.js");
+  const exams=await import("./sector-exam.service.js");
+  const directionId=(await f.prisma.learningPlan.findUniqueOrThrow({where:{id:f.planId}})).directionId;
+  const input={directionId,sectorNumber:1,title:"Переход в квартеты",durationMinutes:15,items:[{title:"Сыграть свою партию с ансамблем",criteria:"Продолжить после ошибки"},{title:"Вступить после отсчёта",criteria:"Общий старт"}]};
+  const program=await programs.saveExamProgram(f.teacher.id,input);
+  const session=await programs.createExamSession(f.teacher.id,{programId:program.id,programRevision:1,title:input.title,planIds:participants.map(p=>p.planId),requestKey:randomUUID()});
+  assert.equal(session.exams.length,6);
+  await assert.rejects(programs.sendExamSession(session.id),rejectsWith("EXAM_SESSION_STUDENT_NOT_READY"));
+  const {applyApprovedSectorReadiness}=await import("./sector-readiness.service.js");
+  await applyApprovedSectorReadiness({planIds:participants.map(p=>p.planId),recipientCrmStudentIds:participants.map(p=>p.crmStudentId),crmClassId:`ready-six-${f.suffix}`,reportVersion:1,actorUserId:f.teacher.id,eventAt:new Date()});
+  const previousFetch=globalThis.fetch;
+  let bookingCalls=0;
+  t.mock.method(globalThis,"fetch",async(input:string|URL|Request,init?:RequestInit)=>{
+    if(!String(input).endsWith("/sector-exams/book")) return previousFetch(input,init);
+    bookingCalls++;
+    const payload=JSON.parse(String(init?.body));
+    assert.deepEqual([...payload.examIds].sort(),session.exams.map(e=>e.id).sort());
+    assert.equal(payload.actorAppUserId,f.teacher.id);
+    assert.equal((init?.headers as Record<string,string>)["X-Integration-System"],"learning-platform");
+    return Response.json({success:true,data:{class:{id:`common-${f.suffix}`,date:"2099-01-01T00:00:00.000Z",startTime:"11:00",endTime:"12:00",teacherId:f.stranger.crmTeacherId,roomId:"room"},alreadyBooked:bookingCalls>1,platformConfirmed:false}});
+  });
+  const slot={date:"2099-01-01",startTime:"11:00",endTime:"12:00",teacherId:f.stranger.crmTeacherId!,roomId:"room"};
+  const booked=await programs.scheduleExamSession(f.teacher.id,session.id,slot);
+  assert.equal(booked.scheduledAt.toISOString(),"2099-01-01T06:00:00.000Z");
+  const noticesBefore=await f.prisma.userNotification.count({where:{userId:{in:participants.map(p=>p.student.id)}}});
+  assert.equal((await programs.scheduleExamSession(f.teacher.id,session.id,slot)).alreadyBooked,true);
+  assert.equal(await f.prisma.userNotification.count({where:{userId:{in:participants.map(p=>p.student.id)}}}),noticesBefore,"retry does not duplicate pupil invitations");
+  assert.equal((await exams.listTeacherStudentSectorExams(f.teacher.id,f.crmStudentId))[0]?.canStart,false);
+  const view=await exams.getExamSessionWorkspace(f.stranger.id,session.id);
+  assert.equal(view.participants.length,6);
+  assert.ok(view.participants.every(p=>p.canStart));
+  await assert.rejects(exams.getExamSessionWorkspace(f.teacher.id,session.id),error=>(error as {statusCode:number}).statusCode===403);
+  for(const person of view.participants){
+    assert.deepEqual(person.exam.items.map(item=>item.title),input.items.map(item=>item.title));
+    const own=participants.find(p=>p.crmStudentId===person.exam.crmStudentId)!;
+    const shown=await exams.getPersonalExam(own.student.id,person.exam.id);
+    assert.equal(shown.exam.sessionTitle,input.title);
+    assert.equal(shown.exam.items.length,2);
+    const foreign=participants.find(p=>p.student.id!==own.student.id)!;
+    await assert.rejects(exams.getPersonalExam(foreign.student.id,person.exam.id),error=>(error as {statusCode:number}).statusCode===404);
+    const started=await exams.startSectorExam(f.stranger.id,person.exam.id);
+    for(const item of started.items) await exams.markSectorExamItem(f.stranger.id,started.id,item.id,true);
+    const finished=await exams.finishSectorExam(f.stranger.id,started.id,{decision:"close_sector"});
+    assert.equal(finished.exam.outcome,"passed"); assert.ok(finished.exam.certificate); assert.equal(finished.awardedPoints,250);
+    assert.equal((await exams.finishSectorExam(f.stranger.id,started.id,{decision:"close_sector"})).awardedPoints,0);
+    const {getSectorCertificate}=await import("./sector-certificate.service.js");
+    assert.equal((await getSectorCertificate(f.stranger.id,started.id)).programTitle,input.title);
+  }
+  assert.equal((await f.prisma.learningTopic.findMany({where:{directionId},select:{progressPercent:true}})).every(topic=>topic.progressPercent===0),true,"exam marks do not overwrite sector material mastery");
+  assert.equal((await exams.getExamSessionWorkspace(f.stranger.id,session.id)).participants.filter(p=>p.exam.status==="completed").length,6);
+});
+
+integrationTest("a saved draft roster may add and remove pupils without changing its saved tasks or allowing stale edits",async t=>{
+  const f=await createFixture(t); const second=await f.addStudent();
+  const programs=await import("./sector-exam-program.service.js");
+  const directionId=(await f.prisma.learningPlan.findUniqueOrThrow({where:{id:f.planId}})).directionId;
+  const input={directionId,sectorNumber:1,title:"Состав",durationMinutes:15,items:[{title:"Старая программа",criteria:"Критерий"}]};
+  const program=await programs.saveExamProgram(f.teacher.id,input);
+  const session=await programs.createExamSession(f.teacher.id,{programId:program.id,programRevision:1,title:input.title,planIds:[f.planId],requestKey:randomUUID()});
+  await programs.saveExamProgram(f.teacher.id,{...input,items:[{title:"Новая программа",criteria:"Другой"}]},program.id,1);
+  const changed=await programs.updateExamSessionParticipants(f.teacher.id,session.id,{planIds:[f.planId,second.planId],expectedExamIds:session.exams.map(e=>e.id)});
+  assert.equal(changed.exams.length,2);
+  const added=await f.prisma.sectorExam.findUniqueOrThrow({where:{id:changed.exams.find(e=>e.planId===second.planId)!.id},include:{items:true}});
+  assert.equal(added.items[0]?.title,"Старая программа");
+  await assert.rejects(programs.updateExamSessionParticipants(f.teacher.id,session.id,{planIds:[second.planId],expectedExamIds:session.exams.map(e=>e.id)}),rejectsWith("EXAM_SESSION_ROSTER_STALE"));
+  const removed=await programs.updateExamSessionParticipants(f.teacher.id,session.id,{planIds:[second.planId],expectedExamIds:changed.exams.map(e=>e.id)});
+  assert.equal(removed.exams.length,1);
+  assert.equal((await f.prisma.sectorExam.findUniqueOrThrow({where:{id:session.exams[0]!.id}})).status,"cancelled");
 });

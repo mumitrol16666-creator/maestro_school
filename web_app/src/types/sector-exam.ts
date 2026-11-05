@@ -12,6 +12,9 @@ export type SectorExamItem = {
 };
 
 export type SectorExam = {
+  sessionId?: string | null;
+  sessionTitle?: string | null;
+  programTitle?: string | null;
   id: string;
   planId: string;
   crmStudentId: string;
@@ -113,4 +116,11 @@ export type PublicSectorExam = {
   outcome: SectorExamOutcome | null;
   certificate: { number: string; issuedAt: string | null } | null;
   items: Array<{ id: string; title: string; criteria: string; done: boolean | null }>;
+};
+
+export type ExamSessionWorkspace = {
+  id: string;
+  title: string;
+  program: { title: string; sectorNumber: number; durationMinutes: number; items: Array<{ title: string; criteria: string }> };
+  participants: Array<{ studentName: string; ready: boolean; canConduct: boolean; canStart: boolean; exam: SectorExam }>;
 };

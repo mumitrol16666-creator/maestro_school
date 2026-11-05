@@ -3,7 +3,7 @@ import { prisma } from "../../infrastructure/database/prisma.js";
 import { ForbiddenError, NotFoundError, ConflictError } from "../../domain/errors.js";
 import { isOfflineCoordinatorRole } from "../../domain/cms-access.js";
 import { getParentVisibility } from "./parent-visibility.service.js";
-import { listTeacherStudentSectorExams } from "./sector-exam.service.js";
+import { getPersonalExam } from "./sector-exam.service.js";
 
 const snapshotSchema = z.object({
   studentName: z.string().min(1), direction: z.string().min(1), sectorNumber: z.number().int().positive(),
@@ -28,7 +28,7 @@ export async function getSectorCertificate(actorUserId: string, examId: string) 
     if (!link) throw new NotFoundError("Сертификат");
     if (!(await getParentVisibility(link.studentUserId)).showPlanProgress) throw new ForbiddenError("Учебные результаты скрыты настройками семейного доступа");
   } else if (role === "teacher") {
-    await listTeacherStudentSectorExams(actor.id, exam.crmStudentId);
+    await getPersonalExam(actor.id, exam.id);
   } else if (!isOfflineCoordinatorRole(role)) {
     throw new ForbiddenError("Сертификат недоступен");
   }
