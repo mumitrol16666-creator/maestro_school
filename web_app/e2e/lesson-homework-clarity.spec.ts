@@ -14,6 +14,8 @@ test("before the lesson separates the assignment from previous checks and opens 
       recentHomework: [
         { recipientId: "reviewed-1", topicTitle: topic.title, directionTitle: direction.title, instructions: "Сыграть куплет", assignedAt: "2026-10-07T05:00:00Z", state: "accepted", decision: "accepted", completionPercent: 75, comment: null, reviewedAt: "2026-10-31T05:00:00Z" },
         { recipientId: "unreviewed-2", topicTitle: "Ещё не проверенное задание", assignedAt: "2026-11-05T05:00:00Z", state: "assigned", decision: null, completionPercent: null, reviewedAt: null },
+        { recipientId: "revision-3", topicTitle: "Ритм", directionTitle: direction.title, assignedAt: "2026-10-07T05:00:00Z", state: "revision", decision: "revision", completionPercent: null, reviewedAt: "2026-10-30T05:00:00Z" },
+        { recipientId: "incomplete-4", topicTitle: "Бой", directionTitle: direction.title, assignedAt: "2026-10-07T05:00:00Z", state: "not_completed", decision: "not_completed", completionPercent: null, reviewedAt: "2026-10-29T05:00:00Z" },
       ],
     }], rewardPreview: [],
   } };
@@ -40,6 +42,8 @@ test("before the lesson separates the assignment from previous checks and opens 
   await expect(history).toContainText("Последние проверки ДЗ");
   await expect(history).toContainText("Результат сохранён 31 окт.");
   await expect(history).toContainText("Выполнено: 75%");
+  await expect(history.getByText("На доработку", { exact: true })).toBeVisible();
+  await expect(history.getByText("Не выполнено", { exact: true })).toBeVisible();
   await expect(history).not.toContainText("ждёт урока");
   await expect(history).not.toContainText("Ещё не проверенное задание");
   await panel.screenshot({ path: testInfo.outputPath("homework-context.png") });

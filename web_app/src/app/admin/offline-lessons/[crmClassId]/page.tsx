@@ -1895,12 +1895,15 @@ export default function AdminOfflineLessonDetailPage() {
                               {item.directionTitle ? <span className="text-stone-500">· {item.directionTitle}</span> : null}
                               <span className="text-stone-500">Результат сохранён {new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short" }).format(new Date(item.reviewedAt!))}</span>
                               <span className={`rounded-md px-1.5 py-0.5 text-[11px] font-black ${
-                                item.completionPercent == null ? (item.decision ? "bg-emerald-50 text-emerald-800" : "bg-stone-200 text-stone-600")
+                                item.decision === "revision" ? "bg-amber-100 text-amber-900"
+                                  : item.decision === "not_completed" ? "bg-red-50 text-red-700"
+                                  : item.completionPercent == null ? "bg-emerald-50 text-emerald-800"
                                   : item.completionPercent >= 100 ? "bg-emerald-600 text-white"
                                   : item.completionPercent > 0 ? "bg-amber-100 text-amber-900" : "bg-red-50 text-red-700"
                               }`}>
                                 {item.completionPercent != null ? `Выполнено: ${item.completionPercent}%`
-                                  : item.decision === "revision" ? "На доработку" : "Принято"}
+                                  : item.decision === "revision" ? "На доработку"
+                                  : item.decision === "not_completed" ? "Не выполнено" : "Принято"}
                               </span>
                               {item.comment ? <span className="text-stone-500">· {item.comment}</span> : null}
                             </li>
