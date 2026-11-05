@@ -1,5 +1,7 @@
 # DEV-05: новая экономика Maestro
 
+> Историческая карта этапа: локальные статусы ниже не описывают текущую выкладку. Сверка действующей реализации: [баллы, секторы и экзамены](../learning-economy-core.md).
+
 Статус: `DEV-05A..DEV-05E DONE LOCALLY / DEV-07A..DEV-07D DONE / READY FOR DEV-07E`
 Назначение: исполняемая техническая карта Points, LEVEL, недельного XP, Coins, серии и достижений
 Основание: [01](./01-product-constitution.md), [03](./03-process-event-map.md), [04](./04-technical-change-map.md), [05](./05-development-prompt.md), [07](./07-local-e2e-acceptance-prompt.md)
