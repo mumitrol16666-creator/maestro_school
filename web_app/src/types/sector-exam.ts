@@ -53,6 +53,7 @@ export type AdminSectorExamRow = {
 };
 
 export type TeacherSectorExamRow = {
+  canMarkReady?: boolean;
   planId: string;
   sequence: number;
   direction: { id: string; title: string; crmDirectionId: string | null };

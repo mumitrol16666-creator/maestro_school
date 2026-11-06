@@ -10,6 +10,45 @@ for(const feature of ["LEARNING_TOPICS","HOMEWORK_FLOW","LESSON_SYNC","UNIFIED_L
 
 const integrationTest = process.env.RUN_DB_INTEGRATION_TESTS === "1" ? test : test.skip;
 
+integrationTest("card readiness is authorized, shared with the board, idempotent, and survives reversal of a different report", async t => {
+  const f = await createFixture(t);
+  const { markStudentSectorReady, listTeacherStudentSectorExams, listAdminSectorExamBoard } = await import("./sector-exam.service.js");
+  const { applyApprovedSectorReadiness, reverseSectorReadiness } = await import("./sector-readiness.service.js");
+  t.after(async () => { await f.prisma.auditLog.deleteMany({ where: { entityType: "learning_plan", entityId: f.planId } }); });
+  const before = await listTeacherStudentSectorExams(f.teacher.id, f.crmStudentId);
+  assert.equal(before[0].canMarkReady, true);
+  await assert.rejects(markStudentSectorReady(f.stranger.id, f.crmStudentId, f.planId));
+  await assert.rejects(markStudentSectorReady(f.teacher.id, "another-student", f.planId));
+  const results = await Promise.all([markStudentSectorReady(f.teacher.id, f.crmStudentId, f.planId), markStudentSectorReady(f.teacher.id, f.crmStudentId, f.planId)]);
+  assert.equal(results.filter(r => !r.idempotent).length, 1);
+  assert.equal(await f.prisma.learningSectorEvent.count({ where: { planId: f.planId, kind: "exam_ready" } }), 1);
+  assert.equal(await f.prisma.auditLog.count({ where: { entityId: f.planId, entityType: "learning_plan" } }), 1);
+  const cardAt = results[0].readyAt!;
+  const board = await listAdminSectorExamBoard();
+  assert.equal(board.sectors.find(row => row.planId === f.planId)?.progress.ready, true);
+  assert.equal(await f.prisma.pointsTransaction.count({ where: { studentId: f.student.id } }), 0);
+  assert.equal(await f.prisma.sectorExam.count({ where: { planId: f.planId } }), 0);
+  assert.equal((await listTeacherStudentSectorExams(f.teacher.id, f.crmStudentId))[0].canMarkReady, false);
+  const crmClassId = `ready-report-${f.suffix}`;
+  await applyApprovedSectorReadiness({ planIds: [f.planId], recipientCrmStudentIds: [f.crmStudentId], actorUserId: f.teacher.id, crmClassId, reportVersion: 1, eventAt: new Date(cardAt.getTime() - 60000) });
+  await f.prisma.$transaction(tx => reverseSectorReadiness(tx, crmClassId, 1, f.teacher.id, new Date()));
+  assert.equal((await f.prisma.learningPlan.findUniqueOrThrow({ where: { id: f.planId } })).examReadyAt?.toISOString(), cardAt.toISOString());
+});
+
+integrationTest("card readiness refuses unpublished, closed and unassigned-direction sectors", async t => {
+  const f = await createFixture(t);
+  const { markStudentSectorReady } = await import("./sector-exam.service.js");
+  await f.prisma.learningPlan.update({ where: { id: f.planId }, data: { publishedVersionNumber: null } });
+  await assert.rejects(markStudentSectorReady(f.teacher.id, f.crmStudentId, f.planId), (e: any) => e.code === "SECTOR_NOT_PUBLISHED");
+  await f.prisma.learningPlan.update({ where: { id: f.planId }, data: { publishedVersionNumber: 1, status: "closed" } });
+  await assert.rejects(markStudentSectorReady(f.teacher.id, f.crmStudentId, f.planId), (e: any) => e.code === "SECTOR_ALREADY_CLOSED");
+  await f.prisma.learningPlan.update({ where: { id: f.planId }, data: { status: "active" } });
+  const plan = await f.prisma.learningPlan.findUniqueOrThrow({ where: { id: f.planId } });
+  await f.prisma.direction.update({ where: { id: plan.directionId }, data: { crmDirectionId: `unassigned-${f.suffix}` } });
+  await assert.rejects(markStudentSectorReady(f.teacher.id, f.crmStudentId, f.planId));
+  assert.equal(await f.prisma.learningSectorEvent.count({ where: { planId: f.planId, kind: "exam_ready" } }), 0);
+});
+
 
 const rejectsWith = (code: string) => (error: { code?: string }) => {
   assert.equal(error.code, code);
