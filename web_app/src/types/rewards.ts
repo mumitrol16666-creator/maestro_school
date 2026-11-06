@@ -45,7 +45,7 @@ export interface RewardRedemption {
 export interface StudentRewardsOverview {
   points: number;
   coins: number;
-  rank: StudentRankOverview;
+  rank: StudentRankOverview | null;
   level: ProductLevelProgress | null;
   catalog: RewardCatalogItem[];
   redemptions: RewardRedemption[];

@@ -30,7 +30,7 @@ export interface StudentDashboardData {
   completedLessonsCount: number;
   totalLessonsCount: number;
   points: number;
-  rank: ReturnType<typeof getStudentRank>;
+  rank: ReturnType<typeof getStudentRank> | null;
   level: Awaited<ReturnType<typeof getStudentPointsReadModel>>["level"];
   nextAvailableLesson: {
     id: string;
@@ -55,7 +55,7 @@ export async function getStudentDashboard(studentId: string): Promise<StudentDas
       completedLessonsCount: 0,
       totalLessonsCount: 0,
       points: pointsOverview.points,
-      rank: getStudentRank(pointsOverview.points),
+      rank: pointsOverview.rank,
       level: pointsOverview.level,
       nextAvailableLesson: null,
     };
@@ -105,7 +105,7 @@ export async function getStudentDashboard(studentId: string): Promise<StudentDas
     completedLessonsCount,
     totalLessonsCount: orderedLessons.length,
     points: pointsOverview.points,
-    rank: getStudentRank(pointsOverview.points),
+    rank: pointsOverview.rank,
     level: pointsOverview.level,
     nextAvailableLesson,
   };

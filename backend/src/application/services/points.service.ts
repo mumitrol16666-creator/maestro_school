@@ -3,6 +3,8 @@ import { prisma } from "../../infrastructure/database/prisma.js";
 import { ConflictError } from "../../domain/errors.js";
 import { rewardEconomyV2AppliesToEvent } from "../../config/product-features.js";
 import { getProductLevel, rankProductPoints } from "../../domain/product-economy-v2.js";
+import { getStudentRank } from "../../domain/student-rank.js";
+import { studentPointsProgression } from "../../domain/student-points-progression.js";
 import { deliverUserNotification } from "./notification.service.js";
 import {
   ensureActiveEconomicEpochParticipant,
@@ -32,6 +34,7 @@ export type StudentPointsReadModel = {
   economicEpoch: { id: string; code: string; startsAt: Date } | null;
   points: number;
   level: ReturnType<typeof getProductLevel> | null;
+  rank: ReturnType<typeof getStudentRank> | null;
 };
 
 /** One current Points balance for all directions, isolated by economic epoch. */
@@ -48,7 +51,7 @@ export async function getStudentPointsReadModel(
       mode: "legacy",
       economicEpoch: null,
       points: legacy._sum.amount ?? 0,
-      level: null,
+      ...studentPointsProgression("legacy", legacy._sum.amount ?? 0),
     };
   }
 
@@ -73,7 +76,7 @@ export async function getStudentPointsReadModel(
       startsAt: economicEpoch.startsAt,
     },
     points,
-    level: getProductLevel(points),
+    ...studentPointsProgression("level", points),
   };
 }
 

@@ -4,7 +4,6 @@ import {
   offlineHomeworkStatus,
   selectOfflineHomeworks,
 } from "../../domain/offline-homework-selection.js";
-import { getStudentRank } from "../../domain/student-rank.js";
 import { prisma } from "../../infrastructure/database/prisma.js";
 import { aqtobeMonthKey } from "../../lib/aqtobe-month.js";
 import { getStudentDashboard } from "./student-dashboard.service.js";
@@ -140,7 +139,7 @@ async function getStudentHomeBase(studentUserId: string) {
     ? dashboardResult.value
     : {
         currentCourse: null, progressPercent: 0, completedLessonsCount: 0,
-        totalLessonsCount: 0, points: 0, rank: getStudentRank(0), level: null,
+        totalLessonsCount: 0, points: 0, rank: null, level: null,
         nextAvailableLesson: null,
       };
   if (schoolResult.status === "rejected") {

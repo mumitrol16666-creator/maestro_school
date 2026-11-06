@@ -1,7 +1,6 @@
 import { Prisma, type RewardRedemptionStatus } from "@prisma/client";
 import { prisma } from "../../infrastructure/database/prisma.js";
 import { BadRequestError, NotFoundError } from "../../domain/errors.js";
-import { getStudentRank } from "../../domain/student-rank.js";
 import {
   canTransitionRewardStatus,
   rewardStatusNeedsRefund,
@@ -89,7 +88,7 @@ export async function getStudentRewardsOverview(studentId: string) {
   return {
     points: pointsOverview.points,
     coins,
-    rank: getStudentRank(pointsOverview.points),
+    rank: pointsOverview.rank,
     level: pointsOverview.level,
     catalog,
     redemptions,

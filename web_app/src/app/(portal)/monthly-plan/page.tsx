@@ -2,23 +2,17 @@
 
 import {
   CheckCircle2,
-  Circle,
-  CircleDot,
-  ClipboardCheck,
   ExternalLink,
   History,
-  Lightbulb,
-  LoaderCircle,
-  Send,
   Users,
-  Target,
 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { ScreenError } from "@/components/app-error-screen";
 import { EmptyState } from "@/components/data-states";
 import { SectorStatistics } from "@/components/sector-statistics";
-import { ProgressBar } from "@/components/progress-bar";
+import { SectorProgressOverview } from "@/components/sector-progress-overview";
+import { SectorTopicList } from "@/components/sector-topic-list";
 import { ScreenSkeleton } from "@/components/screen-skeleton";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { api } from "@/lib/api-client";
@@ -32,13 +26,6 @@ import { materialsApi } from "@/lib/materials-api";
 import { formatOutOf } from "@/lib/plural";
 
 const TOPICS_GENITIVE = ["темы", "тем", "тем"] as const;
-
-const itemStatus = {
-  planned: { label: "Запланировано", icon: Circle, className: "text-stone-500" },
-  in_progress: { label: "В работе", icon: CircleDot, className: "text-amber-800" },
-  completed: { label: "Выполнено", icon: CheckCircle2, className: "text-emerald-700" },
-  moved: { label: "Заменена", icon: Circle, className: "text-stone-400" },
-} as const;
 
 
 function formatDate(value: string | null | undefined, withTime = false) {
@@ -73,7 +60,6 @@ export default function SectorPage() {
   const plans = resource.data?.plans ?? [];
   const active = plans.filter((plan) => plan.status !== "closed");
   const closed = plans.filter((plan) => plan.status === "closed");
-  const aggregateProgress = resource.data?.aggregateProgress ?? { completed: 0, total: 0, percent: 0 };
   const directions = sectorProposalDirections(active);
 
   return (
@@ -81,22 +67,11 @@ export default function SectorPage() {
       <header className="flex flex-wrap items-end justify-between gap-5 border-b border-stone-200 pb-6">
         <div>
           <p className="text-xs font-black uppercase tracking-[0.18em] text-gold-ink">Учебный маршрут</p>
-          <h1 className="font-display mt-2 text-4xl leading-tight sm:text-5xl">
+          <h1 className="font-display mt-2 text-3xl leading-tight sm:text-4xl">
             {active.length === 1 ? sectorTitle(active[0]!, "student") : active.length > 1 ? "Мои сектора" : "Мой сектор"}
           </h1>
         </div>
         <div className="min-w-[220px] max-w-sm flex-1 sm:flex-none">
-          {resource.data && active.length ? (
-            <>
-              <div className="flex items-end justify-between gap-4">
-                <span className="text-sm font-bold text-stone-600">
-                  {formatOutOf(aggregateProgress.completed, aggregateProgress.total, TOPICS_GENITIVE)} закрыто
-                </span>
-                <strong className="text-2xl text-ink">{aggregateProgress.percent}%</strong>
-              </div>
-              <div className="mt-3"><ProgressBar value={aggregateProgress.percent} /></div>
-            </>
-          ) : null}
           <button
             type="button"
             onClick={() => setShowHistory((value) => !value)}
@@ -106,8 +81,6 @@ export default function SectorPage() {
           </button>
         </div>
       </header>
-
-      <SectorStatistics endpoint="/students/me/sector-statistics" />
 
       {resource.loading && !resource.data ? (
         <div className="mt-7"><ScreenSkeleton variant="section" label="Открываем сектор" /></div>
@@ -134,6 +107,8 @@ export default function SectorPage() {
           {active.map((plan) => <SectorDetails key={plan.id} plan={plan} />)}
         </div>
       )}
+
+      <SectorStatistics endpoint="/students/me/sector-statistics" />
 
       {showHistory && (resource.data || !resource.error) ? (
         <section className="mt-8">
@@ -203,18 +178,9 @@ function SectorDetails({ plan }: { plan: StudentHomeMonthlyPlan }) {
             {plan.teacher.name || "Преподаватель Maestro"}
           </p>
         </div>
-        <span className="inline-flex items-center gap-2 text-sm font-black text-amber-900">
-          <Target size={17} /> {plan.progress.percent}%
-        </span>
       </div>
 
-      <div className="mt-5">
-        <ProgressBar value={plan.progress.percent} />
-        <p className="mt-2 text-xs font-semibold text-stone-500">
-          Закрыто {formatOutOf(plan.progress.completed, plan.progress.total, TOPICS_GENITIVE)}
-          {plan.progress.inProgress ? `, в работе ${plan.progress.inProgress}` : ""}
-        </p>
-      </div>
+      <SectorProgressOverview plan={plan} />
 
       <GroupSectorPassBadge pass={plan.memberPass} />
       <SectorExamSummary exam={plan.exam} />
@@ -226,32 +192,7 @@ function SectorDetails({ plan }: { plan: StudentHomeMonthlyPlan }) {
         </div>
       ) : null}
 
-      <div className="mt-6 divide-y divide-stone-100 border-y border-stone-100">
-        {plan.items.map((item) => {
-          const status = itemStatus[item.status] ?? itemStatus.planned;
-          const Icon = status.icon;
-          const transferred = item.state === "transferred" || item.state === "replaced";
-          return (
-            <div key={item.id} className={`flex items-start gap-3 py-4 ${transferred ? "opacity-60" : ""}`}>
-              <Icon size={20} className={`mt-0.5 shrink-0 ${status.className}`} aria-hidden="true" />
-              <div className="min-w-0 flex-1">
-                <p className="break-words text-sm font-bold leading-6 text-stone-800">{item.title}</p>
-                {item.masteryCriteria ? (
-                  <p className="mt-1 break-words text-xs leading-5 text-stone-500">{item.masteryCriteria}</p>
-                ) : null}
-              </div>
-              <div className="shrink-0 text-right">
-                {typeof item.progressPercent === "number" ? (
-                  <strong className={`block text-sm ${status.className}`}>{item.progressPercent}%</strong>
-                ) : null}
-                <span className={`text-xs font-bold ${status.className}`}>
-                  {transferred ? "Заменена" : status.label}
-                </span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      <SectorTopicList items={plan.items} />
 
       {plan.materials?.length ? (
         <div className="mt-6">

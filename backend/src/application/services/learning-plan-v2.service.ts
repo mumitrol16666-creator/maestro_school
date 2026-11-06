@@ -1129,8 +1129,8 @@ async function applyTopicMasteryRewards(params: {
     });
   }
 
-  // Plan 1.13: no sector closes on a lesson any more. An individual sector closes after its
-  // exam (1.10); a group's sector closes by its teacher, and its 250 goes to members who passed.
+  // Topic mastery never closes a sector. Every pupil, including quartet members,
+  // receives the sector reward only after passing their personal session exam.
 }
 
 export type LearningTopicProgressFromLessonV2Input = {

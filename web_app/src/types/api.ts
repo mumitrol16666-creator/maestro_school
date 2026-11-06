@@ -197,7 +197,7 @@ export interface ApiDashboard {
   completedLessonsCount: number;
   totalLessonsCount: number;
   points: number;
-  rank: StudentRankOverview;
+  rank: StudentRankOverview | null;
   level: ProductLevelProgress | null;
   nextAvailableLesson: {
     id: string;
