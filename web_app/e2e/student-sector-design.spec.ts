@@ -29,8 +29,8 @@ test("sector materials are readable without presenting their percentage as exam 
   }
   const chart = page.getByTestId("sector-progress-overview");
   await expect(chart).toContainText("6 из 22");
-  await expect(chart).toContainText("Освоено тем");
-  await expect(chart).toContainText("Готовность к экзамену определяет преподаватель");
+  await expect(chart).toContainText("пунктов освоено");
+  await expect(page.getByText("Твой учебный маршрут", { exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "В работе · 8", exact: true }).click();
   await expect(page.getByTestId("sector-topic")).toHaveCount(8);
   await page.getByTestId("sector-topic").first().getByText("Критерий освоения", { exact: true }).click();
@@ -44,7 +44,21 @@ test("sector materials are readable without presenting their percentage as exam 
   await page.getByRole("button", { name: "Скрыть закрытые секторы", exact: true }).click();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.reload();
-  await expect(page.getByTestId("sector-topic")).toHaveCount(8);
+  await expect(page.getByTestId("sector-topic")).toHaveCount(22);
   await page.screenshot({ path: `/Library/Project/Maestro/output/sector-design-2026-11-06/after-${info.project.name}.png`, fullPage: true });
   await page.screenshot({ path: `/Library/Project/Maestro/output/sector-design-2026-11-06/preview-${info.project.name}.png` });
+  const compact = { ...plan, goal: "Переход пауэр-аккордов", expectedResult: "", items: [
+    { ...items[0], title: "Переход пауэр-аккордов", status: "planned", progressPercent: 0 },
+    { ...items[1], title: "Power chords", status: "planned", progressPercent: 0 },
+    { ...items[2], title: "1 модуль — 3 упражнения", status: "completed", progressPercent: 100 },
+    { ...items[3], title: "2 модуль", status: "in_progress", progressPercent: 50 },
+    { ...items[4], title: "Seven Nation Army", status: "planned", progressPercent: 0 },
+  ], progress: { completed: 1, inProgress: 1, total: 5, percent: 20 } };
+  await page.route("**/api/v1/students/me/monthly-plans**", route => route.fulfill({ json: { data: { plans: [compact], aggregateProgress: compact.progress } } }));
+  await page.reload();
+  await expect(page.getByTestId("sector-topic")).toHaveCount(5);
+  await expect(chart).toContainText("1 из 5");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  if (info.project.name === "chromium") await page.setViewportSize({ width: 1280, height: 1000 });
+  await page.screenshot({ path: `/Library/Project/Maestro/output/sector-design-2026-11-06/compact-${info.project.name}.png`, fullPage: true });
 });
