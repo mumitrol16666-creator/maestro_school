@@ -32,7 +32,7 @@ export function StudentTodayCard({ today, streakWeeks, practice = null, schedule
   return (
     <section className="rounded-[24px] border border-white/10 bg-charcoal p-5 text-white shadow-soft sm:p-6" data-testid="student-today">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs font-black uppercase tracking-wide text-gold-ink">Сегодня</p>
+        <p className="text-xs font-black uppercase tracking-wide text-gold-ink">{lesson ? lesson.status === "started" ? "Урок идёт" : lesson.isToday ? "Сегодняшний урок" : "Следующий урок" : "Сегодня"}</p>
         {streakWeeks ? (
           <span className="inline-flex items-center gap-1 rounded-md bg-orange-400/20 px-2 py-0.5 text-xs font-black text-orange-100" data-testid="today-streak">
             <Flame size={12} /> {formatCount(streakWeeks, ["неделя", "недели", "недель"])} подряд
@@ -70,7 +70,7 @@ export function StudentTodayCard({ today, streakWeeks, practice = null, schedule
       <div className="mt-4 rounded-2xl bg-white/[0.06] p-4" data-testid="today-tasks">
         {first ? (
           <>
-            <p className="text-xs font-black uppercase tracking-wide text-white/60">{lesson ? "К уроку" : "Задание"}</p>
+            <p className="text-xs font-black uppercase tracking-wide text-white/60">{lesson ? lesson.isToday ? "К сегодняшнему уроку" : "К следующему уроку" : "Задание"}</p>
             <p className="mt-1 break-words text-base font-bold">{first.title}</p>
             {first.descriptionPreview ? <p className="mt-1 line-clamp-2 text-sm text-white/70">{first.descriptionPreview}</p> : null}
             {rest.length || today.tasksTotal > today.tasks.length ? (
