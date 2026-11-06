@@ -173,7 +173,7 @@ function SectorDetails({ plan }: { plan: StudentHomeMonthlyPlan }) {
             <span>{sectorTitle(plan, "student")}</span>
             {plan.direction?.title ? <span className="text-amber-800">{plan.direction.title}</span> : null}
           </div>
-          <h2 className="font-display mt-2 break-words text-3xl leading-tight text-ink">{plan.goal}</h2>
+          <h2 className="font-display mt-2 break-words text-2xl leading-tight text-ink sm:text-3xl">{plan.goal}</h2>
           <p className="mt-2 text-sm font-semibold text-stone-500">
             {plan.teacher.name || "Преподаватель Maestro"}
           </p>
