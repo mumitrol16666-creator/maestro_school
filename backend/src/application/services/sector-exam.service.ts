@@ -1,4 +1,6 @@
 import { assertExamReadiness } from "./exam-admission.js";
+import { requireCrmDirection } from "./crm-direction-projection.service.js";
+import { recordCardSectorReadiness } from "./sector-readiness.service.js";
 import { Prisma, type SectorExamStatus } from "@prisma/client";
 import { prisma } from "../../infrastructure/database/prisma.js";
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from "../../domain/errors.js";
@@ -353,9 +355,19 @@ async function applyLessonEventToExam(exam: ExamRow, input: {
 async function requireTeacherStudent(teacherUserId: string, crmStudentId: string) {
   const crmTeacherId = await requireCrmTeacherId(teacherUserId);
   const roster = await fetchTeacherStudentsForAccess(crmTeacherId, { need: crmStudentId });
-  if (!roster.students.some((student) => student.crmStudentId === crmStudentId)) {
+  const student = roster.students.find(student => student.crmStudentId === crmStudentId);
+  if (!student) {
     throw new ForbiddenError("Ученик не закреплён за вами");
   }
+  return student;
+}
+
+export async function markStudentSectorReady(teacherUserId: string, crmStudentId: string, planId: string) {
+  const student = await requireTeacherStudent(teacherUserId, crmStudentId);
+  const plan = await prisma.learningPlan.findFirst({ where: { id: planId, crmStudentId, crmGroupId: null }, include: { direction: true } });
+  if (!plan || !plan.direction.crmDirectionId) throw new NotFoundError("Личный сектор ученика");
+  await requireCrmDirection(plan.direction.crmDirectionId, student.directions);
+  return recordCardSectorReadiness({ planId, crmStudentId, directionId: plan.directionId, actorUserId: teacherUserId });
 }
 
 async function requireTeacherExam(teacherUserId: string, examId: string) {
@@ -368,7 +380,7 @@ async function requireTeacherExam(teacherUserId: string, examId: string) {
 
 /** The student's open sectors with the exam for each: what the teacher may do with it now. */
 export async function listTeacherStudentSectorExams(teacherUserId: string, crmStudentId: string) {
-  await requireTeacherStudent(teacherUserId, crmStudentId);
+  const student = await requireTeacherStudent(teacherUserId, crmStudentId);
   const teacherId = await requireCrmTeacherId(teacherUserId);
   const plans = await prisma.learningPlan.findMany({
     where: { crmStudentId, crmGroupId: null, status: { in: ["active", "awaiting_exam"] }, publishedVersionNumber: { not: null } },
@@ -380,11 +392,16 @@ export async function listTeacherStudentSectorExams(teacherUserId: string, crmSt
     include: examInclude,
     orderBy: [{ attempt: "desc" }, { createdAt: "desc" }],
   });
-  return plans.map((plan) => {
+  return Promise.all(plans.map(async (plan) => {
     const progress = sectorProgress(plan);
     const planExams = exams.filter((exam) => exam.planId === plan.id);
     const exam = planExams[0] ?? null;
     const previous = exam?.previousExamId ? planExams.find((item) => item.id === exam.previousExamId) ?? null : null;
+    let canMarkReady = false;
+    if (!progress.ready && plan.direction.crmDirectionId) {
+      try { await requireCrmDirection(plan.direction.crmDirectionId, student.directions); canMarkReady = true; }
+      catch (error) { if (!(error instanceof BadRequestError || error instanceof ConflictError)) throw error; }
+    }
     return {
       planId: plan.id,
       sequence: plan.templateStep?.number ?? plan.sequence,
@@ -392,9 +409,10 @@ export async function listTeacherStudentSectorExams(teacherUserId: string, crmSt
       progress,
       exam: exam && exam.status !== "draft" ? examDto(exam) : null,
       previousExam: previous ? examDto(previous) : null,
+      canMarkReady,
       canStart: Boolean(exam && exam.crmTeacherId === teacherId && exam.status === "scheduled" && progress.ready),
     };
-  });
+  }));
 }
 
 export async function startSectorExam(teacherUserId: string, examId: string, now = new Date()) {

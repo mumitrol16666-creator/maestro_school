@@ -1,8 +1,39 @@
 import type { Prisma } from "@prisma/client";
 import { upsertAdminJournalEntry } from "./admin-journal.service.js";
 import { prisma } from "../../infrastructure/database/prisma.js";
+import { assertPersonalExamPlan } from "./exam-admission.js";
+import { ConflictError } from "../../domain/errors.js";
 
-/** Readiness is a teacher's decision in an immutable CRM-approved report, never a percentage. */
+/** Both the approved report and the pupil card write the same readiness observations. */
+async function recordReadiness(tx: Prisma.TransactionClient, plan: { id: string; examReadyAt: Date | null }, input: {
+  actorUserId: string; eventAt: Date; sourceKey: string; crmClassId: string | null; source: string;
+}) {
+  if (await tx.learningSectorEvent.findUnique({ where: { sourceKey: input.sourceKey } })) return false;
+  if (!plan.examReadyAt || input.eventAt < plan.examReadyAt) {
+    await tx.learningPlan.update({ where: { id: plan.id }, data: { examReadyAt: input.eventAt, examReadyById: input.actorUserId } });
+  }
+  await tx.learningSectorEvent.create({ data: { planId: plan.id, kind: "exam_ready", actorUserId: input.actorUserId,
+    sourceKey: input.sourceKey, crmClassId: input.crmClassId, occurredAt: input.eventAt, details: { source: input.source } } });
+  return true;
+}
+
+/** Called only after roster/direction authorization; the transaction rechecks the actual owner. */
+export async function recordCardSectorReadiness(input: { planId: string; crmStudentId: string; directionId: string; actorUserId: string }) {
+  return prisma.$transaction(async tx => {
+    await tx.$queryRaw`SELECT id FROM learning_plans WHERE id=${input.planId}::uuid FOR UPDATE`;
+    const plan = await tx.learningPlan.findUniqueOrThrow({ where: { id: input.planId } });
+    assertPersonalExamPlan(plan, input.crmStudentId);
+    if (plan.directionId !== input.directionId) throw new ConflictError("Направление сектора изменилось. Обновите карточку.", "SECTOR_DIRECTION_CHANGED");
+    const changed = await recordReadiness(tx, plan, { actorUserId: input.actorUserId, eventAt: new Date(),
+      sourceKey: `sector-ready:${plan.id}:student-card`, crmClassId: null, source: "student_card" });
+    if (changed) await tx.auditLog.create({ data: { entityType: "learning_plan", entityId: plan.id, action: "update", actorId: input.actorUserId,
+      payload: { event: "exam_ready", source: "student_card", crmStudentId: input.crmStudentId } } });
+    const current = await tx.learningPlan.findUniqueOrThrow({ where: { id: plan.id } });
+    return { planId: plan.id, ready: true, readyAt: current.examReadyAt, idempotent: !changed };
+  });
+}
+
+/** Lesson-origin readiness becomes effective with the immutable CRM-approved report. */
 export async function applyApprovedSectorReadiness(input: {
   planIds: readonly string[];
   recipientCrmStudentIds: readonly string[];
@@ -25,15 +56,8 @@ export async function applyApprovedSectorReadiness(input: {
       const receipt = await tx.learningSectorEvent.findUnique({ where: { sourceKey } });
       if (receipt) { applied.push(planId); continue; }
       if (plan.status === "closed") { skipped.push(planId); continue; }
-      if (!plan.examReadyAt || input.eventAt < plan.examReadyAt) {
-        await tx.learningPlan.update({ where: { id: planId }, data: {
-          examReadyAt: input.eventAt, examReadyById: input.actorUserId,
-        } });
-      }
-      await tx.learningSectorEvent.create({ data: {
-        planId, kind: "exam_ready", actorUserId: input.actorUserId,
-        sourceKey, crmClassId: input.crmClassId, occurredAt: input.eventAt,
-      } });
+      await recordReadiness(tx, plan, { actorUserId: input.actorUserId, eventAt: input.eventAt,
+        sourceKey, crmClassId: input.crmClassId, source: "approved_report" });
       applied.push(planId);
     }
     return { applied, skipped };

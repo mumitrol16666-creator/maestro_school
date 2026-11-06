@@ -61,6 +61,7 @@ dbtest("new exam routes enforce current roles even when a student or parent has 
   const created=await app.inject({method:"POST",url:"/admin/exam-programs",payload,headers:admin});
   assert.equal(created.statusCode,200,created.body);
   for(const headers of [admin,student,parent]) assert.equal((await app.inject({method:"POST",url:`/teachers/me/students/s1/sectors/${randomUUID()}/next`,headers,payload:{crmDirectionId:direction.crmDirectionId,expectedVersion:1}})).statusCode,403);
+  for(const headers of [admin,student,parent]) assert.equal((await app.inject({method:"POST",url:`/teachers/me/students/s1/sectors/${randomUUID()}/exam-readiness`,headers,payload:{}})).statusCode,403);
   assert.equal((await app.inject({method:"GET",url:"/students/me/sector-statistics",headers:student})).statusCode,200);
   assert.equal((await app.inject({method:"GET",url:"/students/me/sector-statistics",headers:parent})).statusCode,403);
   assert.equal((await app.inject({method:"GET",url:`/parents/me/children/${randomUUID()}/sector-statistics`,headers:parent})).statusCode,404);

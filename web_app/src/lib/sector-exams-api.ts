@@ -3,6 +3,8 @@ import type { AdminSectorExamRow, SectorExam, TeacherSectorExamRow } from "@/typ
 
 /** Plan 1.10: the sector exam. Held live at the school; the platform keeps the list and the marks. */
 export const sectorExamsApi = {
+  markReady: (crmStudentId: string, planId: string) => apiRequest<{ ready: boolean; readyAt: string; idempotent: boolean }>(
+    `/teachers/me/students/${encodeURIComponent(crmStudentId)}/sectors/${encodeURIComponent(planId)}/exam-readiness`, { method: "POST", body: JSON.stringify({}) }),
   board: () => apiRequest<{ generatedAt: string; sectors: AdminSectorExamRow[] }>("/admin/sector-exams"),
   forStudent: (crmStudentId: string) =>
     apiRequest<TeacherSectorExamRow[]>(`/teachers/me/students/${encodeURIComponent(crmStudentId)}/sector-exams`),

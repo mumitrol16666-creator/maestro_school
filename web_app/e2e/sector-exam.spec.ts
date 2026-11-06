@@ -6,6 +6,27 @@ import { expect, test, type BrowserContext, type Page } from "@playwright/test";
  */
 
 const PASSWORD = "QaMaestro2026!";
+
+for (const fail of [false, true]) test(`teacher marks readiness from the student card (${fail ? "error" : "success"})`, async ({page,context}) => {
+  await mockTeacher(context,page);
+  let ready=false, writes=0;
+  const planId="22222222-2222-4222-8222-222222222222";
+  await page.route("**/api/v1/teachers/me/students/QA-STUDENT-1/sector-exams", route=>route.fulfill({json:{data:[{
+    planId,sequence:1,direction:{id:"d",title:"Гитара",crmDirectionId:"QA-DIRECTION-GUITAR"},
+    progress:{completed:0,total:3,percent:0,ready},exam:null,previousExam:null,canStart:false,canMarkReady:!ready,
+  }]}}));
+  await page.route(`**/api/v1/teachers/me/students/QA-STUDENT-1/sectors/${planId}/exam-readiness`, route=>{
+    writes++;expect(route.request().method()).toBe("POST");
+    if(fail)return route.fulfill({status:403,json:{error:{code:"FORBIDDEN",message:"Доступ к ученику изменился"}}});
+    ready=true;return route.fulfill({json:{data:{ready:true,readyAt:"2026-11-06T04:00:00Z",idempotent:false}}});
+  });
+  await page.goto("/admin/my-students/student/QA-STUDENT-1");
+  const panel=page.getByTestId("sector-exam-panel");
+  await panel.getByRole("button",{name:"Отметить готовность к экзамену",exact:true}).click();
+  expect(writes).toBe(1);
+  if(fail){await expect(panel.getByRole("alert")).toContainText("Доступ к ученику изменился");await expect(panel.getByRole("button",{name:"Отметить готовность к экзамену",exact:true})).toBeEnabled();}
+  else {await expect(panel).toContainText("Готовность подтверждена");await expect(panel.getByRole("button",{name:"Отметить готовность к экзамену",exact:true})).toHaveCount(0);}
+});
 const teacher = { id: "00000000-0000-4000-8000-000000000011", firstName: "Учитель", lastName: "QA", role: "teacher", permissions: ["offline_school.read", "offline_school.write"] };
 
 function examFixture(done: Array<boolean | null>) {

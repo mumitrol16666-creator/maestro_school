@@ -23,6 +23,7 @@ import {
   listTeacherStudentSectorExams,
   markSectorExamItem,
   startSectorExam,
+  markStudentSectorReady,
 } from "../../application/services/sector-exam.service.js";
 
 /** The session builder is the only preparation and assignment flow. */
@@ -129,6 +130,11 @@ export async function sectorExamRoutes(app: FastifyInstance) {
   app.post("/teachers/me/sector-exams/:examId/start", { preHandler: teacherWrite }, async (request) => {
     const { examId } = examParams.parse(request.params);
     return { data: await startSectorExam(request.user!.id, examId) };
+  });
+
+  app.post("/teachers/me/students/:crmStudentId/sectors/:planId/exam-readiness", { preHandler: teacherWrite }, async request => {
+    const { crmStudentId, planId } = z.object({ crmStudentId: z.string().min(1).max(128), planId: z.string().uuid() }).parse(request.params);
+    return { data: await markStudentSectorReady(request.user!.id, crmStudentId, planId) };
   });
 
   app.put("/teachers/me/sector-exams/:examId/items/:itemId", { preHandler: teacherWrite }, async (request) => {
