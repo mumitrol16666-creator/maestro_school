@@ -266,6 +266,8 @@ export type LearningLessonV2Context = {
   plans: Array<{
     planId: string;
     sequence?: number;
+    /** 07.11: a direction has the current sector (active) and may have the previous one awaiting its exam. */
+    status?: "active" | "awaiting_exam";
     scope?: "student" | "group";
     ownerStudentId?: string | null;
     canEditTopics?: boolean;

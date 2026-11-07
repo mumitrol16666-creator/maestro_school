@@ -106,6 +106,7 @@ export type TeacherStudentWorkspace = {
     sectors: Array<{
       id: string;
       sequence: number;
+      status?: "active" | "awaiting_exam";
       scope: "student" | "group";
       direction: string;
       completed: number;

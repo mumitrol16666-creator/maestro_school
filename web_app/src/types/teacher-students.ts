@@ -219,6 +219,8 @@ export type StudentMonthlyPlanResponse = {
   month?: string;
   nextSequence?: number;
   plan: StudentMonthlyPlan | null;
+  /** 07.11: the previous sector, waiting for its exam while `plan` (the current one) is taught. */
+  awaitingExam?: StudentMonthlyPlan | null;
   history?: SectorHistoryEntry[];
 };
 
