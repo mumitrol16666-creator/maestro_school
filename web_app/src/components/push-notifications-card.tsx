@@ -12,6 +12,8 @@ import {
 } from "@/lib/push-notifications";
 import { toast } from "@/components/toast";
 import { errorToastText } from "@/lib/error-text";
+import { usePlatform } from "@/lib/platform";
+import { IosInstallSteps, OpenInSafariNote } from "@/components/pwa-install-card";
 
 export function PushNotificationsCard({
   audience = "default",
@@ -28,7 +30,9 @@ export function PushNotificationsCard({
   const [permission, setPermission] = useState<NotificationPermission | "unsupported">("default");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-
+  const platform = usePlatform();
+  // «toast» is the student app: it talks to the student as «ты» and has the install card just above,
+  // so here only a link to it is needed. The parent and admin screens say «вы» and carry the steps.
   const viaToast = confirm === "toast";
   function tell(text: string, toastText: string) {
     if (viaToast) toast.success(toastText);
@@ -125,9 +129,30 @@ export function PushNotificationsCard({
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold-ink">Уведомления</p>
             <h3 className="font-display mt-2 text-3xl">На этом устройстве</h3>
-            <p className="mt-3 text-sm leading-6 text-stone-500">
-              Чтобы получать сообщения об уроках и заданиях, откройте Maestro в браузере <strong>Chrome на телефоне Android</strong>.
-            </p>
+            {platform?.os === "ios" ? (
+              <>
+                <p className="mt-3 text-sm leading-6 text-stone-500">
+                  {platform.ipad ? "На iPad" : "На iPhone"} уведомления работают в приложении с экрана «Домой» (iOS 16.4 и новее).
+                </p>
+                {platform.installed ? (
+                  <p className="mt-3 text-sm leading-6 text-stone-500">
+                    {viaToast ? "Обнови iOS до 16.4 или новее." : "Обновите iOS до 16.4 или новее."}
+                  </p>
+                ) : viaToast ? (
+                  <a href="#pwa-install-card" className="mt-3 inline-flex min-h-11 items-center text-sm font-bold text-gold-ink underline">
+                    Как установить приложение — в карточке выше
+                  </a>
+                ) : platform.iosSafari ? (
+                  <IosInstallSteps tone="vy" ipad={platform.ipad} />
+                ) : (
+                  <OpenInSafariNote tone="vy" />
+                )}
+              </>
+            ) : (
+              <p className="mt-3 text-sm leading-6 text-stone-500">
+                {viaToast ? "Чтобы получать сообщения об уроках и заданиях, открой" : "Чтобы получать сообщения об уроках и заданиях, откройте"} Maestro в браузере <strong>Chrome на телефоне Android</strong>.
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -196,7 +221,9 @@ export function PushNotificationsCard({
             </div>
           ) : permission === "denied" ? (
             <p className="mt-4 text-sm leading-6 text-amber-800">
-              Уведомления запрещены в настройках браузера. Разрешите их для сайта Maestro — обычно это в меню ⋮ → «Настройки сайта» → «Уведомления».
+              {platform?.os === "ios"
+                ? `Уведомления запрещены. ${viaToast ? "Разреши" : "Разрешите"} их для Maestro: «Настройки» → «Уведомления» → Maestro.`
+                : `Уведомления запрещены в настройках браузера. ${viaToast ? "Разреши" : "Разрешите"} их для сайта Maestro — обычно это в меню ⋮ → «Настройки сайта» → «Уведомления».`}
             </p>
           ) : null}
 

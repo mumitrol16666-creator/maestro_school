@@ -1,9 +1,8 @@
 "use client";
 
-import { ArrowRight, CalendarDays, Flame, MonitorPlay, School } from "lucide-react";
+import { ArrowRight, CalendarDays, MonitorPlay, School } from "lucide-react";
 import Link from "next/link";
 import { PracticeCheckin } from "@/components/practice-checkin";
-import { formatCount } from "@/lib/plural";
 import type { ApiStudentHome } from "@/types/api";
 
 /**
@@ -19,7 +18,7 @@ function when(lesson: NonNullable<ApiStudentHome["today"]["nextLesson"]>) {
   return `${label.charAt(0).toUpperCase()}${label.slice(1)} в ${lesson.startTime}`;
 }
 
-export function StudentTodayCard({ today, streakWeeks, practice = null, scheduleIssue = null }: { today: ApiStudentHome["today"]; streakWeeks: number | null; practice?: ApiStudentHome["practice"]; scheduleIssue?: "unavailable" | "failed" | null }) {
+export function StudentTodayCard({ today, practice = null, scheduleIssue = null }: { today: ApiStudentHome["today"]; practice?: ApiStudentHome["practice"]; scheduleIssue?: "unavailable" | "failed" | null }) {
   const lesson = today.nextLesson;
   const [first, ...rest] = today.tasks;
   const LessonIcon = lesson?.deliveryFormat === "online" ? MonitorPlay : School;
@@ -30,28 +29,21 @@ export function StudentTodayCard({ today, streakWeeks, practice = null, schedule
       : { href: "/learning", label: "Открыть обучение" };
 
   return (
-    <section className="rounded-[24px] border border-white/10 bg-charcoal p-5 text-white shadow-soft sm:p-6" data-testid="student-today">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs font-black uppercase tracking-wide text-gold-ink">{lesson ? lesson.status === "started" ? "Урок идёт" : lesson.isToday ? "Сегодняшний урок" : "Следующий урок" : "Сегодня"}</p>
-        {streakWeeks ? (
-          <span className="inline-flex items-center gap-1 rounded-md bg-orange-400/20 px-2 py-0.5 text-xs font-black text-orange-100" data-testid="today-streak">
-            <Flame size={12} /> {formatCount(streakWeeks, ["неделя", "недели", "недель"])} подряд
-          </span>
-        ) : null}
-      </div>
+    <section className="rounded-[24px] border border-white/10 bg-charcoal p-4 text-white shadow-soft sm:p-6" data-testid="student-today">
+      <p className="text-xs font-black uppercase tracking-wide text-gold-ink">{lesson ? lesson.status === "started" ? "Урок идёт" : lesson.isToday ? "Сегодняшний урок" : "Следующий урок" : "Сегодня"}</p>
 
       {lesson ? (
-        <div className="mt-3 flex items-start gap-3" data-testid="today-lesson">
+        <div className="mt-2 flex items-start gap-3 sm:mt-3" data-testid="today-lesson">
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/10 text-gold-ink"><LessonIcon size={20} /></span>
           <div className="min-w-0">
             <h2 className="font-display text-2xl leading-tight sm:text-[28px]">{when(lesson)}</h2>
-            <p className="mt-1 text-sm text-white/70">
+            <p className="mt-1 line-clamp-2 text-sm text-white/70">
               {lesson.title}{lesson.teacherName ? ` · ${lesson.teacherName}` : ""}{lesson.roomName ? ` · ${lesson.roomName}` : ""}
             </p>
           </div>
         </div>
       ) : (
-        <div className="mt-3 flex items-start gap-3" data-testid="today-lesson">
+        <div className="mt-2 flex items-start gap-3 sm:mt-3" data-testid="today-lesson">
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/10 text-gold-ink"><CalendarDays size={20} /></span>
           <div>
             {/* В-18: the school read failed, so an empty schedule says nothing about lessons. */}
@@ -67,14 +59,14 @@ export function StudentTodayCard({ today, streakWeeks, practice = null, schedule
         </div>
       )}
 
-      <div className="mt-4 rounded-2xl bg-white/[0.06] p-4" data-testid="today-tasks">
+      <div className="mt-3 rounded-2xl bg-white/[0.06] p-3 sm:mt-4 sm:p-4" data-testid="today-tasks">
         {first ? (
           <>
             <p className="text-xs font-black uppercase tracking-wide text-white/60">{lesson ? lesson.isToday ? "К сегодняшнему уроку" : "К следующему уроку" : "Задание"}</p>
-            <p className="mt-1 break-words text-base font-bold">{first.title}</p>
-            {first.descriptionPreview ? <p className="mt-1 line-clamp-2 text-sm text-white/70">{first.descriptionPreview}</p> : null}
+            <p className="mt-1 line-clamp-2 break-words text-base font-bold">{first.title}</p>
+            {first.descriptionPreview ? <p className="mt-1 line-clamp-1 text-sm text-white/70 sm:line-clamp-2">{first.descriptionPreview}</p> : null}
             {rest.length || today.tasksTotal > today.tasks.length ? (
-              <p className="mt-2 text-xs text-white/60">
+              <p className="mt-2 line-clamp-1 text-xs text-white/60">
                 Ещё {today.tasksTotal - 1}: {rest.map((task) => task.title).join(", ")}{today.tasksTotal > today.tasks.length ? "…" : ""}
               </p>
             ) : null}
@@ -86,7 +78,7 @@ export function StudentTodayCard({ today, streakWeeks, practice = null, schedule
         )}
       </div>
 
-      <Link href={cta.href} className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-gold px-4 text-sm font-black text-ink transition hover:bg-amber-400 sm:w-auto" data-testid="today-cta">
+      <Link href={cta.href} className="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-gold px-4 text-sm font-black text-ink transition hover:bg-amber-400 sm:w-auto" data-testid="today-cta">
         {cta.label} <ArrowRight size={17} />
       </Link>
       <PracticeCheckin practice={practice} />

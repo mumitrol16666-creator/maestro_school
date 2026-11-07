@@ -11,7 +11,10 @@ import { assertCurrentSession } from "../../application/services/account-session
  */
 export async function authenticate(request: FastifyRequest): Promise<void> {
   try {
-    const payload = await request.jwtVerify<{ sub: string; iat: number; sessionVersion?: unknown; crmSessionVersion?: unknown }>();
+    const payload = await request.jwtVerify<{ sub: string; iat: number; purpose?: unknown; sessionVersion?: unknown; crmSessionVersion?: unknown }>();
+    // The CRM bridge token is signed with a secret that may equal JWT_SECRET and has no `sub`;
+    // it is a one-time exchange ticket, never a session.
+    if (typeof payload.sub !== "string" || !payload.sub || payload.purpose !== undefined) throw new UnauthorizedError();
     const user = await findUserWithRoleById(payload.sub);
     if (!user) throw new UnauthorizedError();
     const verifiedSession = await assertCurrentSession(user, payload);
@@ -21,6 +24,7 @@ export async function authenticate(request: FastifyRequest): Promise<void> {
       email: user.email,
       roleSlug: user.role.slug,
       permissions: user.role.rolePermissions.map((rp) => rp.permission.code),
+      sessionVersion: user.sessionVersion,
       ...verifiedSession,
     };
   } catch (error) {

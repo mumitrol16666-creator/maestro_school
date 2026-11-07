@@ -2,6 +2,8 @@
 
 import { Download, Smartphone, X } from "lucide-react";
 import { useEffect, useState } from "react";
+import { setInstallPromptOpen } from "@/lib/floating-prompts";
+import { isInstalledApp } from "@/lib/platform";
 import { APP_CACHE_VERSION, SERVICE_WORKER_URL } from "@/lib/pwa-version";
 
 interface BeforeInstallPromptEvent extends Event {
@@ -18,7 +20,7 @@ export function PwaProvider() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const standalone = window.matchMedia("(display-mode: standalone)").matches;
+    const standalone = isInstalledApp();
     if (standalone) {
       setInstalled(true);
     }
@@ -79,7 +81,14 @@ export function PwaProvider() {
     setVisible(false);
   }
 
-  if (installed || !visible) return null;
+  const shown = !installed && visible;
+  // The notification hint reads this: only one card at the bottom of the screen at a time.
+  useEffect(() => {
+    setInstallPromptOpen(shown);
+    return () => setInstallPromptOpen(false);
+  }, [shown]);
+
+  if (!shown) return null;
 
   return (
     <div className="fixed inset-x-4 bottom-[calc(6.5rem+env(safe-area-inset-bottom,0px))] z-[60] mx-auto max-w-lg rounded-[22px] border border-stone-200 bg-paper p-4 shadow-soft lg:inset-x-auto lg:bottom-6 lg:right-6">
@@ -121,7 +130,7 @@ export function usePwaInstall() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (window.matchMedia("(display-mode: standalone)").matches) {
+    if (isInstalledApp()) {
       setInstalled(true);
       return;
     }

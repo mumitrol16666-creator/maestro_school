@@ -39,6 +39,8 @@ export async function findUsersWithRoleByPhone(phoneNormalized: string) {
 }
 
 export async function findUserWithRoleById(userId: string) {
+  // Prisma drops a filter whose value is undefined, which would return the first active user.
+  if (typeof userId !== "string" || !userId) return null;
   return prisma.user.findFirst({
     where: { id: userId, ...notDeleted, isActive: true },
     include: userWithRoleInclude,

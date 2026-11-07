@@ -1,6 +1,6 @@
 "use client";
 
-import { Award, BookOpen, Camera, Coins, Eye, EyeOff, Flame, GraduationCap, LoaderCircle, LogOut, Mail, Phone, Save, Send, Star, UserRound, WalletCards } from "lucide-react";
+import { Award, BookOpen, Camera, Eye, EyeOff, Flame, GraduationCap, LoaderCircle, LogOut, Mail, Phone, Save, Send, Star, UserRound, WalletCards } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState, type ChangeEvent } from "react";
@@ -106,7 +106,7 @@ export default function SettingsPage() {
           </button>
         ))}
       </nav>
-      <div className={`grid gap-6 ${activeSection === "overview" ? "xl:grid-cols-[0.8fr_1.2fr]" : ""}`}>
+      <div className={`grid grid-cols-[minmax(0,1fr)] gap-6 ${activeSection === "overview" ? "xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]" : ""}`}>
         {activeSection === "overview" ? (
           <section
             className="self-start rounded-[30px] bg-ink p-7 text-white shadow-soft"
@@ -136,7 +136,7 @@ export default function SettingsPage() {
             </button>
           </section>
         ) : null}
-        <section className="space-y-5" data-testid={`profile-section-${activeSection}`}>
+        <section className="min-w-0 space-y-5" data-testid={`profile-section-${activeSection}`}>
           {activeSection === "overview" ? (
             <>
               {level ? <LevelSummary progress={level} /> : null}
@@ -145,7 +145,7 @@ export default function SettingsPage() {
               {school ? <StudentMemberships balanceSnapshot={school.balanceSnapshot} /> : null}
               <div className="rounded-[30px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
                 <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold-ink">Обучение</p>
-                <div className={`mt-6 grid gap-4 ${economy?.economyV2Enabled ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>
+                <div className="mt-6 grid gap-4 sm:grid-cols-2">
                   <div className="rounded-2xl bg-stone-50 p-5">
                     <GraduationCap size={18} className="text-gold-ink" />
                     <p className="mt-3 text-xs font-bold uppercase tracking-wider text-stone-400">Онлайн-курсы</p>
@@ -163,12 +163,6 @@ export default function SettingsPage() {
                         <Star size={18} className="text-gold-ink" />
                         <p className="mt-3 text-xs font-bold uppercase tracking-wider text-stone-400">Баллы</p>
                         <p className="font-display mt-3 text-2xl">{(profile.points ?? 0).toLocaleString("ru-RU")}</p>
-                      </div>
-                      <div className="rounded-2xl bg-amber-50 p-5">
-                        <Coins size={18} className="text-gold-ink" />
-                        <p className="mt-3 text-xs font-bold uppercase tracking-wider text-amber-700">Бонусы Maestro</p>
-                        <p className="font-display mt-3 text-2xl text-amber-950">{(profile.coins ?? 0).toLocaleString("ru-RU")}</p>
-                        <p className="mt-2 text-xs leading-5 text-amber-800">Для обмена на награды; на уровень не влияют</p>
                       </div>
                     </>
                   )}
@@ -328,16 +322,11 @@ function EconomyProfileSummary({
         </div>
         <Link href="/league" className="inline-flex min-h-11 items-center text-sm font-bold text-stone-600 hover:text-gold-ink">Открыть лигу</Link>
       </div>
-      <div className="mt-6 grid divide-y divide-stone-200 border-y border-stone-200 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+      <div className="mt-6 grid divide-y divide-stone-200 border-y border-stone-200 sm:grid-cols-2 sm:divide-x sm:divide-y-0">
         <div className="py-4 sm:px-4 sm:first:pl-0">
-          <Coins size={18} className="text-gold-ink" />
-          <p className="font-display mt-2 text-3xl">{economy.coins.toLocaleString("ru-RU")}</p>
-          <p className="text-xs font-bold text-stone-500">Coins</p>
-        </div>
-        <div className="py-4 sm:px-4">
           <Flame size={18} className="text-gold-ink" />
           <p className="font-display mt-2 text-3xl">{economy.streak?.currentWeeks ?? 0}</p>
-          <p className="text-xs font-bold text-stone-500">текущая серия</p>
+          <p className="text-xs font-bold text-stone-500">{pluralize(economy.streak?.currentWeeks ?? 0, ["неделя", "недели", "недель"])} подряд — серия недель</p>
         </div>
         <div className="py-4 sm:px-4 sm:last:pr-0">
           <Award size={18} className="text-gold-ink" />

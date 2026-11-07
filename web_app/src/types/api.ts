@@ -323,7 +323,8 @@ export interface ApiStudentHome {
   };
   /** Plan 5.2: unread notifications shown as banners until opened. */
   banners: Array<{ id: string; type: string; title: string; body: string; url: string | null; createdAt: string }>;
-  streakWeeks: number | null;
+  /** All unread banner notifications; `banners` holds the newest five. */
+  bannersTotal?: number;
   /** Plan 5.6: today's practice mark, the streak of practice days and the reminder settings. */
   practice: PracticeStatus | null;
 }

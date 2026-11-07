@@ -37,6 +37,7 @@ import { LessonMaterialItems } from "@/components/student-lesson-materials";
 import { ShareAchievementButton } from "@/components/share-achievement";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
+import { Celebration, type CelebrationProps } from "@/components/celebration";
 import { ScreenError } from "@/components/app-error-screen";
 import { EmptyState } from "@/components/data-states";
 import { ScreenSkeleton } from "@/components/screen-skeleton";
@@ -103,6 +104,45 @@ const tabs: {
   },
 ];
 
+/* ─── В-23: «Победа» for a mastered topic or a closed sector ─────────── */
+
+const TOPIC_FORMS = ["тема", "темы", "тем"] as const;
+const WIN_POINTS_FORMS = ["балл", "балла", "баллов"] as const;
+
+/** What the lesson won, or null when no topic was mastered and no sector closed with points. */
+function lessonVictory(lesson: SchoolOfflineLesson): Pick<CelebrationProps, "value" | "prefix" | "unit" | "title" | "message"> | null {
+  const topics = (lesson.learningTopicResults ?? []).filter((item) => item.mastered && item.masteryPointsAwarded > 0);
+  const sectors = (lesson.learningPlanCompletionResults ?? []).filter((item) => item.pointsAwarded > 0);
+  if (topics.length === 0 && sectors.length === 0) return null;
+  // The figure is the one of the line it celebrates on the card: the sector's points have their own
+  // line (not in «итого», audit 24.10), the topics' points are in «итого».
+  const points = sectors.length > 0
+    ? sectors.reduce((sum, item) => sum + item.pointsAwarded, 0)
+    : topics.reduce((sum, item) => sum + item.masteryPointsAwarded, 0);
+  const common = { value: points, prefix: "+", unit: pluralize(points, WIN_POINTS_FORMS) };
+  if (sectors.length > 0) {
+    return {
+      ...common,
+      title: sectors.length > 1 ? `Закрыто секторов: ${sectors.length}` : "Сектор закрыт!",
+      message: topics.length === 1
+        ? `Весь сектор пройден, а тема «${topics[0].title}» теперь твоя. Это большой шаг.`
+        : "Весь сектор пройден — это большой шаг. Так держать!",
+    };
+  }
+  if (topics.length === 1) {
+    return { ...common, title: "Тема освоена!", message: `Тема «${topics[0].title}» теперь твоя. Так держать!` };
+  }
+  return {
+    ...common,
+    title: `Освоено ${formatCount(topics.length, TOPIC_FORMS)}`,
+    message: `Среди них «${topics[0].title}». Так держать!`,
+  };
+}
+
+function celebratedKey(crmClassId: string, userId: string) {
+  return `maestro_celebrated:lesson:${crmClassId}:${userId}`;
+}
+
 /* ─── interactive lesson card ───────────────────────────────────────── */
 
 function LessonCard({
@@ -127,6 +167,24 @@ function LessonCard({
   useEffect(() => {
     if (defaultOpen) setOpen(true);
   }, [defaultOpen]);
+  // В-23: the first time the card of a lesson with a mastered topic or a closed sector is open.
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
+  const victory = useMemo(() => lessonVictory(lesson), [lesson]);
+  const [celebrating, setCelebrating] = useState(false);
+  useEffect(() => {
+    // Only a lesson that took place: a CRM snapshot from before the approval still says «на проверке».
+    if (!open || upcoming || lesson.status !== "completed" || !victory || !userId) return;
+    const key = celebratedKey(lesson.crmClassId, userId);
+    try {
+      if (window.localStorage.getItem(key)) return;
+      window.localStorage.setItem(key, new Date().toISOString());
+    } catch {
+      // No storage (private mode): without a record the window would come back on every open, so stay quiet.
+      return;
+    }
+    setCelebrating(true);
+  }, [lesson.crmClassId, lesson.status, open, upcoming, userId, victory]);
   const statusLabel = statusLabels[lesson.status] ?? lesson.status;
   const isOnline = lesson.deliveryFormat === "online";
   const hasLearningResults =
@@ -159,6 +217,9 @@ function LessonCard({
 
   return (
     <article className="rounded-2xl border border-stone-200 bg-white">
+      {celebrating && victory ? (
+        <Celebration {...victory} detail={null} onClose={() => setCelebrating(false)} testId="lesson-celebration" />
+      ) : null}
       <div className="flex flex-col gap-2 p-3 sm:flex-row sm:items-start sm:justify-between sm:p-4">
         <div className="min-w-0 flex-1">
           <h3 className="break-words text-sm font-bold text-ink">

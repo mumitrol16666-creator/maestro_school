@@ -54,9 +54,14 @@ test("the student marks today's practice on the home and sets the reminder in se
   const button = checkin.getByRole("button", { name: "Позанимался сегодня" });
   if (await button.count()) {
     await button.click();
-    await expect(checkin).not.toContainText("Позанимался сегодня");
+    // В-23: the answer is one sentence with a guitar for 2 s — no toast; then the quiet «done» state.
+    await expect(checkin.getByTestId("practice-reply")).toBeVisible();
+    await expect(page.getByTestId("app-toast")).toHaveCount(0);
+    await expect(checkin.getByTestId("practice-done")).toBeVisible({ timeout: 5_000 });
   }
-  await expect(checkin.getByTestId("practice-streak")).toContainText(/Дней подряд: \d+/);
+  // Marked (now or before): no button, and the streak is in the header of the home, not in this card.
+  await expect(checkin.getByRole("button", { name: "Позанимался сегодня" })).toHaveCount(0);
+  await expect(checkin).not.toContainText("Дней подряд");
 
   await page.goto("/settings");
   await page.getByRole("button", { name: "Настройки" }).click();

@@ -56,7 +56,7 @@ export const studentWorkspaceNavigation: StudentWorkspaceNavigationItem[] = [
     pathPrefixes: ["/messages"],
     messagesOnly: true,
   },
-  // Plan 2.6: the shop is off until CRM has goods and prices; /rewards stays reachable from Coins.
+  // Plan 2.6: the shop is off until CRM has goods and prices; /rewards leads home (decision 24.10).
 ];
 
 export function pathMatchesAny(pathname: string, prefixes: readonly string[]) {

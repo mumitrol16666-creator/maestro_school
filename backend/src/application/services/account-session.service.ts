@@ -30,6 +30,20 @@ export function invalidateCrmSessionCache(crmUserId?: string) {
   crmSessionCache.clear();
 }
 
+const DAY_SECONDS = 86400;
+const STUDENT_SESSION_DAYS = 30;
+const DEFAULT_SESSION_DAYS = 7;
+
+/**
+ * How long a signed-in session lives. A student's phone app keeps them signed in for
+ * 30 days (every visit renews it through POST /auth/refresh); parents, teachers and
+ * staff keep 7 days. The same value is the JWT lifetime, the media cookie Max-Age and
+ * the `iat` bound in assertCurrentSession.
+ */
+export function sessionLifetimeSeconds(roleSlug: string | null | undefined): number {
+  return (roleSlug === "student" ? STUDENT_SESSION_DAYS : DEFAULT_SESSION_DAYS) * DAY_SECONDS;
+}
+
 export function sessionVersionMatches(claim: unknown, current: number): boolean {
   const version = claim === undefined ? 0 : claim;
   return typeof version === "number" && Number.isSafeInteger(version) && version >= 0
@@ -70,9 +84,10 @@ export async function sessionClaims(user: SessionUser) {
 export async function assertCurrentSession(user: SessionUser, payload: {
   sessionVersion?: unknown; crmSessionVersion?: unknown; iat?: unknown;
 }) {
-  // Old platform JWTs had no exp. Bound those to the same seven-day lifetime.
+  // Old platform JWTs had no exp. Bound those to the role's session lifetime.
   if (!Number.isSafeInteger(payload.iat) || typeof payload.iat !== "number"
-      || payload.iat > Date.now() / 1000 + 60 || Date.now() / 1000 - payload.iat > 7 * 86400
+      || payload.iat > Date.now() / 1000 + 60
+      || Date.now() / 1000 - payload.iat > sessionLifetimeSeconds(user.role.slug)
       || !sessionVersionMatches(payload.sessionVersion, user.sessionVersion)) throw new UnauthorizedError();
   const crm = user.crmTeacherId ? await linkedCrmSession(user) : null;
   if (crm && !sessionVersionMatches(payload.crmSessionVersion, crm.sessionVersion)) throw new UnauthorizedError();

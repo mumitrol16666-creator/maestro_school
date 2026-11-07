@@ -1,6 +1,6 @@
-import { sessionClaims } from "../../application/services/account-session.service.js";
+import { sessionClaims, sessionLifetimeSeconds } from "../../application/services/account-session.service.js";
 import type { FastifyInstance } from "fastify";
-import { bearerToken, clearMediaCookieHeader, mediaCookieHeader } from "../guards/media-session.js";
+import { bearerToken, clearMediaCookieHeader, mediaCookieHeader, tokenRemainingSeconds } from "../guards/media-session.js";
 import { Prisma } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
@@ -16,7 +16,7 @@ import {
   updateOwnPassword,
   updateUserProfile,
 } from "../../application/repositories/auth.repository.js";
-import { BadRequestError, ConflictError, UnauthorizedError } from "../../domain/errors.js";
+import { BadRequestError, ConflictError, ForbiddenError, UnauthorizedError } from "../../domain/errors.js";
 import { isValidLogin, normalizeLogin } from "../../lib/login.js";
 import { isValidPhone, normalizePhoneDigits } from "../../lib/phone.js";
 import { getStudentCoins } from "../../application/services/coins.service.js";
@@ -127,8 +127,9 @@ export async function authRoutes(app: FastifyInstance) {
   app.post("/auth/sso-exchange", { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } }, async (request, reply) => {
     const { token } = ssoExchangeSchema.parse(request.body);
     const { user, stats, session } = await exchangeSsoBridgeToken(token);
-    const sessionToken = await reply.jwtSign(session, { expiresIn: "7d" });
-    reply.header("Set-Cookie", mediaCookieHeader(sessionToken, request));
+    const lifetime = sessionLifetimeSeconds(user.role.slug);
+    const sessionToken = await reply.jwtSign(session, { expiresIn: lifetime });
+    reply.header("Set-Cookie", mediaCookieHeader(sessionToken, request, lifetime));
     if (user.role.slug === "student") {
       await recordStudentLogin(user.id, "sso").catch(() => undefined);
     }
@@ -174,8 +175,9 @@ export async function authRoutes(app: FastifyInstance) {
       throw new UnauthorizedError("Неверный логин, email или пароль");
     }
 
-    const token = await reply.jwtSign(await sessionClaims(user), { expiresIn: "7d" });
-    reply.header("Set-Cookie", mediaCookieHeader(token, request));
+    const lifetime = sessionLifetimeSeconds(user.role.slug);
+    const token = await reply.jwtSign(await sessionClaims(user), { expiresIn: lifetime });
+    reply.header("Set-Cookie", mediaCookieHeader(token, request, lifetime));
     const stats = await studentStats(user.id, user.role.slug);
     if (user.role.slug === "student") {
       await recordStudentLogin(user.id, "password").catch(() => undefined);
@@ -262,8 +264,9 @@ export async function authRoutes(app: FastifyInstance) {
     // but never turn a concurrent password reset into a new authenticated login.
     const linkedUser = await findUserWithRoleById(user.id);
     if (!linkedUser || linkedUser.passwordHash !== user.passwordHash) throw new UnauthorizedError();
-    const token = await reply.jwtSign(await sessionClaims(linkedUser), { expiresIn: "7d" });
-    reply.header("Set-Cookie", mediaCookieHeader(token, request));
+    const lifetime = sessionLifetimeSeconds(linkedUser.role.slug);
+    const token = await reply.jwtSign(await sessionClaims(linkedUser), { expiresIn: lifetime });
+    reply.header("Set-Cookie", mediaCookieHeader(token, request, lifetime));
 
     return reply.status(201).send({
       data: {
@@ -276,8 +279,44 @@ export async function authRoutes(app: FastifyInstance) {
   // Plan 1.12: refresh or clear the media cookie for sessions signed in before it existed.
   app.post("/auth/media-session", { preHandler: [authenticate] }, async (request, reply) => {
     const token = bearerToken(request);
-    if (token) reply.header("Set-Cookie", mediaCookieHeader(token, request));
+    if (token) reply.header("Set-Cookie", mediaCookieHeader(token, request, tokenRemainingSeconds(token)));
     return { data: { ok: true } };
+  });
+
+  // Every opening of the student app renews the sign-in (30 days from the last visit). Parents and
+  // staff keep a hard 7 days from sign-in. authenticate has already rejected an expired token, a changed
+  // password (sessionVersion), a disabled or archived account and a revoked CRM link.
+  // The limit counts per token: behind a proxy the IP is shared by the whole school.
+  app.post("/auth/refresh", {
+    preHandler: [authenticate],
+    config: {
+      rateLimit: {
+        max: 30,
+        timeWindow: "1 minute",
+        keyGenerator: (request) => crypto.createHash("sha256").update(request.headers.authorization ?? request.ip).digest("hex"),
+      },
+    },
+  }, async (request, reply) => {
+    const verified = request.user!;
+    if (verified.roleSlug !== "student") {
+      throw new ForbiddenError("Продление входа доступно только ученикам. Войдите заново, когда срок закончится.");
+    }
+    const user = await findUserWithRoleById(verified.id);
+    if (!user) throw new UnauthorizedError();
+    const claims = await sessionClaims(user);
+    // The password may change between authenticate and this read. Never sign an account revision
+    // other than the one the presented token was verified against.
+    if (claims.sessionVersion !== verified.sessionVersion
+        || (claims as { crmSessionVersion?: number }).crmSessionVersion !== verified.crmSessionVersion) {
+      throw new UnauthorizedError();
+    }
+    const lifetime = sessionLifetimeSeconds(user.role.slug);
+    const token = await reply.jwtSign(claims, { expiresIn: lifetime });
+    reply.header("Set-Cookie", mediaCookieHeader(token, request, lifetime));
+    // «Последний вход» follows the renewal: a student no longer signs in with a password every week.
+    await recordStudentLogin(user.id, "refresh").catch(() => undefined);
+    const stats = await studentStats(user.id, user.role.slug);
+    return { data: { token, user: profile(user, stats) } };
   });
 
   app.delete("/auth/media-session", async (request, reply) => {
@@ -387,8 +426,11 @@ export async function authRoutes(app: FastifyInstance) {
     }
 
     const user = await findUserWithRoleById(authUser.id);
-    if (!user || !(await bcrypt.compare(body.currentPassword, user.passwordHash))) {
-      throw new UnauthorizedError("Текущий пароль указан неверно");
+    if (!user) throw new UnauthorizedError();
+    // В-41, З-1: a typo in the current password is a form error, not a lost session — 401 would
+    // make the app sign the student out.
+    if (!(await bcrypt.compare(body.currentPassword, user.passwordHash))) {
+      throw new BadRequestError("Текущий пароль указан неверно", "CURRENT_PASSWORD_INVALID");
     }
 
     const updated = await updateOwnPassword(authUser.id, await bcrypt.hash(body.newPassword, 10));
@@ -401,10 +443,11 @@ export async function authRoutes(app: FastifyInstance) {
     }
     // Authentication already checked CRM. Do not make a fallible remote call
     // after committing the new password; retain that checked revision instead.
+    const lifetime = sessionLifetimeSeconds(user.role.slug);
     const token = await reply.jwtSign({ sub: updated.id, role: user.role.slug, sessionVersion: updated.sessionVersion,
       ...(authUser.crmSessionVersion === undefined ? {} : { crmSessionVersion: authUser.crmSessionVersion }),
-    }, { expiresIn: "7d" });
-    reply.header("Set-Cookie", mediaCookieHeader(token, request));
+    }, { expiresIn: lifetime });
+    reply.header("Set-Cookie", mediaCookieHeader(token, request, lifetime));
 
     return {
       data: { ok: true, token },

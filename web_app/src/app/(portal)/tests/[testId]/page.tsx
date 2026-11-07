@@ -19,6 +19,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { ScreenError } from "@/components/app-error-screen";
+import { Celebration } from "@/components/celebration";
 import { PageHeader } from "@/components/page-header";
 import { PreparedTheoryMaterialView } from "@/components/prepared-theory-material";
 import { ScreenSkeleton } from "@/components/screen-skeleton";
@@ -43,6 +44,8 @@ export default function PreparedTestPage() {
   const [hydratedTestId, setHydratedTestId] = useState<string | null>(null);
   const [retakeMode, setRetakeMode] = useState(false);
   const [view, setView] = useState<"theory" | "test">("theory");
+  // В-23: «Победа» only right after a passing send, never when a passed test is opened again.
+  const [victory, setVictory] = useState<{ score: number } | null>(null);
 
   useEffect(() => {
     const test = resource.data;
@@ -87,6 +90,7 @@ export default function PreparedTestPage() {
       const submittedResult = await api.submitPreparedTest(testId, answers);
       setResult(submittedResult);
       setRetakeMode(false);
+      if (submittedResult.passed) setVictory({ score: submittedResult.score });
       resource.setData((current) => current ? {
         ...current,
         passed: current.passed || submittedResult.passed,
@@ -154,6 +158,16 @@ export default function PreparedTestPage() {
 
   return (
     <>
+      {victory ? (
+        <Celebration
+          value={victory.score}
+          unit="%"
+          title="Тест пройден!"
+          message="Теория в кармане — бери гитару."
+          onClose={() => setVictory(null)}
+          testId="test-celebration"
+        />
+      ) : null}
       <PageHeader
         eyebrow={`Тест ${test.order} из ${test.totalTests}`}
         title={test.title}
