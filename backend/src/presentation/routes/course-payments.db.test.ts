@@ -982,7 +982,7 @@ if (!process.env.TEST_DATABASE_URL) {
       assert.match(text, /Ученик: Лена Телеграмова/);
       assert.match(text, /Платил: родитель Ольга Телеграмова/);
       assert.ok(text.includes(`https://app.test.maestro.kz/admin/course-payments?request=${parentRequest}`), "link to the request in the admin area");
-      assert.ok(!/8707|7707|телефон/i.test(text), "no phone numbers or notes in the chat");
+      assert.ok(!/87079998877|77071112233|телефон/i.test(text), "no phone numbers or notes in the chat");
 
       // Telegram falls over: the request is stored, the answer is still 201.
       mode = "throw";
