@@ -33,9 +33,19 @@ export const sectorExamStatusLabel: Record<string, string> = {
 
 export const sectorExamOutcomeLabel: Record<string, string> = {
   passed: "Сдан",
+  // Only old exams (before 05.11) closed a sector with a partial result.
   partial: "Сдан частично",
   failed: "Не сдан",
 };
+
+/**
+ * 07.11 (P3): one label for an exam's result everywhere. A retake decision is «Нужна пересдача»,
+ * as in the notification and the admin list; «Сдан частично» stays only for old closed sectors.
+ */
+export function sectorExamResultLabel(exam: { outcome: string | null; decision?: string | null }) {
+  if (exam.decision === "retake") return "Нужна пересдача";
+  return exam.outcome ? sectorExamOutcomeLabel[exam.outcome] ?? null : null;
+}
 
 export function formatExamDate(value: string | null) {
   if (!value) return "";

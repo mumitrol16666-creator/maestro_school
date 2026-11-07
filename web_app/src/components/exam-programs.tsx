@@ -89,7 +89,7 @@ export function ExamPrograms({ sectors, onChanged }: { sectors: AdminSectorExamR
     </div>
     <div className="flex flex-wrap gap-2">
       {readinessGroups.map(group => <p key={group.title} className="rounded-xl bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-900">{group.title} · готовы {group.count}</p>)}
-      {!readinessGroups.length ? <p className="text-sm text-stone-600">Готовность учеников преподаватели отмечают в отчёте урока. Черновик экзамена можно собрать заранее.</p> : null}
+      {!readinessGroups.length ? <p className="text-sm text-stone-600">Готовность учеников преподаватели отмечают в отчёте урока или в карточке ученика. Черновик экзамена можно собрать заранее.</p> : null}
     </div>
     {programs.error || sessions.error || directions.error ? <p role="alert" className="text-sm text-red-700">{programs.error ?? sessions.error ?? directions.error}</p> : null}
     {showEditor ? <form onSubmit={event => { event.preventDefault(); void run("program", saveProgram); }} className="grid gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">

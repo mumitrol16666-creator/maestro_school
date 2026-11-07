@@ -381,7 +381,7 @@ export function LearningLessonV2Panel({
               onChange={event => onChange({ ...draft, readySectorIds: event.target.checked
                 ? [...new Set([...(draft.readySectorIds ?? []), plan.planId])]
                 : (draft.readySectorIds ?? []).filter(id => id !== plan.planId) })} />
-            <span>{plan.studentName} · сектор {plan.sequence} · {plan.direction}{plan.readyAt ? " · готовность подтверждена" : " · готов к экзамену"}</span>
+            <span>{plan.studentName} · сектор {plan.sequence} · {plan.direction}{plan.readyAt ? " · готовность подтверждена" : " · отметить готовность к экзамену"}</span>
           </label>)}
         </div>
       </div> : null}

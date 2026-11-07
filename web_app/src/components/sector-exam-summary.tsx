@@ -1,6 +1,6 @@
 import { Award, CalendarClock, Check, GraduationCap, X } from "lucide-react";
 import { formatCount } from "@/lib/plural";
-import { formatExamDate, sectorExamOutcomeLabel } from "@/lib/sector-exams-api";
+import { formatExamDate, sectorExamResultLabel } from "@/lib/sector-exams-api";
 import type { PublicSectorExam } from "@/types/sector-exam";
 
 /** Plan 1.13: the student passed the group's sector (their own exam or counted by the teacher). */
@@ -47,7 +47,7 @@ export function SectorExamSummary({ exam }: { exam: PublicSectorExam | null | un
       {exam.status === "completed" ? (
         <>
           <p className="text-sm font-semibold text-stone-800">
-            {exam.outcome ? sectorExamOutcomeLabel[exam.outcome] : "Экзамен проведён"}: {exam.items.filter((item) => item.done).length} из {exam.items.length}
+            {sectorExamResultLabel(exam) ?? "Экзамен проведён"}: {exam.items.filter((item) => item.done).length} из {exam.items.length}
           </p>
           <ul className="grid gap-1">
             {exam.items.map((item) => (

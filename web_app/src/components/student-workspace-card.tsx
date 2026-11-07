@@ -244,7 +244,7 @@ function NowTab({
       {!data.sectors.length ? (
         <EmptyState
           title="Сектор ещё не открыт"
-          description="Откройте первый сектор в редакторе: темы, цель и тест, которые ученик увидит у себя."
+          description="Откройте первый сектор в редакторе: темы и цель, которые ученик увидит у себя."
           action={!limited ? <Link href={`/admin/my-students/student/${encodeURIComponent(crmStudentId)}/plan`} className={`${control} bg-ink text-white`}>Открыть сектор</Link> : undefined}
         />
       ) : data.sectors.map((sector) => (

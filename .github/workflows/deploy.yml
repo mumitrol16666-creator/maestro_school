@@ -74,17 +74,30 @@ jobs:
       - name: Test backend
         working-directory: backend
         run: npm test
-      - name: Verify unified exam lifecycle
+      - name: Verify exams, lesson approval money and topic conflicts against the database
         working-directory: backend
         env:
           RUN_DB_INTEGRATION_TESTS: "1"
           MAESTRO_QA_LOCAL: "true"
+          # Production flags (/health) the lesson and topic paths depend on. The reward economy flag
+          # stays off: the CI database has no active economic epoch (prod does); reward tests skip.
+          FEATURE_LEARNING_TOPICS_V2: "true"
+          FEATURE_HOMEWORK_FLOW_V2: "true"
+          FEATURE_UNIFIED_LESSON_V2: "true"
+          FEATURE_LESSON_SYNC_V2: "true"
+          FEATURE_CURATOR_WORKSPACE_V2: "true"
         run: >-
           npx tsx --test --test-force-exit --test-concurrency=1
           src/application/services/sector-exam.db.test.ts
           src/application/services/group-sector.db.test.ts
           src/application/services/learning-sector.db.test.ts
           src/presentation/routes/sector-exam-access.db.test.ts
+          src/application/services/family-results.db.test.ts
+          src/application/services/crm-sync-conflict-approval.db.test.ts
+          src/application/services/offline-lesson-cancel-guard.db.test.ts
+          src/application/services/lesson-topic-conflicts.integration.test.ts
+          src/application/services/lesson-pending-topics.db.test.ts
+          src/application/services/learning-topic-progress-batch.integration.test.ts
       - name: Build backend
         working-directory: backend
         run: npm run build

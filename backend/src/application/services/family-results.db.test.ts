@@ -27,6 +27,8 @@ integrationTest("results show this month's mastered topics and sectors, own and 
   t.after(async () => {
     await prisma.pointsTransaction.deleteMany({ where: { studentId: student.id } });
     await prisma.sectorExam.deleteMany({ where: { directionId: direction.id } });
+    await prisma.sectorExamSession.deleteMany({ where: { program: { directionId: direction.id } } });
+    await prisma.sectorExamProgram.deleteMany({ where: { directionId: direction.id } });
     await prisma.learningPlan.deleteMany({ where: { directionId: direction.id } });
     await prisma.learningTopic.deleteMany({ where: { directionId: direction.id } });
     await prisma.user.delete({ where: { id: student.id } });
@@ -54,8 +56,19 @@ integrationTest("results show this month's mastered topics and sectors, own and 
       closedAt: thisMonth, closeReason: "exam", publishedVersionNumber: 1, currentVersionNumber: 1,
     },
   });
+  // 05.11: every exam belongs to a session of a program (migration 20261105160000).
+  const program = await prisma.sectorExamProgram.create({
+    data: { directionId: direction.id, sectorNumber: 1, title: "Сектор 1", items: [{ title: "Бой", criteria: "ровно" }] },
+  });
+  const session = await prisma.sectorExamSession.create({
+    data: {
+      programId: program.id, programRevision: 1, title: "Сектор 1",
+      programSnapshot: { title: "Сектор 1", items: [{ title: "Бой", criteria: "ровно" }] },
+      requestKey: randomUUID(), requestFingerprint: "family-results-test",
+    },
+  });
   await prisma.sectorExam.create({
-    data: { planId: ownSector.id, crmStudentId, directionId: direction.id, status: "completed", outcome: "passed", certificateNumber: `MS-2026-${suffix.toUpperCase()}` },
+    data: { sessionId: session.id, planId: ownSector.id, crmStudentId, directionId: direction.id, status: "completed", outcome: "passed", certificateNumber: `MS-2026-${suffix.toUpperCase()}` },
   });
   const groupSector = await prisma.learningPlan.create({
     data: { directionId: direction.id, crmGroupId, month: "2026-10", sequence: 2, status: "closed", closedAt: thisMonth, closeReason: "manual", publishedVersionNumber: 1, currentVersionNumber: 1 },

@@ -1712,7 +1712,7 @@ export default function AdminOfflineLessonDetailPage() {
           <p>
             Бесплатный экзамен без списания из абонемента. Откройте проведение, чтобы отметить задания и результаты всех участников.
           </p>
-          <LessonExamSessionLinks crmClassId={crmClassId} />
+          <LessonExamSessionLinks crmClassId={crmClassId} isAdmin={isAdmin} />
         </div>
       ) : null}
 

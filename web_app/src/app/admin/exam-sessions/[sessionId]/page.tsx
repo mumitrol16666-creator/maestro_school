@@ -9,7 +9,7 @@ import { useApiResource } from "@/hooks/use-api-resource";
 import { ErrorState, LoadingState } from "@/components/data-states";
 import { PageHeader } from "@/components/page-header";
 import { InProgress, PastResult } from "@/components/exam-assessment";
-import { sectorExamsApi, formatExamDate, sectorExamStatusLabel, sectorExamOutcomeLabel } from "@/lib/sector-exams-api";
+import { sectorExamsApi, formatExamDate, sectorExamStatusLabel, sectorExamResultLabel } from "@/lib/sector-exams-api";
 import type { ExamSessionWorkspace, SectorExam } from "@/types/sector-exam";
 
 const button = "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-ink px-4 py-2 text-sm font-bold text-white disabled:opacity-50";
@@ -29,7 +29,7 @@ export default function ExamSessionPage() {
       <div className="grid min-w-0 gap-4 print:hidden">{data.participants.map(person => <Participant key={person.exam.id} participant={person} onChanged={() => void resource.reload()} />)}</div>
       <article className="hidden print:block" data-exam-protocol>
         <h1 className="text-2xl font-bold">Maestro · {data.title}</h1><p className="mt-2">Протокол экзамена · {data.participants.length} участников</p>
-        {data.participants.map(person => <section key={person.exam.id} className="mt-6 break-inside-avoid border-t border-stone-400 pt-3"><h2 className="text-lg font-bold">{person.studentName}</h2><p>{formatExamDate(person.exam.scheduledAt)} · {sectorExamStatusLabel[person.exam.status]}{person.exam.outcome ? ` · ${sectorExamOutcomeLabel[person.exam.outcome]}` : ""}</p>
+        {data.participants.map(person => <section key={person.exam.id} className="mt-6 break-inside-avoid border-t border-stone-400 pt-3"><h2 className="text-lg font-bold">{person.studentName}</h2><p>{formatExamDate(person.exam.scheduledAt)} · {sectorExamStatusLabel[person.exam.status]}{sectorExamResultLabel(person.exam) ? ` · ${sectorExamResultLabel(person.exam)}` : ""}</p>
           <ol className="mt-2 list-inside list-decimal">{person.exam.items.map(item => <li key={item.id}>{item.done === null ? "□" : item.done ? "✓" : "×"} {item.title}{item.criteria ? ` — ${item.criteria}` : ""}</li>)}</ol>
           {person.exam.comment ? <p className="mt-2">Комментарий: {person.exam.comment}</p> : null}{person.exam.certificate ? <p>Сертификат: {person.exam.certificate.number}</p> : null}</section>)}
       </article>

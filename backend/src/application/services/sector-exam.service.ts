@@ -281,11 +281,12 @@ export async function scheduleSectorExamFromCrm(examId: string, input: {
     body: `${exam.direction.title}: экзамен в школе ${when}.`,
     dedupeKey: key,
   });
+  // 07.11 (P3): one notice per session for the examiner, not one per pupil in it.
   await notifyTeacher(teacherId, {
-    title: "Вам назначен экзамен сектора",
+    title: exam.programTitleSnapshot ? `Вам назначен экзамен «${exam.programTitleSnapshot}»` : "Вам назначен экзамен сектора",
     body: `${exam.direction.title}, ${when}.`,
     url: `/admin/exam-sessions/${exam.sessionId}`,
-    dedupeKey: `${key}:teacher`,
+    dedupeKey: `sector-exam-session:${exam.sessionId ?? examId}:scheduled:${input.lessonAt.toISOString()}:teacher:${teacherId}`,
   });
   return examDto(await loadExam(examId));
 }
