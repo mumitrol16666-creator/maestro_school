@@ -51,7 +51,7 @@ integrationTest("dangling homework: every reason is found, homework of the curre
   const rows = (await listDanglingHomework()).filter((row) => row.crmStudentId === crmStudentId);
   const reasonOf = new Map(rows.map((row) => [row.topicTitle, row.reason]));
   assert.equal(reasonOf.get("Закрытый сектор"), "sector_closed");
-  assert.equal(reasonOf.get("Ждёт экзамена"), "older_open_sector");
+  assert.equal(reasonOf.has("Ждёт экзамена"), false, "the lesson shows the sector awaiting the exam too");
   assert.equal(reasonOf.get("Убрана"), "topic_moved");
   assert.equal(reasonOf.get("Вне сектора"), "no_sector");
   assert.equal(reasonOf.get("Удалена"), "topic_removed");

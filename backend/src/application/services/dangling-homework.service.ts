@@ -2,19 +2,17 @@ import { prisma } from "../../infrastructure/database/prisma.js";
 
 /**
  * 07.11 (Vladislav: «какие висячие ДЗ? список бы мне»): open homework of a pupil that no lesson
- * shows for checking. The lesson takes homework only on active topics of the newest open sector of
- * its direction, while the pupil sees every open homework; anything else hangs. Each row says why.
+ * shows for checking. The lesson takes homework on active topics of every open sector (active or
+ * awaiting the exam) of the pupil; anything else hangs while the pupil still sees it. Each row says why.
  */
 export type DanglingHomeworkReason =
   | "sector_closed"
-  | "older_open_sector"
   | "topic_moved"
   | "no_sector"
   | "topic_removed";
 
 export const DANGLING_REASON_TEXT: Record<DanglingHomeworkReason, string> = {
   sector_closed: "Сектор закрыт, урок это ДЗ больше не показывает",
-  older_open_sector: "Сектор ждёт экзамена, на уроке открыт следующий сектор",
   topic_moved: "Тему убрали или заменили в секторе",
   no_sector: "Тема не входит ни в один опубликованный сектор",
   topic_removed: "Тема удалена",
@@ -22,20 +20,6 @@ export const DANGLING_REASON_TEXT: Record<DanglingHomeworkReason, string> = {
 
 const OPEN_STATES = ["assigned", "waiting_review", "revision"] as const;
 const OPEN_SECTOR = new Set(["active", "awaiting_exam"]);
-
-type PlanRef = {
-  id: string;
-  directionId: string;
-  crmStudentId: string | null;
-  crmGroupId: string | null;
-  sequence: number;
-  status: string;
-  publishedVersionNumber: number | null;
-};
-
-function ownerKey(plan: Pick<PlanRef, "directionId" | "crmStudentId" | "crmGroupId">) {
-  return `${plan.directionId}:${plan.crmStudentId ?? ""}:${plan.crmGroupId ?? ""}`;
-}
 
 export async function listDanglingHomework(limit = 500) {
   const recipients = await prisma.learningHomeworkRecipient.findMany({
@@ -68,21 +52,6 @@ export async function listDanglingHomework(limit = 500) {
   // Only the published version of a sector counts; drafts are not on any lesson.
   const published = links.filter((link) => link.planVersion.plan.publishedVersionNumber === link.planVersion.version);
 
-  const owners = new Set(published.map((link) => ownerKey(link.planVersion.plan)));
-  const openPlans = owners.size
-    ? await prisma.learningPlan.findMany({
-        where: { status: { in: ["active", "awaiting_exam"] }, publishedVersionNumber: { not: null } },
-        select: { id: true, directionId: true, crmStudentId: true, crmGroupId: true, sequence: true, status: true, publishedVersionNumber: true },
-      })
-    : [];
-  const newestOpen = new Map<string, PlanRef>();
-  for (const plan of openPlans) {
-    const key = ownerKey(plan);
-    if (!owners.has(key)) continue;
-    const current = newestOpen.get(key);
-    if (!current || plan.sequence > current.sequence) newestOpen.set(key, plan);
-  }
-
   const studentIds = [...new Set(recipients.map((recipient) => recipient.crmStudentId))];
   const students = await prisma.user.findMany({
     where: { crmStudentId: { in: studentIds }, deletedAt: null },
@@ -105,14 +74,12 @@ export async function listDanglingHomework(limit = 500) {
     } else if (!topicLinks.length) {
       reason = "no_sector";
     } else {
-      const activeOpen = topicLinks.filter((link) => link.state === "active" && OPEN_SECTOR.has(link.planVersion.plan.status));
-      if (activeOpen.some((link) => newestOpen.get(ownerKey(link.planVersion.plan))?.id === link.planVersion.plan.id)) {
-        continue; // on the lesson: not dangling
+      // The lesson shows both open sectors (lessonPlans: active and awaiting_exam), so any active topic
+      // of an open sector is checked there.
+      if (topicLinks.some((link) => link.state === "active" && OPEN_SECTOR.has(link.planVersion.plan.status))) {
+        continue;
       }
-      if (activeOpen.length) {
-        reason = "older_open_sector";
-        sector = activeOpen[0].planVersion.plan.sequence;
-      } else if (topicLinks.some((link) => link.state === "active")) {
+      if (topicLinks.some((link) => link.state === "active")) {
         reason = "sector_closed";
         sector = Math.max(...topicLinks.filter((link) => link.state === "active").map((link) => link.planVersion.plan.sequence));
       } else {

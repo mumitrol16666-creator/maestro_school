@@ -18,7 +18,7 @@ type DanglingHomework = {
   instructions: string;
   state: "assigned" | "waiting_review" | "revision";
   assignedAt: string;
-  reason: "sector_closed" | "older_open_sector" | "topic_moved" | "no_sector" | "topic_removed";
+  reason: "sector_closed" | "topic_moved" | "no_sector" | "topic_removed";
   reasonText: string;
 };
 
@@ -31,7 +31,6 @@ const stateLabel: Record<DanglingHomework["state"], string> = {
 const reasonFilters: Array<{ value: DanglingHomework["reason"] | ""; label: string }> = [
   { value: "", label: "Все" },
   { value: "sector_closed", label: "Сектор закрыт" },
-  { value: "older_open_sector", label: "Сектор ждёт экзамена" },
   { value: "topic_moved", label: "Тема убрана" },
   { value: "no_sector", label: "Вне сектора" },
   { value: "topic_removed", label: "Тема удалена" },
