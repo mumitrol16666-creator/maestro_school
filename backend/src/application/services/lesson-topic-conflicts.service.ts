@@ -57,15 +57,29 @@ function describe(topics: readonly StoredTopicEntry[], current: ReadonlyMap<stri
       return `«${topic.title}»: по этому уроку процент уже записан прежней версией отчёта, новая ставила ${topic.toPercent}%. Остаётся «Оставить как есть».`;
     }
     if (topic.reason === "waiting") {
-      return `«${topic.title}»: урок ставил ${topic.expectedPercent ?? 0} → ${topic.toPercent}%, тема сейчас ${now}%. Сначала нужно подтвердить урок ${topic.waitingFor ?? "до этого"}, тогда этот процент запишется сам.`;
+      return `«${topic.title}»: урок ставил ${topic.expectedPercent ?? 0} → ${topic.toPercent}%, тема сейчас ${now}%. Когда подтвердят урок ${topic.waitingFor ?? "до этого"}, процент запишется сам. Если ждать не нужно, запишите его сейчас.`;
     }
     return `«${topic.title}»: урок ставил ${topic.expectedPercent ?? 0} → ${topic.toPercent}%, а в теме уже ${now}%.`;
   }).join(" ");
 }
 
-/** Only «stale» entries can be written by the admin; «waiting» go by themselves after the earlier lesson. */
+/**
+ * The admin can write «stale» and «waiting» entries (a waiting one without waiting for the earlier
+ * lesson, e.g. that lesson will never be approved); «mastered» and «recorded» cannot be written.
+ */
 function writable(entry: StoredTopicEntry) {
-  return entry.reason === "stale";
+  return entry.reason === "stale" || entry.reason === "waiting";
+}
+
+function lessonSourceKey(crmClassId: string, topicId: string) {
+  return `offline-lesson:${crmClassId}:topic:${topicId}`;
+}
+
+async function alreadyWritten(crmClassId: string, topicId: string) {
+  return Boolean(await prisma.learningTopicProgress.findUnique({
+    where: { sourceKey: lessonSourceKey(crmClassId, topicId) },
+    select: { id: true },
+  }));
 }
 
 async function currentPercents(topicIds: readonly string[]) {
@@ -267,6 +281,8 @@ async function applyWaitingPass(wanted: ReadonlySet<string>) {
     if (!stored.approvedBy || !stored.topics.some((topic) => wanted.has(topic.topicId))) continue;
     const remaining: StoredTopicEntry[] = [];
     for (const entry of stored.topics) {
+      // A crash between the write and saving the list leaves a written entry behind: drop it.
+      if (await alreadyWritten(conflict.crmClassId, entry.topicId)) continue;
       // Only a lesson that waits for an earlier one is written by itself (rule of 26.09: a real
       // mismatch is the admin's decision, it never closes because the topic happened to come by).
       const current = wanted.has(entry.topicId) && entry.reason === "waiting"
@@ -279,15 +295,64 @@ async function applyWaitingPass(wanted: ReadonlySet<string>) {
       try {
         await writeEntry(conflict, stored, stored.approvedBy, entry, current);
         applied += 1;
-      } catch {
-        remaining.push(entry);
+      } catch (error) {
+        // 07.11 (review): the automatic write runs as the lesson's author; a closed substitution or
+        // CRM being down refuses it. It must not hang silently — the admin gets it to decide.
+        console.warn("lesson topic conflict: automatic write failed", conflict.crmClassId, entry.topicId, error);
+        remaining.push({ ...entry, reason: "stale", waitingFor: null, waitingForCrmClassId: null });
       }
     }
-    if (remaining.length !== stored.topics.length) {
+    if (remaining.length !== stored.topics.length || remaining.some((entry, index) => entry.reason !== stored.topics[index]?.reason)) {
       await saveRemaining(conflict, stored, remaining, { by: null, how: "auto_applied", note: "Записано после подтверждения предыдущего урока" });
     }
   }
   return applied;
+}
+
+/**
+ * 07.11 (review): a later lesson waits for a named earlier one. When that lesson is approved, its
+ * waiting dependents are written if the topic now stands at their «было»; otherwise — and when it
+ * is returned, reopened or cancelled — they become a plain mismatch for the admin to decide.
+ */
+export async function releaseLessonsWaitingFor(earlierCrmClassId: string, why: "approved" | "returned" | "cancelled") {
+  const conflicts = await prisma.crmSyncConflict.findMany({
+    where: { kind: LESSON_TOPIC_CONFLICT_KIND, status: "open" },
+    orderBy: { createdAt: "asc" },
+  });
+  const touchedTopics: string[] = [];
+  for (const conflict of conflicts) {
+    const stored = readStored(conflict.localPayload);
+    if (!stored.topics.some((entry) => entry.reason === "waiting" && entry.waitingForCrmClassId === earlierCrmClassId)) continue;
+    const topics = stored.topics.map((entry) => {
+      if (entry.reason !== "waiting" || entry.waitingForCrmClassId !== earlierCrmClassId) return entry;
+      touchedTopics.push(entry.topicId);
+      // After an approval the chain below writes the ones that now match; anything left is the admin's.
+      return why === "approved" ? entry : { ...entry, reason: "stale" as const, waitingFor: null, waitingForCrmClassId: null };
+    });
+    await prisma.crmSyncConflict.update({
+      where: { id: conflict.id },
+      data: { localPayload: asJson({ ...stored, topics }), errorMessage: describe(topics) },
+    });
+  }
+  if (why === "approved" && touchedTopics.length) {
+    await applyWaitingLessonTopicConflicts(touchedTopics);
+    // What the approval did not bring to «было» will not come by itself any more.
+    const left = await prisma.crmSyncConflict.findMany({ where: { kind: LESSON_TOPIC_CONFLICT_KIND, status: "open" } });
+    for (const conflict of left) {
+      const stored = readStored(conflict.localPayload);
+      if (!stored.topics.some((entry) => entry.reason === "waiting" && entry.waitingForCrmClassId === earlierCrmClassId)) continue;
+      const topics = stored.topics.map((entry) => (
+        entry.reason === "waiting" && entry.waitingForCrmClassId === earlierCrmClassId
+          ? { ...entry, reason: "stale" as const, waitingFor: null, waitingForCrmClassId: null }
+          : entry
+      ));
+      await prisma.crmSyncConflict.update({
+        where: { id: conflict.id },
+        data: { localPayload: asJson({ ...stored, topics }), errorMessage: describe(topics) },
+      });
+    }
+  }
+  return touchedTopics.length;
 }
 
 /**
@@ -306,24 +371,23 @@ export async function resolveLessonTopicConflict(
   }
   if (conflict.status === "resolved") return conflict;
   const stored = readStored(conflict.localPayload);
-  const waiting = stored.topics.filter((entry) => entry.reason === "waiting");
   if (decision === "keep_current") {
-    // A lesson waiting for an earlier one is not dropped: it still goes in after that lesson.
-    await saveRemaining(conflict, stored, waiting, { by: actorId, how: "keep_current", note: reason });
+    // An explicit admin decision: every topic of this lesson keeps its current percent.
+    await saveRemaining(conflict, stored, [], { by: actorId, how: "keep_current", note: reason });
     return prisma.crmSyncConflict.findUnique({ where: { id: conflictId } });
   }
   if (!stored.topics.some(writable)) {
     throw new ConflictError(
-      "Здесь нечего записывать: темы либо ждут подтверждения предыдущего урока, либо освоены или уже записаны. Выберите «Оставить как есть».",
+      "Здесь нечего записывать: темы освоены или уже записаны прежней версией отчёта. Выберите «Оставить как есть».",
       "LESSON_TOPIC_CONFLICT_NOT_WRITABLE",
     );
   }
-  const remaining: StoredTopicEntry[] = [...waiting];
+  const remaining: StoredTopicEntry[] = [];
   const failures: string[] = [];
   const written: string[] = [];
   for (const entry of stored.topics) {
     if (!writable(entry)) {
-      if (entry.reason !== "waiting") remaining.push(entry);
+      remaining.push(entry);
       continue;
     }
     const current = await topicPercent(entry.topicId);

@@ -1154,6 +1154,8 @@ export type SkippedLessonTopicUpdate = {
   reason: "stale" | "waiting" | "mastered" | "recorded";
   /** For «waiting»: that earlier lesson, as «Название» (дата, время). */
   waitingFor?: string | null;
+  /** For «waiting»: that earlier lesson's crmClassId — its approval, return or cancel releases this one. */
+  waitingForCrmClassId?: string | null;
 };
 
 type PreparedLearningTopicProgressFromLessonV2 = {
@@ -1193,6 +1195,12 @@ function skippedTopic(
 }
 
 async function earlierLessonAwaitingApproval(crmClassId: string, topicId: string, expectedPercent: number | null) {
+  const found = await earlierLessonAwaitingApprovalRef(crmClassId, topicId, expectedPercent);
+  return found?.label ?? null;
+}
+
+/** The earlier lesson this one continues from: its crmClassId and a label «Название» (дата, время). */
+async function earlierLessonAwaitingApprovalRef(crmClassId: string, topicId: string, expectedPercent: number | null) {
   if (expectedPercent == null) return null;
   const projection = await prisma.offlineLessonProjection.findUnique({
     where: { crmClassId },
@@ -1204,7 +1212,10 @@ async function earlierLessonAwaitingApproval(crmClassId: string, topicId: string
     [topicId],
   )).get(topicId);
   if (!pending || pending.percent !== expectedPercent) return null;
-  return `«${pending.title ?? "Урок"}» (${[pending.date, pending.startTime].filter(Boolean).join(", ")})`;
+  return {
+    crmClassId: pending.crmClassId,
+    label: `«${pending.title ?? "Урок"}» (${[pending.date, pending.startTime].filter(Boolean).join(", ")})`,
+  };
 }
 
 export async function updateLearningTopicProgressBatchFromLessonV2(
@@ -1266,9 +1277,9 @@ export async function updateLearningTopicProgressBatchFromLessonV2(
     if (scoped.progressPercent !== update.expectedPercent && options.skippedTopics) {
       // 07.11 (P2): a later lesson approved before the earlier one is not a real mismatch — it
       // waits for that lesson and is written after it; only a real gap is the admin's decision.
-      const earlier = await earlierLessonAwaitingApproval(crmClassId, update.topicId, update.expectedPercent);
+      const earlier = await earlierLessonAwaitingApprovalRef(crmClassId, update.topicId, update.expectedPercent);
       options.skippedTopics.push(earlier
-        ? { ...skippedTopic(scoped, update, "waiting"), waitingFor: earlier }
+        ? { ...skippedTopic(scoped, update, "waiting"), waitingFor: earlier.label, waitingForCrmClassId: earlier.crmClassId }
         : skippedTopic(scoped, update, "stale"));
       continue;
     }

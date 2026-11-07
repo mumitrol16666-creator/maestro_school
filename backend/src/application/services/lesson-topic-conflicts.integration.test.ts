@@ -15,6 +15,7 @@ import {
   openTopicConflictsFor,
   presentLessonTopicConflict,
   recordLessonTopicConflicts,
+  releaseLessonsWaitingFor,
   resolveLessonTopicConflict,
 } from "./lesson-topic-conflicts.service.js";
 
@@ -277,22 +278,62 @@ integrationTest("a real mismatch is never written by the chain; only a waiting l
   assert.equal((await prisma.crmSyncConflict.findUniqueOrThrow({ where: { id: real!.id } })).status, "open");
 });
 
-integrationTest("«Оставить как есть» keeps a waiting lesson; «Записать» refuses when nothing is writable", async (t) => {
+integrationTest("the admin can write a waiting lesson now, or keep the topic as it is", async (t) => {
   const f = await rewardFixture("individual", 50);
   t.after(() => f.cleanup());
-  const conflict = await recordLessonTopicConflicts({
-    crmClassId: f.crmClassId, reportVersion: 1, approvedBy: f.admin.id,
-    topics: [
-      { topicId: f.topic.id, title: "Тема", expectedPercent: 60, toPercent: 70, currentPercent: 50, reason: "waiting", waitingFor: "«Урок» (2026-10-28, 15:00)" },
-    ],
-  });
-  await assert.rejects(
-    resolveLessonTopicConflict(conflict!.id, f.admin.id, "write_lesson", "записать"),
-    (error: { code?: string }) => error.code === "LESSON_TOPIC_CONFLICT_NOT_WRITABLE",
-  );
-  const kept = await resolveLessonTopicConflict(conflict!.id, f.admin.id, "keep_current", "оставить");
-  assert.equal(kept?.status, "open", "the waiting lesson is still waiting for the earlier one");
+  const waiting = { topicId: f.topic.id, title: "Тема", expectedPercent: 60, toPercent: 70, currentPercent: 50, reason: "waiting" as const, waitingFor: "«Урок» (2026-10-28, 15:00)", waitingForCrmClassId: "never-approved" };
+  const kept = await recordLessonTopicConflicts({ crmClassId: f.crmClassId, reportVersion: 1, approvedBy: f.admin.id, topics: [waiting] });
+  assert.equal((await presentLessonTopicConflict(kept!)).canWriteLesson, true, "a waiting lesson is not a dead end");
+  assert.equal((await resolveLessonTopicConflict(kept!.id, f.admin.id, "keep_current", "оставить"))?.status, "resolved");
   assert.equal(await percent(f.topic.id), 50);
+  const written = await recordLessonTopicConflicts({ crmClassId: `${f.crmClassId}-w`, reportVersion: 1, approvedBy: f.admin.id, topics: [waiting] });
+  assert.equal((await resolveLessonTopicConflict(written!.id, f.admin.id, "write_lesson", "записать сейчас"))?.status, "resolved");
+  assert.equal(await percent(f.topic.id), 70);
+});
+
+integrationTest("the earlier lesson approved with another result, returned or cancelled hands the waiting one to the admin", async (t) => {
+  const f = await rewardFixture("individual", 33);
+  t.after(() => f.cleanup());
+  const waitingOn = (earlier: string) => ({ topicId: f.topic.id, title: "Тема", expectedPercent: 39, toPercent: 60, currentPercent: 33, reason: "waiting" as const, waitingFor: "«A»", waitingForCrmClassId: earlier });
+  // A was resent as 33 → 45 and approved: the topic is 45, B («39 → 60») can never go in by itself.
+  const b = await recordLessonTopicConflicts({ crmClassId: `${f.crmClassId}-b`, reportVersion: 1, approvedBy: f.admin.id, topics: [waitingOn(`${f.crmClassId}-a`)] });
+  await updateLearningTopicProgressBatchFromLessonV2(f.admin.id, `${f.crmClassId}-a`, [{ topicId: f.topic.id, expectedPercent: 33, toPercent: 45 }]);
+  await releaseLessonsWaitingFor(`${f.crmClassId}-a`, "approved");
+  const afterApproval = await prisma.crmSyncConflict.findUniqueOrThrow({ where: { id: b!.id } });
+  assert.equal(afterApproval.status, "open");
+  assert.equal((afterApproval.localPayload as { topics: Array<{ reason: string }> }).topics[0].reason, "stale");
+  assert.equal(await percent(f.topic.id), 45, "nothing written over the approved result");
+  // Returned in CRM: same.
+  const c = await recordLessonTopicConflicts({ crmClassId: `${f.crmClassId}-c`, reportVersion: 1, approvedBy: f.admin.id, topics: [waitingOn(`${f.crmClassId}-x`)] });
+  await releaseLessonsWaitingFor(`${f.crmClassId}-x`, "returned");
+  assert.equal(((await prisma.crmSyncConflict.findUniqueOrThrow({ where: { id: c!.id } })).localPayload as { topics: Array<{ reason: string }> }).topics[0].reason, "stale");
+});
+
+integrationTest("the earlier lesson approved as expected writes the waiting one", async (t) => {
+  const f = await rewardFixture("individual", 33);
+  t.after(() => f.cleanup());
+  const b = await recordLessonTopicConflicts({
+    crmClassId: `${f.crmClassId}-b`, reportVersion: 1, approvedBy: f.admin.id,
+    topics: [{ topicId: f.topic.id, title: "Тема", expectedPercent: 39, toPercent: 60, currentPercent: 33, reason: "waiting", waitingFor: "«A»", waitingForCrmClassId: `${f.crmClassId}-a` }],
+  });
+  await updateLearningTopicProgressBatchFromLessonV2(f.admin.id, `${f.crmClassId}-a`, [{ topicId: f.topic.id, expectedPercent: 33, toPercent: 39 }]);
+  await releaseLessonsWaitingFor(`${f.crmClassId}-a`, "approved");
+  assert.equal(await percent(f.topic.id), 60);
+  assert.equal((await prisma.crmSyncConflict.findUniqueOrThrow({ where: { id: b!.id } })).status, "resolved");
+});
+
+integrationTest("an automatic write that is refused goes to the admin instead of waiting silently", async (t) => {
+  const f = await rewardFixture("individual", 39);
+  t.after(() => f.cleanup());
+  // The lesson's author can no longer act (a closed substitution, a removed account).
+  const b = await recordLessonTopicConflicts({
+    crmClassId: `${f.crmClassId}-b`, reportVersion: 1, approvedBy: randomUUID(),
+    topics: [{ topicId: f.topic.id, title: "Тема", expectedPercent: 39, toPercent: 60, currentPercent: 33, reason: "waiting", waitingFor: "«A»", waitingForCrmClassId: `${f.crmClassId}-a` }],
+  });
+  assert.equal(await applyWaitingLessonTopicConflicts([f.topic.id]), 0);
+  const left = await prisma.crmSyncConflict.findUniqueOrThrow({ where: { id: b!.id } });
+  assert.equal(left.status, "open");
+  assert.equal((left.localPayload as { topics: Array<{ reason: string }> }).topics[0].reason, "stale");
 });
 
 integrationTest("the admin sees the topic's percent now and which buttons work", async (t) => {

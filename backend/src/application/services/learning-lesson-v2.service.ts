@@ -23,6 +23,7 @@ import {
   applyWaitingLessonTopicConflicts,
   openTopicConflictsFor,
   recordLessonTopicConflicts,
+  releaseLessonsWaitingFor,
 } from "./lesson-topic-conflicts.service.js";
 import { pendingTopicPercentsBefore } from "./lesson-pending-topics.service.js";
 import { listHomeworkCheckHistory } from "./learning-homework-v2.service.js";
@@ -908,6 +909,9 @@ export async function applyApprovedLearningLessonV2Results(
   });
   const written = result.topicResults.map((topic) => topic.id);
   if (written.length) await applyWaitingLessonTopicConflicts(written);
+  // Later lessons that waited for this one: written if the topic is now at their «было», otherwise
+  // handed to the admin — never left waiting for a lesson that is already approved.
+  await releaseLessonsWaitingFor(crmClassId, "approved");
   return result;
 }
 

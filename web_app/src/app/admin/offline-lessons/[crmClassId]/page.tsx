@@ -2449,9 +2449,11 @@ export default function AdminOfflineLessonDetailPage() {
                       <p className="mt-2 text-xs leading-5 text-red-800">{item.errorMessage}</p>
                       {item.kind === "topic_percent_mismatch" && item.waitingOnly ? (
                         <p className="mt-2 text-xs leading-5 text-stone-700">
-                          Решать ничего не нужно: процент запишется сам, как только подтвердят предыдущий урок.
+                          Обычно ничего делать не нужно: процент запишется сам, как только подтвердят предыдущий урок.
+                          Если тот урок не будет подтверждён, решите здесь.
                         </p>
-                      ) : (
+                      ) : null}
+                      {(
                       <div className="mt-3 flex flex-wrap gap-2">
                         {item.kind === "topic_percent_mismatch" && !item.canWriteLesson ? null : (
                         <button

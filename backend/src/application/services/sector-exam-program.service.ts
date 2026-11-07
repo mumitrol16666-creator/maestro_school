@@ -191,7 +191,12 @@ export async function scheduleExamSession(actorUserId:string,sessionId:string,ra
     // 07.11 (P3): CRM refused the booking outright (busy slot, wrong room): nothing was booked, so
     // the participants this call sent go back to draft and the roster can be edited or cancelled.
     // A timeout or 5xx may have booked in CRM — then the state stays and the callback finishes it.
-    if (error instanceof AppError && error.statusCode >= 400 && error.statusCode < 500) {
+    // These 409s mean CRM already holds a lesson for the exams (an earlier attempt booked it and the
+    // callback has not arrived): the state stays, the lesson is handled in the CRM calendar.
+    const alreadyBooked = error instanceof AppError && [
+      "SECTOR_EXAM_ALREADY_BOOKED", "SECTOR_EXAM_ALREADY_BOOKED_DIFFERENT_SLOT", "SECTOR_EXAM_NOT_PENDING",
+    ].includes(String(error.code ?? ""));
+    if (error instanceof AppError && error.statusCode >= 400 && error.statusCode < 500 && !alreadyBooked) {
       await prisma.sectorExam.updateMany({
         where: { id: { in: [...wasDraft] }, status: "awaiting_schedule", crmClassId: null },
         data: { status: "draft", sentForScheduleAt: null },

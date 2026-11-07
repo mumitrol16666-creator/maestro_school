@@ -10,7 +10,7 @@ import {
   reopenOfflineLessonReport,
 } from "./offline-lesson-report.service.js";
 import { upsertAdminJournalEntry } from "./admin-journal.service.js";
-import { closeLessonTopicConflicts } from "./lesson-topic-conflicts.service.js";
+import { closeLessonTopicConflicts, releaseLessonsWaitingFor } from "./lesson-topic-conflicts.service.js";
 
 /**
  * Reverses everything a confirmed lesson report version awarded on the Platform:
@@ -496,6 +496,12 @@ export async function applyCrmOfflineLessonEvent(params: {
   crmTeacherId?: string | null;
 }) {
   await applyCrmLessonEventToSectorExams(params).catch(() => null);
+  // 07.11 (review): later lessons waiting for this one go to the admin — it will not be approved as sent.
+  if (params.event === "cancelled" || params.event === "returned") {
+    await releaseLessonsWaitingFor(params.crmClassId, params.event).catch((error) => {
+      console.warn("lesson topic conflict: release failed", params.crmClassId, error);
+    });
+  }
   if (params.event === "cancelled") await closeLessonSubstitutions(params.crmClassId, "cancelled");
   if (params.event === "returned" || params.event === "reopened") await reopenLessonSubstitutions(params.crmClassId);
   if (params.event !== "returned") return { reportState: null, reversal: null };
