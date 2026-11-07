@@ -56,6 +56,7 @@ const teachingNavigation = [
   { href: "/admin/students", label: "Ученики", icon: UsersRound },
   ...lessonNavigation,
   { href: "/admin/homework-review", label: "Проверка ДЗ", icon: ClipboardPenLine },
+  { href: "/admin/dangling-homework", label: "Висячие ДЗ", icon: ClipboardPenLine },
   { href: "/admin/lesson-questions", label: "Вопросы", icon: MessagesSquare },
 ];
 
