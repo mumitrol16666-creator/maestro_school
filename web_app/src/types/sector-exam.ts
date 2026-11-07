@@ -29,6 +29,7 @@ export type SectorExam = {
   scheduledAt: string | null;
   startedAt: string | null;
   finishedAt: string | null;
+  /** Describes the checklist only; whether the exam is passed is `decision === "pass"`. */
   outcome: SectorExamOutcome | null;
   decision: "close_sector" | "pass" | "retake" | null;
   comment: string | null;
@@ -70,7 +71,9 @@ export type PublicSectorExam = {
   attempt: number;
   scheduledAt: string | null;
   finishedAt: string | null;
+  /** Describes the checklist only; whether the exam is passed is `decision === "pass"`. */
   outcome: SectorExamOutcome | null;
+  decision: "close_sector" | "pass" | "retake" | null;
   certificate: { number: string; issuedAt: string | null } | null;
   items: Array<{ id: string; title: string; criteria: string; done: boolean | null }>;
 };

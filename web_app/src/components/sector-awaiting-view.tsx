@@ -17,6 +17,7 @@ export function publicExamOf(exam: SectorExam | null | undefined): PublicSectorE
     scheduledAt: exam.scheduledAt,
     finishedAt: exam.finishedAt,
     outcome: exam.outcome,
+    decision: exam.decision,
     certificate: exam.certificate,
     items: exam.items.map((item) => ({ id: item.id, title: item.title, criteria: item.criteria, done: item.done })),
   };

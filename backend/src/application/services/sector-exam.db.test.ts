@@ -172,17 +172,93 @@ integrationTest("a retake keeps the result and returns the pupil to the same ses
   assert.equal(teacherView[0]?.previousExam?.outcome, "partial");
   assert.equal(teacherView[0]?.canStart, false, "the retake waits for CRM to book it");
 
-  // A failed exam cannot close the sector or issue its reward.
+  // A retake decision on a failed checklist cannot close the sector or issue its reward.
   await bookTestExam(retake.id, { crmClassId: `exam-2-${f.suffix}`, lessonAt: new Date() });
   const second = await exams.startSectorExam(f.teacher.id, retake.id);
   for (const item of second.items) await exams.markSectorExamItem(f.teacher.id, retake.id, item.id, false);
-  await assert.rejects(exams.finishSectorExam(f.teacher.id, retake.id, { decision: "pass" }), rejectsWith("SECTOR_EXAM_NOT_PASSED"));
-  assert.equal((await f.prisma.sectorExam.findUniqueOrThrow({where:{id:retake.id}})).status,"in_progress");
   const failed = await exams.finishSectorExam(f.teacher.id, retake.id, { decision: "retake" });
   assert.equal(failed.exam.outcome, "failed");
+  assert.equal(failed.exam.decision, "retake");
   assert.equal(failed.exam.certificate, null);
   assert.equal(failed.awardedPoints, 0);
   assert.equal(failed.retakeExamId,null);
+});
+
+async function startMarkedExam(f: Awaited<ReturnType<typeof createFixture>>, marks: boolean[]) {
+  const exams = await import("./sector-exam.service.js");
+  await f.markReady();
+  const template = await testExamTasks(f.planId);
+  const exam = await prepareTestExam(f.teacher.id, { planId: f.planId, items: [...template.items, { kind: "custom", title: "Сыграть песню целиком", criteria: "С вокалом" }], send: true });
+  await bookTestExam(exam.id, { crmClassId: `owner-${f.suffix}`, lessonAt: new Date() });
+  const started = await exams.startSectorExam(f.teacher.id, exam.id);
+  assert.equal(started.items.length, marks.length);
+  for (const [index, item] of started.items.entries()) await exams.markSectorExamItem(f.teacher.id, exam.id, item.id, marks[index]!);
+  return { exams, exam, started };
+}
+
+integrationTest("the teacher's pass closes the sector and issues the certificate even when some items are not done", async t => {
+  const f = await createFixture(t);
+  const { exams, exam } = await startMarkedExam(f, [true, false, false]);
+
+  const finished = await exams.finishSectorExam(f.teacher.id, exam.id, { decision: "pass", comment: "Сдал по моему решению" });
+  assert.equal(finished.exam.status, "completed");
+  assert.equal(finished.exam.outcome, "partial", "the outcome only describes the checklist");
+  assert.equal(finished.exam.decision, "pass");
+  assert.match(finished.exam.certificate?.number ?? "", /^MS-\d{4}-[0-9A-F]{8}$/);
+  assert.equal(finished.awardedPoints, 250);
+  assert.equal((await f.prisma.learningPlan.findUniqueOrThrow({ where: { id: f.planId } })).status, "closed");
+
+  const again = await exams.finishSectorExam(f.teacher.id, exam.id, { decision: "pass" });
+  assert.equal(again.awardedPoints, 0, "repeating the decision pays nothing");
+  const points = await f.prisma.pointsTransaction.findMany({ where: { studentId: f.student.id, sourceKey: { startsWith: "learning-plan-completion:" } } });
+  assert.deepEqual(points.map((row) => row.amount), [250]);
+
+  const notices = await f.prisma.userNotification.findMany({ where: { userId: f.student.id, title: "Экзамен сдан, сектор закрыт" } });
+  assert.equal(notices.length, 1);
+  assert.match(notices[0]!.body, /1 из 3 пунктов\. Выдан сертификат\. Начислено 250 баллов\./);
+  assert.equal(await f.prisma.userNotification.count({ where: { userId: f.student.id, title: "Сектор закрыт после экзамена" } }), 0);
+
+  // The certificate follows the decision, not the checklist.
+  const { getSectorCertificate } = await import("./sector-certificate.service.js");
+  assert.equal((await getSectorCertificate(f.student.id, exam.id)).number, finished.exam.certificate?.number);
+  await assert.rejects(exams.finishSectorExam(f.teacher.id, exam.id, { decision: "retake" }), rejectsWith("SECTOR_EXAM_ALREADY_FINISHED"));
+});
+
+integrationTest("the teacher's pass is allowed when no item is done, every item still has to be marked", async t => {
+  const f = await createFixture(t);
+  const exams = await import("./sector-exam.service.js");
+  await f.markReady();
+  const template = await testExamTasks(f.planId);
+  const exam = await prepareTestExam(f.teacher.id, { planId: f.planId, items: template.items, send: true });
+  await bookTestExam(exam.id, { crmClassId: `owner-none-${f.suffix}`, lessonAt: new Date() });
+  const started = await exams.startSectorExam(f.teacher.id, exam.id);
+  await exams.markSectorExamItem(f.teacher.id, exam.id, started.items[0]!.id, false);
+  await assert.rejects(exams.finishSectorExam(f.teacher.id, exam.id, { decision: "pass" }), rejectsWith("SECTOR_EXAM_ITEMS_UNMARKED"));
+  await exams.markSectorExamItem(f.teacher.id, exam.id, started.items[1]!.id, false);
+  const finished = await exams.finishSectorExam(f.teacher.id, exam.id, { decision: "pass" });
+  assert.equal(finished.exam.outcome, "failed");
+  assert.ok(finished.exam.certificate);
+  assert.equal(finished.awardedPoints, 250);
+});
+
+integrationTest("a retake decision with every item done issues nothing and closes nothing", async t => {
+  const f = await createFixture(t);
+  const { exams, exam } = await startMarkedExam(f, [true, true, true]);
+
+  const result = await exams.finishSectorExam(f.teacher.id, exam.id, { decision: "retake", comment: "Хочу ещё раз послушать" });
+  assert.equal(result.exam.status, "completed");
+  assert.equal(result.exam.outcome, "passed", "the checklist was complete");
+  assert.equal(result.exam.decision, "retake");
+  assert.equal(result.exam.certificate, null);
+  assert.equal(result.awardedPoints, 0);
+  assert.equal((await f.prisma.learningPlan.findUniqueOrThrow({ where: { id: f.planId } })).status, "active");
+  assert.equal(await f.prisma.pointsTransaction.count({ where: { studentId: f.student.id, sourceKey: { startsWith: "learning-plan-completion:" } } }), 0);
+  const saved = await f.prisma.sectorExam.findUniqueOrThrow({ where: { id: exam.id } });
+  assert.equal(saved.certificateNumber, null);
+  const { getSectorCertificate } = await import("./sector-certificate.service.js");
+  await assert.rejects(getSectorCertificate(f.student.id, exam.id), (error: { statusCode?: number }) => error.statusCode === 404);
+  const notices = await f.prisma.userNotification.findMany({ where: { userId: f.student.id, title: "Нужна пересдача экзамена" } });
+  assert.equal(notices.length, 1);
 });
 
 integrationTest("an early close cancels the exam prepared for the sector", async t => {

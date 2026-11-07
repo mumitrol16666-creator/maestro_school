@@ -67,7 +67,7 @@ export async function studentSectorStatistics(crmStudentId: string, now = new Da
       studyDays: days(plan.studyStartedAt, plan.examReadyAt ?? plan.studyFinishedAt),
       examWaitingDays: plan.examReadyAt ? Math.max(0, (days(plan.examReadyAt, examDate && examDate <= now ? examDate : now) ?? 1) - 1) : null,
       attemptsCompleted: plan.exams.filter(exam => exam.status === "completed").length,
-      lastExam: lastExam ? { status: lastExam.status, scheduledAt: lastExam.scheduledAt, finishedAt: lastExam.finishedAt, outcome: lastExam.outcome } : null,
+      lastExam: lastExam ? { status: lastExam.status, scheduledAt: lastExam.scheduledAt, finishedAt: lastExam.finishedAt, outcome: lastExam.outcome, decision: lastExam.decision } : null,
       timeline: plan.lifecycleEvents.map(row => ({ kind: row.kind, occurredAt: row.occurredAt, recordedAt: row.recordedAt, actorUserId: row.actorUserId, crmClassId: row.crmClassId })),
     };
   });

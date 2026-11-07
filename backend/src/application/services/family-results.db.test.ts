@@ -68,7 +68,7 @@ integrationTest("results show this month's mastered topics and sectors, own and 
     },
   });
   await prisma.sectorExam.create({
-    data: { sessionId: session.id, planId: ownSector.id, crmStudentId, directionId: direction.id, status: "completed", outcome: "passed", certificateNumber: `MS-2026-${suffix.toUpperCase()}` },
+    data: { sessionId: session.id, planId: ownSector.id, crmStudentId, directionId: direction.id, status: "completed", outcome: "passed", decision: "pass", certificateNumber: `MS-2026-${suffix.toUpperCase()}` },
   });
   const groupSector = await prisma.learningPlan.create({
     data: { directionId: direction.id, crmGroupId, month: "2026-10", sequence: 2, status: "closed", closedAt: thisMonth, closeReason: "manual", publishedVersionNumber: 1, currentVersionNumber: 1 },

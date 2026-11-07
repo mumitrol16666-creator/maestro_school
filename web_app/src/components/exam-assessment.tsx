@@ -15,7 +15,7 @@ export function InProgress({ exam, busy, run }: {
   const [comment, setComment] = useState("");
   const marked = exam.items.filter((item) => item.done !== null).length;
   const allMarked = marked === exam.items.length;
-  const allDone = exam.items.length > 0 && exam.items.every(item => item.done === true);
+  const doneCount = exam.items.filter((item) => item.done === true).length;
   return (
     <div className="mt-3 grid min-w-0 gap-3">
       <ol className="grid min-w-0 grid-cols-1 gap-2">
@@ -63,7 +63,7 @@ export function InProgress({ exam, busy, run }: {
             key={button.decision}
             type="button"
             className={`${control} ${button.primary ? "bg-ink text-white" : "border border-stone-200 bg-white text-stone-700"}`}
-            disabled={!allMarked || busy !== null || (button.decision !== "retake" && !allDone)}
+            disabled={!allMarked || busy !== null}
             onClick={() => void run(button.decision, async () => (await sectorExamsApi.finish(exam.id, button.decision, comment)).exam, true)}
           >
             {busy === button.decision
@@ -74,7 +74,7 @@ export function InProgress({ exam, busy, run }: {
         ))}
       </div>
       {!allMarked ? <p className="text-[11px] text-stone-500">Завершить можно, когда каждый пункт отмечен.</p> : null}
-      {allMarked && !allDone ? <p className="text-sm text-stone-600">Для сдачи нужны все выполненные пункты. Сейчас можно назначить пересдачу без начисления баллов.</p> : null}
+      {allMarked ? <p className="text-sm text-stone-600">Сделано {doneCount} из {exam.items.length}. Сдан экзамен или нет, решаете вы: «Сдал экзамен» закрывает сектор и выдаёт сертификат, «Пересдача» ничего не начисляет.</p> : null}
     </div>
   );
 }

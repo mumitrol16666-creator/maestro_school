@@ -480,12 +480,10 @@ export async function finishSectorExam(teacherUserId: string, examId: string, in
   const doneCount = exam.items.filter((item) => marks.get(item.id)).length;
   const outcome = doneCount === exam.items.length ? "passed" : doneCount === 0 ? "failed" : "partial";
   const now = input.now ?? new Date();
-  const passed = outcome === "passed";
-  if (!passed && input.decision !== "retake") {
-    throw new BadRequestError("Для сдачи выполните все пункты экзамена. Иначе выберите пересдачу.", "SECTOR_EXAM_NOT_PASSED");
-  }
+  // 07.11 (owner): the teacher alone decides whether the exam is passed. `outcome` only describes the checklist.
+  const passed = input.decision === "pass";
   let certificateSnapshot: Prisma.InputJsonValue | undefined;
-  if (passed && input.decision !== "retake") {
+  if (passed) {
     let studentName = exam.studentNameSnapshot ?? (await studentNames([exam.crmStudentId])).get(exam.crmStudentId)?.name;
     if (!studentName) {
       const summary = await fetchStudentOfflineSummary(exam.crmStudentId);
@@ -524,13 +522,13 @@ export async function finishSectorExam(teacherUserId: string, examId: string, in
       decision: input.decision,
       comment: input.comment?.trim().slice(0, 2000) || null,
       certificateSnapshot,
-      certificateNumber: passed && input.decision !== "retake" ? certificateNumber(examId, now) : null,
-      certificateIssuedAt: passed && input.decision !== "retake" ? now : null,
+      certificateNumber: passed ? certificateNumber(examId, now) : null,
+      certificateIssuedAt: passed ? now : null,
     },
   });
 
   let awardedPoints = 0;
-  if (input.decision === "pass") {
+  if (passed) {
     const closed = await closeStudentSectorByExam(exam.planId, { now, tx });
     awardedPoints = closed.awardedPoints;
   }
@@ -543,10 +541,10 @@ export async function finishSectorExam(teacherUserId: string, examId: string, in
   if (completion.replayed) return {exam:examDto(await loadExam(examId)),retakeExamId,awardedPoints};
 
   const summary = `${doneCount} из ${exam.items.length} пунктов`;
-  await notifyStudentAndParents(exam.crmStudentId, input.decision !== "retake"
+  await notifyStudentAndParents(exam.crmStudentId, passed
     ? {
-        title: passed ? "Экзамен сдан, сектор закрыт" : "Сектор закрыт после экзамена",
-        body: `${exam.direction.title}: ${summary}.${passed ? " Выдан сертификат." : ""}${awardedPoints ? ` Начислено ${awardedPoints} баллов.` : ""}`,
+        title: "Экзамен сдан, сектор закрыт",
+        body: `${exam.direction.title}: ${summary}. Выдан сертификат.${awardedPoints ? ` Начислено ${awardedPoints} баллов.` : ""}`,
         url: `/exams/${examId}`,
         dedupeKey: `sector-exam:${examId}:finished`,
       }

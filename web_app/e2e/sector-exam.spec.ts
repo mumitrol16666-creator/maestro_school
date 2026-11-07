@@ -79,7 +79,7 @@ async function mockTeacher(context: BrowserContext, page: Page) {
   });
 }
 
-test("the common exam workspace has one pass/retake rule and requires all saved tasks", async ({ page, context }) => {
+test("the common exam workspace needs every item marked, then the teacher decides pass or retake", async ({ page, context }) => {
   await mockTeacher(context, page);
   await page.goto("/admin/exam-sessions/session-1");
   const panel = page.getByTestId("exam-session-participant");
@@ -95,12 +95,16 @@ test("the common exam workspace has one pass/retake rule and requires all saved 
   await items.nth(1).getByRole("button", { name: "Сделано", exact: true }).click();
   await expect(panel).toContainText("Отмечено 2 из 3");
   await expect(close).toBeDisabled();
+  await expect(retake).toBeDisabled();
   await items.nth(2).getByRole("button", { name: "Не сделано" }).click();
   await expect(items.nth(2).getByRole("button", { name: "Не сделано" })).toHaveAttribute("aria-pressed", "true");
-  await expect(close).toBeDisabled();
+  // 07.11: the teacher decides; a not-done item does not block «Сдал экзамен».
+  await expect(close).toBeEnabled();
   await expect(retake).toBeEnabled();
+  await expect(panel).toContainText("Сделано 2 из 3");
   await items.nth(2).getByRole("button", { name: "Сделано", exact: true }).click();
   await expect(close).toBeEnabled();
+  await expect(retake).toBeEnabled();
 });
 
 test("a pupil card only links to the exam and cannot assess it by sector topics",async({page,context})=>{

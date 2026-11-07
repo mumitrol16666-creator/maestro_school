@@ -94,6 +94,7 @@ integrationTest("sectors follow each other: save opens 1, the exam closes it, th
   const withHistory = await listPublishedLearningPlansV2(crmStudentId, [], { includeClosed: true });
   assert.deepEqual(withHistory.map((row) => [row.sequence, row.status]), [[1, "closed"]]);
   assert.equal(withHistory[0]?.exam?.outcome, "passed");
+  assert.equal(withHistory[0]?.exam?.decision, "pass");
 
   // The next save opens sector 2.
   const second = await saveStudentLearningPlanV2(teacher.id, crmStudentId, crmDirectionId, {
