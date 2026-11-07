@@ -253,9 +253,11 @@ export async function getTeacherStudentWorkspace(
   const limited = access.kind === "lesson";
 
   // 01.11: open sectors drive the card; closed ones are the «Секторы» history.
+  // 07.11: up to two sectors are open in a direction — the current one and the previous one
+  // waiting for its exam — and both stay in `sectors` (with their status).
   const allSectors = await listPublishedLearningPlansV2(crmStudentId, groupIds, { includeClosed: true });
-  const sectors = allSectors.filter((sector) => sector.status === "active");
-  const closedSectors = allSectors.filter((sector) => sector.status !== "active").map((sector) => ({
+  const sectors = allSectors.filter((sector) => sector.status === "active" || sector.status === "awaiting_exam");
+  const closedSectors = allSectors.filter((sector) => sector.status === "closed").map((sector) => ({
     id: sector.id,
     sequence: sector.sequence,
     scope: sector.scope,
@@ -460,6 +462,7 @@ export async function getTeacherStudentWorkspace(
       sectors: sectors.map((sector) => ({
         id: sector.id,
         sequence: sector.sequence,
+        status: sector.status,
         scope: sector.scope,
         direction: sector.direction.title,
         completed: sector.progress.completed,
