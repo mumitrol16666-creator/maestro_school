@@ -396,7 +396,7 @@ export type LessonStudentOverview = {
   appLinked: boolean;
   directions: string[];
   programLevel: string | null;
-  sector: { sequence: number; percent: number; completed: number; total: number; direction: string } | null;
+  sector: { sequence: number; percent: number; completed: number; total: number; direction: string; status?: "active" | "awaiting_exam" } | null;
   level: {
     level: number;
     code: string;

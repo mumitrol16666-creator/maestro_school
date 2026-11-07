@@ -31,7 +31,7 @@ import { GroupSectorPassBadge, SectorExamSummary } from "@/components/sector-exa
 import { sectorTitle } from "@/lib/sector-label";
 import { SectorSwitch } from "@/components/sector-switch";
 import { useSectorChoice } from "@/hooks/use-sector-choice";
-import { groupOpenSectorsByDirection } from "@/lib/sector-switch";
+import { groupOpenSectorsByDirection, sectorSwitchLabel } from "@/lib/sector-switch";
 
 const relationshipLabels: Record<string, string> = {
   mother: "Мама",
@@ -354,7 +354,11 @@ function MonthlyPlans({ studentId }: { studentId: string }) {
   const completed = shown.reduce((total, plan) => total + plan.progress.completed, 0);
   const total = shown.reduce((sum, plan) => sum + plan.progress.total, 0);
   const aggregate = { completed, total, percent: total ? Math.round((completed / total) * 100) : 0 };
-  const title = hasSwitch && shown.length === 1 ? "Текущий сектор" : shown.length === 1 ? sectorTitle(shown[0]!) : "Текущие сектора";
+  // The heading follows the sector on screen: «Сектор N · ждёт экзамена» on that tab, «Текущий сектор» on the current one.
+  const anyWaiting = shown.some((plan) => plan.status === "awaiting_exam");
+  const title = shown.length === 1
+    ? shown[0]!.status === "awaiting_exam" ? sectorSwitchLabel(shown[0]!) : hasSwitch ? "Текущий сектор" : sectorTitle(shown[0]!)
+    : anyWaiting ? "Открытые сектора" : "Текущие сектора";
 
   return (
     <section className="border-t-2 border-stone-300 bg-paper p-5 shadow-soft sm:p-7">
@@ -388,7 +392,7 @@ function MonthlyPlans({ studentId }: { studentId: string }) {
                   onSelect={(id) => choice.select(block.key, id)}
                   label={`Секторы направления ${block.title}`}
                 />
-                {block.shown ? <FamilyPlanDetails plan={block.shown} /> : null}
+                {block.shown ? <FamilyPlanDetails plan={block.shown} hasCurrent={block.personal.some((plan) => plan.status !== "awaiting_exam")} /> : null}
                 {block.group.map((plan) => <FamilyPlanDetails key={plan.id} plan={plan} />)}
               </div>
             ))}
@@ -414,7 +418,7 @@ function MonthlyPlans({ studentId }: { studentId: string }) {
   );
 }
 
-function FamilyPlanDetails({ plan }: { plan: StudentHomeMonthlyPlan }) {
+function FamilyPlanDetails({ plan, hasCurrent = false }: { plan: StudentHomeMonthlyPlan; hasCurrent?: boolean }) {
   return (
     <article className="rounded-2xl border border-stone-200 bg-white p-4">
       <p className="text-[10px] font-black uppercase tracking-[0.14em] text-stone-400">
@@ -455,7 +459,7 @@ function FamilyPlanDetails({ plan }: { plan: StudentHomeMonthlyPlan }) {
       <GroupSectorPassBadge pass={plan.memberPass} />
       {plan.status === "awaiting_exam" ? (
         <p className="mt-4 rounded-lg bg-sky-50 px-4 py-3 text-sm font-bold text-sky-950" data-testid="family-sector-awaiting-exam">
-          Ждёт экзамена. Ребёнок уже занимается в следующем секторе.
+          {hasCurrent ? "Ждёт экзамена. Ребёнок уже занимается в следующем секторе." : "Ждёт экзамена. Новый сектор преподаватель откроет позже."}
         </p>
       ) : null}
       <SectorExamSummary exam={plan.exam} />

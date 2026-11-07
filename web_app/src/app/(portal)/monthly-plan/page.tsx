@@ -123,7 +123,7 @@ export default function SectorPage() {
                 audience="student"
                 label={`Секторы направления ${block.title}`}
               />
-              {block.shown ? <SectorDetails plan={block.shown} /> : null}
+              {block.shown ? <SectorDetails plan={block.shown} hasCurrent={block.personal.some((plan) => plan.status !== "awaiting_exam")} /> : null}
               {block.group.map((plan) => <SectorDetails key={plan.id} plan={plan} />)}
             </div>
           ))}
@@ -185,7 +185,7 @@ export default function SectorPage() {
   );
 }
 
-function SectorDetails({ plan }: { plan: StudentHomeMonthlyPlan }) {
+function SectorDetails({ plan, hasCurrent = false }: { plan: StudentHomeMonthlyPlan; hasCurrent?: boolean }) {
   return (
     <article className="rounded-lg border border-stone-200 bg-white p-5 shadow-soft sm:p-7">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -207,7 +207,7 @@ function SectorDetails({ plan }: { plan: StudentHomeMonthlyPlan }) {
       <GroupSectorPassBadge pass={plan.memberPass} />
       {plan.status === "awaiting_exam" ? (
         <p className="mt-5 rounded-lg bg-sky-50 px-4 py-3 text-sm font-bold text-sky-950" data-testid="sector-awaiting-exam">
-          Ждёт экзамена. Ты уже занимаешься в следующем секторе, а этот сдашь на экзамене в школе.
+          {hasCurrent ? "Ждёт экзамена. Ты уже занимаешься в следующем секторе, а этот сдашь на экзамене в школе." : "Ждёт экзамена. Этот сектор ты сдашь на экзамене в школе. Новый сектор преподаватель откроет после урока."}
         </p>
       ) : null}
       <SectorExamSummary exam={plan.exam} />

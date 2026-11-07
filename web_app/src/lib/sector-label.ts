@@ -10,3 +10,15 @@ export function sectorTitle(
   if (plan.scope === "group") return `План группы${number}`;
   return audience === "student" ? `Мой сектор${number}` : `Сектор${number}`;
 }
+
+/**
+ * The same name of a sector wherever a topic is picked or listed: «Сектор 2 · тема»,
+ * and «Сектор 1 · ждёт экзамена · тема» for the sector waiting for its exam.
+ */
+export function sectorTopicLabel(
+  plan: { scope?: "student" | "group" | null; sequence?: number | null; status?: string | null },
+  title: string,
+) {
+  const sector = sectorTitle({ scope: plan.scope ?? "student", sequence: plan.sequence });
+  return `${sector}${plan.status === "awaiting_exam" ? " · ждёт экзамена" : ""} · ${title}`;
+}

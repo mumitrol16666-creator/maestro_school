@@ -7,7 +7,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { formatFio, initialsFromName } from "@/lib/name";
-import { isContentAdminRole, roleLabel } from "@/lib/role-labels";
+import { isContentAdminRole, isOfflineCoordinatorRole, roleLabel } from "@/lib/role-labels";
 import { usePendingHomeworkCount } from "@/hooks/use-pending-homework-count";
 import { usePendingLessonQuestionsCount } from "@/hooks/use-pending-lesson-questions-count";
 import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
@@ -92,6 +92,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           ...lessonNavigation,
           { href: "/admin/sector-exams", label: "Экзамены секторов", icon: GraduationCap },
           { href: "/admin/materials", label: "Библиотека материалов", icon: LibraryBig },
+          // The list is open to the coordinators the server lets in (curator, branch manager).
+          ...(isOfflineCoordinatorRole(user?.role) ? [{ href: "/admin/dangling-homework", label: "Висячие ДЗ", icon: ClipboardPenLine }] : []),
         ];
   const sidebarTitle = isContentAdmin ? "Управление школой" : "Кабинет преподавателя";
   const displayName = (user ? formatFio(user) : "")

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { sectorTopicLabel } from "../../src/lib/sector-label";
 import { orderOpenSectors, resolveSelectedSector, sectorSwitchLabel } from "../../src/lib/sector-switch";
 
 const waiting = { id: "a", sequence: 1, status: "awaiting_exam" };
@@ -25,4 +26,10 @@ test("labels name the sector and its state; the student reads «Мой сект�
   assert.equal(sectorSwitchLabel(current), "Сектор 2 · текущий");
   assert.equal(sectorSwitchLabel(waiting), "Сектор 1 · ждёт экзамена");
   assert.equal(sectorSwitchLabel(waiting, "student"), "Мой сектор 1 · ждёт экзамена");
+});
+
+test("a topic is named with its sector, and the waiting sector says so", () => {
+  assert.equal(sectorTopicLabel({ scope: "student", sequence: 2, status: "active" }, "Переборы"), "Сектор 2 · Переборы");
+  assert.equal(sectorTopicLabel({ scope: "student", sequence: 1, status: "awaiting_exam" }, "Am и E"), "Сектор 1 · ждёт экзамена · Am и E");
+  assert.equal(sectorTopicLabel({ scope: "group", sequence: 3 }, "Ритм"), "План группы 3 · Ритм");
 });

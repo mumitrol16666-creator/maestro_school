@@ -66,6 +66,7 @@ import { currentAqtobeMonth } from "@/lib/aqtobe-month";
 import { LessonBonusXp } from "@/components/league-bonus-form";
 import { MaterialLibraryPicker } from "@/components/material-library-picker";
 import { LessonStartBlockers } from "@/components/lesson-start-blockers";
+import { sectorTopicLabel } from "@/lib/sector-label";
 import type { CmsMedia } from "@/types/cms";
 import type {
   LessonStudentsOverview,
@@ -2164,7 +2165,7 @@ export default function AdminOfflineLessonDetailPage() {
                           ) : null}
                         {learningV2.plans.flatMap((plan) => plan.topics.map((planTopic) => (
                           <option key={planTopic.id} value={planTopic.id}>
-                            {planTopic.title}
+                            {learningV2.plans.length > 1 ? sectorTopicLabel(plan, planTopic.title) : planTopic.title}
                             {showLearningDirectionInTopicOptions ? ` · ${plan.direction.title}` : ""}
                           </option>
                         )))}
