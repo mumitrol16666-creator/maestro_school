@@ -7,8 +7,10 @@ export async function writeAuditLog(params: {
   action: AuditAction;
   actorId?: string | null;
   payload?: Prisma.InputJsonValue;
+  /** Pass the transaction when the entry must stand or fall together with the change it records. */
+  client?: Prisma.TransactionClient;
 }) {
-  await prisma.auditLog.create({
+  await (params.client ?? prisma).auditLog.create({
     data: {
       entityType: params.entityType,
       entityId: params.entityId,

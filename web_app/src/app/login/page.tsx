@@ -10,6 +10,7 @@ import {
   UsersRound,
 } from "lucide-react";
 import { FormEvent, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AuthHeroPanel } from "@/components/auth-hero-panel";
 import { AndroidAppDownloadLink } from "@/components/android-app-download";
@@ -18,11 +19,12 @@ import { useAuth } from "@/components/auth-provider";
 import { ApiError } from "@/lib/api-client";
 import { getConnectionStatus, subscribeConnectionStatus } from "@/lib/connection-status";
 import { whatsAppUrl } from "@/lib/phone";
-import { homePathForRole, isStaffRole } from "@/lib/role-labels";
+import { homePathForRole, homePathForUser, isStaffRole } from "@/lib/role-labels";
 
-function safeNextPath(next: string | null, role?: string | null) {
+function safeNextPath(next: string | null, user: { role?: string | null; audience?: string | null }) {
+  const role = user.role;
   if (!next || !next.startsWith("/") || next.startsWith("//")) {
-    return homePathForRole(role);
+    return homePathForUser(user);
   }
   // A file of the media library opened before signing in (plan 1.12): any signed-in role may see it.
   if (/^\/api\/v1\/media\/(images|pdf|files)\/[A-Za-z0-9._-]+(\?download=1)?$/.test(next)) {
@@ -35,7 +37,7 @@ function safeNextPath(next: string | null, role?: string | null) {
     return homePathForRole(role);
   }
   if (!isStaffRole(role) && role !== "parent" && (next.startsWith("/admin") || next.startsWith("/family"))) {
-    return homePathForRole(role);
+    return homePathForUser(user);
   }
   return next;
 }
@@ -102,7 +104,7 @@ export default function LoginPage() {
   const { deviceOffline: offline } = useSyncExternalStore(subscribeConnectionStatus, getConnectionStatus, getConnectionStatus);
 
   useEffect(() => {
-    if (!authLoading && user) router.replace(homePathForRole(user.role));
+    if (!authLoading && user) router.replace(homePathForUser(user));
   }, [authLoading, router, user]);
 
   useEffect(() => {
@@ -121,7 +123,7 @@ export default function LoginPage() {
       try {
         const loggedInUser = await loginWithSso(ssoToken!);
         if (cancelled) return;
-        const target = safeNextPath(params.get("next"), loggedInUser.role);
+        const target = safeNextPath(params.get("next"), loggedInUser);
         if (target.startsWith("/api/")) window.location.assign(target);
         else router.replace(target);
       } catch (reason) {
@@ -145,7 +147,7 @@ export default function LoginPage() {
     setError(null);
     try {
       const loggedInUser = await login(phone, password, profile);
-      const target = safeNextPath(new URLSearchParams(window.location.search).get("next"), loggedInUser.role);
+      const target = safeNextPath(new URLSearchParams(window.location.search).get("next"), loggedInUser);
       // A file of the media library is not a page of the app: the browser has to load it itself.
       if (target.startsWith("/api/")) window.location.assign(target);
       else router.replace(target);
@@ -293,18 +295,33 @@ export default function LoginPage() {
           <AndroidAppDownloadLink />
 
           {profile !== "staff" ? (
-            <div className="mt-6 border-t border-stone-200 pt-5">
-              <p className="text-sm font-bold text-ink">Хотите стать учеником Maestro?</p>
-              <p className="mt-2 text-sm leading-6 text-stone-500">
-                Запишитесь на пробный урок на сайте. Администратор свяжется с вами и подберёт удобное время.
-              </p>
-              <a
-                href={TRIAL_LANDING_URL}
-                className="mt-2 inline-flex min-h-11 items-center gap-2 text-sm font-bold text-gold-ink transition hover:text-ink"
-              >
-                Записаться на пробный урок <ArrowRight size={15} />
-              </a>
-            </div>
+            <>
+              <div className="mt-6 border-t border-stone-200 pt-5">
+                <p className="text-sm font-bold text-ink">Нет аккаунта?</p>
+                <p className="mt-2 text-sm leading-6 text-stone-500">
+                  Создайте аккаунт и учитесь на онлайн-курсах. Родитель может зарегистрировать себя и ребёнка сразу.
+                </p>
+                <Link
+                  href="/register"
+                  className="mt-2 inline-flex min-h-11 items-center gap-2 text-sm font-bold text-gold-ink transition hover:text-ink"
+                  data-testid="login-register-link"
+                >
+                  Зарегистрироваться <ArrowRight size={15} />
+                </Link>
+              </div>
+              <div className="mt-2 border-t border-stone-200 pt-5">
+                <p className="text-sm font-bold text-ink">Хотите стать учеником Maestro?</p>
+                <p className="mt-2 text-sm leading-6 text-stone-500">
+                  Запишитесь на пробный урок на сайте. Администратор свяжется с вами и подберёт удобное время.
+                </p>
+                <a
+                  href={TRIAL_LANDING_URL}
+                  className="mt-2 inline-flex min-h-11 items-center gap-2 text-sm font-bold text-gold-ink transition hover:text-ink"
+                >
+                  Записаться на пробный урок <ArrowRight size={15} />
+                </a>
+              </div>
+            </>
           ) : null}
         </div>
       </section>

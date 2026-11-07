@@ -11,6 +11,8 @@ import {
 } from "./offline-lesson-report.service.js";
 import { upsertAdminJournalEntry } from "./admin-journal.service.js";
 import { closeLessonTopicConflicts, releaseLessonsWaitingFor } from "./lesson-topic-conflicts.service.js";
+import { reverseSystemPoints } from "./points.service.js";
+import { freeReversedKey, reversalKey, reversedKey } from "../../domain/source-key-reversal.js";
 
 /**
  * Reverses everything a confirmed lesson report version awarded on the Platform:
@@ -35,33 +37,6 @@ export type OfflineLessonReversalSummary = {
   topics: Array<{ topicId: string; fromPercent: number; toPercent: number; masteryPoints: number }>;
   planCompletions: Array<{ planId: string; points: number }>;
 };
-
-function reversedKey(sourceKey: string, reportVersion: number) {
-  return `${sourceKey}:reversed:v${reportVersion}`;
-}
-
-/**
- * The renamed key of a reversed row must stay unique. Keys that are not bound to
- * a lesson (homework recipient, topic mastery, plan completion) can be awarded
- * again by a later lesson and reversed again under the same report version, so
- * the rename takes the first free suffix: `:reversed:v1`, then `:reversed:v1-2`…
- */
-async function freeReversedKey(
-  exists: (candidate: string) => Promise<boolean>,
-  sourceKey: string,
-  reportVersion: number,
-) {
-  const base = reversedKey(sourceKey, reportVersion);
-  let candidate = base;
-  for (let attempt = 2; await exists(candidate); attempt += 1) {
-    candidate = `${base}-${attempt}`;
-  }
-  return candidate;
-}
-
-function reversalKey(sourceKey: string, reportVersion: number) {
-  return `${sourceKey}:reversal:v${reportVersion}`;
-}
 
 async function reverseXpEvent(tx: Tx, sourceKey: string, reportVersion: number, reason: string, at: Date) {
   const event = await tx.leagueXpEvent.findUnique({ where: { sourceKey } });
@@ -148,54 +123,6 @@ async function reverseCoinTransaction(
   await tx.studentCoinBalance.update({
     where: { studentId: original.studentId },
     data: { balance: balanceAfter },
-  });
-  return original.amount;
-}
-
-async function reversePointsTransaction(
-  tx: Tx,
-  sourceKey: string,
-  reportVersion: number,
-  reason: string,
-  actorUserId: string | null,
-  at: Date,
-) {
-  const original = await tx.pointsTransaction.findUnique({ where: { sourceKey } });
-  if (!original || original.amount <= 0) return 0;
-  const topicAward = sourceKey.match(/^learning-topic-mastery:([^:]+):([^:]+)$/);
-  if (topicAward && await tx.pointsTransaction.findFirst({where:{
-    sourceKey:{startsWith:`account-recovery:${topicAward[1]}:${original.studentId}:`},
-    studentId:original.studentId,economicEpochId:original.economicEpochId,amount:-original.amount,
-    reason:`Перенос баллов в действующий кабинет: ${original.id}`,
-  },select:{id:true}})) {
-    // This original was already offset by a transfer. The target's canonical receipt is
-    // reversed by the same topic loop; debiting the old account again would make it negative.
-    return 0;
-  }
-  const correctionKey = reversalKey(sourceKey, reportVersion);
-  const existing = await tx.pointsTransaction.findUnique({ where: { sourceKey: correctionKey } });
-  if (existing) return 0;
-  await tx.pointsTransaction.update({
-    where: { id: original.id },
-    data: {
-      sourceKey: await freeReversedKey(
-        async (candidate) => Boolean(await tx.pointsTransaction.findUnique({ where: { sourceKey: candidate }, select: { id: true } })),
-        sourceKey,
-        reportVersion,
-      ),
-    },
-  });
-  await tx.pointsTransaction.create({
-    data: {
-      economicEpochId: original.economicEpochId,
-      studentId: original.studentId,
-      amount: -original.amount,
-      reason: `Отмена: ${original.reason}. ${reason}`.slice(0, 500),
-      sourceKey: correctionKey,
-      lessonId: null,
-      awardedBy: actorUserId,
-      createdAt: at,
-    },
   });
   return original.amount;
 }
@@ -338,7 +265,7 @@ async function reverseTopicUpdates(
       for (const row of masteryRows) {
         if (!row.sourceKey) continue;
         if (row.sourceKey.includes(":reversed:") || row.sourceKey.includes(":reversal:")) continue;
-        masteryPoints += await reversePointsTransaction(tx, row.sourceKey, reportVersion, reason, actorUserId, at);
+        masteryPoints += await reverseSystemPoints(tx, { sourceKey: row.sourceKey, version: reportVersion, reason, actorUserId, at });
       }
       const plans = await tx.learningPlan.findMany({
         where: {
@@ -362,7 +289,7 @@ async function reverseTopicUpdates(
         for (const row of completionRows) {
           if (!row.sourceKey) continue;
           if (row.sourceKey.includes(":reversed:") || row.sourceKey.includes(":reversal:")) continue;
-          points += await reversePointsTransaction(tx, row.sourceKey, reportVersion, reason, actorUserId, at);
+          points += await reverseSystemPoints(tx, { sourceKey: row.sourceKey, version: reportVersion, reason, actorUserId, at });
         }
         // The sector reopens unless a later sector was already opened after it.
         const sector = await tx.learningPlan.findUniqueOrThrow({

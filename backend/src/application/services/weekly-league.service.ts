@@ -12,6 +12,7 @@ import {
   calculateLeagueRankDelta,
   courseHomeworkLeagueXp,
   getAqtobeWeekRange,
+  isLeagueStudent,
   lessonAttendanceXpForWeek,
   LEGACY_WEEKLY_LEAGUE_PRIZES,
   nextWeeklyStreak,
@@ -37,6 +38,12 @@ import {
   type AqtobeWeekRange,
 } from "./weekly-league-policy.js";
 
+/** Prisma-условие, парное `isLeagueStudent`: только ученики школы. */
+const LEAGUE_STUDENT_FILTER = {
+  leagueEligible: true,
+  crmStudentId: { not: null },
+} satisfies Prisma.UserWhereInput;
+
 const HOMEWORK_SOURCE_TYPES: LeagueXpSourceType[] = [
   "learning_homework",
   "course_homework",
@@ -59,7 +66,7 @@ async function listRankedWeek(
       createdAt: { gte: range.start, lt: range.end },
       reversedAt: null,
       student: {
-        leagueEligible: true,
+        ...LEAGUE_STUDENT_FILTER,
         isActive: true,
         deletedAt: null,
         role: { slug: "student" },
@@ -107,7 +114,7 @@ export async function awardLeagueXp(params: {
       id: params.studentId,
       deletedAt: null,
       isActive: true,
-      leagueEligible: true,
+      ...LEAGUE_STUDENT_FILTER,
       role: { slug: "student" },
     },
     select: { id: true },
@@ -234,7 +241,7 @@ export async function previewOfflineLessonAttendanceXp(params: {
       amount = existing.amount;
     } else if (!student || student.role.slug !== "student") {
       status = "not_linked";
-    } else if (!student.isActive || !student.leagueEligible) {
+    } else if (!student.isActive || !isLeagueStudent(student)) {
       status = "not_eligible";
     } else if (!params.rewardsEnabled) {
       status = "economy_disabled";
@@ -290,7 +297,7 @@ export async function awardLessonAttendanceXp(params: {
         ...(params.crmStudentId ? { crmStudentId: params.crmStudentId } : {}),
         deletedAt: null,
         isActive: true,
-        leagueEligible: true,
+        ...LEAGUE_STUDENT_FILTER,
         role: { slug: "student" },
       },
       select: { id: true },
@@ -443,7 +450,7 @@ export async function awardHomeworkAcceptedXp(params: {
         id: params.studentId,
         deletedAt: null,
         isActive: true,
-        leagueEligible: true,
+        ...LEAGUE_STUDENT_FILTER,
         role: { slug: "student" },
       },
       select: { id: true },
@@ -551,7 +558,7 @@ export async function awardPreparedTestXp(params: {
         id: params.studentId,
         deletedAt: null,
         isActive: true,
-        leagueEligible: true,
+        ...LEAGUE_STUDENT_FILTER,
         role: { slug: "student" },
       },
       select: { id: true },
@@ -690,7 +697,7 @@ export async function awardTeacherLeagueBonus(params: {
         id: params.studentId,
         deletedAt: null,
         isActive: true,
-        leagueEligible: true,
+        ...LEAGUE_STUDENT_FILTER,
         role: { slug: "student" },
       },
       select: { id: true },
@@ -840,7 +847,7 @@ export async function getWeeklyLeagueOverview(
     viewerStudentId
       ? prisma.user.findFirst({
           where: { id: viewerStudentId, role: { slug: "student" }, deletedAt: null },
-          select: { id: true, leagueEligible: true, isActive: true },
+          select: { id: true, leagueEligible: true, crmStudentId: true, isActive: true },
         })
       : Promise.resolve(null),
     economicEpoch && viewerStudentId
@@ -987,7 +994,7 @@ export async function getWeeklyLeagueOverview(
     participantCount: standings.length,
     standings: standings.slice(0, 10),
     currentStudent: viewerStudentId ? {
-      eligible: Boolean(viewer?.leagueEligible && viewer.isActive),
+      eligible: Boolean(viewer && isLeagueStudent(viewer) && viewer.isActive),
       position: currentEntry?.position ?? null,
       xp: currentXp,
       eventCount: currentEntry?.eventCount ?? 0,
@@ -1132,6 +1139,7 @@ export async function getAdminWeeklyLeagueOverview(weekOffset = 0, now = new Dat
         login: true,
         isActive: true,
         leagueEligible: true,
+        crmStudentId: true,
       },
     }),
     listRankedWeek(range, economicEpoch?.id),
@@ -1179,14 +1187,14 @@ export async function getAdminWeeklyLeagueOverview(weekOffset = 0, now = new Dat
     students: students.map((student) => ({
       ...student,
       fullName: `${student.firstName} ${student.lastName}`.trim(),
-      effectiveEligible: student.isActive && student.leagueEligible,
+      effectiveEligible: student.isActive && isLeagueStudent(student),
       xp: standings.get(student.id)?.xp ?? 0,
       position: standings.get(student.id)?.position ?? null,
       streakWeeks: streakByStudent.get(student.id)?.currentWeeks ?? 0,
       bestStreakWeeks: streakByStudent.get(student.id)?.bestWeeks ?? 0,
       streakProtection: protectionByStudent.get(student.id) ?? null,
     })),
-    excludedCount: students.filter((student) => !student.isActive || !student.leagueEligible).length,
+    excludedCount: students.filter((student) => !student.isActive || !isLeagueStudent(student)).length,
   };
 }
 
@@ -1446,7 +1454,7 @@ export async function finalizeWeeklyLeagueSnapshot(params: {
           recordedAt: { lte: params.finalizedAt },
           reversedAt: null,
           student: {
-            leagueEligible: true,
+            ...LEAGUE_STUDENT_FILTER,
             isActive: true,
             deletedAt: null,
             role: { slug: "student" },
@@ -1466,7 +1474,7 @@ export async function finalizeWeeklyLeagueSnapshot(params: {
           epochId: params.economicEpochId,
           activatedAt: { lt: params.week.end },
           student: {
-            leagueEligible: true,
+            ...LEAGUE_STUDENT_FILTER,
             isActive: true,
             deletedAt: null,
             role: { slug: "student" },

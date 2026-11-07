@@ -359,6 +359,25 @@ export async function postOnlineLessonBooking(payload: {
   }>("/api/integration/v1/bookings/online-lesson", payload);
 }
 
+/**
+ * A registration in the app is only a lead for the school's managers: CRM stores it as a request
+ * with the source «Приложение — регистрация» and creates no student, membership or money record.
+ * `externalSourceId` makes it idempotent: the same id sent twice is one request.
+ */
+export async function postAppRegistrationBooking(payload: {
+  externalSourceId: string;
+  name: string;
+  lastName: string;
+  phone: string;
+  comment?: string;
+}) {
+  return crmPost<{
+    crmBookingId: string;
+    externalSourceId: string;
+    status: string;
+  }>("/api/integration/v1/bookings/online-lesson", { requestType: "app_registration", ...payload });
+}
+
 export async function postOnlineLessonStatus(
   externalSourceId: string,
   status: "new" | "assigned" | "scheduled" | "completed" | "cancelled" | "no_show",
@@ -661,22 +680,6 @@ export async function postAdminReopenClass(
   idempotencyKey?: string,
 ) {
   return requireCrmLessonReopen();
-}
-
-export async function syncStudentFromApp(payload: {
-  appUserId: string;
-  phone: string;
-  firstName: string;
-  lastName: string;
-  middleName?: string | null;
-  email: string;
-}) {
-  return crmPost<{
-    status: string;
-    crmStudentId: string;
-    appUserId: string;
-    created: boolean;
-  }>("/api/integration/v1/users/sync-from-app", payload);
 }
 
 export async function postStudentAvatarToCrm(crmStudentId: string, avatarUrl: string) {

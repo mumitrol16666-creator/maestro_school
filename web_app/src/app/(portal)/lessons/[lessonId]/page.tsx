@@ -17,6 +17,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { ScreenError } from "@/components/app-error-screen";
+import { CoursePaywall } from "@/components/course-paywall";
 import { EmptyState } from "@/components/data-states";
 import { HomeworkAttemptHistory } from "@/components/homework-attempt-history";
 import { HomeworkSubmissionForm } from "@/components/homework-submission-form";
@@ -32,6 +33,7 @@ import { MarkdownContent } from "@/components/markdown-content";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { flattenCourseLessons, normalizeLessonStatus, toLesson } from "@/lib/adapters";
 import { ApiError, api } from "@/lib/api-client";
+import { courseAccessApi } from "@/lib/course-access-api";
 import { errorToastText } from "@/lib/error-text";
 import { lessonStatusHints, testLessonStatusHints } from "@/lib/homework-ui";
 import { lessonStatusLabels } from "@/lib/ui";
@@ -66,6 +68,17 @@ const STALE_SCREEN_TOAST = "Нет связи. Обнови экран, когд
 
 async function loadLesson(lessonId: string) {
   const detail = await api.lesson(lessonId);
+  if (detail.access?.kind === "locked") {
+    // Stage 4: a paid lesson without access has no content and no progress: the screen is the paywall.
+    return {
+      detail,
+      lesson: toLesson(detail, "locked"),
+      lessonNumber: null,
+      attempts: [],
+      nextLesson: null,
+      points: 0,
+    };
+  }
   const [progress, course, attempts] = await Promise.all([
     api.progress(detail.courseId),
     api.course(detail.courseId),
@@ -120,6 +133,28 @@ export default function LessonPage() {
   if (!resource.data) return <EmptyState title="Урок не найден" description="Возможно, урок больше недоступен." />;
 
   const { detail, lesson, lessonNumber, attempts, nextLesson } = resource.data;
+  if (detail.access?.kind === "locked") {
+    return (
+      <div className="mx-auto max-w-3xl" data-testid="locked-lesson">
+        <div className="mb-6 flex flex-wrap items-center gap-3">
+          <span className="text-xs font-bold uppercase tracking-wide text-gold-ink">Урок</span>
+          <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-900">после оплаты</span>
+        </div>
+        <h1 className="font-display break-words text-4xl leading-tight sm:text-5xl">{lesson.title}</h1>
+        {lesson.description ? (
+          <MarkdownContent className="mt-5 max-w-3xl break-words">{lesson.description}</MarkdownContent>
+        ) : null}
+        <div className="mt-8">
+          <CoursePaywall
+            courseKey={detail.courseId}
+            voice="ty"
+            load={() => courseAccessApi.access(detail.courseId)}
+            submit={(body) => courseAccessApi.requestPayment(detail.courseId, body)}
+          />
+        </div>
+      </div>
+    );
+  }
   const isTestHomework = detail.homework?.type === "test";
   const testQuestions = detail.homework?.testQuestions ?? [];
   const passingScore = detail.homework?.passingScore ?? 70;

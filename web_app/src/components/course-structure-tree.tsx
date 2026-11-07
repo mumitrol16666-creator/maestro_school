@@ -6,6 +6,8 @@ import type { CmsCourseTree } from "@/types/cms";
 
 interface CourseStructureTreeProps {
   modules: CmsCourseTree["modules"];
+  /** In a paid course: the lessons open to everyone, marked in the tree. */
+  freeLessonIds?: Set<string>;
   query: string;
   expanded: Set<string>;
   selectedModuleId: string | null;
@@ -49,7 +51,7 @@ export function CourseStructureTree(props: CourseStructureTreeProps) {
           </div>
           {isExpanded && <div className="space-y-1 border-t border-stone-100 p-2">
             {module.lessons.length ? module.lessons.map((lesson) => <button key={lesson.id} onClick={() => props.onSelectLesson(module.id, lesson.id)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left ${props.selectedLessonId === lesson.id ? "bg-ink text-white" : "hover:bg-stone-50"}`}>
-              <BookOpen size={14} className={props.selectedLessonId === lesson.id ? "text-gold-ink" : "text-stone-300"} /><span className="min-w-0 flex-1 truncate text-sm font-semibold">{lesson.title}</span><span className={`h-2 w-2 shrink-0 rounded-full ${lesson.isPublished ? "bg-emerald-500" : "bg-amber-400"}`} />
+              <BookOpen size={14} className={props.selectedLessonId === lesson.id ? "text-gold-ink" : "text-stone-300"} /><span className="min-w-0 flex-1 truncate text-sm font-semibold">{lesson.title}</span>{props.freeLessonIds?.has(lesson.id) ? <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-700">бесплатно</span> : null}<span className={`h-2 w-2 shrink-0 rounded-full ${lesson.isPublished ? "bg-emerald-500" : "bg-amber-400"}`} />
             </button>) : <p className="px-3 py-3 text-xs text-stone-400">{normalizedQuery ? "Совпадений нет" : "Уроков пока нет"}</p>}
           </div>}
         </div>;

@@ -11,6 +11,7 @@ import {
   ListTodo,
   MessagesSquare,
   Target,
+  UserRound,
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
@@ -18,7 +19,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 export type StudentWorkspaceNavigationItem = {
-  id: "home" | "learning" | "schedule" | "messages";
+  id: "home" | "learning" | "schedule" | "messages" | "courses" | "tests" | "profile";
   href: string;
   label: string;
   icon: LucideIcon;
@@ -57,6 +58,16 @@ export const studentWorkspaceNavigation: StudentWorkspaceNavigationItem[] = [
     messagesOnly: true,
   },
   // Plan 2.6: the shop is off until CRM has goods and prices; /rewards leads home (decision 24.10).
+];
+
+/**
+ * Stage 4: a student outside the school sees three sections. Courses, tests and the profile are all
+ * they have; the school's schedule, sector, league and homework are not theirs.
+ */
+export const externalStudentNavigation: StudentWorkspaceNavigationItem[] = [
+  { id: "courses", href: "/courses", label: "Курсы", icon: BookMarked, pathPrefixes: ["/courses", "/lessons"] },
+  { id: "tests", href: "/tests", label: "Тесты", icon: ClipboardCheck, pathPrefixes: ["/tests"] },
+  { id: "profile", href: "/settings", label: "Профиль", icon: UserRound, pathPrefixes: ["/settings"] },
 ];
 
 export function pathMatchesAny(pathname: string, prefixes: readonly string[]) {

@@ -1,9 +1,11 @@
 "use client";
 
-import { BookOpen, Check, ChevronRight, LoaderCircle, LockKeyhole, Play, Trophy } from "lucide-react";
+import { BookOpen, Check, ChevronRight, CreditCard, LoaderCircle, LockKeyhole, Play, Trophy } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ScreenError } from "@/components/app-error-screen";
+import { useAuth } from "@/components/auth-provider";
+import { CoursePaywall } from "@/components/course-paywall";
 import { EmptyState } from "@/components/data-states";
 import { MarkdownContent } from "@/components/markdown-content";
 import { ProgressBar } from "@/components/progress-bar";
@@ -13,6 +15,19 @@ import { toast } from "@/components/toast";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { difficultyLabel, flattenCourseLessons } from "@/lib/adapters";
 import { api } from "@/lib/api-client";
+import { courseAccessApi } from "@/lib/course-access-api";
+import {
+  courseRewardLine,
+  courseStateLine,
+  freeLessonsNote,
+  isForSale,
+  isFreeLesson,
+  lessonLockBadge,
+  lessonLockHref,
+  lessonLockLabel,
+  mergeLessonLock,
+  saleViewOf,
+} from "@/lib/course-access-format";
 import { errorToastText } from "@/lib/error-text";
 import { formatCount, formatOutOf } from "@/lib/plural";
 import { useState } from "react";
@@ -29,6 +44,8 @@ export default function CourseDetailPage() {
   const { courseId } = useParams<{ courseId: string }>();
   const resource = useApiResource(() => loadCourse(courseId), [courseId]);
   const [enrolling, setEnrolling] = useState(false);
+  const [showPaywall, setShowPaywall] = useState(false);
+  const { user } = useAuth();
 
   if (resource.loading && !resource.data) return <ScreenSkeleton variant="detail" label="Открываем курс" />;
   if (resource.error && !resource.data) return <ScreenError message={resource.error} code={resource.errorCode} retry={resource.reload} />;
@@ -37,6 +54,13 @@ export default function CourseDetailPage() {
   const { course, progress, lessons } = resource.data;
   const enrolled = Boolean(course.enrollmentStatus);
   const progressPercent = progress?.courseProgressPercent ?? course.progress ?? 0;
+  const sale = saleViewOf(course);
+  const state = courseStateLine(sale);
+  const freeNote = freeLessonsNote(sale);
+  const rewardLine = courseRewardLine(user?.productFeatures?.rewardEconomyV2);
+  // Stage 4: the server closes lessons for the payment (`locked`); the order of the course is the progress.
+  const paymentLocked = new Set(course.modules.flatMap((module) => module.lessons.filter((lesson) => lesson.locked).map((lesson) => lesson.id)));
+  const canPay = isForSale(sale) && sale.access?.kind === "none" && !sale.access.fullAccess && !sale.access.pendingPaymentRequest;
 
   async function handleEnroll() {
     setEnrolling(true);
@@ -71,11 +95,19 @@ export default function CourseDetailPage() {
             )}
           </div>
           <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
+            <p
+              className="mb-4 rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold text-gold-ink"
+              data-testid="course-state"
+              data-tone={state.tone}
+            >
+              {state.text}
+            </p>
+            {freeNote ? <p className="-mt-2 mb-4 text-xs font-semibold text-white/55" data-testid="course-free-note">{freeNote}</p> : null}
             {enrolled ? (
               <>
-            <div className="mb-3 flex items-end justify-between"><span className="text-sm text-white/55">Прогресс курса</span><span className="font-display text-3xl text-gold-ink">{progressPercent}%</span></div>
-            <ProgressBar value={progressPercent} dark />
-            <div className="mt-5 grid grid-cols-2 gap-3 text-xs text-white/55"><span className="flex items-center gap-2"><BookOpen size={14} /> {formatCount(lessons.length, LESSON_FORMS)}</span><span className="flex items-center gap-2"><Trophy size={14} /> {course.completionCoinsReward > 0 ? `+${course.completionCoinsReward} Coins` : "Без награды"}</span></div>
+                <div className="mb-3 flex items-end justify-between"><span className="text-sm text-white/55">Прогресс курса</span><span className="font-display text-3xl text-gold-ink">{progressPercent}%</span></div>
+                <ProgressBar value={progressPercent} dark />
+                <div className="mt-5 flex items-center gap-2 text-xs text-white/55"><BookOpen size={14} /> {formatCount(lessons.length, LESSON_FORMS)}</div>
               </>
             ) : (
               <>
@@ -86,9 +118,33 @@ export default function CourseDetailPage() {
                 </button>
               </>
             )}
+            {rewardLine ? <p className="mt-4 flex items-center gap-2 text-xs text-white/55" data-testid="course-reward"><Trophy size={14} className="shrink-0" /> {rewardLine}</p> : null}
+            {canPay ? (
+              <button
+                type="button"
+                onClick={() => setShowPaywall((value) => !value)}
+                aria-expanded={showPaywall}
+                className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl border border-gold/60 px-5 py-3 text-sm font-bold text-gold-ink transition hover:bg-white/5"
+                data-testid="course-pay"
+              >
+                <CreditCard size={16} /> Оплатить курс
+              </button>
+            ) : null}
           </div>
         </div>
       </section>
+
+      {showPaywall ? (
+        <div className="mt-6" id="course-paywall">
+          <CoursePaywall
+            courseKey={course.id}
+            voice="ty"
+            load={() => courseAccessApi.access(course.id)}
+            submit={(body) => courseAccessApi.requestPayment(course.id, body)}
+            onChanged={() => void resource.reload()}
+          />
+        </div>
+      ) : null}
 
       {course.modules.length ? course.modules.map((module, moduleIndex) => {
         const moduleLessons = lessons.filter((lesson) => lesson.moduleId === module.id);
@@ -99,11 +155,34 @@ export default function CourseDetailPage() {
             <div className="space-y-3">
               {moduleLessons.map((lesson) => {
                 const position = lessons.indexOf(lesson) + 1;
-                const locked = lesson.status === "locked";
+                const lock = mergeLessonLock({ paymentLocked: paymentLocked.has(lesson.id), progressStatus: lesson.status, enrolled });
+                const locked = lock !== null;
+                const lockLabel = lessonLockLabel(lock);
+                const lockBadge = lessonLockBadge(lock);
+                const free = isFreeLesson({ paymentLocked: paymentLocked.has(lesson.id), course: sale });
                 return (
-                  <Link href={locked ? `/courses/${course.id}` : `/lessons/${lesson.id}`} key={lesson.id} className={`card-hover flex items-center gap-3 rounded-[24px] border border-stone-200 bg-paper p-4 shadow-soft sm:gap-4 sm:p-5 ${locked ? "opacity-55" : ""}`}>
+                  <Link
+                    // Only the payment alone opens the paywall; a lesson the order still holds leads back to the course.
+                    href={lessonLockHref(lock, { courseId: course.id, lessonId: lesson.id })}
+                    key={lesson.id}
+                    data-testid="course-lesson"
+                    data-lock={lock ?? "open"}
+                    className={`card-hover flex items-center gap-3 rounded-[24px] border border-stone-200 bg-paper p-4 shadow-soft sm:gap-4 sm:p-5 ${locked ? "opacity-70" : ""}`}
+                  >
                     <span className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl ${lesson.status === "completed" ? "bg-emerald-50 text-emerald-700" : "bg-stone-100"}`}>{locked ? <LockKeyhole size={18} /> : lesson.status === "completed" ? <Check size={18} /> : <span className="font-display text-lg">{position}</span>}</span>
-                    <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h3 className="font-display min-w-0 break-words text-xl">{lesson.title}</h3><StatusBadge status={lesson.status} /></div><p className="mt-1 line-clamp-2 break-words text-sm text-stone-500 sm:line-clamp-1">{lesson.description}</p></div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="font-display min-w-0 break-words text-xl">{lesson.title}</h3>
+                        {free ? <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-800" data-testid="lesson-free-label">бесплатно</span> : null}
+                        {lockLabel ? (
+                          <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-900" data-testid="lesson-lock-label">{lockLabel}</span>
+                        ) : (
+                          <StatusBadge status={lesson.status} />
+                        )}
+                        {lockBadge ? <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-bold text-stone-600" data-testid="lesson-paid-label">{lockBadge}</span> : null}
+                      </div>
+                      <p className="mt-1 line-clamp-2 break-words text-sm text-stone-500 sm:line-clamp-1">{lesson.description}</p>
+                    </div>
                     <ChevronRight size={18} className="shrink-0 text-stone-300" />
                   </Link>
                 );

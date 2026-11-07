@@ -28,18 +28,20 @@ async function openAdminNavigation(page: Page) {
   return page.getByRole("navigation", { name: "Основная навигация администратора" });
 }
 
-test("admin navigation contains the six workspace sections", async ({ page, request, context }) => {
+test("admin navigation contains the six workspace sections and the course payments", async ({ page, request, context }) => {
   await installSession(context, await loginSession(request, "qa_admin", "staff"));
   await page.goto("/admin");
 
   const navigation = await openAdminNavigation(page);
-  await expect(navigation.getByRole("link")).toHaveCount(6);
+  await expect(navigation.getByRole("link")).toHaveCount(7);
   await expect(navigation.getByRole("link", { name: "Обзор", exact: true })).toBeVisible();
   await expect(navigation.getByRole("link", { name: /Учебный контроль/ })).toBeVisible();
   await expect(navigation.getByRole("link", { name: /Коммуникации/ })).toBeVisible();
   await expect(navigation.getByRole("link", { name: "Люди", exact: true })).toBeVisible();
   await expect(navigation.getByRole("link", { name: "Журнал", exact: true })).toBeVisible();
   await expect(navigation.getByRole("link", { name: "Статистика", exact: true })).toBeVisible();
+  // Stage 4: an administrator with the right to decide course payments has the seventh item.
+  await expect(navigation.getByRole("link", { name: /Оплаты курсов/ })).toBeVisible();
   await expect(navigation.getByRole("link", { name: "Направления", exact: true })).toHaveCount(0);
 });
 

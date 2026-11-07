@@ -10,6 +10,8 @@ import {
   submitParentVisibilityRequest,
 } from "../../application/services/parent-visibility.service.js";
 import { listPublishedNews } from "../../application/repositories/news.repository.js";
+import { addChildByParent, sendAddedChildLead } from "../../application/services/app-registration.service.js";
+import { prisma } from "../../infrastructure/database/prisma.js";
 import { aqtobeMonthKey } from "../../lib/aqtobe-month.js";
 import {
   authenticate,
@@ -39,12 +41,37 @@ function newsView(post: Awaited<ReturnType<typeof listPublishedNews>>[number]) {
   };
 }
 
+/** «Добавить ребёнка»: the same fields and limits as the child in the registration form. */
+const addChildSchema = z.object({
+  firstName: z.string().trim().min(1, "Укажите имя ребёнка").max(128),
+  lastName: z.string().trim().min(1, "Укажите фамилию ребёнка").max(128),
+  phone: z.string({ required_error: "Укажите телефон ребёнка" }).trim().min(10, "Укажите телефон ребёнка").max(32),
+  password: z.string({ required_error: "Укажите пароль ребёнка" }).min(8, "Пароль — не короче 8 символов").max(72),
+});
+
 export async function familyRoutes(app: FastifyInstance) {
   const guards = [authenticate, requireParent, requirePermission("family.read")];
+  // Each add hashes a password and writes two rows: 5 a minute per parent, like the registration forms.
+  const addChildRateLimit = typeof app.rateLimit === "function"
+    ? [app.rateLimit({ max: 5, timeWindow: "1 minute", keyGenerator: (request) => `add-child:${request.user?.id ?? request.ip}` })]
+    : [];
 
   app.get("/parents/me/children", { preHandler: guards }, async (request) => ({
     data: await listParentChildren(request.user!.id),
   }));
+
+  // Stage 4: a parent adds another child themselves; the child is external until the school links them.
+  app.post("/parents/me/children", { preHandler: [...guards, ...addChildRateLimit] }, async (request, reply) => {
+    const body = addChildSchema.parse(request.body);
+    const child = await addChildByParent(request.user!.id, body);
+    const parent = await prisma.user.findUnique({
+      where: { id: request.user!.id },
+      select: { firstName: true, lastName: true, phone: true },
+    });
+    if (parent) void sendAddedChildLead(parent, child);
+    const added = (await listParentChildren(request.user!.id)).find((item) => item.id === child.id);
+    return reply.status(201).send({ data: added ?? null });
+  });
 
   app.get(
     "/parents/me/children/:studentId/offline-summary",

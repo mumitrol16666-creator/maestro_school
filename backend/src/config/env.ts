@@ -28,6 +28,11 @@ const envSchema = z.object({
   ),
   INTEGRATION_SSO_SECRET: z.string().min(16).optional(),
   CRM_API_URL: z.string().default("http://127.0.0.1:5000"),
+  // Public address of the web app for links in Telegram; empty = the first CORS_ORIGIN entry.
+  APP_PUBLIC_URL: optionalUrl,
+  // Telegram bot for «new course payment» messages; both empty = Telegram is skipped quietly.
+  TELEGRAM_BOT_TOKEN: optionalNonEmptyString,
+  TELEGRAM_CHAT_ID: optionalNonEmptyString,
   PRIVATE_STORAGE_DRIVER: z.enum(["local", "s3"]).default("local"),
   MALWARE_SCANNER_DRIVER: z.enum(["none", "clamav"]).default("none"),
   S3_ENDPOINT: optionalUrl,

@@ -21,6 +21,14 @@ const rules: ReadonlyArray<readonly [RegExp, BackTarget]> = [
   [/^\/(league|board|settings)\/?$/, home],
 ];
 
-export function studentBackTarget(pathname: string): BackTarget | null {
-  return rules.find(([pattern]) => pattern.test(pathname))?.[1] ?? null;
+/** An external student (stage 4) has three roots — «Курсы», «Тесты», «Профиль» — and goes one step back to them. */
+const externalRules: ReadonlyArray<readonly [RegExp, BackTarget]> = [
+  [/^\/courses\/[^/]+/, { href: "/courses", label: "Курсы" }],
+  [/^\/lessons\/[^/]+/, { href: "/courses", label: "Курсы" }],
+  [/^\/tests\/[^/]+/, { href: "/tests", label: "Тесты" }],
+];
+
+export function studentBackTarget(pathname: string, options: { external?: boolean } = {}): BackTarget | null {
+  const list = options.external ? externalRules : rules;
+  return list.find(([pattern]) => pattern.test(pathname))?.[1] ?? null;
 }

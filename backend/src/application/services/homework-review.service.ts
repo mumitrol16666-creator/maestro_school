@@ -7,6 +7,7 @@ import {
   reopenLessonForRevision,
 } from "./lesson-progress.service.js";
 import { deliverUserNotification } from "./notification.service.js";
+import { getLessonAccess } from "./course-access.service.js";
 
 export type HomeworkReviewAction = "approve" | "reject";
 
@@ -46,15 +47,22 @@ export async function reviewHomeworkSubmission(params: {
       lessonId,
       courseId,
       reviewerId: params.reviewerId,
-      pointsReward: lesson.pointsReward,
       lessonTitle: lesson.title,
     });
+
+    // «Можно продолжать» only when the next lesson really opens: a paid course may stop at the paywall.
+    const nextAccess = result.nextLessonId
+      ? await getLessonAccess(studentId, result.nextLessonId).catch(() => null)
+      : null;
+    const nextClosedByPayment = nextAccess ? !nextAccess.open : false;
 
     void deliverUserNotification({
       userId: studentId,
       type: "homework_reviewed",
       title: "Домашнее задание принято",
-      body: `Урок «${lesson.title}» — задание проверено, можно продолжать.`,
+      body: nextClosedByPayment
+        ? `Урок «${lesson.title}» — задание проверено. Следующие уроки курса открываются после оплаты.`
+        : `Урок «${lesson.title}» — задание проверено, можно продолжать.`,
       url: `/lessons/${lessonId}`,
       tag: `homework-${params.submissionId}`,
       dedupeKey: `course-hw:review:${params.submissionId}:approved`,

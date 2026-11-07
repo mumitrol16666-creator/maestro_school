@@ -428,6 +428,11 @@ enum UserNotificationType {
   /// Plan 5.6
   practice_reminder
   lesson_tomorrow
+  /// Stage 4: paid courses
+  course_payment_requested
+  course_access_granted
+  course_payment_rejected
+  course_access_revoked
 }
 
 /// Plan 1.12: the school's shared library of materials — links with a caption and uploaded files.
@@ -540,25 +545,25 @@ model LessonShare {
 }
 
 model User {
-  id                String   @id @default(uuid()) @db.Uuid
-  login             String?  @unique @db.VarChar(64)
-  email             String?  @unique @db.VarChar(255)
-  phone             String   @db.VarChar(32)
-  passwordHash      String   @map("password_hash") @db.VarChar(255)
+  id                     String    @id @default(uuid()) @db.Uuid
+  login                  String?   @unique @db.VarChar(64)
+  email                  String?   @unique @db.VarChar(255)
+  phone                  String    @db.VarChar(32)
+  passwordHash           String    @map("password_hash") @db.VarChar(255)
   // When the user last changed the password in the app themselves; CRM checks it before showing its copy.
   passwordChangedInAppAt DateTime? @map("password_changed_in_app_at") @db.Timestamptz(6)
-  sessionVersion    Int      @default(0) @map("session_version")
-  firstName         String   @map("first_name") @db.VarChar(128)
-  lastName          String   @map("last_name") @db.VarChar(128)
-  middleName        String?  @map("middle_name") @db.VarChar(128)
-  avatar            String?  @db.VarChar(512)
-  profileBio        String?  @map("profile_bio") @db.Text
-  profileInstrument String?  @map("profile_instrument") @db.VarChar(128)
-  profileInterests  String[] @default([]) @map("profile_interests")
-  profilePublic     Boolean  @default(false) @map("profile_public")
-  roleId            String   @map("role_id") @db.Uuid
-  isActive          Boolean  @default(true) @map("is_active")
-  leagueEligible    Boolean  @default(true) @map("league_eligible")
+  sessionVersion         Int       @default(0) @map("session_version")
+  firstName              String    @map("first_name") @db.VarChar(128)
+  lastName               String    @map("last_name") @db.VarChar(128)
+  middleName             String?   @map("middle_name") @db.VarChar(128)
+  avatar                 String?   @db.VarChar(512)
+  profileBio             String?   @map("profile_bio") @db.Text
+  profileInstrument      String?   @map("profile_instrument") @db.VarChar(128)
+  profileInterests       String[]  @default([]) @map("profile_interests")
+  profilePublic          Boolean   @default(false) @map("profile_public")
+  roleId                 String    @map("role_id") @db.Uuid
+  isActive               Boolean   @default(true) @map("is_active")
+  leagueEligible         Boolean   @default(true) @map("league_eligible")
 
   // Integration: CRM user link
   crmStudentId       String?   @unique @map("crm_student_id") @db.VarChar(64)
@@ -566,6 +571,9 @@ model User {
   phoneNormalized    String?   @map("phone_normalized") @db.VarChar(32)
   externalLinkStatus String?   @map("external_link_status") @db.VarChar(32)
   linkedAt           DateTime? @map("linked_at") @db.Timestamptz(6)
+  // Stage 4: set when a registration in the app has not yet reached CRM as a lead; cleared when CRM
+  // accepts it. A job re-sends the lead (same externalSourceId, so CRM never duplicates it).
+  crmLeadPendingSince DateTime? @map("crm_lead_pending_since") @db.Timestamptz(6)
 
   createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -649,6 +657,14 @@ model User {
   practiceCheckins                   PracticeCheckin[]                      @relation("PracticeCheckinUser")
   lessonSharesReceived               LessonShare[]                          @relation("LessonShareStudent")
   lessonSharesSent                   LessonShare[]                          @relation("LessonShareTeacher")
+  courseAccesses                     CourseAccess[]                         @relation("CourseAccessStudent")
+  courseAccessesGranted              CourseAccess[]                         @relation("CourseAccessGrantor")
+  courseAccessesRevoked              CourseAccess[]                         @relation("CourseAccessRevoker")
+  coursePaymentRequests              CoursePaymentRequest[]                 @relation("CoursePaymentStudent")
+  coursePaymentRequestsPaid          CoursePaymentRequest[]                 @relation("CoursePaymentPayer")
+  coursePaymentRequestsDecided       CoursePaymentRequest[]                 @relation("CoursePaymentDecider")
+  coursePaymentRequestsRefunded      CoursePaymentRequest[]                 @relation("CoursePaymentRefunder")
+  coursePaymentSettingsUpdated       CoursePaymentSettings[]                @relation("CoursePaymentSettingsUpdater")
   learningConversationMemberEvents   LearningConversationMembershipEvent[]
   appUsageEvents                     AppUsageEvent[]
 
@@ -1539,21 +1555,130 @@ model Course {
   difficultyLevel       DifficultyLevel @default(beginner) @map("difficulty_level")
   completionCoinsReward Int             @default(0) @map("completion_coins_reward")
   isPublished           Boolean         @default(false) @map("is_published")
+  /// Stage 4: price in tenge for 6 months of access. null = the course is not for sale and is open to everyone.
+  /// A CHECK in the migration keeps it positive when set.
+  priceKzt              Int?            @map("price_kzt")
+  /// Stage 4: school students (linked to CRM) get the whole course without paying.
+  includedInSchool      Boolean         @default(false) @map("included_in_school")
+  /// Stage 4: how many first published lessons of a paid course are open without payment.
+  freeLessonsCount      Int             @default(2) @map("free_lessons_count")
   createdAt             DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt             DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt             DateTime?       @map("deleted_at") @db.Timestamptz(6)
 
-  direction      Direction       @relation(fields: [directionId], references: [id], onDelete: Cascade)
-  branch         Branch?         @relation(fields: [branchId], references: [id], onDelete: SetNull)
-  modules        CourseModule[]
-  studentCourses StudentCourse[]
-  signupLessons  Lesson[]        @relation("LessonSignupCourse")
+  direction       Direction              @relation(fields: [directionId], references: [id], onDelete: Cascade)
+  branch          Branch?                @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  modules         CourseModule[]
+  studentCourses  StudentCourse[]
+  signupLessons   Lesson[]               @relation("LessonSignupCourse")
+  accesses        CourseAccess[]
+  paymentRequests CoursePaymentRequest[]
 
   @@index([directionId])
   @@index([branchId])
   @@index([isPublished])
   @@index([deletedAt])
   @@map("courses")
+}
+
+enum CourseAccessSource {
+  payment
+  admin_grant
+}
+
+enum CourseAccessRevokeReason {
+  refund
+  admin
+}
+
+enum CoursePaymentStatus {
+  pending
+  confirmed
+  rejected
+}
+
+/// Stage 4: paid access of one student to one course for a period (6 months from confirmation).
+/// A school student's free access to a course marked includedInSchool is not stored: it is computed
+/// from crmStudentId. Expiry is computed on read (startsAt <= now < expiresAt, revokedAt is null).
+model CourseAccess {
+  id               String                    @id @default(uuid()) @db.Uuid
+  studentId        String                    @map("student_id") @db.Uuid
+  courseId         String                    @map("course_id") @db.Uuid
+  source           CourseAccessSource
+  /// The confirmed request that opened this access; null for an admin grant. One request opens one access.
+  paymentRequestId String?                   @unique @map("payment_request_id") @db.Uuid
+  startsAt         DateTime                  @map("starts_at") @db.Timestamptz(6)
+  expiresAt        DateTime                  @map("expires_at") @db.Timestamptz(6)
+  grantedById      String?                   @map("granted_by_id") @db.Uuid
+  grantNote        String?                   @map("grant_note") @db.Text
+  revokedAt        DateTime?                 @map("revoked_at") @db.Timestamptz(6)
+  revokedById      String?                   @map("revoked_by_id") @db.Uuid
+  revokeReason     CourseAccessRevokeReason? @map("revoke_reason")
+  revokeNote       String?                   @map("revoke_note") @db.Text
+  createdAt        DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  student        User                  @relation("CourseAccessStudent", fields: [studentId], references: [id], onDelete: Restrict)
+  course         Course                @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  paymentRequest CoursePaymentRequest? @relation(fields: [paymentRequestId], references: [id], onDelete: Restrict)
+  grantedBy      User?                 @relation("CourseAccessGrantor", fields: [grantedById], references: [id], onDelete: SetNull)
+  revokedBy      User?                 @relation("CourseAccessRevoker", fields: [revokedById], references: [id], onDelete: SetNull)
+
+  @@index([studentId, courseId, expiresAt])
+  @@index([courseId])
+  @@map("course_access")
+}
+
+/// Stage 4: «Я оплатил». The amount is a snapshot of the course price in tenge. A confirmed request
+/// is the payment record. CHECK (amount_kzt > 0), CHECK (refunded_at IS NULL OR status = 'confirmed')
+/// and the partial unique index
+/// course_payment_requests_one_pending_idx ("student_id", "course_id") WHERE status = 'pending'
+/// live in the migration SQL: Prisma cannot express them.
+model CoursePaymentRequest {
+  id           String              @id @default(uuid()) @db.Uuid
+  courseId     String              @map("course_id") @db.Uuid
+  /// Who gets the access.
+  studentId    String              @map("student_id") @db.Uuid
+  /// Who pressed the button: the student or a parent.
+  payerUserId  String              @map("payer_user_id") @db.Uuid
+  amountKzt    Int                 @map("amount_kzt")
+  status       CoursePaymentStatus @default(pending)
+  payerNote    String?             @map("payer_note") @db.Text
+  decidedById  String?             @map("decided_by_id") @db.Uuid
+  decidedAt    DateTime?           @map("decided_at") @db.Timestamptz(6)
+  decisionNote String?             @map("decision_note") @db.Text
+  refundedAt   DateTime?           @map("refunded_at") @db.Timestamptz(6)
+  refundedById String?             @map("refunded_by_id") @db.Uuid
+  refundNote   String?             @map("refund_note") @db.Text
+  createdAt    DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  course     Course        @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  student    User          @relation("CoursePaymentStudent", fields: [studentId], references: [id], onDelete: Restrict)
+  payer      User          @relation("CoursePaymentPayer", fields: [payerUserId], references: [id], onDelete: Restrict)
+  decidedBy  User?         @relation("CoursePaymentDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+  refundedBy User?         @relation("CoursePaymentRefunder", fields: [refundedById], references: [id], onDelete: SetNull)
+  access     CourseAccess?
+
+  @@index([status, createdAt])
+  @@index([studentId, courseId])
+  @@index([courseId])
+  @@map("course_payment_requests")
+}
+
+/// Stage 4: where to pay, one row for the school (id is always 1, a CHECK in the migration keeps it so).
+model CoursePaymentSettings {
+  id            Int      @id @default(1)
+  kaspiPayUrl   String?  @map("kaspi_pay_url") @db.VarChar(1024)
+  transferPhone String?  @map("transfer_phone") @db.VarChar(32)
+  recipientName String?  @map("recipient_name") @db.VarChar(255)
+  hint          String?  @db.Text
+  updatedById   String?  @map("updated_by_id") @db.Uuid
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  updatedBy User? @relation("CoursePaymentSettingsUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@map("course_payment_settings")
 }
 
 model CourseModule {

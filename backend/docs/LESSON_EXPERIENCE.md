@@ -100,13 +100,13 @@ GET /api/v1/admin/homework-submissions/:submissionId/attempts
 PATCH /api/v1/homeworks/submissions/:submissionId/review
 ```
 
-**Approve:** `action: "approve"`, `reviewComment` опционален → `COMPLETED`, баллы, unlock next lesson.
+**Approve:** `action: "approve"`, `reviewComment` опционален → `COMPLETED`, unlock next lesson (Points за урок напрямую не начисляются: только за модуль и курс).
 
 **Reject:** `action: "reject"`, `reviewComment` обязателен → урок `AVAILABLE`, старая попытка в истории.
 
 ### Защита баллов
 
-`awardLessonPoints()` идемпотентен по `(studentId, lessonId)` — повторное начисление невозможно.
+Points за модуль (+100) и курс (+250) идемпотентны по `sourceKey` (`course-module-completion:…`, `course-completion:…`) — повторное начисление невозможно. Прямых баллов за урок и Coins за курс больше нет.
 
 ---
 

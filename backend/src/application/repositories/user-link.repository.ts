@@ -1,5 +1,6 @@
 import { prisma, notDeleted } from "../../infrastructure/database/prisma.js";
 import { normalizePhoneDigits } from "../../lib/phone.js";
+import { holdParentMadeAccess } from "../services/parent-link-hold.service.js";
 
 export async function findUsersByPhoneNormalized(phoneNormalized: string) {
   const digits = normalizePhoneDigits(phoneNormalized);
@@ -56,6 +57,8 @@ export async function applyUserLink(params: {
   crmTeacherId?: string;
   crmRole?: string;
   force?: boolean;
+  /** The student's new password when CRM sends one; used only if a parent made the account in the app. */
+  password?: string | null;
 }) {
   const digits = normalizePhoneDigits(params.phoneNormalized || params.phone || "");
   let user = null;
@@ -93,7 +96,8 @@ export async function applyUserLink(params: {
       if (params.force) {
         await prisma.user.update({
           where: { id: existing.id },
-          data: { crmStudentId: null, externalLinkStatus: "unlinked", linkedAt: null },
+          // Without a CRM link the person leaves the league (the league is for students of the school).
+          data: { crmStudentId: null, externalLinkStatus: "unlinked", linkedAt: null, leagueEligible: false },
         });
       } else {
       await prisma.user.update({
@@ -129,7 +133,7 @@ export async function applyUserLink(params: {
     }
     await prisma.user.update({
       where: { id: user.id },
-      data: { crmStudentId: null, externalLinkStatus: "unlinked", linkedAt: null },
+      data: { crmStudentId: null, externalLinkStatus: "unlinked", linkedAt: null, leagueEligible: false },
     });
   }
 
@@ -143,6 +147,12 @@ export async function applyUserLink(params: {
     });
   }
 
+  // A new CRM student card on the account: a parent who made it in the app is held until the school checks
+  // them, before the account gets the card.
+  const parentHold = params.crmStudentId && user.crmStudentId !== params.crmStudentId
+    ? await holdParentMadeAccess(user.id, params.crmStudentId, params.password)
+    : { passwordReplaced: false, heldParentLinks: [], temporaryPassword: null };
+
   const now = new Date();
   const data: Record<string, unknown> = {
     phoneNormalized: digits,
@@ -150,7 +160,12 @@ export async function applyUserLink(params: {
     linkedAt: now,
   };
 
-  if (params.crmStudentId) data.crmStudentId = params.crmStudentId;
+  if (params.crmStudentId) {
+    data.crmStudentId = params.crmStudentId;
+    // A person who becomes a student of the school enters the league. A repeated link to the same
+    // card (a CRM resync) must not undo an exclusion the school made by hand.
+    if (user.crmStudentId !== params.crmStudentId) data.leagueEligible = true;
+  }
   if (params.crmTeacherId) data.crmTeacherId = params.crmTeacherId;
 
   const updated = await prisma.user.update({
@@ -174,24 +189,9 @@ export async function applyUserLink(params: {
         phone: updated.phone,
         role: updated.role.slug,
       },
+      parentHold,
     },
   };
-}
-
-export async function linkUserToCrm(
-  userId: string,
-  crmStudentId: string,
-  phoneNormalized: string,
-) {
-  return prisma.user.update({
-    where: { id: userId },
-    data: {
-      crmStudentId,
-      phoneNormalized,
-      externalLinkStatus: "linked",
-      linkedAt: new Date(),
-    },
-  });
 }
 
 export async function getUserLinkStatus(phoneNormalized: string) {

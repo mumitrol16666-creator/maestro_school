@@ -12,12 +12,13 @@ import { useMessageMailboxStatus } from "@/hooks/use-message-mailbox-status";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { loadStudentHome } from "@/lib/student-home";
 import { isStaffRole, isStudentRole } from "@/lib/role-labels";
+import { EXTERNAL_HOME_PATH, isExternalStudent } from "@/lib/course-access-format";
 import { useAuth } from "./auth-provider";
 import { AdminPendingHomeworkBadge } from "./admin-pending-homework-badge";
 import { Brand } from "./brand";
 import { NotificationCenter } from "./teacher-notification-center";
 import { PushNotificationPrompt } from "./push-notification-prompt";
-import { pathMatchesAny, StudentWorkspaceContextNavigation, studentWorkspaceNavigation } from "./student-workspace-navigation";
+import { externalStudentNavigation, pathMatchesAny, StudentWorkspaceContextNavigation, studentWorkspaceNavigation } from "./student-workspace-navigation";
 import { UserMenu } from "./user-menu";
 import { StudentUsageTracker } from "./student-usage-tracker";
 import { ConnectionBanner } from "./connection-banner";
@@ -40,25 +41,28 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const student = isStudentRole(user?.role);
   const staff = isStaffRole(user?.role);
+  // Stage 4: a student outside the school has courses, tests and the profile; the school's screens are not theirs.
+  const external = isExternalStudent(user);
+  const schoolStudent = student && !external;
   const { count: unreadNotifications, reload: reloadUnreadNotifications } = useUnreadNotifications(30_000);
   const learningDialogsV2 = Boolean(user?.productFeatures?.learningDialogsV2);
-  const { count: unreadMessages, hasAccess: hasMessageAccess } = useMessageMailboxStatus(student, 30_000, learningDialogsV2);
-  const { counts: schoolAlerts } = useStudentSchoolAlerts(student ? user?.id : undefined);
+  const { count: unreadMessages, hasAccess: hasMessageAccess } = useMessageMailboxStatus(schoolStudent, 30_000, learningDialogsV2);
+  const { counts: schoolAlerts } = useStudentSchoolAlerts(schoolStudent ? user?.id : undefined);
   const taskSummary = useApiResource(
-    () => student ? loadStudentHome() : Promise.resolve(null),
-    [student, user?.id],
+    () => schoolStudent ? loadStudentHome() : Promise.resolve(null),
+    [schoolStudent, user?.id],
   );
   const taskActionCount = taskSummary.data?.tasks?.counts.actionRequired ?? 0;
   const schoolNavigationCount = schoolAlerts.reports
     + schoolAlerts.todayLessons
     + schoolAlerts.tomorrowLessons;
   // Plan 2.7: the student workspace navigation is the only one; the pre-V2 menu is gone.
-  const primaryNavigation: ShellNavigationItem[] = studentWorkspaceNavigation;
-  const mobileNavigation: ShellNavigationItem[] = studentWorkspaceNavigation;
-  const messagesAvailable = student || hasMessageAccess;
+  const primaryNavigation: ShellNavigationItem[] = external ? externalStudentNavigation : studentWorkspaceNavigation;
+  const mobileNavigation: ShellNavigationItem[] = primaryNavigation;
+  const messagesAvailable = schoolStudent || hasMessageAccess;
   // В-7: one «назад» in the header of every student screen that is not a section root.
   const back = student
-    ? (backOverride?.pathname === pathname ? backOverride.target : studentBackTarget(pathname))
+    ? (backOverride?.pathname === pathname ? backOverride.target : studentBackTarget(pathname, { external }))
     : null;
 
   function activeNavigationItem(item: ShellNavigationItem) {
@@ -77,7 +81,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const sidebar = (
     <aside className="flex h-full flex-col overflow-y-auto border-r border-white/10 bg-charcoal px-4 py-5 text-white sm:px-5 sm:py-6">
       <div className="flex items-center justify-between border-b border-white/10 pb-5">
-        <Brand />
+        <Brand href={external ? EXTERNAL_HOME_PATH : undefined} />
         <button
           type="button"
           className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/5 text-white/70 transition hover:bg-white/10 hover:text-white lg:hidden"
@@ -144,7 +148,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </div>
             ) : (
               <div className="flex items-center gap-2 lg:hidden">
-                <Brand compact />
+                <Brand compact href={external ? EXTERNAL_HOME_PATH : undefined} />
                 <button
                   type="button"
                   onClick={() => setOpen(true)}
@@ -177,7 +181,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         } ${
           student ? "pb-[calc(6.75rem+env(safe-area-inset-bottom,0px))] sm:pb-[calc(6.75rem+env(safe-area-inset-bottom,0px))] lg:pb-10" : ""
         }`}>
-          {student ? (
+          {schoolStudent ? (
             <div className={`${pathname.startsWith("/messages") ? "hidden md:block" : ""} print:hidden`}>
               <StudentWorkspaceContextNavigation />
             </div>
@@ -189,7 +193,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <nav
           data-testid="student-mobile-navigation"
           data-mobile-app-navigation
-          className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-stone-200/90 bg-paper/95 px-0.5 pb-[env(safe-area-inset-bottom,0px)] shadow-[0_-12px_35px_rgba(37,33,25,0.08)] backdrop-blur-xl lg:hidden print:hidden"
+          className={`fixed inset-x-0 bottom-0 z-40 grid ${external ? "grid-cols-3" : "grid-cols-4"} border-t border-stone-200/90 bg-paper/95 px-0.5 pb-[env(safe-area-inset-bottom,0px)] shadow-[0_-12px_35px_rgba(37,33,25,0.08)] backdrop-blur-xl lg:hidden print:hidden`}
           aria-label="Основная навигация"
         >
           {mobileNavigation.filter((item) => !item.messagesOnly || messagesAvailable).map(({ href, label, icon: Icon }) => {

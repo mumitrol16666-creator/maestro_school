@@ -93,13 +93,13 @@ export async function provisionStudentFromCrm(input: ProvisionStudentInput) {
   if (provisionCandidate.kind === "reuse") {
     const byPhone = provisionCandidate.user;
 
-
     const linkResult = await applyUserLink({
       appUserId: byPhone.id,
       phone: input.phone,
       phoneNormalized: digits,
       crmStudentId,
       crmRole: "student",
+      password: input.password,
     });
 
     if (!linkResult.success) {
@@ -107,7 +107,8 @@ export async function provisionStudentFromCrm(input: ProvisionStudentInput) {
       throw new BadRequestError(linkResult.error);
     }
 
-    if (input.password && !input.preserveExistingPassword) {
+    const hold = linkResult.data.parentHold;
+    if (input.password && !input.preserveExistingPassword && !hold.passwordReplaced) {
       const passwordHash = await bcrypt.hash(input.password.trim(), 10);
       await updateUserPassword(byPhone.id, passwordHash);
     }
@@ -119,6 +120,9 @@ export async function provisionStudentFromCrm(input: ProvisionStudentInput) {
       login: byPhone.login,
       email: byPhone.email,
       role: byPhone.role.slug,
+      passwordReplaced: hold.passwordReplaced,
+      heldParentLinks: hold.heldParentLinks,
+      ...(hold.temporaryPassword ? { temporaryPassword: hold.temporaryPassword } : {}),
     };
   }
 

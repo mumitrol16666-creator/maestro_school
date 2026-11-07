@@ -12,6 +12,7 @@ import { integrationRoutes } from "./presentation/routes/integration.routes.js";
 import { startOfflineReportReminderJob } from "./application/services/offline-report-reminder.service.js";
 import { startTeacherTodayReminderJob } from "./application/services/teacher-today-reminder.service.js";
 import { startPracticeReminderJob } from "./application/services/practice-reminder-job.service.js";
+import { startAppRegistrationLeadJob } from "./application/services/app-registration-lead-job.service.js";
 import { startLessonReminderJob } from "./application/services/lesson-reminder.service.js";
 import { startWeeklyLeagueFinalizerJob } from "./application/services/weekly-league.service.js";
 import { getProductFeatureSnapshot } from "./config/product-features.js";
@@ -24,6 +25,8 @@ import { isCorsOriginAllowed } from "./config/cors-origin.js";
 async function bootstrap() {
   const app = Fastify({
     logger: true,
+    // nginx on the same host proxies /api/; trust only it, so request.ip is the visitor (rate limits per person, not per server).
+    trustProxy: ["127.0.0.1", "::1"],
     // Base64 JSON uploads: allow ~20 MB files (+ overhead)
     bodyLimit: 28 * 1024 * 1024,
   });
@@ -95,6 +98,7 @@ async function bootstrap() {
   startTeacherTodayReminderJob();
   startPracticeReminderJob();
   startLessonReminderJob();
+  startAppRegistrationLeadJob();
   startWeeklyLeagueFinalizerJob();
   if (productFeatureConfig.flags.lessonSyncV2) {
     startCrmOutboxWorker();

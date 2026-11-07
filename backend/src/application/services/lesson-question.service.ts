@@ -2,6 +2,7 @@ import { prisma } from "../../infrastructure/database/prisma.js";
 import { BadRequestError, NotFoundError } from "../../domain/errors.js";
 import { getLessonById } from "../repositories/catalog.repository.js";
 import { requireCourseEnrollment } from "./enrollment.service.js";
+import { requireLessonAccess } from "./course-access.service.js";
 import { syncLessonAvailability } from "./lesson-unlock.service.js";
 import { deliverUserNotification, listUsersWithPermission } from "./notification.service.js";
 
@@ -17,6 +18,7 @@ export async function submitLessonQuestion(params: {
   }
 
   const courseId = lesson.module.courseId;
+  await requireLessonAccess(params.studentId, params.lessonId);
   await requireCourseEnrollment(params.studentId, courseId);
   await syncLessonAvailability(params.studentId, courseId);
 

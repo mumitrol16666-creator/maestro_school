@@ -43,6 +43,8 @@ export interface Course {
   modulesCount: number;
   lessonsCount: number;
   completionCoinsReward: number;
+  /** Stage 4: the price and the person's access; absent for a server without paid courses. */
+  sale?: import("@/lib/course-access-format").CourseSaleView;
 }
 
 export interface Student {
