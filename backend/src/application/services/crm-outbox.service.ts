@@ -1797,7 +1797,7 @@ export async function resolveCrmSyncConflict(
   // XP, Coins, topic percents and homework decisions silently (02.11, money review).
   if (resolution === "accept_crm" && conflict.kind === "admin_approve") {
     throw new BadRequestError(
-      "Урок уже подтверждён в CRM, а награды и проценты тем не применены. «Принять CRM» их не начислит: повторите применение или пересмотрите урок в CRM и верните преподавателю.",
+      "Урок подтверждён в CRM, а награды и проценты тем не применены, поэтому этот конфликт так не закрыть. Нажмите «Отправить снова». Если урок в CRM отменён или удалён, верните отчёт на исправление: конфликт закроется сам.",
       "CRM_CONFLICT_APPROVAL_NEEDS_REPLAY",
     );
   }
