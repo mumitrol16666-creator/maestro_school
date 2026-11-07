@@ -1272,11 +1272,23 @@ export async function updateLearningTopicProgressBatchFromLessonV2(
     }
     if (scoped.progressPercent !== update.expectedPercent) {
       const earlier = await earlierLessonAwaitingApproval(crmClassId, update.topicId, update.expectedPercent);
+      // An earlier lesson still awaiting approval explains the gap: the approval is retried after it.
+      // The earlier lesson may also have been applied between our read and this check — then a fresh
+      // read already matches and a retry will go through. Without either the report's «было %» can
+      // never match again (the earlier report was changed), so the approval must stop retrying and
+      // become a conflict for the admin (02.11, money review).
+      const fresh = earlier ? null : await prisma.learningTopic.findUnique({
+        where: { id: update.topicId },
+        select: { progressPercent: true },
+      });
+      const transient = Boolean(earlier) || fresh?.progressPercent === update.expectedPercent;
       throw new ConflictError(
         earlier
           ? `Тема продолжается с ${update.expectedPercent} % после урока ${earlier}: сначала подтвердите тот урок, этот применится следом.`
-          : "Процент темы изменился. Обновите урок и повторите действие.",
-        "LEARNING_TOPIC_STALE_PROGRESS",
+          : transient
+            ? "Процент темы только что изменился. Повторите действие."
+            : `Тема «${scoped.title}» в отчёте начиналась с ${update.expectedPercent} %, а сейчас на ${scoped.progressPercent} %: отчёт устарел. Пересмотрите урок в CRM и верните преподавателю, чтобы он отправил отчёт заново.`,
+        transient ? "LEARNING_TOPIC_STALE_PROGRESS" : "LEARNING_TOPIC_PROGRESS_DIVERGED",
       );
     }
     if (scoped.progressPercent === update.toPercent) {

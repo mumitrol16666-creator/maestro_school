@@ -99,7 +99,8 @@ integrationTest("without the approval option a moved topic still fails the whole
     updateLearningTopicProgressBatchFromLessonV2(f.actor.id, f.crmClassId, [
       { topicId: f.movedTopicId, expectedPercent: 33, toPercent: 39 },
     ]),
-    (error: { code?: string }) => error.code === "LEARNING_TOPIC_STALE_PROGRESS",
+    // money-fix 02.11: no earlier lesson explains the gap, so the report is stale for good.
+    (error: { code?: string }) => error.code === "LEARNING_TOPIC_PROGRESS_DIVERGED",
   );
 });
 

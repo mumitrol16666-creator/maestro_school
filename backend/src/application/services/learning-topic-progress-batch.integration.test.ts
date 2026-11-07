@@ -103,7 +103,9 @@ integrationTest(
           },
         ],
       ),
-      (error) => error instanceof AppError && error.code === "LEARNING_TOPIC_STALE_PROGRESS",
+      // 02.11: with no earlier lesson awaiting approval the gap is permanent — a different code, so
+      // the outbox turns the approval into a conflict instead of retrying it for good.
+      (error) => error instanceof AppError && error.code === "LEARNING_TOPIC_PROGRESS_DIVERGED",
     );
 
     const topics = await prisma.learningTopic.findMany({

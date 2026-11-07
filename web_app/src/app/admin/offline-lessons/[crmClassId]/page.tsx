@@ -2464,6 +2464,9 @@ export default function AdminOfflineLessonDetailPage() {
                         >
                           {item.kind === "topic_percent_mismatch" ? "Записать проценты урока" : "Отправить снова"}
                         </button>
+                        {/* An approval conflict cannot be closed by «Принять расписание»: CRM already charged the
+                            lesson, closing it would drop the rewards (backend: CRM_CONFLICT_APPROVAL_NEEDS_REPLAY). */}
+                        {item.kind === "admin_approve" ? null : (
                         <button
                           type="button"
                           disabled={busy != null}
@@ -2480,6 +2483,7 @@ export default function AdminOfflineLessonDetailPage() {
                         >
                           {item.kind === "topic_percent_mismatch" ? "Оставить как есть" : "Принять расписание"}
                         </button>
+                        )}
                       </div>
                     </div>
                   ))}
