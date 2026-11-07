@@ -94,6 +94,11 @@ function examDto(exam: ExamRow) {
   };
 }
 
+/** 07.11: the session's title, as on the exam page and in the CRM schedule; the program is a fallback. */
+function examName(exam: { session?: { title?: string | null } | null; programTitleSnapshot?: string | null }) {
+  return exam.session?.title || exam.programTitleSnapshot || null;
+}
+
 async function loadExam(examId: string) {
   const exam = await prisma.sectorExam.findUnique({ where: { id: examId }, include: examInclude });
   if (!exam) throw new NotFoundError("Экзамен");
@@ -276,14 +281,14 @@ export async function scheduleSectorExamFromCrm(examId: string, input: {
   const when = formatExamDate(input.lessonAt);
   const key = `sector-exam:${examId}:scheduled:${input.lessonAt.toISOString()}`;
   await notifyStudentAndParents(exam.crmStudentId, {
-    title: exam.programTitleSnapshot ? `Назначен экзамен «${exam.programTitleSnapshot}»` : "Экзамен сектора назначен",
+    title: examName(exam) ? `Назначен экзамен «${examName(exam)}»` : "Экзамен сектора назначен",
     url: `/exams/${exam.id}`,
     body: `${exam.direction.title}: экзамен в школе ${when}.`,
     dedupeKey: key,
   });
   // 07.11 (P3): one notice per session for the examiner, not one per pupil in it.
   await notifyTeacher(teacherId, {
-    title: exam.programTitleSnapshot ? `Вам назначен экзамен «${exam.programTitleSnapshot}»` : "Вам назначен экзамен сектора",
+    title: examName(exam) ? `Вам назначен экзамен «${examName(exam)}»` : "Вам назначен экзамен сектора",
     body: `${exam.direction.title}, ${when}.`,
     url: `/admin/exam-sessions/${exam.sessionId}`,
     dedupeKey: `sector-exam-session:${exam.sessionId ?? examId}:scheduled:${input.lessonAt.toISOString()}:teacher:${teacherId}`,

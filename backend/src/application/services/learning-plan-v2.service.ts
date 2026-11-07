@@ -1494,6 +1494,8 @@ export function publicSectorExamDto(exam: {
   scheduledAt: Date | null;
   finishedAt: Date | null;
   outcome: string | null;
+  /** 07.11: «retake» names the result «Нужна пересдача» everywhere (sectorExamResultLabel). */
+  decision?: string | null;
   certificateNumber: string | null;
   certificateIssuedAt: Date | null;
   items: Array<{ id: string; title: string; criteria: string }>;
@@ -1508,6 +1510,7 @@ export function publicSectorExamDto(exam: {
     scheduledAt: exam.scheduledAt,
     finishedAt: exam.finishedAt,
     outcome: completed ? exam.outcome as "passed" | "partial" | "failed" | null : null,
+    decision: completed ? exam.decision ?? null : null,
     certificate: exam.certificateNumber
       ? { number: exam.certificateNumber, issuedAt: exam.certificateIssuedAt }
       : null,

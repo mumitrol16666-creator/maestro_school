@@ -192,11 +192,13 @@ async function sendStudentOfflineReminders(now: Date) {
       const exam = isExam
         ? await prisma.sectorExam.findFirst({
             where: { crmClassId, crmStudentId: student.crmStudentId ?? undefined, status: { not: "cancelled" } },
-            select: { id: true, programTitleSnapshot: true },
+            select: { id: true, programTitleSnapshot: true, session: { select: { title: true } } },
           })
         : null;
+      // The session's title is what the exam page and the CRM schedule show; the program is a fallback.
+      const examName = exam?.session?.title || exam?.programTitleSnapshot || null;
       const lessonTitle = isExam
-        ? (exam?.programTitleSnapshot ? `Экзамен «${exam.programTitleSnapshot}»` : "Экзамен сектора")
+        ? (examName ? `Экзамен «${examName}»` : "Экзамен сектора")
         : compactString(item.title, "Урок");
       const teacherName = compactString(item.teacherName);
       const roomName = compactString(item.roomName);

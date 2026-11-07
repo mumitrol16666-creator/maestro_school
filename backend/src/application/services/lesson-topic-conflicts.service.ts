@@ -412,7 +412,9 @@ export async function resolveLessonTopicConflict(
   // A later lesson that continues from the percent just written can go in now; one that waited for
   // this lesson and still does not match goes to the admin.
   if (written.length) await applyWaitingLessonTopicConflicts(written);
-  await releaseLessonsWaitingFor(conflict.crmClassId, "approved");
+  // With topics left unwritten the conflict stays open and the admin retries; lessons waiting for it
+  // keep waiting until then.
+  if (!failures.length) await releaseLessonsWaitingFor(conflict.crmClassId, "approved");
   if (failures.length) {
     throw new ConflictError(`Записаны не все темы. ${failures.join(" ")}`, "LESSON_TOPIC_CONFLICT_PARTIAL");
   }
@@ -432,7 +434,7 @@ export type OpenTopicConflict = {
  * Open topic conflicts that mention these topics, for the teacher's lesson screen. Lessons dated
  * after `beforeDate` (the lesson being filled) do not count; the percent is the topic's percent now.
  */
-export async function openTopicConflictsFor(topicIds: readonly string[], beforeDate?: string | null) {
+export async function openTopicConflictsFor(topicIds: readonly string[], beforeDate?: string | null, currentCrmClassId?: string | null) {
   const wanted = new Set(topicIds);
   const result = new Map<string, OpenTopicConflict>();
   if (!wanted.size) return result;
@@ -457,7 +459,9 @@ export async function openTopicConflictsFor(topicIds: readonly string[], beforeD
     const lesson = meta.get(conflict.crmClassId);
     // `beforeDate` is the lesson being filled as «YYYY-MM-DD» or «YYYY-MM-DDTHH:MM»: a later lesson,
     // also later the same day, is not «прошлый урок».
-    if (beforeDate && lesson?.order && lesson.order >= (beforeDate.length > 10 ? beforeDate : `${beforeDate}T23:59`)) continue;
+    // The lesson being looked at keeps its own conflict (shown as «own»); the time filter is for others.
+    if (conflict.crmClassId !== currentCrmClassId
+      && beforeDate && lesson?.order && lesson.order >= (beforeDate.length > 10 ? beforeDate : `${beforeDate}T23:59`)) continue;
     for (const entry of readStored(conflict.localPayload).topics) {
       if (!wanted.has(entry.topicId)) continue;
       // The topic already stands at the lesson's percent: nothing is missing for the teacher.

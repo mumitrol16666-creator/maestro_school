@@ -380,3 +380,28 @@ integrationTest("the next lesson continues from a lesson that is approved and wa
   assert.equal(next.get(f.topic.id)?.percent, 60);
   assert.equal(next.get(f.topic.id)?.approvedWaitingForEarlier, true);
 });
+
+integrationTest("the lesson with the conflict sees it as its own; a later lesson the same day does not", async (t) => {
+  const f = await rewardFixture("individual", 50);
+  t.after(async () => {
+    await prisma.offlineLessonProjection.deleteMany({ where: { crmClassId: { startsWith: f.crmClassId } } });
+    await f.cleanup();
+  });
+  await prisma.offlineLessonProjection.create({
+    data: {
+      crmClassId: f.crmClassId, crmTeacherId: "teacher", status: "completed",
+      lessonPayload: { id: f.crmClassId, title: "Электрогитара", date: "2026-11-05", startTime: "15:00" },
+      rosterPayload: [], rosterVersion: "v1",
+    },
+  });
+  await recordLessonTopicConflicts({
+    crmClassId: f.crmClassId, reportVersion: 1, approvedBy: f.admin.id,
+    topics: [{ topicId: f.topic.id, title: "Тема", expectedPercent: 33, toPercent: 39, currentPercent: 50, reason: "stale" }],
+  });
+  const own = await openTopicConflictsFor([f.topic.id], "2026-11-05T15:00", f.crmClassId);
+  assert.equal(own.get(f.topic.id)?.crmClassId, f.crmClassId, "its own conflict is not cut by the time filter");
+  const earlierSameDay = await openTopicConflictsFor([f.topic.id], "2026-11-05T12:00", `${f.crmClassId}-morning`);
+  assert.equal(earlierSameDay.size, 0, "a lesson that morning does not see the afternoon one as «прошлый»");
+  const later = await openTopicConflictsFor([f.topic.id], "2026-11-06T15:00", `${f.crmClassId}-next`);
+  assert.equal(later.get(f.topic.id)?.lessonDate, "2026-11-05");
+});
