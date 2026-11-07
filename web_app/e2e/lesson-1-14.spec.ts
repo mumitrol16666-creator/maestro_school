@@ -104,7 +104,8 @@ test("an individual lesson: strip, four steps, phrases from the lesson, nothing 
   const homeworkHints = page.getByTestId("lesson-homework-hints");
   await expect(homeworkHints).toContainText("«Чистые переходы аккордов»: Не менее восьми чистых переходов из десяти");
   await homeworkHints.getByRole("button", { name: /Не менее восьми чистых переходов/ }).click();
-  await expect(page.getByPlaceholder("Что отработать дома до следующего урока?")).toHaveValue("«Чистые переходы аккордов»: Не менее восьми чистых переходов из десяти");
+  // e8ad172 (02.11): the hint inserts the topic goal as «Цель по теме «…»: …».
+  await expect(page.getByPlaceholder("Что отработать дома до следующего урока?")).toHaveValue("Цель по теме «Чистые переходы аккордов»: Не менее восьми чистых переходов из десяти");
 
   // Own phrase: saved from the field, offered next time, removable.
   const ownText = `Мой итог ${Date.now().toString(36)}`;

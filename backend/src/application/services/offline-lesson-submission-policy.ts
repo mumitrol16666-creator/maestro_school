@@ -13,6 +13,9 @@ type SubmissionStudent = {
 type SubmissionLesson = {
   classType?: string | null;
   group?: unknown;
+  /** A trial is also a lesson linked to a booking (older rows kept classType «individual»). */
+  trialBooking?: unknown;
+  trialParticipant?: unknown;
 };
 
 type SubmissionPayload = {
@@ -34,8 +37,24 @@ function object(value: unknown): Record<string, unknown> {
     : {};
 }
 
+const TRIAL_BLOCKS = ["instrument", "hearingPulse", "movement", "learnability"] as const;
+const TRIAL_LEVELS = new Set(["not_yet", "with_hint", "independent"]);
+
+/**
+ * Trial report v3 (decision 03.11, document 23 §8): the four diagnostic blocks of the
+ * methodology each have a level, and the parent report «навык, трудность, действие» is filled.
+ * The start step is required by the form only when the school has published steps.
+ */
+function trialReportV3Ready(report: Record<string, unknown>) {
+  const diagnostics = object(report.diagnostics);
+  const facts = object(report.lessonFacts);
+  return TRIAL_BLOCKS.every((block) => TRIAL_LEVELS.has(String(object(diagnostics[block]).level ?? "")))
+    && Boolean(text(facts.achieved) && text(facts.difficulty) && text(facts.homeAction));
+}
+
 function trialReportReady(report: Record<string, unknown> | undefined) {
   if (!report) return false;
+  if (Number(report.version) === 3 || report.diagnostics) return trialReportV3Ready(report);
   const teacherAssessment = object(report.teacherAssessment);
   const lessonFacts = object(report.lessonFacts);
 
@@ -100,7 +119,8 @@ export function validateOfflineLessonSubmission(params: {
     };
   }
 
-  const isTrial = lesson.classType === "trial";
+  // The same rule as the lesson page: a trial by type or by its booking / lead participant.
+  const isTrial = lesson.classType === "trial" || Boolean(lesson.trialBooking || lesson.trialParticipant);
   if (!isTrial && requiresLegacyHomeworkReview) {
     for (const student of presentStudents) {
       const homework = student.homeworkReview;

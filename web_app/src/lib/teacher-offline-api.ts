@@ -42,6 +42,10 @@ export const teacherOfflineApi = {
       `/teachers/me/offline-lessons/${encodeURIComponent(crmClassId)}/draft`,
       { method: "DELETE" },
     ),
+  trialSheet: (crmClassId: string) =>
+    apiRequest<{ html: string }>(
+      `/teachers/me/offline-lessons/${encodeURIComponent(crmClassId)}/trial-sheet`,
+    ),
   reportVersions: (crmClassId: string) =>
     apiRequest<OfflineLessonReportHistory | null>(
       `/teachers/me/offline-lessons/${encodeURIComponent(crmClassId)}/report-versions`,

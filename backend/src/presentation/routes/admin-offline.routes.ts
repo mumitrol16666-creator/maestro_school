@@ -27,6 +27,7 @@ import {
   offlineLessonStudentCheckSchema,
 } from "./offline-lesson.schemas.js";
 import { writeAuditLog } from "../../application/services/audit.service.js";
+import { fetchTrialSheet } from "../../infrastructure/crm/crm-client.js";
 import { quickAddOfflineLessonTopic, updateOfflineLessonTopic } from "../../application/services/learning-lesson-v2.service.js";
 import {
   listCrmSyncJournal,
@@ -191,6 +192,15 @@ export async function adminOfflineRoutes(app: FastifyInstance) {
     async (request) => {
       const { crmClassId } = z.object({ crmClassId: z.string().min(1) }).parse(request.params);
       return { data: await listOfflineLessonReportVersions(crmClassId) };
+    },
+  );
+
+  app.get(
+    "/admin/offline-lessons/:crmClassId/trial-sheet",
+    { preHandler: readGuards },
+    async (request) => {
+      const { crmClassId } = z.object({ crmClassId: z.string().min(1) }).parse(request.params);
+      return { data: await fetchTrialSheet(crmClassId) };
     },
   );
 

@@ -800,3 +800,10 @@ export function fetchExamSchedulingOptions() {
 export function bookExamSessionInCrm(payload: {examIds:string[];date:string;startTime:string;endTime:string;teacherId:string;roomId:string;actorAppUserId:string}) {
   return crmPost<{class:{id:string;date:string;startTime:string;endTime:string;teacherId:string;roomId:string};alreadyBooked:boolean;platformConfirmed:boolean}>("/api/integration/v1/sector-exams/book",payload);
 }
+
+/** «Лист первого занятия» for a trial lesson: CRM renders it from the submitted v3 report (document 23, step 2). */
+export async function fetchTrialSheet(crmClassId: string) {
+  return crmGet<{ html: string }>(
+    `/api/integration/v1/classes/${encodeURIComponent(crmClassId)}/trial-sheet`,
+  );
+}

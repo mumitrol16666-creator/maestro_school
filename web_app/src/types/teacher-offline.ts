@@ -1,4 +1,34 @@
+export type TrialDiagnosticLevel = "not_yet" | "with_hint" | "independent";
+export type TrialDiagnosticBlock = "instrument" | "hearingPulse" | "movement" | "learnability";
+export type TrialPlanStep = {
+  templateId: string | null;
+  number: number;
+  title: string;
+  direction?: string | null;
+  topics?: string[];
+};
+
+/**
+ * Trial report v3 (decision 03.11, document 23 §8): the methodology's four diagnostic blocks
+ * («Работа с учеником», p.48), the parent report «навык, трудность, действие» (p.25) and the
+ * start step with the next two as the plan for three months. 03.11, document 23 §10: only what reaches
+ * the family sheet or opens the first sector is asked; attendance is the fact of starting the lesson.
+ */
 export type TrialLessonReport = {
+  version: 3;
+  capturedAt?: string;
+  studentProfile: { direction?: string; goalAndSong?: string };
+  diagnostics: Record<TrialDiagnosticBlock, { level: TrialDiagnosticLevel | null }>;
+  lessonFacts: { achieved?: string; difficulty?: string; homeAction?: string };
+  recommendation: {
+    startStep: TrialPlanStep | null;
+    plan: TrialPlanStep[];
+    recommendedFrequency: "undecided" | "1_per_week" | "2_per_week" | "3_per_week";
+  };
+};
+
+/** Trial report v1/v2 (before 03.11): nine 1–5 scores and the sales block. Read-only now. */
+export type LegacyTrialLessonReport = {
   version?: number;
   capturedAt?: string;
   attendance?: {
@@ -142,7 +172,7 @@ export type TeacherOfflineClass = {
     direction?: string | null;
     isLead?: boolean;
   } | null;
-  trialReport?: TrialLessonReport | null;
+  trialReport?: TrialLessonReport | LegacyTrialLessonReport | null;
   trialAiAnalysis?: Record<string, unknown> | null;
   startedAt?: string | null;
   finishedAt?: string | null;

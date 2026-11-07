@@ -50,6 +50,8 @@ import {
 import { listTeacherCrmDirections } from "../../application/services/crm-direction-projection.service.js";
 import { isSupportedMaterialUrl } from "../../domain/group-material.js";
 import { writeAuditLog } from "../../application/services/audit.service.js";
+import { fetchTrialSheet } from "../../infrastructure/crm/crm-client.js";
+import { ForbiddenError } from "../../domain/errors.js";
 import { quickAddOfflineLessonTopic, updateOfflineLessonTopic } from "../../application/services/learning-lesson-v2.service.js";
 import {
   deleteOfflineLessonDraft,
@@ -580,6 +582,21 @@ export async function teacherOfflineRoutes(app: FastifyInstance) {
       const { crmClassId } = z.object({ crmClassId: z.string().min(1) }).parse(request.params);
       await getTeacherOfflineClass(request.user!.id, crmClassId);
       return { data: await listOfflineLessonReportVersions(crmClassId) };
+    },
+  );
+
+  app.get(
+    "/teachers/me/offline-lessons/:crmClassId/trial-sheet",
+    { preHandler: readGuards },
+    async (request) => {
+      const { crmClassId } = z.object({ crmClassId: z.string().min(1) }).parse(request.params);
+      // Access check first: the teacher prints only a lesson of their own.
+      const lesson = await getTeacherOfflineClass(request.user!.id, crmClassId) as { substitution?: unknown; status?: unknown };
+      // Norm 6: a substitute sees the child only until the lesson is approved.
+      if (lesson.substitution === true && lesson.status === "completed") {
+        throw new ForbiddenError("Урок подтверждён. Лист первого занятия теперь печатает администратор.");
+      }
+      return { data: await fetchTrialSheet(crmClassId) };
     },
   );
 
