@@ -759,39 +759,53 @@ export async function closeStudentSectorEarlyV2(
     throw new BadRequestError("Сектор ещё не опубликован ученику: закрывать нечего", "SECTOR_NOT_PUBLISHED");
   }
   assertEarlyClosePointsPolicy(input.points);
-  // A booked exam lesson lives in the CRM calendar; only the administrator can cancel it there.
-  const bookedExam = await prisma.sectorExam.findFirst({
-    where: { planId: plan.id, status: { in: ["scheduled", "in_progress"] } },
-    select: { scheduledAt: true },
-  });
-  if (bookedExam) {
-    const when = formatExamDate(bookedExam.scheduledAt);
-    throw new ConflictError(
-      `На сектор ${plan.sequence} назначен экзамен${when ? ` ${when}` : ""}. Отменить урок экзамена может администратор в CRM, после этого сектор можно закрыть`,
-      "SECTOR_EXAM_SCHEDULED",
-    );
-  }
   const now = input.now ?? new Date();
   const completionSourceKey = `learning-plan-completion:${plan.id}`;
-  const closed = await prisma.learningPlan.updateMany({
-    where: { id: plan.id, status: { in: ["active", "awaiting_exam"] } },
-    data: {
-      status: "closed",
-      closedAt: now,
-      closeReason: "manual",
-      studyFinishedAt: plan.studyFinishedAt ?? now,
-      completedAt: plan.completedAt ?? now,
-      lockedAt: plan.lockedAt ?? now,
-      completionRewardSourceKey: plan.completionRewardSourceKey ?? completionSourceKey,
-    },
-  });
-  if (closed.count === 0) {
-    throw new ConflictError("Сектор уже закрыт. Обновите страницу.", "SECTOR_ALREADY_CLOSED");
-  }
-  // An exam still being prepared for this sector has nothing left to close.
-  await prisma.sectorExam.updateMany({
-    where: { planId: plan.id, status: { in: ["draft", "awaiting_schedule"] } },
-    data: { status: "cancelled", cancelledAt: now, cancelReason: "Сектор закрыт досрочно" },
+  const comment = input.comment?.trim().slice(0, 500) || null;
+  // 07.11 (review): the plan row is locked, and scheduleSectorExamFromCrm takes the same lock, so a
+  // CRM booking either lands before (and the close is refused) or after (and finds the exam cancelled).
+  await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM learning_plans WHERE id = ${plan.id}::uuid FOR UPDATE`;
+    // A booked exam lesson lives in the CRM calendar; only the administrator can cancel it there.
+    const bookedExam = await tx.sectorExam.findFirst({
+      where: { planId: plan.id, status: { in: ["scheduled", "in_progress"] } },
+      select: { scheduledAt: true },
+    });
+    if (bookedExam) {
+      const when = formatExamDate(bookedExam.scheduledAt);
+      throw new ConflictError(
+        `На сектор ${plan.sequence} назначен экзамен${when ? ` ${when}` : ""}. Отменить урок экзамена может администратор в CRM, после этого сектор можно закрыть`,
+        "SECTOR_EXAM_SCHEDULED",
+      );
+    }
+    const closed = await tx.learningPlan.updateMany({
+      where: { id: plan.id, status: { in: ["active", "awaiting_exam"] } },
+      data: {
+        status: "closed",
+        closedAt: now,
+        closeReason: "manual",
+        studyFinishedAt: plan.studyFinishedAt ?? now,
+        completedAt: plan.completedAt ?? now,
+        lockedAt: plan.lockedAt ?? now,
+        completionRewardSourceKey: plan.completionRewardSourceKey ?? completionSourceKey,
+      },
+    });
+    if (closed.count === 0) {
+      throw new ConflictError("Сектор уже закрыт. Обновите страницу.", "SECTOR_ALREADY_CLOSED");
+    }
+    // An exam still being prepared for this sector has nothing left to close.
+    await tx.sectorExam.updateMany({
+      where: { planId: plan.id, status: { in: ["draft", "awaiting_schedule"] } },
+      data: { status: "cancelled", cancelledAt: now, cancelReason: comment ? `Сектор закрыт досрочно: ${comment}`.slice(0, 255) : "Сектор закрыт досрочно" },
+    });
+    await tx.learningSectorEvent.create({ data: {
+      planId: plan.id,
+      kind: "closed_early",
+      actorUserId: teacherUserId,
+      sourceKey: `sector-closed-early:${plan.id}`,
+      occurredAt: now,
+      details: { comment, sequence: plan.sequence, previousStatus: plan.status },
+    } });
   });
 
   const studentUser = await prisma.user.findFirst({

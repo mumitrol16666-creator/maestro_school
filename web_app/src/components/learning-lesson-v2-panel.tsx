@@ -276,12 +276,10 @@ export function LearningLessonV2Panel({
   // from the sectors this lesson shows.
   const sectorDirections = context.plans.filter(plan => plan.canEditTopics !== false && (context.owner.kind !== "group" || plan.scope === "group")).map((plan) => plan.direction)
     .filter((direction, index, all) => all.findIndex(other => other.id === direction.id) === index);
-  // Computed again below once the chosen sectors are known (hooks above stay unconditional).
-  const canQuickAddBase = Boolean(onQuickAddTopic) && !disabled && sectorDirections.length > 0;
 
   async function handleAddTopicSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const directionId = quickDirectionId || sectorDirections[0]?.id;
+    const directionId = quickAddDirections.find((direction) => direction.id === quickDirectionId)?.id ?? quickAddDirections[0]?.id;
     if (!quickTitle.trim() || !onQuickAddTopic || addingTopic) return;
     if (!directionId) {
       setAddError("Сначала откройте сектор в карточке ученика");
@@ -334,11 +332,20 @@ export function LearningLessonV2Panel({
       return { key, plans, options, selected: resolveSelectedSector(options, chosenPlanByLane[key]) };
     });
   const hiddenPlanIds = new Set(switchLanes.flatMap((lane) => lane.plans.filter((plan) => plan.planId !== lane.selected?.id).map((plan) => plan.planId)));
-  const onAwaitingTab = switchLanes.some((lane) => lane.selected?.status === "awaiting_exam");
+  // 07.11: a topic goes into the current sector only. The button hides for a direction whose shown
+  // sector is the one waiting for its exam; other directions of the lesson keep it.
+  const quickAddDirections = sectorDirections.filter((direction) => context.plans.some((plan) => (
+    plan.direction.id === direction.id
+    && plan.canEditTopics !== false
+    && (context.owner.kind !== "group" || plan.scope === "group")
+    && !hiddenPlanIds.has(plan.planId)
+    && plan.status !== "awaiting_exam"
+  )));
+  const awaitingTabBlocksAdd = Boolean(onQuickAddTopic) && !disabled && sectorDirections.length > 0 && quickAddDirections.length === 0;
   const topicsOf = (plans: typeof context.plans) => plans.flatMap((plan) => (
     plan.topics.map((topic) => ({ ...topic, directionTitle: plan.direction.title, ownerName: plan.ownerName, scope: plan.scope, sequence: plan.sequence, canEditTopics: plan.canEditTopics, sharedGroupPlan:plan.sharedGroupPlan }))
   )).filter((topic, index, all) => all.findIndex(other => other.id === topic.id) === index);
-  const canQuickAdd = canQuickAddBase && !onAwaitingTab;
+  const canQuickAdd = Boolean(onQuickAddTopic) && !disabled && quickAddDirections.length > 0;
   const topics = topicsOf(context.plans.filter((plan) => !hiddenPlanIds.has(plan.planId)));
   const changedCountByPlan = Object.fromEntries(context.plans.map((plan) => [
     plan.planId,
@@ -347,11 +354,20 @@ export function LearningLessonV2Panel({
       return entry && entry.toPercent !== topic.progressPercent;
     }).length,
   ]));
+  // Warnings of a sector (percent conflict, report waiting for the admin, start changed after filling)
+  // are drawn on the topic chips of the shown tab only, so the other tab's label carries their number.
+  const warningCountByPlan = Object.fromEntries(context.plans.map((plan) => [
+    plan.planId,
+    plan.topics.filter((topic) => {
+      const entry = draft.topicProgress[topic.id];
+      return Boolean(topic.percentConflict || topic.pendingFromLesson || (entry && entry.expectedPercent !== topic.progressPercent));
+    }).length,
+  ]));
   // The check of last homework lists every pupil's homework; each row says which sector its topic is in.
   const sectorLabelByTopic = new Map<string, string>();
   for (const plan of context.plans) {
     for (const topic of plan.topics) {
-      if (!sectorLabelByTopic.has(topic.id)) sectorLabelByTopic.set(topic.id, sectorTitle({ scope: plan.scope ?? "student", sequence: plan.sequence }));
+      if (!sectorLabelByTopic.has(topic.id)) sectorLabelByTopic.set(topic.id, `${sectorTitle({ scope: plan.scope ?? "student", sequence: plan.sequence })}${plan.status === "awaiting_exam" ? " · ждёт экзамена" : ""}`);
     }
   }
   const directionTitles = new Set(
@@ -367,6 +383,40 @@ export function LearningLessonV2Panel({
     ?? selectedTopic?.progressPercent
     ?? null;
   const pendingCount = pendingLearningHomeworkCount(context);
+  // The chosen topic may sit on a tab that is not shown now: say which one instead of «Выберите тему».
+  const hiddenSelected = (() => {
+    if (selectedTopic || !draft.topicId) return null;
+    for (const plan of context.plans) {
+      const topic = plan.topics.find((item) => item.id === draft.topicId);
+      if (topic) return { topic, plan, lane: switchLanes.find((item) => item.plans.some((other) => other.planId === plan.planId)) ?? null };
+    }
+    return null;
+  })();
+  const emptyHint = sectorDirections.length
+    ? canQuickAdd
+      ? "Добавьте тему прямо сейчас: она попадёт в опубликованный сектор, и вы сразу отметите прогресс её освоения."
+      : awaitingTabBlocksAdd
+        ? "Этот сектор ждёт экзамена, новые темы в него не добавляются. Новую тему можно добавить в текущий сектор."
+        : null
+    : onOpenSector && !disabled
+      ? "Откройте сектор прямо здесь: выберите шаблон ступени или начните с пустого, опубликуйте — и темы появятся на этом шаге."
+      : "Темы на уроке добавляются только в опубликованный сектор. Откройте и опубликуйте сектор в карточке ученика.";
+  const hiddenSelectedNote = hiddenSelected ? (
+    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-stone-50 px-4 py-3 text-sm text-stone-700" data-testid="lesson-selected-topic-elsewhere">
+      <p className="min-w-0 break-words">
+        Выбрана тема «{hiddenSelected.topic.title}» ({sectorTitle({ scope: hiddenSelected.plan.scope ?? "student", sequence: hiddenSelected.plan.sequence })}{hiddenSelected.plan.status === "awaiting_exam" ? " · ждёт экзамена" : ""}). Её проценты сохранены.
+      </p>
+      {hiddenSelected.lane ? (
+        <button
+          type="button"
+          onClick={() => setChosenPlanByLane((current) => ({ ...current, [hiddenSelected.lane!.key]: hiddenSelected.plan.planId }))}
+          className="min-h-11 rounded-lg border border-stone-300 bg-white px-3 text-xs font-bold text-ink"
+        >
+          Показать эту вкладку
+        </button>
+      ) : null}
+    </div>
+  ) : null;
 
   /** 31.10: the topic's percent changed after the draft was filled — start from the new one. */
   function refreshTopicStart(topic: typeof topics[number]) {
@@ -447,7 +497,7 @@ export function LearningLessonV2Panel({
           ) : null}
         </div>
 
-        {showAddForm ? (
+        {showAddForm && canQuickAdd ? (
           <form onSubmit={handleAddTopicSubmit} className="mt-4 rounded-2xl border border-amber-200 bg-amber-50/50 p-4">
             <div className="flex items-center gap-2">
               <Sparkles size={16} className="text-amber-700" />
@@ -456,18 +506,18 @@ export function LearningLessonV2Panel({
               </p>
             </div>
             <p className="mt-1 text-xs text-amber-900/70">
-              Тема сразу добавится в опубликованный сектор{sectorDirections.length === 1 ? ` «${sectorDirections[0]!.title}»` : ""} и появится для выбора на этом уроке. Черновик сектора тоже её получит.
+              Тема сразу добавится в текущий опубликованный сектор{quickAddDirections.length === 1 ? ` «${quickAddDirections[0]!.title}»` : ""} и появится для выбора на этом уроке. Черновик сектора тоже её получит.
             </p>
             <div className="mt-3 space-y-2.5">
-              {sectorDirections.length > 1 ? (
+              {quickAddDirections.length > 1 ? (
                 <select
                   aria-label="Направление сектора"
-                  value={quickDirectionId || sectorDirections[0]?.id}
+                  value={quickAddDirections.find((direction) => direction.id === quickDirectionId)?.id ?? quickAddDirections[0]?.id}
                   disabled={addingTopic}
                   onChange={(e) => setQuickDirectionId(e.target.value)}
                   className="h-10 w-full rounded-xl border border-stone-300 bg-white px-3 text-sm font-medium text-ink focus:border-amber-500 focus:outline-none"
                 >
-                  {sectorDirections.map((direction) => (
+                  {quickAddDirections.map((direction) => (
                     <option key={direction.id} value={direction.id}>{direction.title}</option>
                   ))}
                 </select>
@@ -525,8 +575,11 @@ export function LearningLessonV2Panel({
               onSelect={(id) => setChosenPlanByLane((current) => ({ ...current, [lane.key]: id }))}
               label={`Секторы направления ${lane.plans[0]?.direction.title ?? ""}`}
               suffixes={Object.fromEntries(lane.plans
-                .filter((plan) => changedCountByPlan[plan.planId])
-                .map((plan) => [plan.planId, formatCount(changedCountByPlan[plan.planId]!, ["изменение", "изменения", "изменений"])]))}
+                .filter((plan) => changedCountByPlan[plan.planId] || warningCountByPlan[plan.planId])
+                .map((plan) => [plan.planId, [
+                  changedCountByPlan[plan.planId] ? formatCount(changedCountByPlan[plan.planId]!, ["изменение", "изменения", "изменений"]) : null,
+                  warningCountByPlan[plan.planId] ? formatCount(warningCountByPlan[plan.planId]!, ["предупреждение", "предупреждения", "предупреждений"]) : null,
+                ].filter(Boolean).join(" · ")]))}
             />
           </div>
         ))}
@@ -788,7 +841,7 @@ export function LearningLessonV2Panel({
                   </p>
                 ) : null}
               </div>
-            ) : (
+            ) : hiddenSelectedNote ?? (
               <p className="mt-3 text-sm text-stone-500">
                 Выберите тему, чтобы изменить её прогресс. Остальные изменения при переключении сохранятся.
               </p>
@@ -802,13 +855,7 @@ export function LearningLessonV2Panel({
                 {sectorDirections.length ? "В открытом секторе пока нет активных тем" : "Сектор ещё не открыт"}
               </h4>
             </div>
-            <p className="mt-1.5 text-xs leading-relaxed text-amber-900/80">
-              {sectorDirections.length
-                ? "Добавьте тему прямо сейчас: она попадёт в опубликованный сектор, и вы сразу отметите прогресс её освоения."
-                : onOpenSector && !disabled
-                  ? "Откройте сектор прямо здесь: выберите шаблон ступени или начните с пустого, опубликуйте — и темы появятся на этом шаге."
-                  : "Темы на уроке добавляются только в опубликованный сектор. Откройте и опубликуйте сектор в карточке ученика."}
-            </p>
+            {emptyHint ? <p className="mt-1.5 text-xs leading-relaxed text-amber-900/80">{emptyHint}</p> : null}
             {!sectorDirections.length && onOpenSector && !disabled ? (
               <button
                 type="button"
@@ -833,6 +880,7 @@ export function LearningLessonV2Panel({
             ) : null}
           </div>
         )}
+        {topics.length ? null : hiddenSelectedNote}
       </div>
 
       <div className="mt-6 border-t border-stone-200 pt-5">

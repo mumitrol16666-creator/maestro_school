@@ -59,7 +59,7 @@ export function SectorAwaitingView({ plan, examRow }: { plan: StudentMonthlyPlan
       <SectorExamSummary exam={publicExamOf(examRow?.exam)} />
       <p className="mt-4 text-sm text-stone-700" data-testid="sector-awaiting-readiness">
         {examRow?.progress.ready
-          ? "Готовность к экзамену отмечена. Дату назначит администратор."
+          ? examRow.exam ? "Готовность к экзамену отмечена." : "Готовность к экзамену отмечена. Дату назначит администратор."
           : "Готовность к экзамену пока не отмечена: отметьте её в карточке ученика."}
       </p>
     </div>

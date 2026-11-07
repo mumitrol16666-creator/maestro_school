@@ -5,10 +5,6 @@
  */
 export type OpenSectorLike = { id: string; sequence?: number | null; status?: string | null };
 
-export function isOpenSector(sector: OpenSectorLike) {
-  return sector.status === "active" || sector.status === "awaiting_exam" || sector.status == null;
-}
-
 /** Current sector first, then the one waiting for its exam. */
 export function orderOpenSectors<T extends OpenSectorLike>(sectors: readonly T[]): T[] {
   const rank = (sector: T) => (sector.status === "awaiting_exam" ? 1 : 0);

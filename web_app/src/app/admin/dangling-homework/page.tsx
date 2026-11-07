@@ -79,7 +79,7 @@ export default function DanglingHomeworkPage() {
       {resource.loading ? <LoadingState label="Собираем открытые задания" /> : null}
       {resource.error ? <ErrorState message={resource.error} retry={() => void resource.reload()} /> : null}
       {resource.data && !rows.length ? (
-        <EmptyState title="Висячих ДЗ нет" description="Все открытые задания учеников попадают на уроки к проверке." />
+        <EmptyState title="Нет заданий вне открытых секторов" description="Открытые задания учеников попадают на уроки к проверке. Если появятся задания, которых урок не покажет, они будут здесь." />
       ) : null}
       {byStudent.map((items) => (
         <section key={items[0].crmStudentId} className="grid gap-3 rounded-2xl border border-stone-200 bg-white p-4">

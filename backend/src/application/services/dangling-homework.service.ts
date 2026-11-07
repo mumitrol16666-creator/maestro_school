@@ -21,13 +21,26 @@ export const DANGLING_REASON_TEXT: Record<DanglingHomeworkReason, string> = {
 const OPEN_STATES = ["assigned", "waiting_review", "revision"] as const;
 const OPEN_SECTOR = new Set(["active", "awaiting_exam"]);
 
-export async function listDanglingHomework(limit = 500) {
-  const recipients = await prisma.learningHomeworkRecipient.findMany({
-    where: { state: { in: [...OPEN_STATES] }, assignment: { archivedAt: null } },
-    include: { assignment: { include: { topic: { include: { direction: { select: { title: true } } } } } } },
-    orderBy: { assignment: { assignedAt: "asc" } },
-    take: limit,
-  });
+const PAGE = 1000;
+
+async function loadOpenRecipients() {
+  // 07.11 (review): read every open homework in pages; a fixed cap silently hid the newest rows.
+  const all = [];
+  for (let skip = 0; ; skip += PAGE) {
+    const page = await prisma.learningHomeworkRecipient.findMany({
+      where: { state: { in: [...OPEN_STATES] }, assignment: { archivedAt: null } },
+      include: { assignment: { include: { topic: { include: { direction: { select: { title: true } } } } } } },
+      orderBy: [{ assignment: { assignedAt: "asc" } }, { id: "asc" }],
+      skip,
+      take: PAGE,
+    });
+    all.push(...page);
+    if (page.length < PAGE) return all;
+  }
+}
+
+export async function listDanglingHomework() {
+  const recipients = await loadOpenRecipients();
   if (!recipients.length) return [];
 
   const topicIds = [...new Set(recipients.map((recipient) => recipient.assignment.topicId))];
