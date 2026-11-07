@@ -2447,7 +2447,13 @@ export default function AdminOfflineLessonDetailPage() {
                         {syncConflictLabels[item.kind] ?? "Данные урока требуют проверки"}
                       </p>
                       <p className="mt-2 text-xs leading-5 text-red-800">{item.errorMessage}</p>
+                      {item.kind === "topic_percent_mismatch" && item.waitingOnly ? (
+                        <p className="mt-2 text-xs leading-5 text-stone-700">
+                          Решать ничего не нужно: процент запишется сам, как только подтвердят предыдущий урок.
+                        </p>
+                      ) : (
                       <div className="mt-3 flex flex-wrap gap-2">
+                        {item.kind === "topic_percent_mismatch" && !item.canWriteLesson ? null : (
                         <button
                           type="button"
                           disabled={busy != null}
@@ -2464,6 +2470,7 @@ export default function AdminOfflineLessonDetailPage() {
                         >
                           {item.kind === "topic_percent_mismatch" ? "Записать проценты урока" : "Отправить снова"}
                         </button>
+                        )}
                         {/* An approval conflict cannot be closed by «Принять расписание»: CRM already charged the
                             lesson, closing it would drop the rewards (backend: CRM_CONFLICT_APPROVAL_NEEDS_REPLAY). */}
                         {item.kind === "admin_approve" ? null : (
@@ -2485,6 +2492,7 @@ export default function AdminOfflineLessonDetailPage() {
                         </button>
                         )}
                       </div>
+                      )}
                     </div>
                   ))}
               </div>

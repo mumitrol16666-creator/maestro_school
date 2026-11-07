@@ -270,7 +270,9 @@ export async function getOfflineLessonSyncSummary(crmClassId: string, source?: "
       },
     }),
     prisma.crmSyncConflict.findMany({
-      where: { crmClassId, status: "open" },
+      // 07.11 (P2): a topic percent conflict belongs to an approved lesson and is the admin's
+      // decision on the lesson page; it must not turn the lesson into «расписание не приняло».
+      where: { crmClassId, status: "open", kind: { not: "topic_percent_mismatch" } },
       select: {
         outboxEvent: {
           select: { eventType: true, payload: true },

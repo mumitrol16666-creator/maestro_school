@@ -21,7 +21,11 @@ import {
   upsertAdminJournalEntry,
 } from "./admin-journal.service.js";
 import { finalizeOfflineLessonApproval } from "./offline-lesson-finalization.service.js";
-import { LESSON_TOPIC_CONFLICT_KIND, resolveLessonTopicConflict } from "./lesson-topic-conflicts.service.js";
+import {
+  LESSON_TOPIC_CONFLICT_KIND,
+  presentLessonTopicConflict,
+  resolveLessonTopicConflict,
+} from "./lesson-topic-conflicts.service.js";
 import { buildOfflineLessonApprovalSnapshot } from "./offline-lesson-approval-snapshot.js";
 import {
   withInferredTopicHomeworkAssignment,
@@ -1735,7 +1739,8 @@ export async function listCrmSyncJournal(crmClassId?: string) {
       take: 100,
     }),
   ]);
-  return { events, conflicts };
+  // 07.11 (P2): topic conflicts carry the topics' current percents and which decision is possible.
+  return { events, conflicts: await Promise.all(conflicts.map((conflict) => presentLessonTopicConflict(conflict))) };
 }
 
 export async function retryCrmOutboxEvent(eventId: string) {

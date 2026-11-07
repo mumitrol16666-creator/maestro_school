@@ -500,17 +500,17 @@ export function LearningLessonV2Panel({
                         ? `${topic.progressPercent}% → ${topicDraft.toPercent}%`
                         : `${topic.progressPercent}%`}
                     </span>
-                    {topicDraft && topicDraft.expectedPercent !== topic.progressPercent ? (
+                    {topic.percentConflict ? (
+                      <span className="mt-0.5 block text-[11px] font-semibold text-amber-700">
+                        процент у администратора
+                      </span>
+                    ) : topicDraft && topicDraft.expectedPercent !== topic.progressPercent ? (
                       <span className="mt-0.5 block text-[11px] font-semibold text-red-700">
                         процент изменился
                       </span>
                     ) : topic.pendingFromLesson ? (
                       <span className="mt-0.5 block text-[11px] font-semibold text-amber-700">
                         ждёт подтверждения
-                      </span>
-                    ) : topic.percentConflict ? (
-                      <span className="mt-0.5 block text-[11px] font-semibold text-amber-700">
-                        процент у администратора
                       </span>
                     ) : null}
                   </button>
@@ -641,16 +641,21 @@ export function LearningLessonV2Panel({
                       <p className="mt-1 text-xs leading-5 text-amber-800" data-testid="topic-pending-from-lesson">
                         {selectedTopic.progressPercent}% — по отчёту прошлого урока
                         {selectedTopic.pendingFromLesson.date ? ` ${pendingLessonDay(selectedTopic.pendingFromLesson.date)}` : ""},
-                        он ждёт подтверждения админом. Сейчас в теме {selectedTopic.approvedPercent ?? 0}%.
+                        {selectedTopic.pendingFromLesson.approvedWaitingForEarlier
+                          ? " он принят, процент запишется после подтверждения урока до него."
+                          : " он ждёт подтверждения админом."} Сейчас в теме {selectedTopic.approvedPercent ?? 0}%.
                       </p>
                     ) : selectedTopic.percentConflict ? (
                       <p className="mt-1 text-xs leading-5 text-amber-800" data-testid="topic-percent-conflict">
-                        Прошлый урок принят, но его {selectedTopic.percentConflict.toPercent}% не записаны:
-                        в теме уже было {selectedTopic.percentConflict.currentPercent}%. Какой процент оставить, решит администратор.
-                        Сейчас тема начинается с {selectedTopic.progressPercent}%.
+                        {selectedTopic.percentConflict.own ? "Урок принят, но" : (
+                          <>Урок{selectedTopic.percentConflict.lessonDate ? ` ${pendingLessonDay(selectedTopic.percentConflict.lessonDate)}` : ""} принят, но</>
+                        )}{" "}
+                        его {selectedTopic.percentConflict.toPercent}% по этой теме не записаны: в теме сейчас {selectedTopic.percentConflict.currentPercent}%.
+                        Какой процент оставить, решит администратор.
+                        {selectedTopic.percentConflict.own ? null : ` Тема начинается с ${selectedTopic.progressPercent}%.`}
                       </p>
                     ) : null}
-                    {selectedTopicProgress && selectedTopicProgress.expectedPercent !== selectedTopic.progressPercent ? (
+                    {!selectedTopic.percentConflict && selectedTopicProgress && selectedTopicProgress.expectedPercent !== selectedTopic.progressPercent ? (
                       <div className="mt-2 rounded-lg border border-red-200 bg-red-50 p-3 text-xs leading-5 text-red-800" data-testid="topic-start-changed">
                         <p>
                           После заполнения прошлый урок по этой теме изменили: тема теперь начинается с{" "}

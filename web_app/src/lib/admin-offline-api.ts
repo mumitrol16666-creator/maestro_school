@@ -30,6 +30,10 @@ export type CrmSyncJournal = {
     kind: string;
     status: string;
     errorMessage: string;
+    /** 07.11: topic conflicts only — whether «Записать проценты урока» has anything to write. */
+    canWriteLesson?: boolean | null;
+    /** 07.11: topic conflicts only — every topic waits for an earlier lesson, nothing to decide. */
+    waitingOnly?: boolean;
     createdAt: string;
   }>;
 };

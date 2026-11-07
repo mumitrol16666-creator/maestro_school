@@ -1150,7 +1150,10 @@ export type SkippedLessonTopicUpdate = {
   expectedPercent: number | null;
   toPercent: number;
   currentPercent: number;
-  reason: "stale" | "mastered" | "recorded";
+  /** «waiting»: an earlier lesson that is still not approved brings the topic to «было» first. */
+  reason: "stale" | "waiting" | "mastered" | "recorded";
+  /** For «waiting»: that earlier lesson, as «Название» (дата, время). */
+  waitingFor?: string | null;
 };
 
 type PreparedLearningTopicProgressFromLessonV2 = {
@@ -1261,7 +1264,12 @@ export async function updateLearningTopicProgressBatchFromLessonV2(
       continue;
     }
     if (scoped.progressPercent !== update.expectedPercent && options.skippedTopics) {
-      options.skippedTopics.push(skippedTopic(scoped, update, "stale"));
+      // 07.11 (P2): a later lesson approved before the earlier one is not a real mismatch — it
+      // waits for that lesson and is written after it; only a real gap is the admin's decision.
+      const earlier = await earlierLessonAwaitingApproval(crmClassId, update.topicId, update.expectedPercent);
+      options.skippedTopics.push(earlier
+        ? { ...skippedTopic(scoped, update, "waiting"), waitingFor: earlier }
+        : skippedTopic(scoped, update, "stale"));
       continue;
     }
     if (scoped.progressPercent === 100) {

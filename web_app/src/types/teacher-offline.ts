@@ -292,12 +292,20 @@ export type LearningLessonV2Context = {
         title: string | null;
         date: string | null;
         startTime: string | null;
+        /** 07.11: that lesson is approved in CRM, its percent waits for an even earlier lesson. */
+        approvedWaitingForEarlier?: boolean;
       } | null;
-      /** 04.11: an approved lesson's percent for this topic waits for the admin's decision. */
+      /** 04.11/07.11: an approved lesson's percent for this topic waits for the admin's decision. */
       percentConflict?: {
         crmClassId: string;
+        lessonDate: string | null;
+        lessonTitle: string | null;
         toPercent: number;
+        /** The topic's percent now, not at the time of the conflict. */
         currentPercent: number;
+        reason: "stale" | "waiting" | "mastered" | "recorded";
+        /** The lesson being looked at is the one with the conflict. */
+        own: boolean;
       } | null;
       masteredAt: string | null;
       planCompletionRewardPoints: number;

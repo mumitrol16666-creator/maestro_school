@@ -46,16 +46,49 @@ function readStored(payload: Prisma.JsonValue): StoredTopicConflict {
   };
 }
 
-function describe(topics: readonly StoredTopicEntry[]) {
+/** `current` overrides the percent stored at conflict time: texts show what the topic has now. */
+function describe(topics: readonly StoredTopicEntry[], current: ReadonlyMap<string, number> = new Map()) {
   return topics.map((topic) => {
+    const now = current.get(topic.topicId) ?? topic.currentPercent;
     if (topic.reason === "mastered") {
-      return `«${topic.title}»: тема уже освоена (100 %), урок ставил ${topic.toPercent} %.`;
+      return `«${topic.title}»: тема уже освоена (100%), урок ставил ${topic.toPercent}%. Снять освоение может только куратор, поэтому остаётся «Оставить как есть».`;
     }
     if (topic.reason === "recorded") {
-      return `«${topic.title}»: по этому уроку процент уже записан другой версией отчёта, новая версия ставила ${topic.toPercent} %.`;
+      return `«${topic.title}»: по этому уроку процент уже записан прежней версией отчёта, новая ставила ${topic.toPercent}%. Остаётся «Оставить как есть».`;
     }
-    return `«${topic.title}»: урок ставил ${topic.expectedPercent ?? 0} → ${topic.toPercent} %, а в теме уже ${topic.currentPercent} %.`;
+    if (topic.reason === "waiting") {
+      return `«${topic.title}»: урок ставил ${topic.expectedPercent ?? 0} → ${topic.toPercent}%, тема сейчас ${now}%. Сначала нужно подтвердить урок ${topic.waitingFor ?? "до этого"}, тогда этот процент запишется сам.`;
+    }
+    return `«${topic.title}»: урок ставил ${topic.expectedPercent ?? 0} → ${topic.toPercent}%, а в теме уже ${now}%.`;
   }).join(" ");
+}
+
+/** Only «stale» entries can be written by the admin; «waiting» go by themselves after the earlier lesson. */
+function writable(entry: StoredTopicEntry) {
+  return entry.reason === "stale";
+}
+
+async function currentPercents(topicIds: readonly string[]) {
+  const topics = topicIds.length
+    ? await prisma.learningTopic.findMany({ where: { id: { in: [...new Set(topicIds)] } }, select: { id: true, progressPercent: true } })
+    : [];
+  return new Map(topics.map((topic) => [topic.id, topic.progressPercent ?? 0]));
+}
+
+/**
+ * The admin journal and the lesson page read the stored message; this refreshes it to the topics'
+ * current percents and says which decision is possible. Used by the sync journal listing.
+ */
+export async function presentLessonTopicConflict<T extends { kind: string; localPayload: Prisma.JsonValue; errorMessage: string }>(conflict: T) {
+  if (conflict.kind !== LESSON_TOPIC_CONFLICT_KIND) return { ...conflict, canWriteLesson: null };
+  const stored = readStored(conflict.localPayload);
+  const current = await currentPercents(stored.topics.map((topic) => topic.topicId));
+  return {
+    ...conflict,
+    errorMessage: describe(stored.topics, current),
+    canWriteLesson: stored.topics.some(writable),
+    waitingOnly: stored.topics.length > 0 && stored.topics.every((topic) => topic.reason === "waiting"),
+  };
 }
 
 function asJson(value: unknown) {
@@ -108,7 +141,7 @@ export async function recordLessonTopicConflicts(params: {
     occurredAt: params.occurredAt ? params.occurredAt.toISOString() : null,
     topics: [...params.topics],
   };
-  const errorMessage = `Урок принят, но проценты тем не записаны. ${describe(params.topics)}`;
+  const errorMessage = describe(params.topics);
   const existing = await prisma.crmSyncConflict.findFirst({
     where: { crmClassId: params.crmClassId, kind: LESSON_TOPIC_CONFLICT_KIND, status: { not: "resolved" } },
   });
@@ -129,7 +162,7 @@ export async function recordLessonTopicConflicts(params: {
     await upsertAdminJournalEntry({
       sourceKey: journalKey(params.crmClassId),
       type: "crm_sync",
-      severity: "high",
+      severity: params.topics.every((topic) => topic.reason === "waiting") ? "normal" : "high",
       source: "crm",
       linkedEntityType: "crm_sync_conflict",
       linkedEntityId: conflict.id,
@@ -177,7 +210,7 @@ async function saveRemaining(
       where: { id: conflict.id },
       data: {
         localPayload: asJson({ ...stored, topics: remaining }),
-        errorMessage: `Урок принят, но проценты тем не записаны. ${describe(remaining)}`,
+        errorMessage: describe(remaining),
       },
     });
     return false;
@@ -234,7 +267,9 @@ async function applyWaitingPass(wanted: ReadonlySet<string>) {
     if (!stored.approvedBy || !stored.topics.some((topic) => wanted.has(topic.topicId))) continue;
     const remaining: StoredTopicEntry[] = [];
     for (const entry of stored.topics) {
-      const current = wanted.has(entry.topicId) && entry.reason === "stale"
+      // Only a lesson that waits for an earlier one is written by itself (rule of 26.09: a real
+      // mismatch is the admin's decision, it never closes because the topic happened to come by).
+      const current = wanted.has(entry.topicId) && entry.reason === "waiting"
         ? await topicPercent(entry.topicId)
         : null;
       if (current === null || current !== entry.expectedPercent || current === 100) {
@@ -271,14 +306,26 @@ export async function resolveLessonTopicConflict(
   }
   if (conflict.status === "resolved") return conflict;
   const stored = readStored(conflict.localPayload);
+  const waiting = stored.topics.filter((entry) => entry.reason === "waiting");
   if (decision === "keep_current") {
-    await saveRemaining(conflict, stored, [], { by: actorId, how: "keep_current", note: reason });
+    // A lesson waiting for an earlier one is not dropped: it still goes in after that lesson.
+    await saveRemaining(conflict, stored, waiting, { by: actorId, how: "keep_current", note: reason });
     return prisma.crmSyncConflict.findUnique({ where: { id: conflictId } });
   }
-  const remaining: StoredTopicEntry[] = [];
+  if (!stored.topics.some(writable)) {
+    throw new ConflictError(
+      "Здесь нечего записывать: темы либо ждут подтверждения предыдущего урока, либо освоены или уже записаны. Выберите «Оставить как есть».",
+      "LESSON_TOPIC_CONFLICT_NOT_WRITABLE",
+    );
+  }
+  const remaining: StoredTopicEntry[] = [...waiting];
   const failures: string[] = [];
   const written: string[] = [];
   for (const entry of stored.topics) {
+    if (!writable(entry)) {
+      if (entry.reason !== "waiting") remaining.push(entry);
+      continue;
+    }
     const current = await topicPercent(entry.topicId);
     if (current === null) continue; // the topic was archived: nothing left to write
     if (current === entry.toPercent) continue;
@@ -304,25 +351,52 @@ export async function resolveLessonTopicConflict(
   return prisma.crmSyncConflict.findUnique({ where: { id: conflictId } });
 }
 
-/** Open topic conflicts that mention these topics, for the teacher's lesson screen. */
-export async function openTopicConflictsFor(topicIds: readonly string[]) {
+export type OpenTopicConflict = {
+  crmClassId: string;
+  lessonDate: string | null;
+  lessonTitle: string | null;
+  toPercent: number;
+  currentPercent: number;
+  reason: StoredTopicEntry["reason"];
+};
+
+/**
+ * Open topic conflicts that mention these topics, for the teacher's lesson screen. Lessons dated
+ * after `beforeDate` (the lesson being filled) do not count; the percent is the topic's percent now.
+ */
+export async function openTopicConflictsFor(topicIds: readonly string[], beforeDate?: string | null) {
   const wanted = new Set(topicIds);
-  const result = new Map<string, { crmClassId: string; toPercent: number; currentPercent: number }>();
+  const result = new Map<string, OpenTopicConflict>();
   if (!wanted.size) return result;
   const conflicts = await prisma.crmSyncConflict.findMany({
     where: { kind: LESSON_TOPIC_CONFLICT_KIND, status: "open" },
     orderBy: { createdAt: "asc" },
     select: { crmClassId: true, localPayload: true },
   });
+  if (!conflicts.length) return result;
+  const projections = await prisma.offlineLessonProjection.findMany({
+    where: { crmClassId: { in: conflicts.map((conflict) => conflict.crmClassId) } },
+    select: { crmClassId: true, lessonPayload: true },
+  });
+  const meta = new Map(projections.map((projection) => {
+    const payload = (projection.lessonPayload ?? {}) as { date?: unknown; startTime?: unknown; title?: unknown };
+    const date = String(payload.date ?? "").slice(0, 10) || null;
+    return [projection.crmClassId, { date, title: typeof payload.title === "string" ? payload.title : null }] as const;
+  }));
+  const current = await currentPercents([...wanted]);
   for (const conflict of conflicts) {
+    const lesson = meta.get(conflict.crmClassId);
+    if (beforeDate && lesson?.date && lesson.date > beforeDate) continue;
     for (const entry of readStored(conflict.localPayload).topics) {
-      if (wanted.has(entry.topicId)) {
-        result.set(entry.topicId, {
-          crmClassId: conflict.crmClassId,
-          toPercent: entry.toPercent,
-          currentPercent: entry.currentPercent,
-        });
-      }
+      if (!wanted.has(entry.topicId)) continue;
+      result.set(entry.topicId, {
+        crmClassId: conflict.crmClassId,
+        lessonDate: lesson?.date ?? null,
+        lessonTitle: lesson?.title ?? null,
+        toPercent: entry.toPercent,
+        currentPercent: current.get(entry.topicId) ?? entry.currentPercent,
+        reason: entry.reason,
+      });
     }
   }
   return result;

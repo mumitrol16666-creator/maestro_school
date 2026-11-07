@@ -450,7 +450,7 @@ async function withPendingTopicPercents(
     { crmClassId, date: lesson.date, startTime: lesson.startTime },
     topicIds,
   );
-  const conflicts = await openTopicConflictsFor(topicIds);
+  const conflicts = await openTopicConflictsFor(topicIds, String(lesson.date ?? "").slice(0, 10) || null);
   return plans.map((plan) => ({
     ...plan,
     topics: plan.topics.map((topic) => {
@@ -465,11 +465,13 @@ async function withPendingTopicPercents(
               title: waiting.title,
               date: waiting.date,
               startTime: waiting.startTime,
+              approvedWaitingForEarlier: waiting.approvedWaitingForEarlier ?? false,
             }
           : null,
-        // 04.11: an approved earlier lesson whose percent the admin still has to decide on.
-        percentConflict: !waiting && conflicts.get(topic.id)?.crmClassId !== crmClassId
-          ? conflicts.get(topic.id) ?? null
+        // 04.11/07.11: an approved lesson whose percent for this topic the admin still decides on —
+        // an earlier one, or this very lesson (`own`), whose screen otherwise shows «процент изменился».
+        percentConflict: !waiting && conflicts.get(topic.id)
+          ? { ...conflicts.get(topic.id)!, own: conflicts.get(topic.id)!.crmClassId === crmClassId }
           : null,
       };
     }),
