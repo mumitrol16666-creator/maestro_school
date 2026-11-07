@@ -12,6 +12,11 @@ import { LearningTopicProgressEditor } from "@/components/learning-topic-progres
 import { LearningHomeworkAssignmentComposer } from "@/components/learning-homework-assignment-composer";
 import { SectorHistoryList, SectorProposalsPanel, SectorTemplatePicker } from "@/components/sector-editor-parts";
 import { ProgressBar } from "@/components/progress-bar";
+import { SectorSwitch } from "@/components/sector-switch";
+import { SectorEarlyClose } from "@/components/sector-early-close";
+import { SectorAwaitingView } from "@/components/sector-awaiting-view";
+import { useSectorChoice } from "@/hooks/use-sector-choice";
+import { sectorExamsApi } from "@/lib/sector-exams-api";
 import { learningHomeworkApi } from "@/lib/learning-homework-api";
 import type {
   LearningPlanMode,
@@ -126,6 +131,10 @@ function StudentMonthlyPlanEditorContent({
   const [error, setError] = useState<string | null>(null);
   const [staleDraft, setStaleDraft] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  // 07.11: up to two open sectors — the current one (editable) and the previous one awaiting its exam (read-only).
+  const choice = useSectorChoice();
+  const [startNew, setStartNew] = useState(false);
+  const examRows = useApiResource(() => sectorExamsApi.forStudent(crmStudentId).catch(() => []), [crmStudentId]);
 
   useEffect(() => {
     if (resource.data) {
@@ -228,7 +237,16 @@ function StudentMonthlyPlanEditorContent({
 
   const isNewSector = sectors && !resource.data?.plan;
   const sequence = draft.sequence ?? resource.data?.nextSequence ?? 1;
-  const history = resource.data?.history ?? [];
+  const awaiting = resource.data?.awaitingExam ?? null;
+  // A sector awaiting its exam is shown in its own tab, not in the list of earlier ones.
+  const history = (resource.data?.history ?? []).filter((entry) => entry.status !== "awaiting_exam");
+  const openSectors = [
+    ...(resource.data?.plan?.id ? [{ id: resource.data.plan.id, sequence: resource.data.plan.sequence, status: "active" }] : []),
+    ...(awaiting?.id ? [{ id: awaiting.id, sequence: awaiting.sequence, status: "awaiting_exam" }] : []),
+  ];
+  const selectedSector = choice.pick(crmDirectionId, openSectors);
+  const showAwaiting = Boolean(awaiting && selectedSector?.id === awaiting.id && !(startNew && !resource.data?.plan));
+  const examRowOf = (planId?: string) => examRows.data?.find((row) => row.planId === planId) ?? null;
   const activeItems = draft.items.filter((item) => (
     item.title.trim() && (!item.state || item.state === "active")
   ));
@@ -250,7 +268,7 @@ function StudentMonthlyPlanEditorContent({
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-800">Учебная программа</p>
             <h3 className="mt-0.5 font-display text-2xl text-ink">
-              {sectors ? (isNewSector ? `Открываем сектор ${sequence}` : `Сектор ${sequence}`) : "План на месяц"}
+              {sectors ? (showAwaiting && awaiting ? `Сектор ${awaiting.sequence}` : isNewSector ? `Открываем сектор ${sequence}` : `Сектор ${sequence}`) : "План на месяц"}
             </h3>
             {sectors && history.length ? (
               <button
@@ -262,7 +280,7 @@ function StudentMonthlyPlanEditorContent({
               </button>
             ) : null}
           </div>
-          <span className={`max-w-full self-start rounded-full px-3 py-1.5 text-[11px] font-black leading-5 ${
+          {showAwaiting ? null : <span className={`max-w-full self-start rounded-full px-3 py-1.5 text-[11px] font-black leading-5 ${
             draft.publication?.isPublished && !hasUnpublishedChanges
               ? "bg-emerald-100 text-emerald-800"
               : hasUnpublishedChanges && draft.publication?.isPublished
@@ -270,7 +288,7 @@ function StudentMonthlyPlanEditorContent({
                 : "bg-stone-100 text-stone-600"
           }`}>
             {publicationLabel}
-          </span>
+          </span>}
         </div>
 
         {sectors ? (
@@ -289,15 +307,70 @@ function StudentMonthlyPlanEditorContent({
             </label>
           </div>
         ) : null}
+        <SectorSwitch
+          sectors={openSectors}
+          selectedId={selectedSector?.id}
+          onSelect={(id) => choice.select(crmDirectionId, id)}
+          label="Секторы направления"
+          className="mt-4"
+        />
       </div>
 
       {showHistory && history.length ? <SectorHistoryList history={history} /> : null}
       {sectors ? <SectorStatistics endpoint={`/teachers/me/students/${encodeURIComponent(crmStudentId)}/sector-statistics`} /> : null}
 
+      {showAwaiting && awaiting && crmDirectionId ? (
+        <>
+          <SectorAwaitingView plan={awaiting} examRow={examRowOf(awaiting.id)} />
+          {awaiting.id ? (
+            <SectorEarlyClose
+              crmStudentId={crmStudentId}
+              crmDirectionId={crmDirectionId}
+              planId={awaiting.id}
+              sequence={awaiting.sequence ?? 0}
+              exam={examRowOf(awaiting.id)?.exam}
+              onClosed={async () => { await Promise.all([resource.reload(), examRows.reload()]); }}
+            />
+          ) : null}
+          {!resource.data?.plan ? (
+            <button
+              type="button"
+              onClick={() => setStartNew(true)}
+              className="mt-4 inline-flex min-h-11 items-center justify-center rounded-xl bg-ink px-4 text-sm font-bold text-white"
+            >
+              Открыть сектор {resource.data?.nextSequence ?? sequence}
+            </button>
+          ) : null}
+        </>
+      ) : null}
+
+      {!showAwaiting ? (
+      <>
       {sectors && draft.id && draft.publication?.isPublished && crmDirectionId ? (
-        <NextLearningPlan kind="students" ownerId={crmStudentId} planId={draft.id}
-          directionId={crmDirectionId} version={draft.version ?? 0}
-          disabled={!saved || hasUnpublishedChanges || saving || publishing} onOpened={() => resource.reload()} />
+        <>
+          <NextLearningPlan kind="students" ownerId={crmStudentId} planId={draft.id}
+            directionId={crmDirectionId} version={draft.version ?? 0}
+            disabled={!saved || hasUnpublishedChanges || saving || publishing}
+            blockedReason={awaiting ? `Сектор ${awaiting.sequence} ещё ждёт экзамена: следующий откроется после него` : null}
+            onOpened={() => resource.reload()} />
+          <SectorEarlyClose
+            crmStudentId={crmStudentId}
+            crmDirectionId={crmDirectionId}
+            planId={draft.id}
+            sequence={draft.sequence ?? 0}
+            exam={examRowOf(draft.id)?.exam}
+            onClosed={async () => { setStartNew(false); await Promise.all([resource.reload(), examRows.reload()]); }}
+          />
+        </>
+      ) : null}
+      {awaiting && !resource.data?.plan ? (
+        <button
+          type="button"
+          onClick={() => setStartNew(false)}
+          className="mt-4 inline-flex min-h-11 items-center justify-center rounded-xl border border-stone-300 bg-white px-4 text-sm font-bold text-ink"
+        >
+          К сектору {awaiting.sequence}, который ждёт экзамена
+        </button>
       ) : null}
 
       {resource.error ? (
@@ -547,9 +620,11 @@ function StudentMonthlyPlanEditorContent({
       ) : null}
       {!sectors ? null : (
         <p className="mt-2 inline-flex items-center gap-1.5 text-[11px] text-stone-500">
-          <Lightbulb size={13} /> Следующий сектор откроется, когда этот закроется: все темы на 100 % и сдан тест.
+          <Lightbulb size={13} /> Следующий сектор открывается кнопкой выше. Предыдущий сектор ждёт экзамена; открыты не больше двух секторов.
         </p>
       )}
+      </>
+      ) : null}
     </section>
   );
 }

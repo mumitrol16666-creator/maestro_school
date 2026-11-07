@@ -10,6 +10,8 @@ import {
   listLearningHomeworkReviewQueue,
 } from "../../application/services/learning-homework-review-queue.service.js";
 import { learningHomeworkV2Enabled } from "../../application/services/learning-homework-v2.service.js";
+import { listDanglingHomework } from "../../application/services/dangling-homework.service.js";
+import { isOfflineCoordinatorRole } from "../../domain/cms-access.js";
 import { isContentAdminRole } from "../../domain/cms-access.js";
 import { ForbiddenError, NotFoundError } from "../../domain/errors.js";
 import {
@@ -43,6 +45,19 @@ function legacyItem(item: Awaited<ReturnType<typeof listAdminHomeworkSubmissions
 }
 
 export async function homeworkReviewRoutes(app: FastifyInstance) {
+  // 07.11: open homework that no lesson shows for checking, with the reason. School-wide, so only
+  // coordinators (admin, owner, curator) — a teacher must not see other teachers' pupils.
+  app.get(
+    "/admin/homework/dangling",
+    { preHandler: [authenticate] },
+    async (request) => {
+      if (!isOfflineCoordinatorRole(request.user!.roleSlug)) {
+        throw new ForbiddenError("Список доступен администратору и куратору");
+      }
+      return { data: await listDanglingHomework() };
+    },
+  );
+
   app.get(
     "/admin/homework-submissions",
     { preHandler: reviewGuards() },

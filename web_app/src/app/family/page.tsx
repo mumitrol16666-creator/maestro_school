@@ -32,6 +32,9 @@ import { AddChildForm } from "@/components/add-child-form";
 import { externalChildLine, isExternalChild } from "@/lib/course-access-format";
 import { GroupSectorPassBadge, SectorExamSummary } from "@/components/sector-exam-summary";
 import { sectorTitle } from "@/lib/sector-label";
+import { SectorSwitch } from "@/components/sector-switch";
+import { useSectorChoice } from "@/hooks/use-sector-choice";
+import { groupOpenSectorsByDirection } from "@/lib/sector-switch";
 
 const relationshipLabels: Record<string, string> = {
   mother: "Мама",
@@ -383,8 +386,15 @@ const planItemStatus = {
 function MonthlyPlans({ studentId }: { studentId: string }) {
   const resource = useApiResource(() => familyApi.childMonthlyPlans(studentId), [studentId]);
   const plans = resource.data?.plans ?? [];
-  const aggregate = resource.data?.aggregateProgress;
-  const title = plans.length === 1 ? sectorTitle(plans[0]!) : "Текущие сектора";
+  const choice = useSectorChoice();
+  // 07.11: a direction may have two open sectors — the current one and the one waiting for its exam.
+  const blocks = groupOpenSectorsByDirection(plans).map((block) => ({ ...block, shown: choice.pick(block.key, block.personal) }));
+  const shown = blocks.flatMap((block) => [...(block.shown ? [block.shown] : []), ...block.group]);
+  const hasSwitch = blocks.some((block) => block.personal.length > 1);
+  const completed = shown.reduce((total, plan) => total + plan.progress.completed, 0);
+  const total = shown.reduce((sum, plan) => sum + plan.progress.total, 0);
+  const aggregate = { completed, total, percent: total ? Math.round((completed / total) * 100) : 0 };
+  const title = hasSwitch && shown.length === 1 ? "Текущий сектор" : shown.length === 1 ? sectorTitle(shown[0]!) : "Текущие сектора";
 
   return (
     <section className="border-t-2 border-stone-300 bg-paper p-5 shadow-soft sm:p-7">
@@ -410,7 +420,18 @@ function MonthlyPlans({ studentId }: { studentId: string }) {
           </div>
           <div className="mt-3"><ProgressBar value={aggregate?.percent ?? 0} /></div>
           <div className="mt-6 grid gap-5">
-            {plans.map((plan) => <FamilyPlanDetails key={plan.id} plan={plan} />)}
+            {blocks.map((block) => (
+              <div key={block.key} className="grid gap-5">
+                <SectorSwitch
+                  sectors={block.personal}
+                  selectedId={block.shown?.id}
+                  onSelect={(id) => choice.select(block.key, id)}
+                  label={`Секторы направления ${block.title}`}
+                />
+                {block.shown ? <FamilyPlanDetails plan={block.shown} /> : null}
+                {block.group.map((plan) => <FamilyPlanDetails key={plan.id} plan={plan} />)}
+              </div>
+            ))}
           </div>
         </>
       )}
@@ -472,6 +493,11 @@ function FamilyPlanDetails({ plan }: { plan: StudentHomeMonthlyPlan }) {
         })}
       </div>
       <GroupSectorPassBadge pass={plan.memberPass} />
+      {plan.status === "awaiting_exam" ? (
+        <p className="mt-4 rounded-lg bg-sky-50 px-4 py-3 text-sm font-bold text-sky-950" data-testid="family-sector-awaiting-exam">
+          Ждёт экзамена. Ребёнок уже занимается в следующем секторе.
+        </p>
+      ) : null}
       <SectorExamSummary exam={plan.exam} />
     </article>
   );

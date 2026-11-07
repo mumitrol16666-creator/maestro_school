@@ -140,6 +140,34 @@ integrationTest("the assigned teacher gets the whole student card in one read", 
   assert.equal(card.dynamics?.sectors[0]?.percent, 0);
 });
 
+integrationTest("both open sectors are on the card: the current one and the one waiting for its exam", async t => {
+  const fixture = await createFixture();
+  t.after(() => removeFixture(fixture));
+  mockCrm(t, { crmStudentId: fixture.student.crmStudentId!, assigned: true });
+  const { prisma, direction, student, teacher } = fixture;
+  const mkPlan = (sequence: number, status: "awaiting_exam" | "closed") => prisma.learningPlan.create({
+    data: {
+      directionId: direction.id, crmStudentId: student.crmStudentId!, month: "2026-09", sequence, status,
+      currentVersionNumber: 1, publishedVersionNumber: 1, createdById: teacher.id,
+      ...(status === "closed" ? { closedAt: new Date(), closeReason: "manual" } : {}),
+      versions: { create: { version: 1, goal: `Сектор ${sequence}`, createdById: teacher.id, publishedAt: new Date() } },
+    },
+  });
+  // The fixture's own active sector has sequence 2; the one waiting for its exam is sector 1.
+  const waiting = await mkPlan(1, "awaiting_exam");
+  const { getTeacherStudentWorkspace } = await import("./teacher-student-workspace.service.js");
+  const card = await getTeacherStudentWorkspace(teacher.id, student.crmStudentId!);
+  assert.deepEqual(card.sectors.map((sector) => [sector.sequence, sector.status]), [[2, "active"], [1, "awaiting_exam"]]);
+  assert.equal(card.sectors.find((sector) => sector.id === waiting.id)?.status, "awaiting_exam");
+  assert.deepEqual(card.closedSectors, [], "a sector waiting for its exam is not history");
+  assert.deepEqual(card.dynamics?.sectors.map((sector) => [sector.sequence, sector.status]), [[2, "active"], [1, "awaiting_exam"]]);
+
+  await prisma.learningPlan.update({ where: { id: waiting.id }, data: { status: "closed", closedAt: new Date(), closeReason: "exam" } });
+  const after = await getTeacherStudentWorkspace(teacher.id, student.crmStudentId!);
+  assert.deepEqual(after.sectors.map((sector) => sector.sequence), [2]);
+  assert.deepEqual(after.closedSectors.map((sector) => [sector.sequence, sector.status]), [[1, "closed"]]);
+});
+
 integrationTest("a teacher without an assignment is refused, and a lesson gives the sector only", async t => {
   const fixture = await createFixture();
   t.after(() => removeFixture(fixture));

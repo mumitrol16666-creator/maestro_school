@@ -403,6 +403,7 @@ async function lessonPlans(scope: LessonScope) {
     return [{
       planId: plan.id,
       sequence: plan.sequence,
+      status: plan.status as "active" | "awaiting_exam",
       scope: plan.crmGroupId ? "group" as const : "student" as const,
       sharedGroupPlan:plan.isSharedGroupPlan,
       ownerStudentId: plan.crmStudentId,

@@ -264,6 +264,23 @@ async function findActiveSector(scope: ResolvedScope) {
   });
 }
 
+/**
+ * The previous individual sector that finished teaching and waits for its exam.
+ * An owner has at most one in a direction: the next sector is not opened while
+ * one is still waiting (see openNextLearningPlan).
+ */
+async function findAwaitingExamSector(scope: ResolvedScope) {
+  return prisma.learningPlan.findFirst({
+    where: {
+      directionId: scope.direction.id,
+      status: "awaiting_exam",
+      ...ownerWhere(scope.owner),
+    },
+    include: planInclude,
+    orderBy: { sequence: "desc" },
+  });
+}
+
 async function listClosedSectors(scope: ResolvedScope) {
   const plans = await prisma.learningPlan.findMany({
     where: {
@@ -652,6 +669,7 @@ export async function getStudentLearningPlanV2(
 ) {
   const scope = await resolveStudentScope(teacherUserId, crmStudentId, crmDirectionId);
   const plan = await findActiveSector(scope);
+  const awaitingExam = await findAwaitingExamSector(scope);
   const history = await listClosedSectors(scope);
   return {
     student: { crmStudentId, name: scope.owner.name },
@@ -661,6 +679,8 @@ export async function getStudentLearningPlanV2(
     },
     nextSequence: plan ? plan.sequence : (history[0]?.sequence ?? 0) + 1,
     plan: plan ? versionDto(plan) : null,
+    // The previous sector, waiting for its exam while the current one is taught.
+    awaitingExam: awaitingExam ? versionDto(awaitingExam) : null,
     history,
   };
 }
@@ -688,12 +708,36 @@ export async function publishStudentLearningPlanV2(
 /** Historical request range; positive early-close rewards are now rejected. */
 export const SECTOR_EARLY_CLOSE_MAX_POINTS = NON_EMPTY_PLAN_COMPLETION_POINTS;
 
-/** Legacy archive action: closes without a certificate or reward. New teaching uses next-sector. */
+/**
+ * Owner decision 07.11 is still open: may an early close pay Points? Today it may not
+ * (Points are only for a passed exam). Flip this one constant, then add the award below,
+ * to change the rule.
+ */
+const SECTOR_EARLY_CLOSE_PAYS_POINTS = false;
+
+function assertEarlyClosePointsPolicy(points: number) {
+  if (points > 0 && !SECTOR_EARLY_CLOSE_PAYS_POINTS) {
+    throw new BadRequestError(
+      "Баллы за сектор начисляются после сдачи экзамена. Для продолжения обучения откройте следующий сектор.",
+      "SECTOR_REWARD_REQUIRES_EXAM",
+    );
+  }
+}
+
+function formatExamDate(date: Date | null) {
+  if (!date) return "";
+  return new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Asia/Aqtobe" }).format(date);
+}
+
+/**
+ * Closes one open sector of a student's direction without an exam or a reward.
+ * Up to two sectors are open (active and awaiting_exam), so the sector is named by planId.
+ */
 export async function closeStudentSectorEarlyV2(
   teacherUserId: string,
   crmStudentId: string,
   crmDirectionId: string,
-  input: { points: number; comment?: string | null; now?: Date },
+  input: { planId: string; points: number; comment?: string | null; now?: Date },
 ) {
   if (!Number.isInteger(input.points) || input.points < 0 || input.points > SECTOR_EARLY_CLOSE_MAX_POINTS) {
     throw new BadRequestError(
@@ -702,18 +746,35 @@ export async function closeStudentSectorEarlyV2(
     );
   }
   const scope = await resolveStudentScope(teacherUserId, crmStudentId, crmDirectionId);
-  const plan = await findActiveSector(scope);
+  const plan = await prisma.learningPlan.findFirst({
+    where: {
+      id: input.planId,
+      directionId: scope.direction.id,
+      status: { in: ["active", "awaiting_exam"] },
+      ...ownerWhere(scope.owner),
+    },
+  });
   if (!plan) throw new BadRequestError("Открытый сектор не найден", "MONTHLY_PLAN_NOT_FOUND");
   if (plan.publishedVersionNumber === null) {
     throw new BadRequestError("Сектор ещё не опубликован ученику: закрывать нечего", "SECTOR_NOT_PUBLISHED");
   }
-  if (input.points > 0) {
-    throw new BadRequestError("Баллы за сектор начисляются после сдачи экзамена. Для продолжения обучения откройте следующий сектор.", "SECTOR_REWARD_REQUIRES_EXAM");
+  assertEarlyClosePointsPolicy(input.points);
+  // A booked exam lesson lives in the CRM calendar; only the administrator can cancel it there.
+  const bookedExam = await prisma.sectorExam.findFirst({
+    where: { planId: plan.id, status: { in: ["scheduled", "in_progress"] } },
+    select: { scheduledAt: true },
+  });
+  if (bookedExam) {
+    const when = formatExamDate(bookedExam.scheduledAt);
+    throw new ConflictError(
+      `На сектор ${plan.sequence} назначен экзамен${when ? ` ${when}` : ""}. Отменить урок экзамена может администратор в CRM, после этого сектор можно закрыть`,
+      "SECTOR_EXAM_SCHEDULED",
+    );
   }
   const now = input.now ?? new Date();
   const completionSourceKey = `learning-plan-completion:${plan.id}`;
   const closed = await prisma.learningPlan.updateMany({
-    where: { id: plan.id, status: "active" },
+    where: { id: plan.id, status: { in: ["active", "awaiting_exam"] } },
     data: {
       status: "closed",
       closedAt: now,
@@ -727,9 +788,9 @@ export async function closeStudentSectorEarlyV2(
   if (closed.count === 0) {
     throw new ConflictError("Сектор уже закрыт. Обновите страницу.", "SECTOR_ALREADY_CLOSED");
   }
-  // An exam prepared for this sector has nothing left to close.
+  // An exam still being prepared for this sector has nothing left to close.
   await prisma.sectorExam.updateMany({
-    where: { planId: plan.id, status: { in: ["draft", "awaiting_schedule", "scheduled", "in_progress"] } },
+    where: { planId: plan.id, status: { in: ["draft", "awaiting_schedule"] } },
     data: { status: "cancelled", cancelledAt: now, cancelReason: "Сектор закрыт досрочно" },
   });
 
@@ -737,7 +798,7 @@ export async function closeStudentSectorEarlyV2(
     where: { crmStudentId, deletedAt: null, isActive: true, role: { slug: "student" } },
     select: { id: true },
   });
-  let awardedPoints = 0;
+  const awardedPoints = 0;
   if (studentUser) {
     try {
       const { deliverUserNotification } = await import("./notification.service.js");
@@ -745,9 +806,7 @@ export async function closeStudentSectorEarlyV2(
         userId: studentUser.id,
         type: "offline_lesson_report_ready",
         title: `Сектор ${plan.sequence} закрыт`,
-        body: awardedPoints
-          ? `Преподаватель закрыл сектор. Начислено ${awardedPoints} баллов.`
-          : "Преподаватель закрыл сектор. Скоро откроется следующий.",
+        body: `Преподаватель закрыл сектор ${plan.sequence} без экзамена.`,
         url: "/monthly-plan",
         tag: `sector-closed-${plan.id}`,
         dedupeKey: `sector-closed:${plan.id}`,
@@ -1569,6 +1628,20 @@ async function openNextLearningPlan(
       ? replay.details.nextPlanId : null;
     if (typeof replayNext === "string") return replayNext;
     if (previous.status !== "active") throw new ConflictError("Обучение по этому плану уже завершено", "SECTOR_STUDY_ALREADY_FINISHED");
+    if (scope.owner.kind === "student") {
+      // At most two sectors are open: the current one and the previous one waiting for its exam.
+      const waiting = await tx.learningPlan.findFirst({
+        where: { directionId: scope.direction.id, status: "awaiting_exam", ...ownerWhere(scope.owner) },
+        select: { sequence: true },
+        orderBy: { sequence: "desc" },
+      });
+      if (waiting) {
+        throw new ConflictError(
+          `Сектор ${waiting.sequence} ещё ждёт экзамена. Проведите экзамен или закройте сектор ${waiting.sequence} досрочно, потом открывайте следующий`,
+          "SECTOR_PREVIOUS_AWAITING_EXAM",
+        );
+      }
+    }
     assertExpectedLearningPlanVersion(previous.currentVersionNumber, input.expectedVersion);
     if (previous.publishedVersionNumber === null || previous.publishedVersionNumber !== previous.currentVersionNumber) {
       throw new ConflictError("Сначала опубликуйте текущий план и изменения", "SECTOR_PUBLISH_BEFORE_NEXT");

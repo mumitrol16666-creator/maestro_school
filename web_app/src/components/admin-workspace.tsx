@@ -91,6 +91,7 @@ export const adminWorkspaceSections: AdminWorkspaceSection[] = [
       "/admin/offline-lessons",
       "/admin/online-lessons",
       "/admin/homework-review",
+      "/admin/dangling-homework",
       "/admin/directions",
       "/admin/sector-templates",
       "/admin/lesson-templates",
@@ -117,6 +118,13 @@ export const adminWorkspaceSections: AdminWorkspaceSection[] = [
         group: "Рабочий день",
         icon: ClipboardCheck,
         badge: "homework",
+      },
+      {
+        href: "/admin/dangling-homework",
+        label: "Висячие ДЗ",
+        description: "Открытые задания учеников, которые не попадут на урок к проверке, и почему.",
+        group: "Рабочий день",
+        icon: ClipboardCheck,
       },
       {
         href: "/admin/directions",

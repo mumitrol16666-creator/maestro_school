@@ -1,6 +1,7 @@
 "use client";
 
 import { sectorTitle } from "@/lib/sector-label";
+import { formatExamDate } from "@/lib/sector-exams-api";
 import {
   ArrowRight,
   ChevronRight,
@@ -64,7 +65,10 @@ export default function DashboardPage() {
   const school = data.school;
   const upcoming = school?.upcomingLessons ?? [];
   const plans = data.monthlyPlans;
-  const planProgress = aggregatePlanProgress(plans);
+  // 07.11: progress is the current sectors only; the one waiting for its exam is a line below it.
+  const currentPlans = plans.filter((plan) => plan.status !== "awaiting_exam");
+  const waitingPlans = plans.filter((plan) => plan.status === "awaiting_exam");
+  const planProgress = aggregatePlanProgress(currentPlans);
   const actionTasks = data.tasks?.items.filter((task) => task.actionRequired) ?? [];
   // Plan 5.1: «Сегодня» opens the home; the lessons after the nearest one go to the list.
   const today = data.today ?? { nextLesson: null, tasks: [], tasksTotal: 0 };
@@ -111,7 +115,9 @@ export default function DashboardPage() {
         <div className={`mt-4 grid grid-cols-[minmax(0,1fr)] items-start gap-5 ${visibleUpcoming.length ? "lg:grid-cols-2" : ""}`}>
           <LearningSummary
             actionCount={data.tasks?.counts.actionRequired ?? null}
-            plans={plans}
+            plans={currentPlans}
+            waitingPlans={waitingPlans}
+            hasPlans={plans.length > 0}
             planProgress={planProgress}
           />
           {visibleUpcoming.length ? <UpcomingLessons lessons={visibleUpcoming} /> : null}
@@ -173,10 +179,14 @@ export default function DashboardPage() {
 function LearningSummary({
   actionCount,
   plans,
+  waitingPlans,
+  hasPlans,
   planProgress,
 }: {
   actionCount: number | null;
   plans: StudentHomeMonthlyPlan[];
+  waitingPlans: StudentHomeMonthlyPlan[];
+  hasPlans: boolean;
   planProgress: StudentMonthlyPlansResponse["aggregateProgress"];
 }) {
   return (
@@ -198,11 +208,24 @@ function LearningSummary({
           <p className="mt-2 text-xs font-semibold text-stone-500">{formatOutOf(planProgress.completed, planProgress.total, ["темы", "тем", "тем"])} закрыто</p>
         </div>
       ) : null}
+      {waitingPlans.map((plan) => (
+        <Link
+          key={plan.id}
+          href={`/monthly-plan?sector=${encodeURIComponent(plan.id)}`}
+          data-testid="dashboard-sector-awaiting-exam"
+          className="mt-3 flex min-h-11 min-w-0 items-center justify-between gap-2 rounded-lg bg-sky-50 px-3 py-2 text-sm font-bold text-sky-950"
+        >
+          <span className="min-w-0 break-words">
+            {sectorTitle(plan, "student")} ждёт экзамена{plan.exam?.status === "scheduled" && plan.exam.scheduledAt ? ` · ${formatExamDate(plan.exam.scheduledAt)}` : ""}
+          </span>
+          <ChevronRight size={16} className="shrink-0" aria-hidden="true" />
+        </Link>
+      ))}
       <div className="mt-5 flex flex-wrap gap-2">
         <Link href="/learning" className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-ink px-4 text-sm font-bold text-white">
           Открыть обучение <ArrowRight size={16} />
         </Link>
-        {plans.length ? (
+        {hasPlans ? (
           <Link href="/monthly-plan" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-stone-300 px-4 text-sm font-bold text-ink">
             Открыть сектор
           </Link>

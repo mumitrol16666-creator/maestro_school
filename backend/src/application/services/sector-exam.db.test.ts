@@ -190,7 +190,7 @@ integrationTest("an early close cancels the exam prepared for the sector", async
   const exams = await import("./sector-exam.service.js");
   const template = await testExamTasks(f.planId);
   const exam = await prepareTestExam(f.teacher.id, { planId: f.planId, items: template.items, send: true });
-  await f.plans.closeStudentSectorEarlyV2(f.teacher.id, f.crmStudentId, f.crmDirectionId, { points: 0 });
+  await f.plans.closeStudentSectorEarlyV2(f.teacher.id, f.crmStudentId, f.crmDirectionId, { planId: f.planId, points: 0 });
   const cancelled = await f.prisma.sectorExam.findUniqueOrThrow({ where: { id: exam.id } });
   assert.equal(cancelled.status, "cancelled");
   assert.equal((await exams.listSectorExamsAwaitingSchedule()).some((item) => item.examId === exam.id), false);
@@ -247,6 +247,85 @@ integrationTest("a teacher opens the next sector before the exam without complet
   const events = await f.prisma.learningSectorEvent.findMany({ where: { planId: { in: [f.planId, next.id] } } });
   assert.equal(events.length, 2);
   assert.ok(events.every(x => x.actorUserId === f.teacher.id));
+});
+
+integrationTest("a third sector does not open while the first still waits for its exam", async t => {
+  const f = await createFixture(t);
+  const first = await f.prisma.learningPlan.findUniqueOrThrow({ where: { id: f.planId } });
+  const second = await f.plans.openNextStudentSector(f.teacher.id, f.crmStudentId, f.crmDirectionId, { planId: f.planId, expectedVersion: first.currentVersionNumber });
+  const shown = await f.plans.getStudentLearningPlanV2(f.teacher.id, f.crmStudentId, f.crmDirectionId);
+  assert.equal(shown.plan?.id, second.id);
+  assert.equal(shown.awaitingExam?.id, f.planId);
+  assert.equal(shown.awaitingExam?.status, "awaiting_exam");
+  const saved = await f.plans.saveStudentLearningPlanV2(f.teacher.id, f.crmStudentId, f.crmDirectionId, {
+    goal: "Второй сектор", expectedResult: "", skills: "", checkpoint: "", note: "",
+    items: [{ id: "topic-c", title: "Переборы", status: "planned" }], expectedVersion: second.version,
+  });
+  const published = await f.plans.publishStudentLearningPlanV2(f.teacher.id, f.crmStudentId, f.crmDirectionId, saved.version);
+  const request = { planId: second.id, expectedVersion: published.version };
+  await assert.rejects(
+    f.plans.openNextStudentSector(f.teacher.id, f.crmStudentId, f.crmDirectionId, request),
+    (error: { code?: string; message?: string }) => error.code === "SECTOR_PREVIOUS_AWAITING_EXAM" && /Сектор 1 ещё ждёт экзамена/.test(error.message ?? ""),
+  );
+  assert.equal(await f.prisma.learningPlan.count({ where: { directionId: first.directionId } }), 2, "no third sector appeared");
+  assert.equal((await f.prisma.learningPlan.findUniqueOrThrow({ where: { id: second.id } })).status, "active");
+  // A retried click of the earlier successful opening still returns the sector it opened.
+  const replay = await f.plans.openNextStudentSector(f.teacher.id, f.crmStudentId, f.crmDirectionId, { planId: f.planId, expectedVersion: first.currentVersionNumber });
+  assert.equal(replay.id, second.id);
+});
+
+integrationTest("an early close by planId closes the waiting sector and leaves the active one open", async t => {
+  const f = await createFixture(t);
+  const first = await f.prisma.learningPlan.findUniqueOrThrow({ where: { id: f.planId } });
+  const second = await f.plans.openNextStudentSector(f.teacher.id, f.crmStudentId, f.crmDirectionId, { planId: f.planId, expectedVersion: first.currentVersionNumber });
+  const saved = await f.plans.saveStudentLearningPlanV2(f.teacher.id, f.crmStudentId, f.crmDirectionId, {
+    goal: "Второй сектор", expectedResult: "", skills: "", checkpoint: "", note: "",
+    items: [{ id: "topic-c", title: "Переборы", status: "planned" }], expectedVersion: second.version,
+  });
+  const published = await f.plans.publishStudentLearningPlanV2(f.teacher.id, f.crmStudentId, f.crmDirectionId, saved.version);
+  await assert.rejects(
+    f.plans.closeStudentSectorEarlyV2(f.teacher.id, f.crmStudentId, f.crmDirectionId, { planId: f.planId, points: 100 }),
+    rejectsWith("SECTOR_REWARD_REQUIRES_EXAM"),
+  );
+  await assert.rejects(f.plans.closeStudentSectorEarlyV2(f.stranger.id, f.crmStudentId, f.crmDirectionId, { planId: f.planId, points: 0 }));
+
+  const closed = await f.plans.closeStudentSectorEarlyV2(f.teacher.id, f.crmStudentId, f.crmDirectionId, { planId: f.planId, points: 0 });
+  assert.equal(closed.id, f.planId);
+  assert.equal(closed.status, "closed");
+  assert.equal(closed.closeReason, "manual");
+  assert.equal((await f.prisma.learningPlan.findUniqueOrThrow({ where: { id: second.id } })).status, "active");
+  const shown = await f.plans.getStudentLearningPlanV2(f.teacher.id, f.crmStudentId, f.crmDirectionId);
+  assert.equal(shown.plan?.id, second.id);
+  assert.equal(shown.awaitingExam, null);
+  assert.equal(await f.prisma.pointsTransaction.count({ where: { studentId: f.student.id } }), 0);
+  const note = await f.prisma.userNotification.findFirst({ where: { userId: f.student.id, dedupeKey: `sector-closed:${f.planId}` } });
+  assert.match(note?.body ?? "", /Преподаватель закрыл сектор 1 без экзамена\./);
+  // With nothing waiting, the next sector may be opened again.
+  const third = await f.plans.openNextStudentSector(f.teacher.id, f.crmStudentId, f.crmDirectionId, { planId: second.id, expectedVersion: published.version });
+  assert.equal(third.sequence, 3);
+});
+
+integrationTest("an early close is refused while an exam lesson is booked and allowed while it awaits scheduling", async t => {
+  const f = await createFixture(t);
+  await f.markReady();
+  const template = await testExamTasks(f.planId);
+  const exam = await prepareTestExam(f.teacher.id, { planId: f.planId, items: template.items, send: true });
+  assert.equal(exam.status, "awaiting_schedule");
+  await bookTestExam(exam.id, { crmClassId: `exam-booked-${f.suffix}`, lessonAt: new Date("2099-01-10T07:00:00.000Z") });
+  await assert.rejects(
+    f.plans.closeStudentSectorEarlyV2(f.teacher.id, f.crmStudentId, f.crmDirectionId, { planId: f.planId, points: 0 }),
+    (error: { code?: string; message?: string }) => error.code === "SECTOR_EXAM_SCHEDULED" && /На сектор 1 назначен экзамен 10\.01\.2099/.test(error.message ?? "") && /администратор в CRM/.test(error.message ?? ""),
+  );
+  assert.equal((await f.prisma.learningPlan.findUniqueOrThrow({ where: { id: f.planId } })).status, "active");
+  assert.equal((await f.prisma.sectorExam.findUniqueOrThrow({ where: { id: exam.id } })).status, "scheduled");
+
+  // The administrator cancels the lesson in CRM: the exam goes back to the queue and the sector can be closed.
+  const exams = await import("./sector-exam.service.js");
+  await exams.applyCrmLessonEventToSectorExams({ event: "cancelled", crmClassId: `exam-booked-${f.suffix}` });
+  assert.equal((await f.prisma.sectorExam.findUniqueOrThrow({ where: { id: exam.id } })).status, "awaiting_schedule");
+  const closed = await f.plans.closeStudentSectorEarlyV2(f.teacher.id, f.crmStudentId, f.crmDirectionId, { planId: f.planId, points: 0 });
+  assert.equal(closed.status, "closed");
+  assert.equal((await f.prisma.sectorExam.findUniqueOrThrow({ where: { id: exam.id } })).status, "cancelled");
 });
 
 integrationTest("an unpublished edit cannot be lost when opening the next sector", async t => {
