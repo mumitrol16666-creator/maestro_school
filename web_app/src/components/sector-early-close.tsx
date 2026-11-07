@@ -31,6 +31,8 @@ export function SectorEarlyClose({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const booked = exam?.status === "scheduled" || exam?.status === "in_progress";
+  // An exam still being prepared or waiting for a date is cancelled together with the sector.
+  const preparing = exam?.status === "draft" || exam?.status === "awaiting_schedule";
 
   async function close() {
     if (busy) return;
@@ -77,7 +79,7 @@ export function SectorEarlyClose({
       {open && !booked ? (
         <div className="mt-3 grid gap-3">
           <p className="text-sm leading-6 text-stone-700">
-            Закрыть сектор {sequence} досрочно? Баллы за сектор не начисляются: их дают только за сданный экзамен. Отменить нельзя.
+            Закрыть сектор {sequence} досрочно? Баллы за сектор не начисляются: их дают только за сданный экзамен.{preparing ? " Заявка на экзамен будет отменена." : ""} Отменить нельзя.
           </p>
           <label className="text-xs font-bold text-stone-600">
             Почему закрываем (необязательно)

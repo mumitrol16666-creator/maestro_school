@@ -13,6 +13,7 @@ import { useApiResource } from "@/hooks/use-api-resource";
 import { learningTaskContext } from "@/lib/learning-overview";
 import { formatOutOf, pluralize } from "@/lib/plural";
 import { sectorTitle } from "@/lib/sector-label";
+import { formatExamDate } from "@/lib/sector-exams-api";
 import { invalidateStudentHome, loadStudentHome } from "@/lib/student-home";
 import type { StudentHomeMonthlyPlan } from "@/types/api";
 import type { UnifiedTask } from "@/types/unified-tasks";
@@ -132,28 +133,52 @@ export default function LearningWorkspacePage() {
   );
 }
 
-/** The open sectors in brief: goal, progress and the exam, with the way to the sector page. */
+/**
+ * The open sectors in brief. Same split as on «Сейчас»: progress counts the current sectors only;
+ * a sector waiting for its exam is a line of its own, not part of the percent.
+ */
 function SectorCard({ plans }: { plans: StudentHomeMonthlyPlan[] }) {
-  const active = plans.filter((plan) => plan.status !== "closed");
-  const first = active[0] ?? null;
+  const open = plans.filter((plan) => plan.status !== "closed");
+  const active = open.filter((plan) => plan.status !== "awaiting_exam");
+  const waiting = open.filter((plan) => plan.status === "awaiting_exam");
+  // With nothing current the waiting sector is what is left to show.
+  const shown = active.length ? active : waiting;
+  const first = shown[0] ?? null;
   const completed = active.reduce((total, plan) => total + plan.progress.completed, 0);
   const total = active.reduce((total, plan) => total + plan.progress.total, 0);
   const percent = total ? Math.round((completed / total) * 100) : 0;
   return (
     <section className="flex min-w-0 flex-col rounded-xl border border-stone-200 bg-white p-5 sm:p-7" aria-labelledby="learning-plan-title" data-testid="learning-sector-card">
       <p className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-wide text-amber-800">
-        <Target size={17} aria-hidden="true" /> {active.length === 1 ? sectorTitle(first!, "student") : active.length ? "Мои сектора" : "Сектор"}
+        <Target size={17} aria-hidden="true" /> {shown.length === 1 ? sectorTitle(first!, "student") : shown.length ? "Мои сектора" : "Сектор"}
       </p>
       <h2 id="learning-plan-title" className="font-display mt-4 break-words text-2xl leading-tight sm:text-3xl">
-        {first ? (active.length === 1 ? first.goal || "Темы сектора" : `${active.length} ${pluralize(active.length, ["открытый сектор", "открытых сектора", "открытых секторов"])}`) : "Сектор ещё не открыт"}
+        {first
+          ? (shown.length === 1
+            ? (first.status === "awaiting_exam" ? "Ждёт экзамена" : first.goal || "Темы сектора")
+            : `${shown.length} ${pluralize(shown.length, ["открытый сектор", "открытых сектора", "открытых секторов"])}`)
+          : "Сектор ещё не открыт"}
       </h2>
-      {first ? (
+      {active.length ? (
         <div className="mt-4">
           <ProgressBar value={percent} />
           <p className="mt-2 text-xs font-semibold text-stone-500">{formatOutOf(completed, total, ["темы", "тем", "тем"])} закрыто</p>
         </div>
-      ) : <p className="mt-3 text-sm leading-6 text-stone-600">Темы появятся, когда преподаватель откроет сектор.</p>}
-      {active.map((plan) => plan.exam ? <SectorExamSummary key={plan.id} exam={plan.exam} /> : null)}
+      ) : !first ? <p className="mt-3 text-sm leading-6 text-stone-600">Темы появятся, когда преподаватель откроет сектор.</p> : null}
+      {waiting.map((plan) => (
+        <Link
+          key={plan.id}
+          href={`/monthly-plan?sector=${encodeURIComponent(plan.id)}`}
+          data-testid="learning-sector-awaiting-exam"
+          className="mt-3 flex min-h-11 min-w-0 items-center justify-between gap-2 rounded-lg bg-sky-50 px-3 py-2 text-sm font-bold text-sky-950"
+        >
+          <span className="min-w-0 break-words">
+            {sectorTitle(plan, "student")} ждёт экзамена{plan.exam?.status === "scheduled" && plan.exam.scheduledAt ? ` · ${formatExamDate(plan.exam.scheduledAt)}` : ""}
+          </span>
+          <ArrowRight size={16} className="shrink-0" aria-hidden="true" />
+        </Link>
+      ))}
+      {open.map((plan) => plan.exam ? <SectorExamSummary key={plan.id} exam={plan.exam} /> : null)}
       <div className="mt-auto pt-5">
         <Link href="/monthly-plan" className={linkStyle}>Открыть сектор <ArrowRight size={17} aria-hidden="true" /></Link>
       </div>

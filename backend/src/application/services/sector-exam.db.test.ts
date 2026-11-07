@@ -323,8 +323,20 @@ integrationTest("an early close is refused while an exam lesson is booked and al
   const exams = await import("./sector-exam.service.js");
   await exams.applyCrmLessonEventToSectorExams({ event: "cancelled", crmClassId: `exam-booked-${f.suffix}` });
   assert.equal((await f.prisma.sectorExam.findUniqueOrThrow({ where: { id: exam.id } })).status, "awaiting_schedule");
-  const closed = await f.plans.closeStudentSectorEarlyV2(f.teacher.id, f.crmStudentId, f.crmDirectionId, { planId: f.planId, points: 0 });
+  const closed = await f.plans.closeStudentSectorEarlyV2(f.teacher.id, f.crmStudentId, f.crmDirectionId, { planId: f.planId, points: 0, comment: "  Переходим на другую программу  " });
   assert.equal(closed.status, "closed");
+  const cancelled = await f.prisma.sectorExam.findUniqueOrThrow({ where: { id: exam.id } });
+  assert.equal(cancelled.status, "cancelled");
+  assert.equal(cancelled.cancelReason, "Сектор закрыт досрочно: Переходим на другую программу");
+  // 07.11 (review): the teacher's reason is kept with the sector.
+  const event = await f.prisma.learningSectorEvent.findUniqueOrThrow({ where: { sourceKey: `sector-closed-early:${f.planId}` } });
+  assert.equal(event.kind, "closed_early");
+  assert.deepEqual((event.details as { comment?: string }).comment, "Переходим на другую программу");
+  // A CRM booking that read the queue before the close is refused, so no exam lesson is confirmed.
+  await assert.rejects(
+    exams.scheduleSectorExamFromCrm(exam.id, { crmClassId: `exam-late-${f.suffix}`, lessonAt: new Date("2099-01-11T07:00:00.000Z") }),
+    (error: { code?: string }) => error.code === "SECTOR_EXAM_NOT_SCHEDULABLE",
+  );
   assert.equal((await f.prisma.sectorExam.findUniqueOrThrow({ where: { id: exam.id } })).status, "cancelled");
 });
 

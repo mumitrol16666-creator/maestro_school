@@ -88,7 +88,7 @@ export function LessonStudentStrip({
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-display text-lg text-ink">{student.name}</p>
                   <p className="truncate text-xs font-semibold text-stone-500" data-testid="strip-row-summary">
-                    {student.sector ? `Сектор ${student.sector.sequence} · ${student.sector.percent} %` : "Сектор не открыт"}
+                    {student.sector ? (student.sector.status === "awaiting_exam" ? `Сектор ${student.sector.sequence} · ждёт экзамена` : `Сектор ${student.sector.sequence} · ${student.sector.percent} %`) : "Сектор не открыт"}
                     {attendance && attendance.total ? ` · посещения ${attendance.attended} из ${attendance.total}` : ""}
                   </p>
                 </div>
@@ -158,7 +158,7 @@ export function LessonStudentStrip({
                 <div className="min-w-0">
                   <p className="text-[10px] font-black uppercase tracking-wider text-stone-500">Сектор</p>
                   <p className="truncate text-sm font-bold text-ink">
-                    {student.sector ? `${student.sector.sequence} · ${student.sector.percent} %` : "не открыт"}
+                    {student.sector ? (student.sector.status === "awaiting_exam" ? `${student.sector.sequence} · ждёт экзамена` : `${student.sector.sequence} · ${student.sector.percent} %`) : "не открыт"}
                   </p>
                 </div>
               </div>

@@ -30,7 +30,7 @@ function HistoryRows({ endpoint }: { endpoint: string }) {
       {row.studyDays !== null ? <p>Календарных дней обучения: {row.studyDays}</p> : null}
       {row.examWaitingDays !== null ? <p>Дней ожидания экзамена: {row.examWaitingDays}</p> : null}
       <p>Завершённых попыток экзамена: {row.attemptsCompleted}</p>
-      <p className="text-stone-500">{row.status === "awaiting_exam" ? "Обучение по сектору завершено, экзамен ещё не подтверждён" : row.status === "closed" ? "Сектор завершён" : "Обучение продолжается"}</p>
+      <p className="text-stone-500">{row.status === "awaiting_exam" ? "Ждёт экзамена" : row.status === "closed" ? "Сектор завершён" : "Обучение продолжается"}</p>
     </div>)}
   </div>;
 }

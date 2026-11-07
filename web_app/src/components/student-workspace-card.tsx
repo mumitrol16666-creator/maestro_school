@@ -35,6 +35,7 @@ import { SectorSwitch } from "@/components/sector-switch";
 import { groupOpenSectorsByDirection } from "@/lib/sector-switch";
 import { ApiError } from "@/lib/api-client";
 import { learningHomeworkApi } from "@/lib/learning-homework-api";
+import { sectorTopicLabel } from "@/lib/sector-label";
 import { teacherStudentsApi } from "@/lib/teacher-students-api";
 import type { StudentHomeMonthlyPlan } from "@/types/api";
 import type {
@@ -421,7 +422,7 @@ function HomeworkAssignForm({
   // 07.11: topics of both open sectors; with more than one sector the option names the sector.
   const topics = sectors.flatMap((sector) => sector.items
     .filter((item) => (!item.state || item.state === "active") && item.progressPercent !== 100)
-    .map((item) => ({ ...item, label: sectors.length > 1 ? `${sector.scope === "group" ? "План группы" : "Сектор"} ${sector.sequence ?? ""} · ${item.title}` : item.title })));
+    .map((item) => ({ ...item, label: sectors.length > 1 ? sectorTopicLabel(sector, item.title) : item.title })));
   const [open, setOpen] = useState(false);
   const [topicId, setTopicId] = useState(topics[0]?.id ?? "");
   const [instructions, setInstructions] = useState("");

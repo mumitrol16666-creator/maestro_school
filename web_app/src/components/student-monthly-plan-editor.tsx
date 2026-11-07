@@ -351,7 +351,7 @@ function StudentMonthlyPlanEditorContent({
           <NextLearningPlan kind="students" ownerId={crmStudentId} planId={draft.id}
             directionId={crmDirectionId} version={draft.version ?? 0}
             disabled={!saved || hasUnpublishedChanges || saving || publishing}
-            blockedReason={awaiting ? `Сектор ${awaiting.sequence} ещё ждёт экзамена: следующий откроется после него` : null}
+            blockedReason={awaiting ? `Сектор ${awaiting.sequence} ещё ждёт экзамена: следующий откроется после него. Если экзамен не нужен, сектор ${awaiting.sequence} можно закрыть досрочно на его вкладке.` : null}
             onOpened={() => resource.reload()} />
           <SectorEarlyClose
             crmStudentId={crmStudentId}
@@ -618,11 +618,13 @@ function StudentMonthlyPlanEditorContent({
           Сектор опубликован и доступен ученику{hasUnpublishedChanges ? ", но последние правки ещё не опубликованы" : ""}.
         </p>
       ) : null}
-      {!sectors ? null : (
+      {sectors && draft.id && draft.publication?.isPublished && crmDirectionId ? (
         <p className="mt-2 inline-flex items-center gap-1.5 text-[11px] text-stone-500">
-          <Lightbulb size={13} /> Следующий сектор открывается кнопкой выше. Предыдущий сектор ждёт экзамена; открыты не больше двух секторов.
+          <Lightbulb size={13} /> {awaiting
+            ? `Следующий сектор откроется после экзамена за сектор ${awaiting.sequence}. Открыты не больше двух секторов.`
+            : "Следующий сектор открывается кнопкой выше. Открыты не больше двух секторов."}
         </p>
-      )}
+      ) : null}
       </>
       ) : null}
     </section>

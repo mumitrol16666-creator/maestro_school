@@ -33,7 +33,8 @@ export type LessonStudentOverview = {
   /** CRM directions of the student: the sector editor opened from the lesson needs them. */
   directions: string[];
   programLevel: string | null;
-  sector: { sequence: number; percent: number; completed: number; total: number; direction: string } | null;
+  /** `awaiting_exam` only when the student has no current sector: then the waiting one is what there is to show. */
+  sector: { sequence: number; percent: number; completed: number; total: number; direction: string; status: "active" | "awaiting_exam" } | null;
   level: {
     level: number;
     code: string;
@@ -124,7 +125,9 @@ export async function getLessonStudentsOverview(teacherUserId: string, crmClassI
       listPublishedLearningPlansV2(student.crmStudentId, groupIds).catch(() => []),
       economyOf(appUserId, now),
     ]);
-    const sector = sectors.find((item) => item.status === "active" && item.scope === "student") ?? null;
+    const sector = sectors.find((item) => item.status === "active" && item.scope === "student")
+      ?? sectors.find((item) => item.status === "awaiting_exam" && item.scope === "student")
+      ?? null;
     const history = (crm?.attendanceHistory ?? []).filter((item) => item.crmClassId !== crmClassId);
     const recent = history.slice(0, RECENT_ATTENDANCE);
     return {
@@ -140,6 +143,7 @@ export async function getLessonStudentsOverview(teacherUserId: string, crmClassI
             completed: sector.progress.completed,
             total: sector.progress.total,
             direction: sector.direction.title,
+            status: sector.status === "awaiting_exam" ? "awaiting_exam" as const : "active" as const,
           }
         : null,
       ...economy,

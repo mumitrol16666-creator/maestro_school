@@ -23,7 +23,7 @@ export function NextLearningPlan({ kind, ownerId, planId, directionId, version, 
     if (busy || disabled || blockedReason) return;
     if (!window.confirm(group
       ? "Завершить текущий план группы и открыть новый? Личные результаты учеников сохранятся."
-      : "Открыть следующий сектор? Текущий останется в истории и сможет ждать экзамена.")) return;
+      : "Открыть следующий сектор? Текущий останется на своей вкладке до экзамена.")) return;
     setBusy(true);
     setError(null);
     try {
@@ -34,11 +34,11 @@ export function NextLearningPlan({ kind, ownerId, planId, directionId, version, 
     } finally { setBusy(false); }
   }
   return <div className="mt-5 rounded-2xl border border-stone-200 bg-white p-4">
-    <p className="text-sm text-stone-600">{group
+    {group || !blockedReason ? <p className="text-sm text-stone-600">{group
       ? "Общий план — темы и материалы совместных занятий. Готовность каждого ученика к экзамену учитывается отдельно."
-      : "Продолжайте обучение в следующем секторе, пока предыдущий ожидает экзамена. Одновременно открыты не больше двух секторов."}</p>
+      : "Продолжайте обучение в следующем секторе, пока предыдущий ожидает экзамена. Одновременно открыты не больше двух секторов."}</p> : null}
     <button type="button" disabled={disabled || busy || Boolean(blockedReason)} onClick={() => void open()}
-      className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-xl bg-ink px-4 text-sm font-bold text-white disabled:opacity-50">
+      className={`${group || !blockedReason ? "mt-3" : "mt-0"} inline-flex min-h-11 items-center gap-2 rounded-xl bg-ink px-4 text-sm font-bold text-white disabled:opacity-50`}>
       {busy ? <LoaderCircle size={16} className="animate-spin" /> : <ArrowRight size={16} />}
       {group ? "Открыть следующий план" : "Открыть следующий сектор"}
     </button>

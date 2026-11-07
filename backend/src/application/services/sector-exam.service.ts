@@ -269,14 +269,26 @@ export async function scheduleSectorExamFromCrm(examId: string, input: {
     && exam.scheduledAt?.getTime() === input.lessonAt.getTime()
     && exam.crmTeacherId === teacherId;
   if (same) return examDto(exam);
-  await prisma.sectorExam.update({
-    where: { id: examId },
-    data: {
-      status: "scheduled",
-      crmClassId: input.crmClassId,
-      scheduledAt: input.lessonAt,
-      crmTeacherId: teacherId,
-    },
+  // 07.11 (review): same plan-row lock as closeStudentSectorEarlyV2, so an early close and a CRM
+  // booking never interleave; the state is re-read under the lock.
+  await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM learning_plans WHERE id = ${exam.planId}::uuid FOR UPDATE`;
+    const [fresh, plan] = await Promise.all([
+      tx.sectorExam.findUnique({ where: { id: examId }, select: { status: true } }),
+      tx.learningPlan.findUnique({ where: { id: exam.planId }, select: { status: true } }),
+    ]);
+    if (!fresh || (fresh.status !== "awaiting_schedule" && fresh.status !== "scheduled") || plan?.status === "closed") {
+      throw new ConflictError("Экзамен нельзя назначить в текущем состоянии", "SECTOR_EXAM_NOT_SCHEDULABLE");
+    }
+    await tx.sectorExam.update({
+      where: { id: examId },
+      data: {
+        status: "scheduled",
+        crmClassId: input.crmClassId,
+        scheduledAt: input.lessonAt,
+        crmTeacherId: teacherId,
+      },
+    });
   });
   const when = formatExamDate(input.lessonAt);
   const key = `sector-exam:${examId}:scheduled:${input.lessonAt.toISOString()}`;
