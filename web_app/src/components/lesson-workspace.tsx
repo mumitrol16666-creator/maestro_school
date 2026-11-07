@@ -1,6 +1,7 @@
 "use client";
 
-import { BookOpen, CheckCircle2, ClipboardList, FileStack, Send, Settings2, Trash2 } from "lucide-react";
+import { BookOpen, CheckCircle2, ClipboardList, Eye, FileStack, Send, Settings2, Trash2 } from "lucide-react";
+import Link from "next/link";
 import { AdminVideoValidation } from "@/components/admin-video-validation";
 import { LessonEditorForm, type LessonFormValues } from "@/components/lesson-editor-form";
 import { LessonHomeworkPanel } from "@/components/lesson-homework-panel";
@@ -13,6 +14,8 @@ export type LessonWorkspaceTab = "content" | "materials" | "homework" | "setting
 
 interface LessonWorkspaceProps {
   lesson: CmsLesson;
+  /** «Посмотреть как ученик»: the preview page of this lesson. */
+  previewHref?: string;
   module: Pick<CmsModule, "title"> | null;
   activeTab: LessonWorkspaceTab;
   lessonForm: LessonFormValues;
@@ -56,6 +59,7 @@ const tabs: Array<{ id: LessonWorkspaceTab; label: string; hint: string; icon: t
 
 export function LessonWorkspace({
   lesson,
+  previewHref,
   module,
   activeTab,
   lessonForm,
@@ -100,6 +104,11 @@ export function LessonWorkspace({
           <p className="mt-3 text-sm text-stone-500">Порядок в модуле: {lesson.sortOrder}</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {previewHref ? (
+            <Link href={previewHref} data-testid="lesson-preview-link" className={secondaryButton}>
+              <Eye size={15} />Посмотреть как ученик
+            </Link>
+          ) : null}
           <button onClick={onTogglePublish} className={primaryButton}>
             <Send size={15} />
             {lesson.isPublished ? "Снять с публикации" : "Опубликовать"}

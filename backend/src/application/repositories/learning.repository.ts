@@ -132,12 +132,21 @@ export async function getProgressMapForCourse(studentId: string, courseId: strin
   );
 }
 
+/**
+ * Completed lessons that still count: published and not deleted, by the same conditions as
+ * `countTotalPublishedLessons`. A lesson that was finished and then unpublished or deleted does not
+ * count, so it can neither finish a course nor award the course Points.
+ */
 export async function countCompletedLessons(studentId: string, courseId?: string) {
   return prisma.lessonProgress.count({
     where: {
       studentId,
       status: "completed",
-      ...(courseId ? { lesson: { module: { courseId } } } : {}),
+      lesson: {
+        isPublished: true,
+        deletedAt: null,
+        module: { deletedAt: null, ...(courseId ? { courseId } : {}) },
+      },
     },
   });
 }

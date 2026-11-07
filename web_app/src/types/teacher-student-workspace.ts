@@ -106,12 +106,13 @@ export type TeacherStudentWorkspace = {
     sectors: Array<{
       id: string;
       sequence: number;
+      status?: "active" | "awaiting_exam";
       scope: "student" | "group";
       direction: string;
       completed: number;
       total: number;
       percent: number;
-      exam: { status: string; scheduledAt: string | null; outcome: string | null } | null;
+      exam: { status: string; scheduledAt: string | null; outcome: string | null; decision?: string | null } | null;
     }>;
   } | null;
 };
@@ -142,7 +143,7 @@ export type WorkspaceClosedSector = {
   completed: number;
   total: number;
   percent: number;
-  exam: { status: string; scheduledAt: string | null; outcome: string | null } | null;
+  exam: { status: string; scheduledAt: string | null; outcome: string | null; decision?: string | null } | null;
   memberPass: { method: "exam" | "manual"; passedAt: string; points: number } | null;
   topics: Array<{ id: string; title: string; progressPercent: number; state: string }>;
 };

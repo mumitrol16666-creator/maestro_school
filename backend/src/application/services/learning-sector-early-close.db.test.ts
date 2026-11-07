@@ -76,17 +76,22 @@ integrationTest("an early close archives without rewards and cannot bypass the p
     expectedVersion: 0,
   });
   await assert.rejects(
-    closeStudentSectorEarlyV2(teacher.id, crmStudentId, crmDirectionId, { points: 100 }),
+    closeStudentSectorEarlyV2(teacher.id, crmStudentId, crmDirectionId, { planId: draft.id, points: 100 }),
     (error: { code?: string }) => error.code === "SECTOR_NOT_PUBLISHED",
   );
   await publishStudentLearningPlanV2(teacher.id, crmStudentId, crmDirectionId, draft.version);
   await assert.rejects(
-    closeStudentSectorEarlyV2(teacher.id, crmStudentId, crmDirectionId, { points: 251 }),
+    closeStudentSectorEarlyV2(teacher.id, crmStudentId, crmDirectionId, { planId: draft.id, points: 251 }),
     (error: { code?: string }) => error.code === "SECTOR_EARLY_CLOSE_POINTS_INVALID",
   );
+  await assert.rejects(
+    closeStudentSectorEarlyV2(teacher.id, crmStudentId, crmDirectionId, { planId: randomUUID(), points: 0 }),
+    (error: { code?: string }) => error.code === "MONTHLY_PLAN_NOT_FOUND",
+    "a plan that is not the student's open sector is not found",
+  );
 
-  await assert.rejects(closeStudentSectorEarlyV2(teacher.id, crmStudentId, crmDirectionId, { points: 120 }), (error:{code?:string})=>error.code==="SECTOR_REWARD_REQUIRES_EXAM");
-  const closed = await closeStudentSectorEarlyV2(teacher.id, crmStudentId, crmDirectionId, { points: 0 });
+  await assert.rejects(closeStudentSectorEarlyV2(teacher.id, crmStudentId, crmDirectionId, { planId: draft.id, points: 120 }), (error:{code?:string})=>error.code==="SECTOR_REWARD_REQUIRES_EXAM");
+  const closed = await closeStudentSectorEarlyV2(teacher.id, crmStudentId, crmDirectionId, { planId: draft.id, points: 0 });
   assert.equal(closed.status, "closed");
   assert.equal(closed.closeReason, "manual");
   assert.equal(closed.awardedPoints, 0);
@@ -94,9 +99,11 @@ integrationTest("an early close archives without rewards and cannot bypass the p
   assert.deepEqual(points, []);
   const note = await prisma.userNotification.findFirst({ where: { userId: student.id, dedupeKey: `sector-closed:${closed.id}` } });
   assert.ok(note, "the student is told the sector is closed");
+  assert.match(note.body, /без экзамена/);
+  assert.doesNotMatch(note.body, /следующий/i, "no promise of a next sector");
 
   await assert.rejects(
-    closeStudentSectorEarlyV2(teacher.id, crmStudentId, crmDirectionId, { points: 120 }),
+    closeStudentSectorEarlyV2(teacher.id, crmStudentId, crmDirectionId, { planId: draft.id, points: 0 }),
     (error: { code?: string }) => error.code === "MONTHLY_PLAN_NOT_FOUND",
     "nothing open to close a second time",
   );
@@ -116,7 +123,7 @@ integrationTest("closing early for 0 Points pays nothing but still closes", asyn
     expectedVersion: 0,
   });
   await publishStudentLearningPlanV2(teacher.id, crmStudentId, crmDirectionId, draft.version);
-  const closed = await closeStudentSectorEarlyV2(teacher.id, crmStudentId, crmDirectionId, { points: 0 });
+  const closed = await closeStudentSectorEarlyV2(teacher.id, crmStudentId, crmDirectionId, { planId: draft.id, points: 0 });
   assert.equal(closed.status, "closed");
   assert.equal(closed.awardedPoints, 0);
   assert.equal(await prisma.pointsTransaction.count({ where: { studentId: student.id } }), 0);

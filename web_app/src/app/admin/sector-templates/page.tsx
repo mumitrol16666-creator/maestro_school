@@ -181,7 +181,7 @@ export default function SectorTemplatesAdminPage() {
       {templates.data && !list.length && !draft ? (
         <EmptyState
           title="Секторов пока нет"
-          description="Создайте первый сектор: номер, цель, темы по линиям и тест. После публикации она появится у преподавателей."
+          description="Создайте первый сектор: номер, цель и темы по линиям. После публикации он появится у преподавателей."
         />
       ) : null}
 

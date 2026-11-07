@@ -187,7 +187,19 @@ async function sendStudentOfflineReminders(now: Date) {
       const crmClassId = compactString(item.crmClassId);
       if (!startsAt || !crmClassId) continue;
 
-      const lessonTitle = compactString(item.title, "Урок");
+      // 07.11 (P3): CRM now sends the pupil's exam lesson too; it is reminded as an exam and links to it.
+      const isExam = item.classType === "exam";
+      const exam = isExam
+        ? await prisma.sectorExam.findFirst({
+            where: { crmClassId, crmStudentId: student.crmStudentId ?? undefined, status: { not: "cancelled" } },
+            select: { id: true, programTitleSnapshot: true, session: { select: { title: true } } },
+          })
+        : null;
+      // The session's title is what the exam page and the CRM schedule show; the program is a fallback.
+      const examName = exam?.session?.title || exam?.programTitleSnapshot || null;
+      const lessonTitle = isExam
+        ? (examName ? `Экзамен «${examName}»` : "Экзамен сектора")
+        : compactString(item.title, "Урок");
       const teacherName = compactString(item.teacherName);
       const roomName = compactString(item.roomName);
       const context = [teacherName, roomName].filter(Boolean).join(" · ");
@@ -198,9 +210,11 @@ async function sendStudentOfflineReminders(now: Date) {
           userId: student.id,
           type: "lesson_student_reminder",
           rule,
-          title: `Напоминание: урок через ${rule.label}`,
-          body: `${lessonTitle} · ${formatLessonTime(startsAt)}${context ? ` · ${context}` : ""}. Подготовьте инструмент и материалы к занятию.`,
-          url: `/school-lessons?tab=upcoming&lesson=${encodeURIComponent(crmClassId)}`,
+          title: isExam ? `Напоминание: экзамен через ${rule.label}` : `Напоминание: урок через ${rule.label}`,
+          body: `${lessonTitle} · ${formatLessonTime(startsAt)}${context ? ` · ${context}` : ""}. ${isExam
+            ? "Возьмите инструмент. Что проверит преподаватель, видно на странице экзамена."
+            : "Подготовьте инструмент и материалы к занятию."}`,
+          url: exam ? `/exams/${exam.id}` : `/school-lessons?tab=upcoming&lesson=${encodeURIComponent(crmClassId)}`,
           source: "offline",
           lessonId: crmClassId,
           startsAt,
@@ -212,7 +226,7 @@ async function sendStudentOfflineReminders(now: Date) {
           userId: link.parentUserId,
           type: "parent_lesson_reminder",
           rule,
-          title: `Урок ${childName} через ${rule.label}`,
+          title: isExam ? `Экзамен ${childName} через ${rule.label}` : `Урок ${childName} через ${rule.label}`,
           body: `${lessonTitle} · ${formatLessonTime(startsAt)}${context ? ` · ${context}` : ""}. Расписание доступно в семейном кабинете.`,
           url: `/family?student=${encodeURIComponent(student.id)}`,
           source: "offline",

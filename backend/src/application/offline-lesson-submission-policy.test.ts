@@ -128,3 +128,56 @@ test("trial lead from a booking can submit without a student card", () => {
   assert.equal(result.valid, true);
   if (result.valid) assert.equal(result.outcome, "held");
 });
+
+// 03.11 (document 23 §8): the v3 trial report — four diagnostic blocks and «навык, трудность, действие».
+test("a v3 trial report needs a level in every diagnostic block and the three lines for the family", () => {
+  const base = {
+    lesson: { classType: "trial", group: null },
+    students: [{ name: "Клиент из заявки", attendanceStatus: "present" }],
+  };
+  const complete = {
+    version: 3,
+    diagnostics: {
+      instrument: { level: "independent" },
+      hearingPulse: { level: "with_hint" },
+      movement: { level: "not_yet" },
+      learnability: { level: "independent" },
+    },
+    lessonFacts: { achieved: "Чистый звук", difficulty: "Устаёт рука", homeAction: "Пять минут звук" },
+  };
+  const ok = validateOfflineLessonSubmission({ ...base, payload: { trialReport: complete } });
+  assert.equal(ok.valid, true);
+
+  const noLevel = validateOfflineLessonSubmission({
+    ...base,
+    payload: { trialReport: { ...complete, diagnostics: { ...complete.diagnostics, movement: { level: "5" } } } },
+  });
+  assert.equal(noLevel.valid, false);
+  if (!noLevel.valid) assert.equal(noLevel.code, "TRIAL_REPORT_INCOMPLETE");
+
+  const noAction = validateOfflineLessonSubmission({
+    ...base,
+    payload: { trialReport: { ...complete, lessonFacts: { ...complete.lessonFacts, homeAction: " " } } },
+  });
+  assert.equal(noAction.valid, false);
+});
+
+test("an older trial kept as «individual» but linked to a booking is checked as a trial", () => {
+  const result = validateOfflineLessonSubmission({
+    lesson: { classType: "individual", group: null, trialBooking: { id: "booking-1" } },
+    students: [{ name: "Клиент из заявки", attendanceStatus: "present" }],
+    payload: {
+      trialReport: {
+        version: 3,
+        diagnostics: {
+          instrument: { level: "independent" },
+          hearingPulse: { level: "independent" },
+          movement: { level: "independent" },
+          learnability: { level: "independent" },
+        },
+        lessonFacts: { achieved: "Звук", difficulty: "Рука", homeAction: "Пять минут" },
+      },
+    },
+  });
+  assert.equal(result.valid, true, "no topic is required from a trial");
+});

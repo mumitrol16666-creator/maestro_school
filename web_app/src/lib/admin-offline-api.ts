@@ -30,6 +30,10 @@ export type CrmSyncJournal = {
     kind: string;
     status: string;
     errorMessage: string;
+    /** 07.11: topic conflicts only — whether «Записать проценты урока» has anything to write. */
+    canWriteLesson?: boolean | null;
+    /** 07.11: topic conflicts only — every topic waits for an earlier lesson, nothing to decide. */
+    waitingOnly?: boolean;
     createdAt: string;
   }>;
 };
@@ -76,6 +80,10 @@ export const adminOfflineApi = {
     apiRequest<{ deleted: number }>(
       `/admin/offline-lessons/${encodeURIComponent(crmClassId)}/draft`,
       { method: "DELETE" },
+    ),
+  trialSheet: (crmClassId: string) =>
+    apiRequest<{ html: string }>(
+      `/admin/offline-lessons/${encodeURIComponent(crmClassId)}/trial-sheet`,
     ),
   reportVersions: (crmClassId: string) =>
     apiRequest<OfflineLessonReportHistory | null>(

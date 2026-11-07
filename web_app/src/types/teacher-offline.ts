@@ -1,4 +1,34 @@
+export type TrialDiagnosticLevel = "not_yet" | "with_hint" | "independent";
+export type TrialDiagnosticBlock = "instrument" | "hearingPulse" | "movement" | "learnability";
+export type TrialPlanStep = {
+  templateId: string | null;
+  number: number;
+  title: string;
+  direction?: string | null;
+  topics?: string[];
+};
+
+/**
+ * Trial report v3 (decision 03.11, document 23 §8): the methodology's four diagnostic blocks
+ * («Работа с учеником», p.48), the parent report «навык, трудность, действие» (p.25) and the
+ * start step with the next two as the plan for three months. 03.11, document 23 §10: only what reaches
+ * the family sheet or opens the first sector is asked; attendance is the fact of starting the lesson.
+ */
 export type TrialLessonReport = {
+  version: 3;
+  capturedAt?: string;
+  studentProfile: { direction?: string; goalAndSong?: string };
+  diagnostics: Record<TrialDiagnosticBlock, { level: TrialDiagnosticLevel | null }>;
+  lessonFacts: { achieved?: string; difficulty?: string; homeAction?: string };
+  recommendation: {
+    startStep: TrialPlanStep | null;
+    plan: TrialPlanStep[];
+    recommendedFrequency: "undecided" | "1_per_week" | "2_per_week" | "3_per_week";
+  };
+};
+
+/** Trial report v1/v2 (before 03.11): nine 1–5 scores and the sales block. Read-only now. */
+export type LegacyTrialLessonReport = {
   version?: number;
   capturedAt?: string;
   attendance?: {
@@ -142,7 +172,7 @@ export type TeacherOfflineClass = {
     direction?: string | null;
     isLead?: boolean;
   } | null;
-  trialReport?: TrialLessonReport | null;
+  trialReport?: TrialLessonReport | LegacyTrialLessonReport | null;
   trialAiAnalysis?: Record<string, unknown> | null;
   startedAt?: string | null;
   finishedAt?: string | null;
@@ -266,6 +296,8 @@ export type LearningLessonV2Context = {
   plans: Array<{
     planId: string;
     sequence?: number;
+    /** 07.11: a direction has the current sector (active) and may have the previous one awaiting its exam. */
+    status?: "active" | "awaiting_exam";
     scope?: "student" | "group";
     ownerStudentId?: string | null;
     canEditTopics?: boolean;
@@ -292,12 +324,20 @@ export type LearningLessonV2Context = {
         title: string | null;
         date: string | null;
         startTime: string | null;
+        /** 07.11: that lesson is approved in CRM, its percent waits for an even earlier lesson. */
+        approvedWaitingForEarlier?: boolean;
       } | null;
-      /** 04.11: an approved lesson's percent for this topic waits for the admin's decision. */
+      /** 04.11/07.11: an approved lesson's percent for this topic waits for the admin's decision. */
       percentConflict?: {
         crmClassId: string;
+        lessonDate: string | null;
+        lessonTitle: string | null;
         toPercent: number;
+        /** The topic's percent now, not at the time of the conflict. */
         currentPercent: number;
+        reason: "stale" | "waiting" | "mastered" | "recorded";
+        /** The lesson being looked at is the one with the conflict. */
+        own: boolean;
       } | null;
       masteredAt: string | null;
       planCompletionRewardPoints: number;

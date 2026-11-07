@@ -4,6 +4,10 @@ import { useState } from "react";
 import { homeworkPercentTone } from "@/lib/homework-ui";
 
 import { ClipboardCheck, LoaderCircle, MoreHorizontal, Plus, Sparkles, Target } from "lucide-react";
+import { SectorSwitch } from "@/components/sector-switch";
+import { formatCount } from "@/lib/plural";
+import { sectorTitle } from "@/lib/sector-label";
+import { resolveSelectedSector } from "@/lib/sector-switch";
 import type {
   LearningLessonV2Context,
   LearningLessonV2Homework,
@@ -128,12 +132,16 @@ const percentPresets = [
 function HomeworkDecisionRow({
   homework,
   studentName,
+  sectorLabel,
   value,
   disabled,
   onChange,
 }: {
   homework: LearningLessonV2Homework;
   studentName: string;
+  /** 07.11: which sector the homework's topic belongs to, once a student has two open ones. */
+  sectorLabel?: string | null;
+
   value: LearningLessonHomeworkDecisionDraft;
   disabled: boolean;
   onChange: (value: LearningLessonHomeworkDecisionDraft) => void;
@@ -150,6 +158,7 @@ function HomeworkDecisionRow({
         <div className="min-w-0">
           <p className="text-sm font-black text-ink">{studentName}</p>
           <p className="mt-1 text-sm font-bold text-stone-700">{homework.topicTitle}</p>
+          {sectorLabel ? <p className="mt-0.5 text-xs font-bold text-amber-800" data-testid="homework-sector-label">{sectorLabel}</p> : null}
           <p className="mt-1 line-clamp-2 text-sm leading-5 text-stone-500">
             {homework.instructions}
           </p>
@@ -261,11 +270,14 @@ export function LearningLessonV2Panel({
   const [addingTopic, setAddingTopic] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
   const [quickDirectionId, setQuickDirectionId] = useState("");
+  // 07.11: which of a lane's two open sectors the topic chips show (screen state only).
+  const [chosenPlanByLane, setChosenPlanByLane] = useState<Record<string, string>>({});
   // Plan 1.6: a quick topic goes only into an open published sector, so the direction is chosen
   // from the sectors this lesson shows.
   const sectorDirections = context.plans.filter(plan => plan.canEditTopics !== false && (context.owner.kind !== "group" || plan.scope === "group")).map((plan) => plan.direction)
     .filter((direction, index, all) => all.findIndex(other => other.id === direction.id) === index);
-  const canQuickAdd = Boolean(onQuickAddTopic) && !disabled && sectorDirections.length > 0;
+  // Computed again below once the chosen sectors are known (hooks above stay unconditional).
+  const canQuickAddBase = Boolean(onQuickAddTopic) && !disabled && sectorDirections.length > 0;
 
   async function handleAddTopicSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -308,9 +320,40 @@ export function LearningLessonV2Panel({
     );
   }
 
-  const topics = context.plans.flatMap((plan) => (
+  // 07.11: a student's direction may have two open sectors (current + awaiting exam). The topic
+  // chips show one of them; draft.topicProgress is by topic id, so changes survive the switch.
+  const lanes = new Map<string, typeof context.plans>();
+  for (const plan of context.plans) {
+    const key = `${plan.direction.id}:${plan.ownerStudentId ?? plan.scope ?? "owner"}`;
+    lanes.set(key, [...(lanes.get(key) ?? []), plan]);
+  }
+  const switchLanes = [...lanes.entries()]
+    .filter(([, plans]) => plans.filter((plan) => plan.status).length > 1)
+    .map(([key, plans]) => {
+      const options = plans.map((plan) => ({ id: plan.planId, sequence: plan.sequence, status: plan.status }));
+      return { key, plans, options, selected: resolveSelectedSector(options, chosenPlanByLane[key]) };
+    });
+  const hiddenPlanIds = new Set(switchLanes.flatMap((lane) => lane.plans.filter((plan) => plan.planId !== lane.selected?.id).map((plan) => plan.planId)));
+  const onAwaitingTab = switchLanes.some((lane) => lane.selected?.status === "awaiting_exam");
+  const topicsOf = (plans: typeof context.plans) => plans.flatMap((plan) => (
     plan.topics.map((topic) => ({ ...topic, directionTitle: plan.direction.title, ownerName: plan.ownerName, scope: plan.scope, sequence: plan.sequence, canEditTopics: plan.canEditTopics, sharedGroupPlan:plan.sharedGroupPlan }))
   )).filter((topic, index, all) => all.findIndex(other => other.id === topic.id) === index);
+  const canQuickAdd = canQuickAddBase && !onAwaitingTab;
+  const topics = topicsOf(context.plans.filter((plan) => !hiddenPlanIds.has(plan.planId)));
+  const changedCountByPlan = Object.fromEntries(context.plans.map((plan) => [
+    plan.planId,
+    plan.topics.filter((topic) => {
+      const entry = draft.topicProgress[topic.id];
+      return entry && entry.toPercent !== topic.progressPercent;
+    }).length,
+  ]));
+  // The check of last homework lists every pupil's homework; each row says which sector its topic is in.
+  const sectorLabelByTopic = new Map<string, string>();
+  for (const plan of context.plans) {
+    for (const topic of plan.topics) {
+      if (!sectorLabelByTopic.has(topic.id)) sectorLabelByTopic.set(topic.id, sectorTitle({ scope: plan.scope ?? "student", sequence: plan.sequence }));
+    }
+  }
   const directionTitles = new Set(
     context.plans.map((plan) => plan.direction.title.trim()).filter(Boolean),
   );
@@ -381,7 +424,7 @@ export function LearningLessonV2Panel({
               onChange={event => onChange({ ...draft, readySectorIds: event.target.checked
                 ? [...new Set([...(draft.readySectorIds ?? []), plan.planId])]
                 : (draft.readySectorIds ?? []).filter(id => id !== plan.planId) })} />
-            <span>{plan.studentName} · сектор {plan.sequence} · {plan.direction}{plan.readyAt ? " · готовность подтверждена" : " · готов к экзамену"}</span>
+            <span>{plan.studentName} · сектор {plan.sequence} · {plan.direction}{plan.readyAt ? " · готовность подтверждена" : " · отметить готовность к экзамену"}</span>
           </label>)}
         </div>
       </div> : null}
@@ -469,6 +512,24 @@ export function LearningLessonV2Panel({
             </div>
           </form>
         ) : null}
+        {switchLanes.map((lane) => (
+          <div key={lane.key} className="mt-3 grid gap-1" data-testid="lesson-sector-lane">
+            {switchLanes.length > 1 || context.owner.kind === "group" ? (
+              <p className="text-xs font-semibold text-stone-500">
+                {lane.plans[0]?.ownerName ? `${lane.plans[0].ownerName} · ` : ""}{lane.plans[0]?.direction.title}
+              </p>
+            ) : null}
+            <SectorSwitch
+              sectors={lane.options}
+              selectedId={lane.selected?.id}
+              onSelect={(id) => setChosenPlanByLane((current) => ({ ...current, [lane.key]: id }))}
+              label={`Секторы направления ${lane.plans[0]?.direction.title ?? ""}`}
+              suffixes={Object.fromEntries(lane.plans
+                .filter((plan) => changedCountByPlan[plan.planId])
+                .map((plan) => [plan.planId, formatCount(changedCountByPlan[plan.planId]!, ["изменение", "изменения", "изменений"])]))}
+            />
+          </div>
+        ))}
         {topics.length ? (
           <>
             <div className="mt-3 flex flex-wrap gap-2">
@@ -500,13 +561,17 @@ export function LearningLessonV2Panel({
                         ? `${topic.progressPercent}% → ${topicDraft.toPercent}%`
                         : `${topic.progressPercent}%`}
                     </span>
-                    {topicDraft && topicDraft.expectedPercent !== topic.progressPercent ? (
+                    {topic.percentConflict?.own ? (
+                      <span className="mt-0.5 block text-[11px] font-semibold text-amber-700">
+                        процент у администратора
+                      </span>
+                    ) : topicDraft && topicDraft.expectedPercent !== topic.progressPercent ? (
                       <span className="mt-0.5 block text-[11px] font-semibold text-red-700">
                         процент изменился
                       </span>
                     ) : topic.pendingFromLesson ? (
                       <span className="mt-0.5 block text-[11px] font-semibold text-amber-700">
-                        ждёт подтверждения
+                        {topic.pendingFromLesson.approvedWaitingForEarlier ? "ждёт урок до него" : "ждёт подтверждения"}
                       </span>
                     ) : topic.percentConflict ? (
                       <span className="mt-0.5 block text-[11px] font-semibold text-amber-700">
@@ -641,16 +706,21 @@ export function LearningLessonV2Panel({
                       <p className="mt-1 text-xs leading-5 text-amber-800" data-testid="topic-pending-from-lesson">
                         {selectedTopic.progressPercent}% — по отчёту прошлого урока
                         {selectedTopic.pendingFromLesson.date ? ` ${pendingLessonDay(selectedTopic.pendingFromLesson.date)}` : ""},
-                        он ждёт подтверждения админом. Сейчас в теме {selectedTopic.approvedPercent ?? 0}%.
+                        {selectedTopic.pendingFromLesson.approvedWaitingForEarlier
+                          ? " он принят, процент запишется после подтверждения урока до него."
+                          : " он ждёт подтверждения админом."} Сейчас в теме {selectedTopic.approvedPercent ?? 0}%.
                       </p>
                     ) : selectedTopic.percentConflict ? (
                       <p className="mt-1 text-xs leading-5 text-amber-800" data-testid="topic-percent-conflict">
-                        Прошлый урок принят, но его {selectedTopic.percentConflict.toPercent}% не записаны:
-                        в теме уже было {selectedTopic.percentConflict.currentPercent}%. Какой процент оставить, решит администратор.
-                        Сейчас тема начинается с {selectedTopic.progressPercent}%.
+                        {selectedTopic.percentConflict.own ? "Урок принят, но" : (
+                          <>Урок{selectedTopic.percentConflict.lessonDate ? ` ${pendingLessonDay(selectedTopic.percentConflict.lessonDate)}` : ""} принят, но</>
+                        )}{" "}
+                        его {selectedTopic.percentConflict.toPercent}% по этой теме не записаны: в теме сейчас {selectedTopic.percentConflict.currentPercent}%.
+                        Какой процент оставить, решит администратор.
+                        {selectedTopic.percentConflict.own ? null : ` Тема начинается с ${selectedTopic.progressPercent}%.`}
                       </p>
                     ) : null}
-                    {selectedTopicProgress && selectedTopicProgress.expectedPercent !== selectedTopic.progressPercent ? (
+                    {!selectedTopic.percentConflict?.own && selectedTopicProgress && selectedTopicProgress.expectedPercent !== selectedTopic.progressPercent ? (
                       <div className="mt-2 rounded-lg border border-red-200 bg-red-50 p-3 text-xs leading-5 text-red-800" data-testid="topic-start-changed">
                         <p>
                           После заполнения прошлый урок по этой теме изменили: тема теперь начинается с{" "}
@@ -781,6 +851,7 @@ export function LearningLessonV2Panel({
                   key={homework.recipientId}
                   homework={homework}
                   studentName={student.name}
+                  sectorLabel={sectorLabelByTopic.get(homework.topicId) ?? null}
                   disabled={disabled}
                   value={draft.homeworkDecisions[homework.recipientId] ?? {
                     completionPercent: null,

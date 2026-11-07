@@ -179,6 +179,27 @@ async function attendanceSnapshot(crmClassId: string) {
   }));
 }
 
+/**
+ * 02.11 (money review): «Отменить урок» rewrites every student as absent. Once the lesson's report
+ * has left the editor (sent, under review, approving, in conflict or confirmed) that rewrite would
+ * reach CRM as attendance for a report that says the lesson was held — a charge per student and the
+ * teacher's rate. The lesson card may still look open when CRM is down and the projection is stale,
+ * so the local report is the guard: cancel only while the report is editable.
+ */
+export async function assertOfflineLessonReportNotSubmitted(crmClassId: string) {
+  const report = await prisma.offlineLessonReport.findUnique({
+    where: { crmClassId },
+    select: { status: true, crmConfirmedAt: true },
+  });
+  if (!report || (report.status === "editing" && !report.crmConfirmedAt)) return;
+  throw new ConflictError(
+    report.crmConfirmedAt
+      ? "Урок уже подтверждён школой, отменить его нельзя."
+      : "Отчёт по этому уроку уже отправлен. Отзовите его, если нужно отменить урок.",
+    "LESSON_REPORT_SUBMITTED",
+  );
+}
+
 export async function submitOfflineLessonReportVersion(params: {
   crmClassId: string;
   authorUserId: string;

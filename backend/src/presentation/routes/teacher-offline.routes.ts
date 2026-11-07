@@ -50,6 +50,8 @@ import {
 import { listTeacherCrmDirections } from "../../application/services/crm-direction-projection.service.js";
 import { isSupportedMaterialUrl } from "../../domain/group-material.js";
 import { writeAuditLog } from "../../application/services/audit.service.js";
+import { fetchTrialSheet } from "../../infrastructure/crm/crm-client.js";
+import { ForbiddenError } from "../../domain/errors.js";
 import { quickAddOfflineLessonTopic, updateOfflineLessonTopic } from "../../application/services/learning-lesson-v2.service.js";
 import {
   deleteOfflineLessonDraft,
@@ -224,7 +226,7 @@ export async function teacherOfflineRoutes(app: FastifyInstance) {
     },
   );
 
-  // Decision 19.10: close the open sector early for 0–250 Points written by the teacher.
+  // Early close of one open sector (current or awaiting its exam), named by planId. No Points (decision 07.11).
   app.post(
     "/teachers/me/students/:crmStudentId/monthly-plan/close",
     { preHandler: [authenticate, requireTeacher, requirePermission("offline_school.write")] },
@@ -232,10 +234,12 @@ export async function teacherOfflineRoutes(app: FastifyInstance) {
       const { crmStudentId } = z.object({ crmStudentId: z.string().min(1).max(128) }).parse(request.params);
       const body = z.object({
         crmDirectionId: z.string().min(1).max(128),
+        planId: z.string().uuid(),
         points: z.number().int().min(0).max(SECTOR_EARLY_CLOSE_MAX_POINTS),
         comment: z.string().trim().max(1000).nullable().optional(),
       }).parse(request.body ?? {});
       const plan = await closeStudentSectorEarlyV2(request.user!.id, crmStudentId, body.crmDirectionId, {
+        planId: body.planId,
         points: body.points,
         comment: body.comment,
       });
@@ -580,6 +584,21 @@ export async function teacherOfflineRoutes(app: FastifyInstance) {
       const { crmClassId } = z.object({ crmClassId: z.string().min(1) }).parse(request.params);
       await getTeacherOfflineClass(request.user!.id, crmClassId);
       return { data: await listOfflineLessonReportVersions(crmClassId) };
+    },
+  );
+
+  app.get(
+    "/teachers/me/offline-lessons/:crmClassId/trial-sheet",
+    { preHandler: readGuards },
+    async (request) => {
+      const { crmClassId } = z.object({ crmClassId: z.string().min(1) }).parse(request.params);
+      // Access check first: the teacher prints only a lesson of their own.
+      const lesson = await getTeacherOfflineClass(request.user!.id, crmClassId) as { substitution?: unknown; status?: unknown };
+      // Norm 6: a substitute sees the child only until the lesson is approved.
+      if (lesson.substitution === true && lesson.status === "completed") {
+        throw new ForbiddenError("Урок подтверждён. Лист первого занятия теперь печатает администратор.");
+      }
+      return { data: await fetchTrialSheet(crmClassId) };
     },
   );
 

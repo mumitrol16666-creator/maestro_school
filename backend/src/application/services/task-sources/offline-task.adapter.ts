@@ -17,6 +17,7 @@ type OfflineReview = {
 
 type OfflineLesson = {
   crmClassId: string;
+  classType?: string | null;
   title: string;
   date: string;
   startTime?: string | null;
@@ -38,6 +39,8 @@ function normalized(value?: string | null) {
 }
 
 function sameLearningStream(left: OfflineLesson, right: OfflineLesson) {
+  // 07.11 (P3): an exam lesson is in the schedule now; it is never the lesson homework is due for.
+  if (left.classType === "exam" || right.classType === "exam") return false;
   if (left.crmGroupId && right.crmGroupId) return left.crmGroupId === right.crmGroupId;
   if (left.groupName && right.groupName) return normalized(left.groupName) === normalized(right.groupName);
   if (left.crmTeacherId && right.crmTeacherId) return left.crmTeacherId === right.crmTeacherId;

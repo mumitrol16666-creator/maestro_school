@@ -45,13 +45,14 @@ describe("awardManualPoints zero-amount policy", () => {
 });
 
 describe("points vs coins separation", () => {
-  it("awardLessonPoints and awardManualPoints are separate entry points", async () => {
-    const points = await import("./points.service.js");
-    const coins = await import("./coins.service.js");
-    assert.equal(typeof points.awardLessonPoints, "function");
+  it("manual Points and Coins are separate entry points, direct lesson Points are gone", async () => {
+    const points = await import("./points.service.js") as Record<string, unknown>;
+    const coins = await import("./coins.service.js") as Record<string, unknown>;
     assert.equal(typeof points.awardManualPoints, "function");
     assert.equal(typeof coins.addMaestroCoins, "function");
-    assert.notEqual(points.awardLessonPoints, coins.addMaestroCoins);
+    assert.notEqual(points.awardManualPoints, coins.addMaestroCoins);
+    assert.equal(points.awardLessonPoints, undefined);
+    assert.equal(coins.awardCourseCompletionCoins, undefined);
   });
 
   it("exports a dedicated idempotent system award entry point", async () => {

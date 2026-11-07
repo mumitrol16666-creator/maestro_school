@@ -1,17 +1,18 @@
 "use client";
 
 import { sectorTitle } from "@/lib/sector-label";
+import { formatExamDate } from "@/lib/sector-exams-api";
 import {
   ArrowRight,
   ChevronRight,
+  Flame,
   MonitorPlay,
   School,
   Sparkles,
-  Star,
   Trophy,
 } from "lucide-react";
 import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { ScreenError } from "@/components/app-error-screen";
 import { LevelBadge, LevelProgressDialog } from "@/components/level-summary";
@@ -20,11 +21,11 @@ import { ScreenSkeleton } from "@/components/screen-skeleton";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { StudentBanners } from "@/components/student-banners";
 import { StudentTodayCard } from "@/components/student-today-card";
+import { dashboardCourseAction } from "@/lib/course-access-format";
 import { invalidateStudentHome, loadStudentHome } from "@/lib/student-home";
 import { formatCount, formatOutOf, pluralize } from "@/lib/plural";
-import { weeklyLeagueApi } from "@/lib/weekly-league-api";
 import type { SchoolOfflineLesson } from "@/types/school-offline";
-import type { StudentHomeMonthlyPlan, StudentMonthlyPlansResponse } from "@/types/api";
+import type { ProductLevelProgress, StudentHomeMonthlyPlan, StudentMonthlyPlansResponse } from "@/types/api";
 
 function formatLessonDate(value: string) {
   const date = new Date(value);
@@ -41,6 +42,16 @@ function formatLessonDate(value: string) {
 export default function DashboardPage() {
   const { user } = useAuth();
   const [levelDialogOpen, setLevelDialogOpen] = useState(false);
+  // The streak in the header follows the «Позанимался сегодня» mark without a reload.
+  const [streakNow, setStreakNow] = useState<number | null>(null);
+  useEffect(() => {
+    const onChecked = (event: Event) => {
+      const days = (event as CustomEvent<{ streakDays?: number }>).detail?.streakDays;
+      if (typeof days === "number") setStreakNow(days);
+    };
+    window.addEventListener("maestro:practice-checked-in", onChecked);
+    return () => window.removeEventListener("maestro:practice-checked-in", onChecked);
+  }, []);
   // Plan 2.1: «Сейчас» is one read of the student's home; the header shares it.
   const resource = useApiResource(() => loadStudentHome(), []);
   if (resource.loading && !resource.data) {
@@ -54,7 +65,10 @@ export default function DashboardPage() {
   const school = data.school;
   const upcoming = school?.upcomingLessons ?? [];
   const plans = data.monthlyPlans;
-  const planProgress = aggregatePlanProgress(plans);
+  // 07.11: progress is the current sectors only; the one waiting for its exam is a line below it.
+  const currentPlans = plans.filter((plan) => plan.status !== "awaiting_exam");
+  const waitingPlans = plans.filter((plan) => plan.status === "awaiting_exam");
+  const planProgress = aggregatePlanProgress(currentPlans);
   const actionTasks = data.tasks?.items.filter((task) => task.actionRequired) ?? [];
   // Plan 5.1: «Сегодня» opens the home; the lessons after the nearest one go to the list.
   const today = data.today ?? { nextLesson: null, tasks: [], tasksTotal: 0 };
@@ -70,29 +84,22 @@ export default function DashboardPage() {
     || data.dashboard.currentCourse
     || actionTasks.length,
   );
+  // Stage 4: a lesson that waits for the payment of its course leads to the course, not to the lesson.
+  const courseAction = data.dashboard.currentCourse
+    ? dashboardCourseAction({ nextLesson: data.dashboard.nextAvailableLesson, currentCourseId: data.dashboard.currentCourse.id })
+    : { href: "/courses", label: "Открыть курс" };
 
   return (
     <div className="mx-auto max-w-[1400px]">
-      <header className="mb-4 flex flex-wrap items-center justify-between gap-3 sm:mb-5 sm:gap-4">
-        <div>
-          <p className="text-xs font-black uppercase tracking-wide text-gold-ink">Твоя учебная неделя</p>
-          <h1 className="font-display mt-1.5 text-[32px] leading-tight sm:mt-2 sm:text-4xl">
-            Привет, {user?.firstName || "ученик"}!
-          </h1>
-          <p className="mt-1 text-[13px] text-stone-500 sm:mt-2 sm:text-sm">Здесь только то, что важно сейчас.</p>
-        </div>
-        {/* Plan 5.1: two figures only — LEVEL and Points. Coins wait for the shop (decision 24.10). */}
-        <div className="grid w-full grid-cols-2 gap-2 sm:w-auto">
-          {data.dashboard.level ? (
-            <MetricChip
-              leading={<LevelBadge level={data.dashboard.level.level} size="small" />}
-              value={data.dashboard.level.level.title}
-              label=""
-              onClick={() => setLevelDialogOpen(true)}
-              testId="dashboard-level-chip"
-            />
-          ) : null}
-          <MetricChip icon={Star} value={data.dashboard.points.toLocaleString("ru-RU")} label={pluralize(data.dashboard.points, ["балл", "балла", "баллов"])} onClick={data.dashboard.level ? () => setLevelDialogOpen(true) : undefined} testId="dashboard-points-chip" />
+      {/* В-31: the greeting and two figures — LEVEL with its bar and the days of practice in a row. XP and the
+          place in the league live on «Лига»; Coins are not shown to the student (decision 24.10). */}
+      <header className="mb-3 sm:mb-4">
+        <h1 className="font-display text-[26px] leading-tight sm:text-[28px]">
+          Привет, {user?.firstName || "ученик"}!
+        </h1>
+        <div className="mt-2 grid grid-cols-1 gap-2 min-[360px]:grid-cols-[minmax(0,1fr)_auto] sm:max-w-xl">
+          {data.dashboard.level ? <LevelChip progress={data.dashboard.level} onClick={() => setLevelDialogOpen(true)} /> : <span />}
+          <StreakChip days={streakNow ?? data.practice?.streakDays ?? 0} />
         </div>
       </header>
 
@@ -100,18 +107,17 @@ export default function DashboardPage() {
         <LevelProgressDialog progress={data.dashboard.level} onClose={() => setLevelDialogOpen(false)} />
       ) : null}
 
-      <StudentBanners banners={data.banners ?? []} />
+      <StudentTodayCard today={today} practice={data.practice ?? null} scheduleIssue={scheduleIssue} />
 
-      <div className="grid grid-cols-[minmax(0,1fr)] items-stretch gap-5 xl:grid-cols-[minmax(0,1.75fr)_minmax(280px,0.65fr)]">
-        <div className="order-1 min-w-0"><StudentTodayCard today={today} streakWeeks={data.streakWeeks ?? null} practice={data.practice ?? null} scheduleIssue={scheduleIssue} /></div>
-        <div className="order-3 min-w-0 xl:order-2"><LeagueMiniWidget /></div>
-      </div>
+      <StudentBanners banners={data.banners ?? []} total={data.bannersTotal} />
 
       {(plans.length || data.tasks || visibleUpcoming.length) ? (
-        <div className={`mt-5 grid grid-cols-[minmax(0,1fr)] items-start gap-5 ${visibleUpcoming.length ? "lg:grid-cols-2" : ""}`}>
+        <div className={`mt-4 grid grid-cols-[minmax(0,1fr)] items-start gap-5 ${visibleUpcoming.length ? "lg:grid-cols-2" : ""}`}>
           <LearningSummary
             actionCount={data.tasks?.counts.actionRequired ?? null}
-            plans={plans}
+            plans={currentPlans}
+            waitingPlans={waitingPlans}
+            hasPlans={plans.length > 0}
             planProgress={planProgress}
           />
           {visibleUpcoming.length ? <UpcomingLessons lessons={visibleUpcoming} /> : null}
@@ -129,16 +135,29 @@ export default function DashboardPage() {
               </p>
             </div>
             <Link
-              href={data.dashboard.nextAvailableLesson ? `/lessons/${data.dashboard.nextAvailableLesson.id}` : `/courses/${data.dashboard.currentCourse.id}`}
+              href={courseAction.href}
               className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-stone-300 px-4 text-sm font-bold"
+              data-testid="dashboard-course-action"
             >
-              {data.dashboard.nextAvailableLesson ? "Открыть урок" : "Открыть курс"}
+              {courseAction.label}
               <ArrowRight size={16} />
             </Link>
           </div>
           <ProgressBar value={data.dashboard.progressPercent} />
         </section>
       ) : null}
+
+      <Link
+        href="/league"
+        className="mt-5 flex min-h-11 items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-white px-4 text-sm font-bold text-ink transition hover:border-gold/50"
+        data-testid="dashboard-league-link"
+      >
+        <span className="flex min-w-0 items-center gap-3">
+          <Trophy size={18} className="shrink-0 text-gold-ink" aria-hidden="true" />
+          <span className="min-w-0">Недельная лига — таблица и награды</span>
+        </span>
+        <ChevronRight size={18} className="shrink-0 text-stone-400" aria-hidden="true" />
+      </Link>
 
       {!hasLearningData ? (
         <section className="mt-8 rounded-[28px] border border-dashed border-stone-300 bg-white p-8 text-center">
@@ -160,10 +179,14 @@ export default function DashboardPage() {
 function LearningSummary({
   actionCount,
   plans,
+  waitingPlans,
+  hasPlans,
   planProgress,
 }: {
   actionCount: number | null;
   plans: StudentHomeMonthlyPlan[];
+  waitingPlans: StudentHomeMonthlyPlan[];
+  hasPlans: boolean;
   planProgress: StudentMonthlyPlansResponse["aggregateProgress"];
 }) {
   return (
@@ -185,11 +208,24 @@ function LearningSummary({
           <p className="mt-2 text-xs font-semibold text-stone-500">{formatOutOf(planProgress.completed, planProgress.total, ["темы", "тем", "тем"])} закрыто</p>
         </div>
       ) : null}
+      {waitingPlans.map((plan) => (
+        <Link
+          key={plan.id}
+          href={`/monthly-plan?sector=${encodeURIComponent(plan.id)}`}
+          data-testid="dashboard-sector-awaiting-exam"
+          className="mt-3 flex min-h-11 min-w-0 items-center justify-between gap-2 rounded-lg bg-sky-50 px-3 py-2 text-sm font-bold text-sky-950"
+        >
+          <span className="min-w-0 break-words">
+            {sectorTitle(plan, "student")} ждёт экзамена{plan.exam?.status === "scheduled" && plan.exam.scheduledAt ? ` · ${formatExamDate(plan.exam.scheduledAt)}` : ""}
+          </span>
+          <ChevronRight size={16} className="shrink-0" aria-hidden="true" />
+        </Link>
+      ))}
       <div className="mt-5 flex flex-wrap gap-2">
         <Link href="/learning" className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-ink px-4 text-sm font-bold text-white">
           Открыть обучение <ArrowRight size={16} />
         </Link>
-        {plans.length ? (
+        {hasPlans ? (
           <Link href="/monthly-plan" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-stone-300 px-4 text-sm font-bold text-ink">
             Открыть сектор
           </Link>
@@ -199,109 +235,57 @@ function LearningSummary({
   );
 }
 
-function MetricChip({
-  icon: Icon,
-  leading,
-  value,
-  label,
-  href,
-  onClick,
-  testId,
-}: {
-  icon?: typeof Star;
-  leading?: ReactNode;
-  value: string | number;
-  label: string;
-  href?: string;
-  onClick?: () => void;
-  testId?: string;
-}) {
-  const interactive = Boolean(href || onClick);
-  const accessibleLabel = `${value} ${label}`.trim();
-  const className = `group flex min-h-12 min-w-0 items-center justify-center gap-2 rounded-xl border border-stone-200 bg-white px-2 py-2 shadow-sm transition sm:min-h-14 sm:justify-start sm:rounded-2xl sm:px-3 ${interactive ? "cursor-pointer hover:-translate-y-0.5 hover:border-gold/50 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold" : ""}`;
-  const content = (
-    <>
-      {leading ?? (Icon ? <Icon size={17} className="shrink-0 text-gold-ink" /> : null)}
-      <span className="min-w-0 text-xs text-stone-500">
-        <strong className="mr-1 text-sm text-ink sm:text-base">{value}</strong>
-        <span className="break-words">{label}</span>
+function LevelChip({ progress, onClick }: { progress: ProductLevelProgress; onClick: () => void }) {
+  const next = progress.next;
+  const label = next
+    ? `${progress.level.title}, ${progress.points.toLocaleString("ru-RU")} из ${next.minPoints.toLocaleString("ru-RU")}`
+    : `${progress.level.title}, максимальный уровень`;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      title="Уровни Maestro"
+      className="flex min-h-12 min-w-0 items-center gap-3 rounded-xl border border-stone-200 bg-white px-3 py-2 text-left shadow-sm transition hover:border-gold/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold"
+      data-testid="dashboard-level-chip"
+    >
+      <LevelBadge level={progress.level} size="small" />
+      <span className="block min-w-0 flex-1">
+        <strong className="block text-sm text-ink">{progress.level.title}</strong>
+        {next ? (
+          <>
+            {/* The bar and the line are the same figure as the level window: progress inside the level. */}
+            <span className="mt-1.5 block h-1.5 overflow-hidden rounded-full bg-stone-200/90" aria-hidden="true">
+              <span className="block h-full rounded-full bg-gold transition-all duration-500" style={{ width: `${Math.min(100, Math.max(0, progress.progressPercent))}%` }} />
+            </span>
+            <span className="mt-1 block text-xs text-stone-500" data-testid="dashboard-level-to-next">
+              {formatCount(progress.pointsToNext, ["балл", "балла", "баллов"])} до {next.title}
+            </span>
+          </>
+        ) : (
+          <span className="mt-0.5 block text-xs text-stone-500">максимальный уровень</span>
+        )}
       </span>
-      {interactive ? <ChevronRight size={14} className="hidden shrink-0 text-stone-300 transition group-hover:text-gold-ink sm:block" /> : null}
-    </>
+    </button>
   );
-  if (href) {
-    return <Link href={href} className={className} aria-label={accessibleLabel} title={accessibleLabel} data-testid={testId}>{content}</Link>;
-  }
-  if (onClick) {
-    return <button type="button" onClick={onClick} className={className} aria-label={accessibleLabel} title={accessibleLabel} data-testid={testId}>{content}</button>;
-  }
-  return <div className={className} aria-label={accessibleLabel} title={accessibleLabel} data-testid={testId}>{content}</div>;
 }
 
-function LeagueMiniWidget() {
-  const resource = useApiResource(() => weeklyLeagueApi.studentOverview(0), []);
-  const data = resource.data;
-  if (!data) return null;
-  const me = data.currentStudent;
-  const top3 = data.standings.slice(0, 3);
-  const medals = ["🥇", "🥈", "🥉"];
-
+function StreakChip({ days }: { days: number }) {
   return (
-    <section className="h-full rounded-[20px] border border-stone-200 bg-charcoal p-4 text-white shadow-soft sm:p-6">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <span className="grid h-9 w-9 place-items-center rounded-xl bg-gold/15 text-gold-ink sm:h-10 sm:w-10">
-            <Trophy size={18} />
-          </span>
-          <div>
-            <p className="text-xs font-black uppercase tracking-wide text-gold-ink">Недельная лига</p>
-            <h3 className="font-display text-base sm:text-lg">Лидеры недели</h3>
-          </div>
-        </div>
-        <Link
-          href="/league"
-          aria-label="Открыть таблицу недельной лиги"
-          title="Таблица лиги"
-          className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/5 text-white/80 transition hover:bg-white/10 hover:text-white"
-        >
-          <ChevronRight size={18} />
-        </Link>
-      </div>
-
-      {top3.length > 0 ? (
-        <div className="mt-4 hidden space-y-2 sm:block">
-          {top3.map((item, idx) => (
-            <div
-              key={item.displayName}
-              className={`flex items-center justify-between gap-3 rounded-xl px-3 py-2 text-xs font-bold ${
-                item.isCurrentStudent ? "bg-gold/20 text-gold-ink" : "bg-white/[0.04] text-white/80"
-              }`}
-            >
-              <div className="flex items-center gap-2 truncate">
-                <span>{medals[idx]}</span>
-                <span className="truncate">{item.displayName} {item.isCurrentStudent ? "(вы)" : ""}</span>
-              </div>
-              <span className="shrink-0 font-display text-sm text-gold-ink">{item.xp} XP</span>
-            </div>
-          ))}
-        </div>
+    <div
+      className="flex min-h-12 items-center gap-2 rounded-xl border border-stone-200 bg-white px-3 py-2 shadow-sm"
+      data-testid="dashboard-streak"
+    >
+      <Flame size={20} className={`shrink-0 ${days > 0 ? "text-orange-500" : "text-stone-400"}`} aria-hidden="true" />
+      {days > 0 ? (
+        <span className="block leading-tight">
+          <strong className="block text-base text-ink">{days.toLocaleString("ru-RU")}</strong>
+          <span className="block text-xs text-stone-500">{pluralize(days, ["день", "дня", "дней"])} подряд</span>
+        </span>
       ) : (
-        <p className="mt-4 hidden text-xs text-white/50 sm:block">Неделя только началась. Сделай первое действие!</p>
+        <span className="text-sm font-bold text-stone-700">Начни серию</span>
       )}
-
-      <div className="mt-3 border-t border-white/10 pt-3 sm:mt-4">
-        <div className="flex items-center justify-between text-xs text-white/60">
-          <span>{me?.position ? `Твоё место: #${me.position}` : "Цель на неделю"}</span>
-          <span className="font-bold text-white">{me?.xp ?? 0} / {me?.goalXp ?? 80} XP</span>
-        </div>
-        <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
-          <div
-            className="h-full rounded-full bg-gradient-to-r from-gold to-amber-400 transition-all"
-            style={{ width: `${me?.goalProgress ?? 0}%` }}
-          />
-        </div>
-      </div>
-    </section>
+    </div>
   );
 }
 

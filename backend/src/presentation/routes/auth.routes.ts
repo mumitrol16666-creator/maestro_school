@@ -1,13 +1,12 @@
-import { sessionClaims } from "../../application/services/account-session.service.js";
+import { sessionClaims, sessionLifetimeSeconds } from "../../application/services/account-session.service.js";
 import type { FastifyInstance } from "fastify";
-import { bearerToken, clearMediaCookieHeader, mediaCookieHeader } from "../guards/media-session.js";
+import { bearerToken, clearMediaCookieHeader, mediaCookieHeader, tokenRemainingSeconds } from "../guards/media-session.js";
 import { Prisma } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import crypto from "node:crypto";
 import path from "node:path";
 import {
-  createStudentUser,
   findUserWithRoleByEmail,
   findUserWithRoleById,
   findUserWithRoleByLogin,
@@ -16,13 +15,19 @@ import {
   updateOwnPassword,
   updateUserProfile,
 } from "../../application/repositories/auth.repository.js";
-import { BadRequestError, ConflictError, UnauthorizedError } from "../../domain/errors.js";
+import { BadRequestError, ConflictError, ForbiddenError, UnauthorizedError } from "../../domain/errors.js";
 import { isValidLogin, normalizeLogin } from "../../lib/login.js";
 import { isValidPhone, normalizePhoneDigits } from "../../lib/phone.js";
 import { getStudentCoins } from "../../application/services/coins.service.js";
 import { getStudentPointsBalance } from "../../application/services/points.service.js";
 import { authenticate } from "../guards/auth.guards.js";
-import { syncNewStudentToCrm } from "../../application/services/crm-sync.service.js";
+import {
+  parentRegistrationLeadComment,
+  registerExternalStudent,
+  registerParentWithChild,
+  reserveLogin,
+  sendAppRegistrationLead,
+} from "../../application/services/app-registration.service.js";
 import { postPasswordChangedInApp, postStudentAvatarToCrm } from "../../infrastructure/crm/crm-client.js";
 import {
   inferMimeType,
@@ -40,6 +45,7 @@ import {
 } from "../../domain/login-profile.js";
 import { getProductFeatureSnapshot } from "../../config/product-features.js";
 import { recordStudentLogin } from "../../application/services/app-usage.service.js";
+import { resolveAudience } from "../../domain/course-access.js";
 
 const ssoExchangeSchema = z.object({
   token: z.string().min(10),
@@ -64,6 +70,19 @@ const registerSchema = z.object({
   email: z.string().trim().email().transform((value) => value.toLowerCase()).optional(),
   phone: z.string().trim().min(10).max(32),
   password: z.string().min(8).max(72),
+});
+
+const registerPerson = (who: "родителя" | "ребёнка") => z.object({
+  firstName: z.string().trim().min(1, `Укажите имя ${who}`).max(128),
+  lastName: z.string().trim().min(1, `Укажите фамилию ${who}`).max(128),
+  phone: z.string({ required_error: `Укажите телефон ${who}` }).trim().min(10, `Укажите телефон ${who}`).max(32),
+  password: z.string({ required_error: `Укажите пароль ${who}` }).min(8, "Пароль — не короче 8 символов").max(72),
+});
+
+/** A parent registers themselves and the child in one form: the child signs in with their own phone. */
+const registerParentSchema = z.object({
+  parent: registerPerson("родителя"),
+  child: registerPerson("ребёнка"),
 });
 
 const profileUpdateSchema = z.object({
@@ -107,6 +126,8 @@ function profile(
     profilePublic: user.profilePublic,
     phone: user.phone,
     role: user.role.slug,
+    // Stage 4: a student without a CRM link is external; everyone else works in the school interface.
+    audience: resolveAudience({ roleSlug: user.role.slug, crmStudentId: user.crmStudentId }),
     permissions: user.role.rolePermissions.map((item) => item.permission.code),
     productFeatures: getProductFeatureSnapshot().flags,
     points: stats?.points,
@@ -123,12 +144,25 @@ async function studentStats(userId: string, roleSlug: string) {
   return { points, coins };
 }
 
+/**
+ * One limit for both registration forms: 5 requests a minute per IP across `/auth/register` and
+ * `/auth/register/parent` together. A per-route `config.rateLimit` gets its own counter, so the two
+ * routes share one limiter created here and passed as `preHandler`. Without the rate-limit plugin
+ * (some tests) there is no limiter.
+ */
+export const REGISTRATION_RATE_LIMIT = { max: 5, timeWindow: "1 minute" } as const;
+
 export async function authRoutes(app: FastifyInstance) {
+  const registrationRateLimit = typeof app.rateLimit === "function"
+    ? [app.rateLimit({ ...REGISTRATION_RATE_LIMIT, keyGenerator: (request) => `register:${request.ip}` })]
+    : [];
+
   app.post("/auth/sso-exchange", { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } }, async (request, reply) => {
     const { token } = ssoExchangeSchema.parse(request.body);
     const { user, stats, session } = await exchangeSsoBridgeToken(token);
-    const sessionToken = await reply.jwtSign(session, { expiresIn: "7d" });
-    reply.header("Set-Cookie", mediaCookieHeader(sessionToken, request));
+    const lifetime = sessionLifetimeSeconds(user.role.slug);
+    const sessionToken = await reply.jwtSign(session, { expiresIn: lifetime });
+    reply.header("Set-Cookie", mediaCookieHeader(sessionToken, request, lifetime));
     if (user.role.slug === "student") {
       await recordStudentLogin(user.id, "sso").catch(() => undefined);
     }
@@ -174,8 +208,9 @@ export async function authRoutes(app: FastifyInstance) {
       throw new UnauthorizedError("Неверный логин, email или пароль");
     }
 
-    const token = await reply.jwtSign(await sessionClaims(user), { expiresIn: "7d" });
-    reply.header("Set-Cookie", mediaCookieHeader(token, request));
+    const lifetime = sessionLifetimeSeconds(user.role.slug);
+    const token = await reply.jwtSign(await sessionClaims(user), { expiresIn: lifetime });
+    reply.header("Set-Cookie", mediaCookieHeader(token, request, lifetime));
     const stats = await studentStats(user.id, user.role.slug);
     if (user.role.slug === "student") {
       await recordStudentLogin(user.id, "password").catch(() => undefined);
@@ -189,7 +224,7 @@ export async function authRoutes(app: FastifyInstance) {
     };
   });
 
-  app.post("/auth/register", { config: { rateLimit: { max: 5, timeWindow: "1 minute" } } }, async (request, reply) => {
+  app.post("/auth/register", { preHandler: registrationRateLimit }, async (request, reply) => {
     const body = registerSchema.parse(request.body);
     if (!isValidPhone(body.phone)) {
       throw new BadRequestError("Укажите корректный номер телефона");
@@ -207,14 +242,7 @@ export async function authRoutes(app: FastifyInstance) {
         throw new ConflictError("Этот логин уже занят", "LOGIN_ALREADY_EXISTS");
       }
     } else {
-      const digits = normalizePhoneDigits(body.phone);
-      let candidate = `s_${digits.slice(-10)}`.slice(0, 32);
-      let suffix = 0;
-      while (await findUserWithRoleByLogin(candidate)) {
-        suffix += 1;
-        candidate = `s_${digits.slice(-10)}_${suffix}`.slice(0, 32);
-      }
-      login = candidate;
+      login = await reserveLogin("s", normalizePhoneDigits(body.phone));
     }
 
     // Use provided email or null
@@ -228,10 +256,10 @@ export async function authRoutes(app: FastifyInstance) {
 
     let user;
     try {
-      user = await createStudentUser({
+      user = await registerExternalStudent({
         login,
         email,
-        phone: normalizePhoneDigits(body.phone),
+        phone: body.phone,
         passwordHash: await bcrypt.hash(body.password, 10),
         firstName: body.firstName,
         lastName: body.lastName,
@@ -249,21 +277,20 @@ export async function authRoutes(app: FastifyInstance) {
     }
     await recordStudentLogin(user.id, "registration").catch(() => undefined);
 
-    await syncNewStudentToCrm({
-      appUserId: user.id,
-      phone: user.phone,
+    // The school learns about the registration as a lead in CRM, not as a CRM student. Sent after the
+    // account is stored and not awaited: CRM being down never fails or delays the registration.
+    void sendAppRegistrationLead({
+      userId: user.id,
       firstName: user.firstName,
       lastName: user.lastName,
-      middleName: user.middleName,
-      email: user.email ?? "",
+      phone: user.phone,
     });
 
-    // Linking updates the account revision. Issue against that completed state,
-    // but never turn a concurrent password reset into a new authenticated login.
-    const linkedUser = await findUserWithRoleById(user.id);
-    if (!linkedUser || linkedUser.passwordHash !== user.passwordHash) throw new UnauthorizedError();
-    const token = await reply.jwtSign(await sessionClaims(linkedUser), { expiresIn: "7d" });
-    reply.header("Set-Cookie", mediaCookieHeader(token, request));
+    // Stage 4: registration no longer links a CRM student, so the stored account is the final state.
+    // Package 4: the session lives as long as the role allows (a student: 30 days), the cookie too.
+    const lifetime = sessionLifetimeSeconds(user.role.slug);
+    const token = await reply.jwtSign(await sessionClaims(user), { expiresIn: lifetime });
+    reply.header("Set-Cookie", mediaCookieHeader(token, request, lifetime));
 
     return reply.status(201).send({
       data: {
@@ -273,11 +300,77 @@ export async function authRoutes(app: FastifyInstance) {
     });
   });
 
+  // Stage 4, decision ★1: «Я родитель» registers the parent, the child and the link in one transaction.
+  // The answer is the parent's session. The school gets one lead, from the parent, naming the child.
+  app.post("/auth/register/parent", { preHandler: registrationRateLimit }, async (request, reply) => {
+    const body = registerParentSchema.parse(request.body);
+    const { parent, child } = await registerParentWithChild(body);
+
+    void sendAppRegistrationLead({
+      userId: parent.id,
+      firstName: parent.firstName,
+      lastName: parent.lastName,
+      phone: parent.phone,
+      comment: parentRegistrationLeadComment(child),
+    });
+
+    const parentWithRole = await findUserWithRoleById(parent.id);
+    if (!parentWithRole) throw new UnauthorizedError();
+    // A parent's session: 7 days by the role policy, the media cookie lives exactly as long.
+    const lifetime = sessionLifetimeSeconds(parentWithRole.role.slug);
+    const token = await reply.jwtSign(await sessionClaims(parentWithRole), { expiresIn: lifetime });
+    reply.header("Set-Cookie", mediaCookieHeader(token, request, lifetime));
+
+    return reply.status(201).send({
+      data: {
+        token,
+        user: profile(parentWithRole, { points: 0, coins: 0 }),
+        child: { id: child.id, firstName: child.firstName, lastName: child.lastName, login: child.login },
+      },
+    });
+  });
+
   // Plan 1.12: refresh or clear the media cookie for sessions signed in before it existed.
   app.post("/auth/media-session", { preHandler: [authenticate] }, async (request, reply) => {
     const token = bearerToken(request);
-    if (token) reply.header("Set-Cookie", mediaCookieHeader(token, request));
+    if (token) reply.header("Set-Cookie", mediaCookieHeader(token, request, tokenRemainingSeconds(token)));
     return { data: { ok: true } };
+  });
+
+  // Every opening of the student app renews the sign-in (30 days from the last visit). Parents and
+  // staff keep a hard 7 days from sign-in. authenticate has already rejected an expired token, a changed
+  // password (sessionVersion), a disabled or archived account and a revoked CRM link.
+  // The limit counts per token: behind a proxy the IP is shared by the whole school.
+  app.post("/auth/refresh", {
+    preHandler: [authenticate],
+    config: {
+      rateLimit: {
+        max: 30,
+        timeWindow: "1 minute",
+        keyGenerator: (request) => crypto.createHash("sha256").update(request.headers.authorization ?? request.ip).digest("hex"),
+      },
+    },
+  }, async (request, reply) => {
+    const verified = request.user!;
+    if (verified.roleSlug !== "student") {
+      throw new ForbiddenError("Продление входа доступно только ученикам. Войдите заново, когда срок закончится.");
+    }
+    const user = await findUserWithRoleById(verified.id);
+    if (!user) throw new UnauthorizedError();
+    const claims = await sessionClaims(user);
+    // The password may change between authenticate and this read. Never sign an account revision
+    // other than the one the presented token was verified against.
+    if (claims.sessionVersion !== verified.sessionVersion
+        || (claims as { crmSessionVersion?: number }).crmSessionVersion !== verified.crmSessionVersion) {
+      throw new UnauthorizedError();
+    }
+    const lifetime = sessionLifetimeSeconds(user.role.slug);
+    const token = await reply.jwtSign(claims, { expiresIn: lifetime });
+    reply.header("Set-Cookie", mediaCookieHeader(token, request, lifetime));
+    // «Последний вход» follows the renewal: a student no longer signs in with a password every week.
+    await recordStudentLogin(user.id, "refresh").catch(() => undefined);
+    const stats = await studentStats(user.id, user.role.slug);
+    return { data: { token, user: profile(user, stats) } };
   });
 
   app.delete("/auth/media-session", async (request, reply) => {
@@ -387,8 +480,11 @@ export async function authRoutes(app: FastifyInstance) {
     }
 
     const user = await findUserWithRoleById(authUser.id);
-    if (!user || !(await bcrypt.compare(body.currentPassword, user.passwordHash))) {
-      throw new UnauthorizedError("Текущий пароль указан неверно");
+    if (!user) throw new UnauthorizedError();
+    // В-41, З-1: a typo in the current password is a form error, not a lost session — 401 would
+    // make the app sign the student out.
+    if (!(await bcrypt.compare(body.currentPassword, user.passwordHash))) {
+      throw new BadRequestError("Текущий пароль указан неверно", "CURRENT_PASSWORD_INVALID");
     }
 
     const updated = await updateOwnPassword(authUser.id, await bcrypt.hash(body.newPassword, 10));
@@ -401,10 +497,11 @@ export async function authRoutes(app: FastifyInstance) {
     }
     // Authentication already checked CRM. Do not make a fallible remote call
     // after committing the new password; retain that checked revision instead.
+    const lifetime = sessionLifetimeSeconds(user.role.slug);
     const token = await reply.jwtSign({ sub: updated.id, role: user.role.slug, sessionVersion: updated.sessionVersion,
       ...(authUser.crmSessionVersion === undefined ? {} : { crmSessionVersion: authUser.crmSessionVersion }),
-    }, { expiresIn: "7d" });
-    reply.header("Set-Cookie", mediaCookieHeader(token, request));
+    }, { expiresIn: lifetime });
+    reply.header("Set-Cookie", mediaCookieHeader(token, request, lifetime));
 
     return {
       data: { ok: true, token },

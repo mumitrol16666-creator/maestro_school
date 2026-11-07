@@ -42,3 +42,25 @@ test("teacher session checks reuse the CRM answer and survive a CRM outage", asy
   await assert.rejects(linkedCrmSession(teacher, { fresh: true }), (error: { statusCode?: number }) => error.statusCode === 502,
     "after a revocation there is no verified state to fall back to");
 });
+
+test("session lifetime: student 30 days, every other role 7 days", async () => {
+  const { sessionLifetimeSeconds } = await import("./account-session.service.js");
+  assert.equal(sessionLifetimeSeconds("student"), 30 * 86400);
+  for (const role of ["parent", "teacher", "admin", "owner", "curator", "", null, undefined]) {
+    assert.equal(sessionLifetimeSeconds(role), 7 * 86400, String(role));
+  }
+});
+
+test("assertCurrentSession bounds iat by the role's lifetime", async () => {
+  const { assertCurrentSession } = await import("./account-session.service.js");
+  const now = Math.floor(Date.now() / 1000);
+  const user = (role: string) => ({ id: "u", sessionVersion: 0, role: { slug: role } });
+  const at = (days: number) => ({ sessionVersion: 0, iat: now - days * 86400 });
+  await assert.doesNotReject(assertCurrentSession(user("student"), at(20)));
+  await assert.doesNotReject(assertCurrentSession(user("student"), at(29.9)));
+  await assert.rejects(assertCurrentSession(user("student"), at(31)), (e: { statusCode?: number }) => e.statusCode === 401);
+  await assert.doesNotReject(assertCurrentSession(user("parent"), at(6.9)));
+  await assert.rejects(assertCurrentSession(user("parent"), at(8)), (e: { statusCode?: number }) => e.statusCode === 401);
+  await assert.rejects(assertCurrentSession(user("admin"), at(20)), (e: { statusCode?: number }) => e.statusCode === 401);
+  await assert.rejects(assertCurrentSession(user("student"), { sessionVersion: 0, iat: now + 3600 }), (e: { statusCode?: number }) => e.statusCode === 401);
+});

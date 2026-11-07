@@ -23,6 +23,7 @@ import {
   applyWaitingLessonTopicConflicts,
   openTopicConflictsFor,
   recordLessonTopicConflicts,
+  releaseLessonsWaitingFor,
 } from "./lesson-topic-conflicts.service.js";
 import { pendingTopicPercentsBefore } from "./lesson-pending-topics.service.js";
 import { listHomeworkCheckHistory } from "./learning-homework-v2.service.js";
@@ -402,6 +403,7 @@ async function lessonPlans(scope: LessonScope) {
     return [{
       planId: plan.id,
       sequence: plan.sequence,
+      status: plan.status as "active" | "awaiting_exam",
       scope: plan.crmGroupId ? "group" as const : "student" as const,
       sharedGroupPlan:plan.isSharedGroupPlan,
       ownerStudentId: plan.crmStudentId,
@@ -450,7 +452,12 @@ async function withPendingTopicPercents(
     { crmClassId, date: lesson.date, startTime: lesson.startTime },
     topicIds,
   );
-  const conflicts = await openTopicConflictsFor(topicIds);
+  const lessonDay = String(lesson.date ?? "").slice(0, 10);
+  const conflicts = await openTopicConflictsFor(
+    topicIds,
+    lessonDay ? `${lessonDay}T${String(lesson.startTime ?? "00:00").slice(0, 5)}` : null,
+    crmClassId,
+  );
   return plans.map((plan) => ({
     ...plan,
     topics: plan.topics.map((topic) => {
@@ -465,11 +472,13 @@ async function withPendingTopicPercents(
               title: waiting.title,
               date: waiting.date,
               startTime: waiting.startTime,
+              approvedWaitingForEarlier: waiting.approvedWaitingForEarlier ?? false,
             }
           : null,
-        // 04.11: an approved earlier lesson whose percent the admin still has to decide on.
-        percentConflict: !waiting && conflicts.get(topic.id)?.crmClassId !== crmClassId
-          ? conflicts.get(topic.id) ?? null
+        // 04.11/07.11: an approved lesson whose percent for this topic the admin still decides on —
+        // an earlier one, or this very lesson (`own`), whose screen otherwise shows «процент изменился».
+        percentConflict: !waiting && conflicts.get(topic.id)
+          ? { ...conflicts.get(topic.id)!, own: conflicts.get(topic.id)!.crmClassId === crmClassId }
           : null,
       };
     }),
@@ -906,6 +915,9 @@ export async function applyApprovedLearningLessonV2Results(
   });
   const written = result.topicResults.map((topic) => topic.id);
   if (written.length) await applyWaitingLessonTopicConflicts(written);
+  // Later lessons that waited for this one: written if the topic is now at their «было», otherwise
+  // handed to the admin — never left waiting for a lesson that is already approved.
+  await releaseLessonsWaitingFor(crmClassId, "approved");
   return result;
 }
 

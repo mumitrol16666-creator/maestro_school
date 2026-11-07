@@ -13,7 +13,8 @@ test("only CRM approves a lesson; Platform shows role-appropriate status without
   page.on("pageerror", error => errors.push(error.message));
   await page.route("**/api/v1/**", route => {
     const path = new URL(route.request().url()).pathname.replace(/^.*\/api\/v1/, "");
-    if (route.request().method() !== "GET") writes.push(path);
+    // Keeping the session alive (media cookie, renewal of the sign-in) is not a write of lesson data.
+    if (route.request().method() !== "GET" && !["/auth/media-session", "/auth/refresh"].includes(path)) writes.push(path);
     const ok = (data: unknown) => route.fulfill({ json: { data } });
     if (path === "/auth/me") return ok(user);
     if (path.endsWith("/students")) return ok({ crmClassId: lesson.crmClassId, group: null, students: [{ crmStudentId: "pupil", appUserId: null, name: "Ученик Проверочный", attended: true, attendanceStatus: "present", recentLessons: [] }] });

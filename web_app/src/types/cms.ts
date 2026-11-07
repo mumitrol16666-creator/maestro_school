@@ -27,6 +27,12 @@ export interface CmsCourse {
   thumbnail: string | null;
   difficultyLevel: string;
   completionCoinsReward: number;
+  /** Stage 4: null means the course is free as a whole. */
+  priceKzt: number | null;
+  /** Students of the school (linked to CRM) open the course without paying. */
+  includedInSchool: boolean;
+  /** The first N published lessons are open to everyone. */
+  freeLessonsCount: number;
   isPublished: boolean;
   deletedAt: string | null;
   direction: { id: string; title: string };

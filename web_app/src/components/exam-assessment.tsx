@@ -1,7 +1,7 @@
 "use client";
 import { Award, Check, LoaderCircle, RotateCcw, X } from "lucide-react";
 import { useState } from "react";
-import { sectorExamOutcomeLabel, sectorExamsApi } from "@/lib/sector-exams-api";
+import { sectorExamResultLabel, sectorExamsApi } from "@/lib/sector-exams-api";
 import type { SectorExam } from "@/types/sector-exam";
 const control="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl px-3 text-sm font-bold disabled:opacity-50";
 
@@ -84,7 +84,7 @@ export function PastResult({ exam }: { exam: SectorExam }) {
   return (
     <div className="mt-3 grid gap-2 rounded-xl border border-stone-200 bg-white p-3">
       <p className="text-xs font-bold text-ink">
-        {exam.attempt > 1 ? `Пересдача ${exam.attempt - 1}` : "Экзамен"}: {exam.outcome ? sectorExamOutcomeLabel[exam.outcome] : "завершён"}, {done} из {exam.items.length}
+        {exam.attempt > 1 ? `Пересдача ${exam.attempt - 1}` : "Экзамен"}: {sectorExamResultLabel(exam) ?? "завершён"}, {done} из {exam.items.length}
       </p>
       <ul className="grid gap-1">
         {exam.items.map((item) => (

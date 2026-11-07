@@ -19,6 +19,9 @@ import { api } from "@/lib/api-client";
 import type { StudentHomeMonthlyPlan } from "@/types/api";
 import type { SectorProposal } from "@/types/teacher-students";
 import { GroupSectorPassBadge, SectorExamSummary } from "@/components/sector-exam-summary";
+import { SectorSwitch } from "@/components/sector-switch";
+import { useSectorChoice } from "@/hooks/use-sector-choice";
+import { groupOpenSectorsByDirection } from "@/lib/sector-switch";
 import { sectorTitle } from "@/lib/sector-label";
 import { SectorProposalSection, sectorProposalDirections } from "@/components/sector-proposals";
 import { sameSiteMediaUrl } from "@/lib/media-url";
@@ -61,6 +64,13 @@ export default function SectorPage() {
   const active = plans.filter((plan) => plan.status !== "closed");
   const closed = plans.filter((plan) => plan.status === "closed");
   const directions = sectorProposalDirections(active);
+  const choice = useSectorChoice();
+  // 07.11: a direction may have two personal open sectors — the current one and the one waiting for its exam.
+  const blocks = groupOpenSectorsByDirection(active).map((block) => ({
+    ...block,
+    shown: choice.pick(block.key, block.personal),
+  }));
+  const shown = blocks.flatMap((block) => [...(block.shown ? [block.shown] : []), ...block.group]);
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -68,7 +78,7 @@ export default function SectorPage() {
         <div>
           <p className="text-xs font-black uppercase tracking-[0.18em] text-gold-ink">Учебный маршрут</p>
           <h1 className="font-display mt-2 text-3xl leading-tight sm:text-4xl">
-            {active.length === 1 ? sectorTitle(active[0]!, "student") : active.length > 1 ? "Мои сектора" : "Мой сектор"}
+            {shown.length === 1 ? sectorTitle(shown[0]!, "student") : shown.length > 1 ? "Мои сектора" : "Мой сектор"}
           </h1>
         </div>
         <div className="min-w-[220px] max-w-sm flex-1 sm:flex-none">
@@ -104,7 +114,19 @@ export default function SectorPage() {
         </div>
       ) : (
         <div className="mt-7 grid gap-5">
-          {active.map((plan) => <SectorDetails key={plan.id} plan={plan} />)}
+          {blocks.map((block) => (
+            <div key={block.key} className="grid gap-5">
+              <SectorSwitch
+                sectors={block.personal}
+                selectedId={block.shown?.id}
+                onSelect={(id) => choice.select(block.key, id)}
+                audience="student"
+                label={`Секторы направления ${block.title}`}
+              />
+              {block.shown ? <SectorDetails plan={block.shown} /> : null}
+              {block.group.map((plan) => <SectorDetails key={plan.id} plan={plan} />)}
+            </div>
+          ))}
         </div>
       )}
 
@@ -183,6 +205,11 @@ function SectorDetails({ plan }: { plan: StudentHomeMonthlyPlan }) {
       <SectorProgressOverview plan={plan} />
 
       <GroupSectorPassBadge pass={plan.memberPass} />
+      {plan.status === "awaiting_exam" ? (
+        <p className="mt-5 rounded-lg bg-sky-50 px-4 py-3 text-sm font-bold text-sky-950" data-testid="sector-awaiting-exam">
+          Ждёт экзамена. Ты уже занимаешься в следующем секторе, а этот сдашь на экзамене в школе.
+        </p>
+      ) : null}
       <SectorExamSummary exam={plan.exam} />
 
       {plan.expectedResult ? (

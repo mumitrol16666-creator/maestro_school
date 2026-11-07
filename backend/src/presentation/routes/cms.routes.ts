@@ -1,10 +1,11 @@
+import type { Prisma } from "@prisma/client";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { isSupportedMaterialLink } from "../../domain/group-material.js";
 import {
-  createCourse, createDirection, createHomework, createLesson, createMaterial, createModule, createNews,
+  courseTermsOf, createCourse, createDirection, createHomework, createLesson, createMaterial, createModule, createNews,
   deleteMaterial, getAdminCourse, getAdminCourseTree, getAdminLesson, listAdminCourses, listAdminDirections, listAdminNews, listHomeworks, listLessons,
-  listMaterials, listMaterialUsages, listModules, updateCourse, updateDirection, updateHomework, updateLesson,
+  listMaterials, listMaterialUsages, listModules, updateCourse, updateCourseWithTerms, updateDirection, updateHomework, updateLesson,
   updateMaterial, updateModule, updateNews,
 } from "../../application/repositories/cms.repository.js";
 import { writeAuditLog } from "../../application/services/audit.service.js";
@@ -12,7 +13,9 @@ import { listAdminCrmDirectionProjection } from "../../application/services/crm-
 import { getMediaInfoFromUrl } from "../../application/services/media-storage.service.js";
 import { productFeatureConfig } from "../../config/product-features.js";
 import { authenticate, requireContentAdmin, requirePermission } from "../guards/auth.guards.js";
-import { BadRequestError, ConflictError } from "../../domain/errors.js";
+import { BadRequestError, ConflictError, NotFoundError } from "../../domain/errors.js";
+import { getLessonById } from "../../application/repositories/catalog.repository.js";
+import { buildOpenLessonView } from "./student-lesson-view.js";
 import { listPreparedTestTemplates } from "../../domain/prepared-tests.js";
 
 const idParams = z.object({ id: z.string().uuid() });
@@ -27,6 +30,10 @@ const materialUrl = z.string().trim().max(1024).refine(isSupportedMaterialLink, 
 const publishBody = z.object({ isPublished: z.boolean() });
 const difficulty = z.enum(["beginner", "intermediate", "advanced", "all_levels"]);
 const completionCoinsReward = z.coerce.number().int().min(0).max(1_000_000);
+// Stage 4: null price = the course is free as a whole; a price is a whole number of tenge above zero
+// (the database refuses zero too). Lessons given free to everyone are 0..50.
+const coursePriceKzt = z.number().int().min(1).max(100_000_000).nullable();
+const courseFreeLessonsCount = z.number().int().min(0).max(50);
 const materialType = z.enum(["pdf", "image", "file", "link"]);
 const homeworkType = z.enum(["assignment", "test"]);
 const testOption = z.object({ id: z.string().min(1).max(100), text: z.string().trim().min(1).max(500) });
@@ -73,8 +80,8 @@ const catalogGuards = () => [authenticate, requireContentAdmin, requirePermissio
 const newsGuards = () => [authenticate, requireContentAdmin, requirePermission("news.manage")];
 const meta = (page: number, limit: number, total: number) => ({ page, limit, total, pages: Math.ceil(total / limit) });
 
-async function audit(request: FastifyRequest, entityType: string, entityId: string, action: "create" | "update" | "delete" | "publish" | "unpublish") {
-  await writeAuditLog({ entityType, entityId, action, actorId: request.user!.id });
+async function audit(request: FastifyRequest, entityType: string, entityId: string, action: "create" | "update" | "delete" | "publish" | "unpublish", payload?: Prisma.InputJsonValue) {
+  await writeAuditLog({ entityType, entityId, action, actorId: request.user!.id, ...(payload ? { payload } : {}) });
 }
 
 function validateVideoUrl(value?: string | null) {
@@ -140,13 +147,20 @@ export async function cmsRoutes(app: FastifyInstance) {
     const { id } = idParams.parse(request.params); return { data: await getAdminCourseTree(id) };
   });
   app.post("/admin/courses", { preHandler: catalogGuards() }, async (request, reply) => {
-    const body = z.object({ directionId: z.string().uuid(), title: z.string().min(1).max(255), description: z.string().nullable().optional(), thumbnail: nullableUrl, difficultyLevel: difficulty.default("beginner"), completionCoinsReward: completionCoinsReward.default(0), isPublished: z.boolean().optional() }).parse(request.body);
-    const item = await createCourse(body); await audit(request, "course", item.id, "create"); return reply.status(201).send({ data: item });
+    const body = z.object({ directionId: z.string().uuid(), title: z.string().min(1).max(255), description: z.string().nullable().optional(), thumbnail: nullableUrl, difficultyLevel: difficulty.default("beginner"), completionCoinsReward: completionCoinsReward.default(0), priceKzt: coursePriceKzt.optional(), includedInSchool: z.boolean().optional(), freeLessonsCount: courseFreeLessonsCount.optional(), isPublished: z.boolean().optional() }).parse(request.body);
+    const item = await createCourse(body);
+    // The terms the course was created with (the price is a money setting): the log names them.
+    await audit(request, "course", item.id, "create", { terms: { before: null, after: courseTermsOf(item) } });
+    return reply.status(201).send({ data: item });
   });
   app.patch("/admin/courses/:id", { preHandler: catalogGuards() }, async (request) => {
     const { id } = idParams.parse(request.params);
-    const body = z.object({ directionId: z.string().uuid().optional(), title: z.string().min(1).max(255).optional(), description: z.string().nullable().optional(), thumbnail: nullableUrl, difficultyLevel: difficulty.optional(), completionCoinsReward: completionCoinsReward.optional() }).parse(request.body);
-    const item = await updateCourse(id, body); await audit(request, "course", id, "update"); return { data: item };
+    const body = z.object({ directionId: z.string().uuid().optional(), title: z.string().min(1).max(255).optional(), description: z.string().nullable().optional(), thumbnail: nullableUrl, difficultyLevel: difficulty.optional(), completionCoinsReward: completionCoinsReward.optional(), priceKzt: coursePriceKzt.optional(), includedInSchool: z.boolean().optional(), freeLessonsCount: courseFreeLessonsCount.optional() }).parse(request.body);
+    const { item, before, after } = await updateCourseWithTerms(id, body);
+    // A price or access change is a money change: the log names the previous and the new terms.
+    const changed = (Object.keys(after) as Array<keyof typeof after>).some((key) => before[key] !== after[key]);
+    await audit(request, "course", id, "update", changed ? { terms: { before, after } } : undefined);
+    return { data: item };
   });
   app.post("/admin/courses/:id/publish", { preHandler: catalogGuards() }, async (request) => {
     const { id } = idParams.parse(request.params); const body = publishBody.parse(request.body);
@@ -179,6 +193,23 @@ export async function cmsRoutes(app: FastifyInstance) {
   });
   app.get("/admin/lessons/:id", { preHandler: catalogGuards() }, async (request) => {
     const { id } = idParams.parse(request.params); return { data: await getAdminLesson(id) };
+  });
+  // «Посмотреть как ученик»: the answer of GET /lessons/:id for an open lesson, content included, even
+  // for a draft. Reads only: no progress, no enrollment, nothing is written.
+  app.get("/admin/lessons/:id/student-view", { preHandler: catalogGuards() }, async (request) => {
+    const { id } = idParams.parse(request.params);
+    const lesson = await getLessonById(id, { includeUnpublished: true });
+    if (!lesson) throw new NotFoundError("Lesson");
+    return {
+      data: await buildOpenLessonView({
+        lesson,
+        request,
+        contentOpen: true,
+        enrolledCourseIds: new Set(),
+        source: "preview",
+        expiresAt: null,
+      }),
+    };
   });
   app.post("/admin/lessons", { preHandler: catalogGuards() }, async (request, reply) => {
     const body = z.object({

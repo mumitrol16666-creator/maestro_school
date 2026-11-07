@@ -21,6 +21,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { AchievementsWall } from "@/components/achievements-wall";
 import { EmptyState, ErrorState, LoadingState } from "@/components/data-states";
+import { StudentCourseAccessCard } from "@/components/student-course-access-card";
 import { StudentPhoneLine, WhatsAppLink } from "@/components/whatsapp-link";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { formatFio } from "@/lib/name";
@@ -86,6 +87,8 @@ export default function AdminStudentDetailPage() {
           <AchievementsWall achievements={student.achievements} compact />
         </div>
       </section>
+
+      <StudentCourseAccessCard studentId={student.id} studentName={studentName} />
 
       <section className="mt-6">
         <div className="rounded-[28px] border border-stone-200 bg-white p-6">

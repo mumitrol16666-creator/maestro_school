@@ -21,6 +21,12 @@ export const teacherStudentsApi = {
     apiRequest<StudentMonthlyPlan>(`/teachers/me/${kind}/${encodeURIComponent(ownerId)}/sectors/${encodeURIComponent(planId)}/next`, {
       method: "POST", body: JSON.stringify({ crmDirectionId, expectedVersion }),
     }),
+  /** Early close of one open sector (07.11): the sector is named by planId; no Points are paid. */
+  closeSectorEarly: (crmStudentId: string, body: { crmDirectionId: string; planId: string; points: 0; comment?: string | null }) =>
+    apiRequest<StudentMonthlyPlan & { awardedPoints: number }>(
+      `/teachers/me/students/${encodeURIComponent(crmStudentId)}/monthly-plan/close`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
   list: () => apiRequest<TeacherStudentsResponse>("/teachers/me/students"),
   openDialog: (studentUserId: string, recipient: "student" | "parent") =>
     apiRequest<{ conversationId: string; recipients: string[] }>(
@@ -95,11 +101,6 @@ export const teacherStudentsApi = {
       method: "POST",
       body: JSON.stringify(body),
     }),
-  closeSectorEarly: (crmStudentId: string, body: { crmDirectionId: string; points: number; comment?: string | null }) =>
-    apiRequest<StudentMonthlyPlan & { awardedPoints: number }>(
-      `/teachers/me/students/${encodeURIComponent(crmStudentId)}/monthly-plan/close`,
-      { method: "POST", body: JSON.stringify(body) },
-    ),
   workspace: (crmStudentId: string, crmClassId?: string | null) =>
     apiRequest<TeacherStudentWorkspace>(
       `/teachers/me/students/${encodeURIComponent(crmStudentId)}/workspace${crmClassId ? `?crmClassId=${encodeURIComponent(crmClassId)}` : ""}`,

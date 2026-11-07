@@ -20,8 +20,6 @@ import type {
   StudentEconomyProfile,
   StudentMonthlyPlansResponse,
   StudentPointsReadModel,
-  TrialBookingInput,
-  TrialBookingResponse,
 } from "@/types/api";
 import type { StudentOfflineSummary } from "@/types/school-offline";
 import type { UnifiedTaskFilters, UnifiedTasksData, UnifiedTasksMeta } from "@/types/unified-tasks";
@@ -83,6 +81,7 @@ interface ApiErrorEnvelope {
   error?: {
     code?: string;
     message?: string;
+    details?: unknown;
   };
 }
 
@@ -91,6 +90,8 @@ export class ApiError extends Error {
     message: string,
     public readonly status: number,
     public readonly code = "API_ERROR",
+    /** Stage 4: what the server added to the error (the new price of a course, for one). */
+    public readonly details: unknown = undefined,
   ) {
     super(message);
     this.name = "ApiError";
@@ -118,8 +119,33 @@ export function storeSession(token: string, user: ApiAuthUser) {
   window.localStorage.setItem(USER_KEY, JSON.stringify(user));
 }
 
+// В-41: a signed-in student stays in for 30 days if every visit renews the session. The app asks
+// for a new token when it opens, at most once in 12 hours.
+const RENEWED_AT_KEY = "maestro_session_renewed_at";
+const SESSION_RENEW_INTERVAL_MS = 12 * 60 * 60 * 1000;
+
+export function sessionRenewalDue(now = Date.now()) {
+  if (typeof window === "undefined") return false;
+  try {
+    const renewedAt = Number(window.localStorage.getItem(RENEWED_AT_KEY) || 0);
+    return !Number.isFinite(renewedAt) || now - renewedAt >= SESSION_RENEW_INTERVAL_MS || renewedAt > now;
+  } catch {
+    return true;
+  }
+}
+
+/** Call whenever a fresh token was issued: a sign-in, a renewal, a password change. */
+export function markSessionRenewed(now = Date.now()) {
+  try {
+    window.localStorage.setItem(RENEWED_AT_KEY, String(now));
+  } catch {
+    // Without storage the app renews at every opening, which is harmless.
+  }
+}
+
 export function clearSession() {
   if (typeof window === "undefined") return;
+  try { window.localStorage.removeItem(RENEWED_AT_KEY); } catch { /* nothing to forget */ }
   savedReads.clear();
   clearHomeSnapshots();
   resetConnectionStatus();
@@ -171,6 +197,7 @@ export async function apiRequestEnvelope<T, M = unknown>(path: string, init: Req
       payload.error?.message ?? "Произошла ошибка при загрузке данных",
       response.status,
       payload.error?.code ?? "API_ERROR",
+      payload.error?.details,
     );
   }
   return payload;
@@ -188,6 +215,33 @@ function unreachable<T, M>(method: string, path: string): ApiEnvelope<T, M> {
   throw new ApiError("Не удалось связаться с сервером Maestro", 0, "NETWORK_ERROR");
 }
 
+/**
+ * A file the server builds for the signed-in person (a table for Excel): the token goes in the
+ * header, so the file cannot be opened by a plain link. Returns the bytes and the file name.
+ */
+export async function apiDownload(path: string): Promise<{ blob: Blob; filename: string | null }> {
+  const token = getAccessToken();
+  const headers = new Headers();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${path}`, { headers, cache: "no-store" });
+  } catch {
+    throw new ApiError("Не удалось связаться с сервером Maestro", 0, "NETWORK_ERROR");
+  }
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as ApiErrorEnvelope;
+    throw new ApiError(
+      payload.error?.message ?? "Не удалось скачать файл",
+      response.status,
+      payload.error?.code ?? "API_ERROR",
+    );
+  }
+  const disposition = response.headers.get("Content-Disposition") ?? "";
+  const filename = /filename="?([^";]+)"?/i.exec(disposition)?.[1] ?? null;
+  return { blob: await response.blob(), filename };
+}
+
 export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   return (await apiRequestEnvelope<T>(path, init)).data;
 }
@@ -202,6 +256,7 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ phone, password, profile }),
     }),
+  refreshSession: () => apiRequest<LoginResponse>("/auth/refresh", { method: "POST" }),
   ssoExchange: (token: string) =>
     apiRequest<LoginResponse>("/auth/sso-exchange", {
       method: "POST",
@@ -209,11 +264,6 @@ export const api = {
     }),
   register: (body: RegisterInput) =>
     apiRequest<LoginResponse>("/auth/register", {
-      method: "POST",
-      body: JSON.stringify(body),
-    }),
-  createTrialBooking: (body: TrialBookingInput) =>
-    apiRequest<TrialBookingResponse>("/trial-bookings", {
       method: "POST",
       body: JSON.stringify(body),
     }),
@@ -245,7 +295,10 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify({ currentPassword, newPassword }),
     });
-    if (typeof window !== "undefined") localStorage.setItem(TOKEN_KEY, result.token);
+    if (typeof window !== "undefined") {
+      localStorage.setItem(TOKEN_KEY, result.token);
+      markSessionRenewed();
+    }
     return result;
   },
   directions: () => apiRequest<ApiDirection[]>("/directions"),

@@ -7,7 +7,7 @@ import { ProgressBar } from "@/components/progress-bar";
 import { ScreenSkeleton } from "@/components/screen-skeleton";
 import { SectorExamSummary } from "@/components/sector-exam-summary";
 import { SectorProposalSection, sectorProposalDirections } from "@/components/sector-proposals";
-import { StudentBanners } from "@/components/student-banners";
+import { StudentBannersLink } from "@/components/student-banners";
 import { UnifiedTaskCard } from "@/components/unified-task-card";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { learningTaskContext } from "@/lib/learning-overview";
@@ -60,7 +60,7 @@ export default function LearningWorkspacePage() {
         <p className="mt-2 text-sm leading-6 text-stone-600">Сектор, задания и твои предложения преподавателю.</p>
       </header>
 
-      <StudentBanners banners={home.banners ?? []} />
+      <StudentBannersLink banners={home.banners ?? []} total={home.bannersTotal} />
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
         <section className="flex min-w-0 flex-col rounded-xl border border-ink bg-ink p-5 text-white sm:p-7" aria-labelledby="learning-focus-title">

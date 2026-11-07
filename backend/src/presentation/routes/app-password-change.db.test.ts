@@ -99,6 +99,21 @@ if (!process.env.TEST_DATABASE_URL) {
     assert.ok(row.passwordChangedInAppAt);
   });
 
+  test("a wrong current password is a form error: 400, the session and the password stay", async (t) => {
+    const { user, crmUserId } = await makeUser("student", "student");
+    fakeCrm(t, user, crmUserId);
+    const token = app.jwt.sign({ sub: user.id, sessionVersion: 0, crmSessionVersion: 0 });
+    const wrong = await app.inject({ method: "PATCH", url: "/api/auth/me/password", headers: { authorization: `Bearer ${token}` },
+      payload: { currentPassword: "not-the-password", newPassword: "replacement-password" } });
+    assert.equal(wrong.statusCode, 400, wrong.body);
+    assert.equal(wrong.json().error.code, "CURRENT_PASSWORD_INVALID");
+    const row = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+    assert.equal(await bcrypt.compare("previous-password", row.passwordHash), true);
+    assert.equal(row.sessionVersion, 0);
+    const me = await app.inject({ method: "GET", url: "/api/auth/me", headers: { authorization: `Bearer ${token}` } });
+    assert.equal(me.statusCode, 200, me.body);
+  });
+
   test("an account without a CRM card sends nothing", async (t) => {
     const { user } = await makeUser("parent", null);
     const sent = fakeCrm(t, user, "");

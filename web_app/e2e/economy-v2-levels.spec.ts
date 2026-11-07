@@ -60,8 +60,10 @@ test("LEVEL uses the current epoch and replaces the legacy rank", async ({ page,
   const economy = page.getByTestId("economy-profile-summary");
   await expect(economy).toBeVisible();
   await expect(economy).toContainText("Серия и медали");
-  await expect(economy).toContainText("текущая серия");
+  await expect(economy).toContainText("серия недель");
   await expect(economy).toContainText("0 / 5");
+  // Decision 24.10: Coins are not shown to the student, neither in the profile nor in the menu.
+  await expect(page.getByText(/Coins|Бонусы Maestro/)).toHaveCount(0);
   await expect(page.getByTestId("profile-achievements")).toBeVisible();
   await expect(page.getByText("Публичная карточка")).toHaveCount(0);
   const profileSummaryBox = await page.getByTestId("student-profile-summary").boundingBox();

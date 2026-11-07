@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { prisma, notDeleted } from "../../infrastructure/database/prisma.js";
 
 const userWithRoleInclude = {
@@ -39,6 +40,8 @@ export async function findUsersWithRoleByPhone(phoneNormalized: string) {
 }
 
 export async function findUserWithRoleById(userId: string) {
+  // Prisma drops a filter whose value is undefined, which would return the first active user.
+  if (typeof userId !== "string" || !userId) return null;
   return prisma.user.findFirst({
     where: { id: userId, ...notDeleted, isActive: true },
     include: userWithRoleInclude,
@@ -91,15 +94,20 @@ export async function createStudentUser(params: {
   lastName: string;
   middleName?: string | null;
   crmStudentId?: string;
+  /** Registration in the app: the lead for CRM is still to be sent. */
+  crmLeadPendingSince?: Date;
+  /** A transaction to work in; the default is the shared client. */
+  client?: Prisma.TransactionClient;
 }) {
-  const studentRole = await prisma.role.findUnique({ where: { slug: "student" } });
+  const db = params.client ?? prisma;
+  const studentRole = await db.role.findUnique({ where: { slug: "student" } });
   if (!studentRole) {
     throw new Error("Student role is not configured. Run the production seed.");
   }
 
   const digits = params.phone.replace(/\D/g, "");
 
-  return prisma.user.create({
+  return db.user.create({
     data: {
       login: params.login,
       email: params.email,
@@ -110,6 +118,9 @@ export async function createStudentUser(params: {
       lastName: params.lastName,
       middleName: params.middleName,
       roleId: studentRole.id,
+      ...(params.crmLeadPendingSince ? { crmLeadPendingSince: params.crmLeadPendingSince } : {}),
+      // The league is for students of the school: a person without a CRM link starts outside it.
+      leagueEligible: Boolean(params.crmStudentId),
       ...(params.crmStudentId
         ? {
             crmStudentId: params.crmStudentId,

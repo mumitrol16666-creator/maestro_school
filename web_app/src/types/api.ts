@@ -4,6 +4,7 @@ import type { SectorProposal } from "@/types/teacher-students";
 import type { LessonStatus } from "@/types";
 import type { HomeworkTestQuestion, HomeworkType } from "@/types/homework";
 import type { StudentOfflineSummary } from "@/types/school-offline";
+import type { CourseAccessInfo } from "@/lib/course-access-format";
 
 export interface ApiDirection {
   id: string;
@@ -28,6 +29,8 @@ export interface ApiAuthUser {
   avatarSyncStatus?: "synced" | "not_linked" | "failed";
   phone?: string | null;
   role: string;
+  /** Stage 4: a student without a link to the school is external; absent in old answers (= school). */
+  audience?: "school" | "external";
   permissions?: string[];
   productFeatures?: {
     learningTopicsV2: boolean;
@@ -56,28 +59,6 @@ export interface RegisterInput {
   password: string;
 }
 
-export interface TrialBookingInput {
-  firstName: string;
-  lastName: string;
-  middleName?: string;
-  phone: string;
-  direction: string;
-  level: string;
-  preferredTime: string;
-  comment?: string;
-  marketingClientId?: string;
-  marketingSessionId?: string;
-  attribution?: Record<string, unknown>;
-  landingUrl?: string;
-  referrerUrl?: string;
-}
-
-export interface TrialBookingResponse {
-  bookingId: string;
-  status: string;
-  replyChannel: "whatsapp";
-}
-
 export interface ApiCourseSummary {
   id: string;
   directionId: string;
@@ -92,6 +73,11 @@ export interface ApiCourseSummary {
   lessonsCount: number;
   progress: number;
   enrollmentStatus: string | null;
+  /** Stage 4: no price = a free course. The fields are absent on a server without paid courses. */
+  priceKzt?: number | null;
+  includedInSchool?: boolean;
+  freeLessonsCount?: number;
+  access?: CourseAccessInfo | null;
 }
 
 export interface ApiCourseLesson {
@@ -100,6 +86,8 @@ export interface ApiCourseLesson {
   description: string | null;
   sortOrder: number;
   pointsReward: number;
+  /** Stage 4: closed until the course is paid for. */
+  locked?: boolean;
 }
 
 export interface ApiCourseModule {
@@ -154,6 +142,19 @@ export interface ApiLessonEndActions {
   hasActions: boolean;
 }
 
+/** Stage 4: a paid lesson without access answers with the data of the paywall and no content. */
+export type ApiLessonAccess =
+  | { kind: "open"; source: string; expiresAt: string | null }
+  | {
+    kind: "locked";
+    reason: "payment_required";
+    courseId: string;
+    priceKzt: number | null;
+    includedInSchool: boolean;
+    freeLessonsCount: number;
+    pendingPaymentRequest: { id: string; createdAt: string } | null;
+  };
+
 export interface ApiLessonDetail {
   id: string;
   moduleId: string;
@@ -167,6 +168,7 @@ export interface ApiLessonDetail {
   homework: ApiHomework | null;
   endActions: ApiLessonEndActions;
   course: { id: string; directionId: string; title: string };
+  access?: ApiLessonAccess;
 }
 
 export interface StudentAchievementItem {
@@ -323,7 +325,8 @@ export interface ApiStudentHome {
   };
   /** Plan 5.2: unread notifications shown as banners until opened. */
   banners: Array<{ id: string; type: string; title: string; body: string; url: string | null; createdAt: string }>;
-  streakWeeks: number | null;
+  /** All unread banner notifications; `banners` holds the newest five. */
+  bannersTotal?: number;
   /** Plan 5.6: today's practice mark, the streak of practice days and the reminder settings. */
   practice: PracticeStatus | null;
 }

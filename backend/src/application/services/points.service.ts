@@ -11,6 +11,7 @@ import {
   requireActiveEconomicEpochForEvent,
 } from "./economic-epoch.service.js";
 import { privateLeagueName } from "./weekly-league-policy.js";
+import { freeReversedKey, reversalKey } from "../../domain/source-key-reversal.js";
 
 async function notifyPointsAwarded(params: {
   studentId: string;
@@ -194,58 +195,6 @@ export async function getProductPointsLeaderboard(
     standings: ranking.slice(0, 10),
     currentStudent,
   };
-}
-
-/**
- * Awards lesson points after successful homework review.
- * Idempotent per (studentId, lessonId) — no double award.
- */
-export async function awardLessonPoints(params: {
-  studentId: string;
-  lessonId: string;
-  amount: number;
-  reason: string;
-  awardedBy: string;
-}): Promise<{ awarded: boolean; transactionId?: string }> {
-  if (params.amount <= 0) {
-    return { awarded: false };
-  }
-  if (rewardEconomyV2AppliesToEvent(new Date())) {
-    throw new ConflictError(
-      "Прямые баллы за урок отключены в новой экономике",
-      "LEGACY_LESSON_POINTS_DISABLED",
-    );
-  }
-
-  const existing = await prisma.pointsTransaction.findFirst({
-    where: {
-      studentId: params.studentId,
-      lessonId: params.lessonId,
-    },
-  });
-
-  if (existing) {
-    return { awarded: false, transactionId: existing.id };
-  }
-
-  const tx = await prisma.pointsTransaction.create({
-    data: {
-      studentId: params.studentId,
-      lessonId: params.lessonId,
-      amount: params.amount,
-      reason: params.reason,
-      awardedBy: params.awardedBy,
-    },
-  });
-
-  await notifyPointsAwarded({
-    studentId: params.studentId,
-    amount: params.amount,
-    reason: params.reason,
-    transactionId: tx.id,
-  });
-
-  return { awarded: true, transactionId: tx.id };
 }
 
 export async function awardManualPoints(params: {
@@ -447,6 +396,63 @@ export async function awardSystemPointsInTransaction(tx: Prisma.TransactionClien
     amount: params.amount, reason: params.reason, sourceKey: params.sourceKey, createdAt: params.eventAt,
   } });
   return { awarded: true, transactionId: receipt.id };
+}
+
+/**
+ * Takes back an automated award: the original row keeps its history but gives up its canonical
+ * source key (`<key>:reversed:v<n>`, so the same source can be awarded again), and a negative
+ * correction row `<key>:reversal:v<n>` is written. Runs inside the caller's transaction.
+ * Returns the amount taken back; 0 when there is nothing to reverse or it was reversed already.
+ */
+export async function reverseSystemPoints(
+  tx: Prisma.TransactionClient,
+  params: {
+    sourceKey: string;
+    /** Revision the reversal belongs to (for an offline lesson: the confirmed report version). */
+    version: number;
+    reason: string;
+    actorUserId: string | null;
+    at: Date;
+  },
+): Promise<number> {
+  const original = await tx.pointsTransaction.findUnique({ where: { sourceKey: params.sourceKey } });
+  if (!original || original.amount <= 0) return 0;
+  const topicAward = params.sourceKey.match(/^learning-topic-mastery:([^:]+):([^:]+)$/);
+  if (topicAward && await tx.pointsTransaction.findFirst({where:{
+    sourceKey:{startsWith:`account-recovery:${topicAward[1]}:${original.studentId}:`},
+    studentId:original.studentId,economicEpochId:original.economicEpochId,amount:-original.amount,
+    reason:`Перенос баллов в действующий кабинет: ${original.id}`,
+  },select:{id:true}})) {
+    // This original was already offset by a transfer. The target's canonical receipt is
+    // reversed by the same topic loop; debiting the old account again would make it negative.
+    return 0;
+  }
+  const correctionKey = reversalKey(params.sourceKey, params.version);
+  const existing = await tx.pointsTransaction.findUnique({ where: { sourceKey: correctionKey } });
+  if (existing) return 0;
+  await tx.pointsTransaction.update({
+    where: { id: original.id },
+    data: {
+      sourceKey: await freeReversedKey(
+        async (candidate) => Boolean(await tx.pointsTransaction.findUnique({ where: { sourceKey: candidate }, select: { id: true } })),
+        params.sourceKey,
+        params.version,
+      ),
+    },
+  });
+  await tx.pointsTransaction.create({
+    data: {
+      economicEpochId: original.economicEpochId,
+      studentId: original.studentId,
+      amount: -original.amount,
+      reason: `Отмена: ${original.reason}. ${params.reason}`.slice(0, 500),
+      sourceKey: correctionKey,
+      lessonId: null,
+      awardedBy: params.actorUserId,
+      createdAt: params.at,
+    },
+  });
+  return original.amount;
 }
 
 export async function assertLessonPointsNotAwarded(

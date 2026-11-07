@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
 import { findUserWithRoleById } from "../repositories/auth.repository.js";
 import { UnauthorizedError } from "../../domain/errors.js";
+import { resolveAudience } from "../../domain/course-access.js";
 import { getStudentCoins } from "./coins.service.js";
 import { getStudentPointsBalance } from "./points.service.js";
 import { linkedCrmSession, sessionVersionMatches } from "./account-session.service.js";
@@ -83,6 +84,7 @@ export function buildAuthUserProfile(
     profilePublic: user.profilePublic,
     phone: user.phone,
     role: user.role.slug,
+    audience: resolveAudience({ roleSlug: user.role.slug, crmStudentId: user.crmStudentId }),
     permissions: user.role.rolePermissions.map((item) => item.permission.code),
     points: stats?.points,
     coins: stats?.coins,

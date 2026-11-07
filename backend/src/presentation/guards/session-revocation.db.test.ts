@@ -124,13 +124,14 @@ if (!process.env.TEST_DATABASE_URL) {
     assert.equal((await get(fresh)).statusCode, 502);
   });
 
-  test("registration returns a usable session after linking; school enrollment does not own online student access", async t => {
+  test("registration returns a usable session at once (no CRM link to wait for); school enrollment does not own online student access", async t => {
     await prisma.role.upsert({ where: { slug: "student" }, create: { slug: "student", name: "student" }, update: {} });
     let calls = 0;
     t.mock.method(globalThis, "fetch", async (input: string | URL | Request) => {
       calls++;
-      assert.match(String(input), /users\/sync-from-app$/);
-      return new Response(JSON.stringify({ success: true, data: { crmStudentId: randomUUID() } }), { status: 200 });
+      // Registration is only a lead for the school now: no student is synced, no link is made.
+      assert.match(String(input), /bookings\/online-lesson$/);
+      return new Response(JSON.stringify({ success: true, data: { crmBookingId: randomUUID(), externalSourceId: "x", status: "new" } }), { status: 200 });
     });
     const result = await app.inject({ method: "POST", url: "/api/auth/register", payload: {
       phone: `77${String(Date.now()).slice(-9)}`, firstName: "Session", lastName: "Registration",
@@ -139,8 +140,9 @@ if (!process.env.TEST_DATABASE_URL) {
     assert.equal(result.statusCode, 201, result.body);
     users.push(result.json().data.user.id);
     const token = result.json().data.token;
-    assert.equal((jwt.decode(token) as { sessionVersion: number }).sessionVersion, 1);
+    assert.equal((jwt.decode(token) as { sessionVersion: number }).sessionVersion, 0, "the account was not touched after it was created");
     assert.equal((await get(token)).statusCode, 200);
+    for (let attempt = 0; attempt < 40 && calls < 1; attempt += 1) await new Promise((resolve) => setTimeout(resolve, 25));
     assert.equal(calls, 1);
   });
 

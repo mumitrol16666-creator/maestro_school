@@ -1,9 +1,10 @@
 "use client";
 
-import { Award, BookOpen, Camera, Coins, Eye, EyeOff, Flame, GraduationCap, LoaderCircle, LogOut, Mail, Phone, Save, Send, Star, UserRound, WalletCards } from "lucide-react";
+import { Award, BookOpen, Camera, Eye, EyeOff, Flame, GraduationCap, LoaderCircle, LogOut, Mail, Phone, Save, Send, Star, UserRound, WalletCards } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState, type ChangeEvent } from "react";
+import { ExternalCoursesSection } from "@/components/external-courses-section";
 import { StudentMemberships } from "@/components/student-memberships";
 import { AchievementsWall } from "@/components/achievements-wall";
 import { useAuth } from "@/components/auth-provider";
@@ -19,6 +20,7 @@ import { AndroidAppDownloadCard } from "@/components/android-app-download";
 import { ImprovementSuggestionCard } from "@/components/improvement-suggestion-card";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { api } from "@/lib/api-client";
+import { isExternalStudent } from "@/lib/course-access-format";
 import { errorToastText } from "@/lib/error-text";
 import { formatFio, initialsFromName } from "@/lib/name";
 import { isStudentRole, roleLabel, settingsPathForRole } from "@/lib/role-labels";
@@ -31,13 +33,15 @@ export default function SettingsPage() {
   const router = useRouter();
   const { user, logout, refreshUser } = useAuth();
   const [activeSection, setActiveSection] = useState<"overview" | "data" | "settings">("overview");
+  // Stage 4: a student outside the school has no groups, memberships or league; their profile is courses.
+  const external = isExternalStudent(user);
   const resource = useApiResource(async () => {
     const profile = await api.me();
     const [directionsResult, progressResult, schoolResult, economyResult, achievementsResult] = await Promise.allSettled([
       api.directions(),
       api.progress(),
-      loadStudentOfflineSummary(),
-      api.studentEconomyProfile(),
+      external ? Promise.resolve(null) : loadStudentOfflineSummary(),
+      external ? Promise.resolve(null) : api.studentEconomyProfile(),
       api.achievements(),
     ]);
     const directions = directionsResult.status === "fulfilled" ? directionsResult.value : [];
@@ -106,7 +110,7 @@ export default function SettingsPage() {
           </button>
         ))}
       </nav>
-      <div className={`grid gap-6 ${activeSection === "overview" ? "xl:grid-cols-[0.8fr_1.2fr]" : ""}`}>
+      <div className={`grid grid-cols-[minmax(0,1fr)] gap-6 ${activeSection === "overview" ? "xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]" : ""}`}>
         {activeSection === "overview" ? (
           <section
             className="self-start rounded-[30px] bg-ink p-7 text-white shadow-soft"
@@ -121,7 +125,7 @@ export default function SettingsPage() {
             <h2 className="font-display mt-7 text-4xl">{fullName}</h2>
             <p className="mt-2 text-sm text-white/45">Ученик Maestro</p>
             <div className="mt-8 space-y-3 border-t border-white/10 pt-6 text-sm">
-              <div className="flex items-center gap-3 text-white/60"><GraduationCap size={16} className="text-gold-ink" /> {offlineGroups.length ? offlineGroups.map((item) => item.name).join(", ") : "Учебные группы пока не подключены"}</div>
+              {external ? null : <div className="flex items-center gap-3 text-white/60"><GraduationCap size={16} className="text-gold-ink" /> {offlineGroups.length ? offlineGroups.map((item) => item.name).join(", ") : "Учебные группы пока не подключены"}</div>}
               <div className="flex items-center gap-3 text-white/60"><BookOpen size={16} className="text-gold-ink" /> {directions.length ? directions.map((item) => item.title).join(", ") : "Онлайн-курсы пока не начаты"}</div>
               <div className="flex items-center gap-3 text-white/60"><Mail size={16} className="text-gold-ink" /> {profile.email}</div>
               <div className="flex items-center gap-3 text-white/60"><Phone size={16} className="text-gold-ink" /> {profile.phone && profile.phone !== "00000000000" ? profile.phone : "Телефон не указан"}</div>
@@ -136,16 +140,17 @@ export default function SettingsPage() {
             </button>
           </section>
         ) : null}
-        <section className="space-y-5" data-testid={`profile-section-${activeSection}`}>
+        <section className="min-w-0 space-y-5" data-testid={`profile-section-${activeSection}`}>
           {activeSection === "overview" ? (
             <>
               {level ? <LevelSummary progress={level} /> : null}
               {economy?.economyV2Enabled ? <EconomyProfileSummary economy={economy} /> : null}
               {achievements ? <ProfileAchievements achievements={achievements} /> : null}
               {school ? <StudentMemberships balanceSnapshot={school.balanceSnapshot} /> : null}
+              {external ? <ExternalCoursesSection /> : <>
               <div className="rounded-[30px] border border-stone-200 bg-paper p-6 shadow-soft sm:p-8">
                 <p className="text-xs font-bold uppercase tracking-[0.17em] text-gold-ink">Обучение</p>
-                <div className={`mt-6 grid gap-4 ${economy?.economyV2Enabled ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>
+                <div className="mt-6 grid gap-4 sm:grid-cols-2">
                   <div className="rounded-2xl bg-stone-50 p-5">
                     <GraduationCap size={18} className="text-gold-ink" />
                     <p className="mt-3 text-xs font-bold uppercase tracking-wider text-stone-400">Онлайн-курсы</p>
@@ -163,12 +168,6 @@ export default function SettingsPage() {
                         <Star size={18} className="text-gold-ink" />
                         <p className="mt-3 text-xs font-bold uppercase tracking-wider text-stone-400">Баллы</p>
                         <p className="font-display mt-3 text-2xl">{(profile.points ?? 0).toLocaleString("ru-RU")}</p>
-                      </div>
-                      <div className="rounded-2xl bg-amber-50 p-5">
-                        <Coins size={18} className="text-gold-ink" />
-                        <p className="mt-3 text-xs font-bold uppercase tracking-wider text-amber-700">Бонусы Maestro</p>
-                        <p className="font-display mt-3 text-2xl text-amber-950">{(profile.coins ?? 0).toLocaleString("ru-RU")}</p>
-                        <p className="mt-2 text-xs leading-5 text-amber-800">Для обмена на награды; на уровень не влияют</p>
                       </div>
                     </>
                   )}
@@ -190,6 +189,7 @@ export default function SettingsPage() {
                   )}
                 </div>
               </div>
+              </>}
             </>
           ) : null}
 
@@ -328,16 +328,11 @@ function EconomyProfileSummary({
         </div>
         <Link href="/league" className="inline-flex min-h-11 items-center text-sm font-bold text-stone-600 hover:text-gold-ink">Открыть лигу</Link>
       </div>
-      <div className="mt-6 grid divide-y divide-stone-200 border-y border-stone-200 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+      <div className="mt-6 grid divide-y divide-stone-200 border-y border-stone-200 sm:grid-cols-2 sm:divide-x sm:divide-y-0">
         <div className="py-4 sm:px-4 sm:first:pl-0">
-          <Coins size={18} className="text-gold-ink" />
-          <p className="font-display mt-2 text-3xl">{economy.coins.toLocaleString("ru-RU")}</p>
-          <p className="text-xs font-bold text-stone-500">Coins</p>
-        </div>
-        <div className="py-4 sm:px-4">
           <Flame size={18} className="text-gold-ink" />
           <p className="font-display mt-2 text-3xl">{economy.streak?.currentWeeks ?? 0}</p>
-          <p className="text-xs font-bold text-stone-500">текущая серия</p>
+          <p className="text-xs font-bold text-stone-500">{pluralize(economy.streak?.currentWeeks ?? 0, ["неделя", "недели", "недель"])} подряд — серия недель</p>
         </div>
         <div className="py-4 sm:px-4 sm:last:pr-0">
           <Award size={18} className="text-gold-ink" />

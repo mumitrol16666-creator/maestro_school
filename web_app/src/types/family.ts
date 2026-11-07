@@ -32,6 +32,11 @@ export type FamilyChild = {
   fullName: string;
   avatar?: string | null;
   relationship: string;
+  /**
+   * `external`: the child registered in the app and has no card in the school (stage 4) — there is no
+   * school overview for them, only online courses. A server that does not send it means the school.
+   */
+  audience?: "school" | "external";
 };
 
 export type FamilyChildOverview = {

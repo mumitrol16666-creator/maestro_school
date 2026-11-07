@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "../../infrastructure/database/prisma.js";
-import { BadRequestError, ConflictError, NotFoundError } from "../../domain/errors.js";
+import { AppError, BadRequestError, ConflictError, NotFoundError } from "../../domain/errors.js";
 
 export const examProgramInput = z.object({
   directionId: z.string().uuid(), sectorNumber: z.number().int().min(1).max(100),
@@ -179,11 +179,31 @@ export async function scheduleExamSession(actorUserId:string,sessionId:string,ra
   if (!session) throw new NotFoundError("Экзамен");
   if (session.exams.some(exam=>!["draft","awaiting_schedule","scheduled"].includes(exam.status))) throw new ConflictError("Экзамен уже начат или завершён", "EXAM_SESSION_ROSTER_LOCKED");
   if (session.exams.length>20) throw new BadRequestError("В один экзамен можно назначить не больше 20 учеников", "EXAM_SESSION_TOO_LARGE");
+  const wasDraft = new Set(session.exams.filter(exam => exam.status === "draft").map(exam => exam.id));
   const sent = await sendExamSession(session.id);
   // Use the roster locked by send, which may have changed since the initial read.
   const participants = sent.exams.filter(exam => exam.status !== "cancelled");
   const {bookExamSessionInCrm}=await import("../../infrastructure/crm/crm-client.js");
-  const result=await bookExamSessionInCrm({...input,examIds:participants.map(exam=>exam.id),actorAppUserId:actorUserId});
+  let result: Awaited<ReturnType<typeof bookExamSessionInCrm>>;
+  try {
+    result=await bookExamSessionInCrm({...input,examIds:participants.map(exam=>exam.id),actorAppUserId:actorUserId});
+  } catch (error) {
+    // 07.11 (P3): CRM refused the booking outright (busy slot, wrong room): nothing was booked, so
+    // the participants this call sent go back to draft and the roster can be edited or cancelled.
+    // A timeout or 5xx may have booked in CRM — then the state stays and the callback finishes it.
+    // These 409s mean CRM already holds a lesson for the exams (an earlier attempt booked it and the
+    // callback has not arrived): the state stays, the lesson is handled in the CRM calendar.
+    const alreadyBooked = error instanceof AppError && [
+      "SECTOR_EXAM_ALREADY_BOOKED", "SECTOR_EXAM_ALREADY_BOOKED_DIFFERENT_SLOT", "SECTOR_EXAM_NOT_PENDING",
+    ].includes(String(error.code ?? ""));
+    if (error instanceof AppError && error.statusCode >= 400 && error.statusCode < 500 && !alreadyBooked) {
+      await prisma.sectorExam.updateMany({
+        where: { id: { in: [...wasDraft] }, status: "awaiting_schedule", crmClassId: null },
+        data: { status: "draft", sentForScheduleAt: null },
+      });
+    }
+    throw error;
+  }
   const {scheduleSectorExamFromCrm}=await import("./sector-exam.service.js");
   const day=result.class.date.slice(0,10);
   const lessonAt=new Date(`${day}T${result.class.startTime}:00+05:00`);

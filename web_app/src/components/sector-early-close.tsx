@@ -3,51 +3,48 @@
 import { Flag, LoaderCircle } from "lucide-react";
 import { useState } from "react";
 import { ApiError } from "@/lib/api-client";
+import { formatExamDate } from "@/lib/sector-exams-api";
 import { teacherStudentsApi } from "@/lib/teacher-students-api";
 
-const MAX_POINTS = 250;
-
 /**
- * Decision 19.10: the teacher may close the open sector before every topic is
- * done and writes how many Points it is worth, from 0 to 250.
+ * 07.11: the teacher may close an open sector (the current one or the one waiting for its exam)
+ * before the exam. No Points are paid for it: they are given only for a passed exam.
+ * While an exam lesson is booked, only the administrator can cancel it in the CRM first.
  */
 export function SectorEarlyClose({
   crmStudentId,
   crmDirectionId,
+  planId,
   sequence,
-  completed,
-  total,
+  exam,
   onClosed,
 }: {
   crmStudentId: string;
   crmDirectionId: string;
+  planId: string;
   sequence: number;
-  completed: number;
-  total: number;
-  onClosed: (awardedPoints: number) => void;
+  exam?: { status: string; scheduledAt: string | null } | null;
+  onClosed: () => void | Promise<unknown>;
 }) {
-  const suggested = total ? Math.round((MAX_POINTS * completed) / total) : 0;
   const [open, setOpen] = useState(false);
-  const [points, setPoints] = useState(String(suggested));
   const [comment, setComment] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const value = Number(points);
-  const valid = points.trim() !== "" && Number.isInteger(value) && value >= 0 && value <= MAX_POINTS;
+  const booked = exam?.status === "scheduled" || exam?.status === "in_progress";
 
   async function close() {
-    if (!valid || busy) return;
-    if (!window.confirm(`Закрыть сектор ${sequence} и начислить ${value} баллов? Отменить это нельзя.`)) return;
+    if (busy) return;
     setBusy(true);
     setError(null);
     try {
-      const result = await teacherStudentsApi.closeSectorEarly(crmStudentId, {
+      await teacherStudentsApi.closeSectorEarly(crmStudentId, {
         crmDirectionId,
-        points: value,
+        planId,
+        points: 0,
         comment: comment.trim() || null,
       });
       setOpen(false);
-      onClosed(result.awardedPoints);
+      await onClosed();
     } catch (reason) {
       setError(reason instanceof ApiError ? reason.message : "Не удалось закрыть сектор");
     } finally {
@@ -61,32 +58,27 @@ export function SectorEarlyClose({
         <p className="inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-stone-600">
           <Flag size={14} /> Закрыть сектор досрочно
         </p>
-        <button
-          type="button"
-          onClick={() => setOpen((current) => !current)}
-          className="inline-flex min-h-9 items-center rounded-lg border border-stone-200 px-3 text-xs font-bold text-stone-700"
-        >
-          {open ? "Скрыть" : "Закрыть досрочно"}
-        </button>
+        {booked ? null : (
+          <button
+            type="button"
+            onClick={() => setOpen((current) => !current)}
+            aria-expanded={open}
+            className="inline-flex min-h-11 items-center rounded-lg border border-stone-200 px-3 text-xs font-bold text-stone-700"
+          >
+            {open ? "Скрыть" : "Закрыть досрочно"}
+          </button>
+        )}
       </div>
-      {open ? (
+      {booked ? (
+        <p className="mt-3 text-sm leading-6 text-stone-700" data-testid="sector-early-close-booked">
+          На сектор {sequence} назначен экзамен{exam?.scheduledAt ? ` ${formatExamDate(exam.scheduledAt)}` : ""}. Отменить урок экзамена может администратор в CRM, после этого сектор можно закрыть.
+        </p>
+      ) : null}
+      {open && !booked ? (
         <div className="mt-3 grid gap-3">
-          <p className="text-xs leading-5 text-stone-500">
-            Закрыто тем: {completed} из {total}. Полный сектор стоит {MAX_POINTS} баллов; впишите, сколько начислить сейчас. Можно 0.
+          <p className="text-sm leading-6 text-stone-700">
+            Закрыть сектор {sequence} досрочно? Баллы за сектор не начисляются: их дают только за сданный экзамен. Отменить нельзя.
           </p>
-          <label className="text-xs font-bold text-stone-600">
-            Баллы за сектор
-            <input
-              type="number"
-              inputMode="numeric"
-              min={0}
-              max={MAX_POINTS}
-              value={points}
-              onChange={(event) => setPoints(event.target.value)}
-              aria-label="Баллы за досрочное закрытие"
-              className="mt-1 block h-11 w-32 rounded-xl border border-stone-200 bg-white px-3 text-sm font-bold text-ink"
-            />
-          </label>
           <label className="text-xs font-bold text-stone-600">
             Почему закрываем (необязательно)
             <input
@@ -97,16 +89,15 @@ export function SectorEarlyClose({
               className="mt-1 block h-11 w-full rounded-xl border border-stone-200 bg-white px-3 text-sm"
             />
           </label>
-          {!valid ? <p className="text-xs font-semibold text-red-700">Целое число от 0 до {MAX_POINTS}.</p> : null}
-          {error ? <p className="text-xs font-semibold text-red-700">{error}</p> : null}
+          {error ? <p role="alert" className="text-sm font-semibold text-red-700">{error}</p> : null}
           <button
             type="button"
-            disabled={!valid || busy}
+            disabled={busy}
             onClick={() => void close()}
             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-red-700 px-4 text-sm font-bold text-white disabled:opacity-50"
           >
             {busy ? <LoaderCircle size={15} className="animate-spin" /> : <Flag size={15} />}
-            Закрыть сектор {sequence} за {valid ? value : "…"} баллов
+            Закрыть сектор {sequence} без баллов
           </button>
         </div>
       ) : null}
