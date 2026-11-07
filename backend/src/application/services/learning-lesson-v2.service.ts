@@ -451,7 +451,11 @@ async function withPendingTopicPercents(
     { crmClassId, date: lesson.date, startTime: lesson.startTime },
     topicIds,
   );
-  const conflicts = await openTopicConflictsFor(topicIds, String(lesson.date ?? "").slice(0, 10) || null);
+  const lessonDay = String(lesson.date ?? "").slice(0, 10);
+  const conflicts = await openTopicConflictsFor(
+    topicIds,
+    lessonDay ? `${lessonDay}T${String(lesson.startTime ?? "00:00").slice(0, 5)}` : null,
+  );
   return plans.map((plan) => ({
     ...plan,
     topics: plan.topics.map((topic) => {

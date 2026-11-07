@@ -374,6 +374,8 @@ export async function resolveLessonTopicConflict(
   if (decision === "keep_current") {
     // An explicit admin decision: every topic of this lesson keeps its current percent.
     await saveRemaining(conflict, stored, [], { by: actorId, how: "keep_current", note: reason });
+    // Lessons that waited for this one's percent will not get it: they go to the admin too.
+    await releaseLessonsWaitingFor(conflict.crmClassId, "cancelled");
     return prisma.crmSyncConflict.findUnique({ where: { id: conflictId } });
   }
   if (!stored.topics.some(writable)) {
@@ -407,8 +409,10 @@ export async function resolveLessonTopicConflict(
     }
   }
   await saveRemaining(conflict, stored, remaining, { by: actorId, how: "write_lesson", note: reason });
-  // A later lesson that continues from the percent just written can go in now.
+  // A later lesson that continues from the percent just written can go in now; one that waited for
+  // this lesson and still does not match goes to the admin.
   if (written.length) await applyWaitingLessonTopicConflicts(written);
+  await releaseLessonsWaitingFor(conflict.crmClassId, "approved");
   if (failures.length) {
     throw new ConflictError(`Записаны не все темы. ${failures.join(" ")}`, "LESSON_TOPIC_CONFLICT_PARTIAL");
   }
@@ -445,14 +449,19 @@ export async function openTopicConflictsFor(topicIds: readonly string[], beforeD
   const meta = new Map(projections.map((projection) => {
     const payload = (projection.lessonPayload ?? {}) as { date?: unknown; startTime?: unknown; title?: unknown };
     const date = String(payload.date ?? "").slice(0, 10) || null;
-    return [projection.crmClassId, { date, title: typeof payload.title === "string" ? payload.title : null }] as const;
+    const time = String(payload.startTime ?? "").slice(0, 5) || "00:00";
+    return [projection.crmClassId, { date, order: date ? `${date}T${time}` : null, title: typeof payload.title === "string" ? payload.title : null }] as const;
   }));
   const current = await currentPercents([...wanted]);
   for (const conflict of conflicts) {
     const lesson = meta.get(conflict.crmClassId);
-    if (beforeDate && lesson?.date && lesson.date > beforeDate) continue;
+    // `beforeDate` is the lesson being filled as «YYYY-MM-DD» or «YYYY-MM-DDTHH:MM»: a later lesson,
+    // also later the same day, is not «прошлый урок».
+    if (beforeDate && lesson?.order && lesson.order >= (beforeDate.length > 10 ? beforeDate : `${beforeDate}T23:59`)) continue;
     for (const entry of readStored(conflict.localPayload).topics) {
       if (!wanted.has(entry.topicId)) continue;
+      // The topic already stands at the lesson's percent: nothing is missing for the teacher.
+      if ((current.get(entry.topicId) ?? entry.currentPercent) === entry.toPercent) continue;
       result.set(entry.topicId, {
         crmClassId: conflict.crmClassId,
         lessonDate: lesson?.date ?? null,

@@ -107,6 +107,7 @@ const syncConflictLabels: Record<string, string> = {
   attendance_mismatch: "Посещаемость отличается от расписания",
   stale_projection_ignored: "Расписание содержит более новые данные",
   topic_percent_mismatch: "Урок принят, проценты тем не записаны",
+  admin_approve: "CRM подтвердила урок, награды и проценты не применены",
 };
 
 const REPORT_SUBMISSION_LEAD_MINUTES = 20;
@@ -1710,7 +1711,9 @@ export default function AdminOfflineLessonDetailPage() {
         <div className="mb-4 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm leading-6 text-sky-950" data-testid="lesson-sector-exam">
           <p className="font-bold">Экзамен сектора</p>
           <p>
-            Бесплатный экзамен без списания из абонемента. Откройте проведение, чтобы отметить задания и результаты всех участников.
+            {isAdmin
+              ? "Бесплатный экзамен без списания из абонемента. Задания и результаты отмечает экзаменатор; состав и итоги видны в разделе экзаменов."
+              : "Бесплатный экзамен без списания из абонемента. Откройте проведение, чтобы отметить задания и результаты всех участников."}
           </p>
           <LessonExamSessionLinks crmClassId={crmClassId} isAdmin={isAdmin} />
         </div>

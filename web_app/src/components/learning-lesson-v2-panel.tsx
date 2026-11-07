@@ -500,7 +500,7 @@ export function LearningLessonV2Panel({
                         ? `${topic.progressPercent}% → ${topicDraft.toPercent}%`
                         : `${topic.progressPercent}%`}
                     </span>
-                    {topic.percentConflict ? (
+                    {topic.percentConflict?.own ? (
                       <span className="mt-0.5 block text-[11px] font-semibold text-amber-700">
                         процент у администратора
                       </span>
@@ -510,7 +510,11 @@ export function LearningLessonV2Panel({
                       </span>
                     ) : topic.pendingFromLesson ? (
                       <span className="mt-0.5 block text-[11px] font-semibold text-amber-700">
-                        ждёт подтверждения
+                        {topic.pendingFromLesson.approvedWaitingForEarlier ? "ждёт урок до него" : "ждёт подтверждения"}
+                      </span>
+                    ) : topic.percentConflict ? (
+                      <span className="mt-0.5 block text-[11px] font-semibold text-amber-700">
+                        процент у администратора
                       </span>
                     ) : null}
                   </button>
@@ -655,7 +659,7 @@ export function LearningLessonV2Panel({
                         {selectedTopic.percentConflict.own ? null : ` Тема начинается с ${selectedTopic.progressPercent}%.`}
                       </p>
                     ) : null}
-                    {!selectedTopic.percentConflict && selectedTopicProgress && selectedTopicProgress.expectedPercent !== selectedTopic.progressPercent ? (
+                    {!selectedTopic.percentConflict?.own && selectedTopicProgress && selectedTopicProgress.expectedPercent !== selectedTopic.progressPercent ? (
                       <div className="mt-2 rounded-lg border border-red-200 bg-red-50 p-3 text-xs leading-5 text-red-800" data-testid="topic-start-changed">
                         <p>
                           После заполнения прошлый урок по этой теме изменили: тема теперь начинается с{" "}

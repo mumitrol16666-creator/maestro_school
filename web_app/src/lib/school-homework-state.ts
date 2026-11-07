@@ -1,5 +1,6 @@
 type SchoolLessonRef = {
   crmClassId: string;
+  classType?: string | null;
   date: string;
   startTime?: string | null;
   status?: string | null;
@@ -21,6 +22,7 @@ function lessonOrder(lesson: SchoolLessonRef) {
 }
 
 function sameLearningStream(left: SchoolLessonRef, right: SchoolLessonRef) {
+  if (left.classType === "exam" || right.classType === "exam") return false;
   if (left.crmGroupId && right.crmGroupId) return left.crmGroupId === right.crmGroupId;
   if (left.groupName && right.groupName) return normalized(left.groupName) === normalized(right.groupName);
   if (left.crmTeacherId && right.crmTeacherId) return left.crmTeacherId === right.crmTeacherId;

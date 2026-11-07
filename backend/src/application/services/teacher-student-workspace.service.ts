@@ -266,7 +266,7 @@ export async function getTeacherStudentWorkspace(
     completed: sector.progress.completed,
     total: sector.progress.total,
     percent: sector.progress.percent,
-    exam: sector.exam ? { status: sector.exam.status, scheduledAt: sector.exam.scheduledAt, outcome: sector.exam.outcome } : null,
+    exam: sector.exam ? { status: sector.exam.status, scheduledAt: sector.exam.scheduledAt, outcome: sector.exam.outcome, decision: "decision" in sector.exam ? (sector.exam as { decision?: string | null }).decision ?? null : null } : null,
     memberPass: sector.memberPass,
     topics: sector.items.map((item) => ({ id: item.id, title: item.title, progressPercent: item.progressPercent, state: item.state ?? "active" })),
   }));
@@ -465,7 +465,7 @@ export async function getTeacherStudentWorkspace(
         completed: sector.progress.completed,
         total: sector.progress.total,
         percent: sector.progress.percent,
-        exam: sector.exam ? { status: sector.exam.status, scheduledAt: sector.exam.scheduledAt, outcome: sector.exam.outcome } : null,
+        exam: sector.exam ? { status: sector.exam.status, scheduledAt: sector.exam.scheduledAt, outcome: sector.exam.outcome, decision: "decision" in sector.exam ? (sector.exam as { decision?: string | null }).decision ?? null : null } : null,
       })),
     },
   };

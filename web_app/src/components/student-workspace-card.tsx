@@ -1,5 +1,6 @@
 "use client";
 
+import { sectorExamResultLabel } from "@/lib/sector-exams-api";
 import {
   Activity,
   BookOpenCheck,
@@ -786,7 +787,7 @@ function SectorsTab({ data }: { data: TeacherStudentWorkspace }) {
                   <span className="font-semibold text-ink">{sector.scope === "group" ? "План группы" : "Сектор"} {sector.sequence} · {sector.direction}</span>
                   <span className="text-xs text-stone-500">
                     {sector.status === "awaiting_exam" ? "Обучение завершено · ожидает подтверждения экзаменом" : sector.closedAt ? `закрыт ${formatDate(sector.closedAt)}` : sector.status}
-                    {sector.exam?.status === "completed" ? ` · экзамен${sector.exam.outcome ? ` (${sector.exam.outcome})` : ""}` : ""}
+                    {sector.exam?.status === "completed" ? ` · экзамен${sectorExamResultLabel(sector.exam) ? `: ${sectorExamResultLabel(sector.exam)?.toLowerCase()}` : ""}` : ""}
                     {sector.memberPass ? ` · ${sector.memberPass.method === "exam" ? "сдал на экзамене" : "зачтено без экзамена"}, ${sector.memberPass.points} баллов` : ""}
                   </span>
                 </div>

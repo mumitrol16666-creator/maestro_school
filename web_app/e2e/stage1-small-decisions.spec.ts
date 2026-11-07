@@ -2,7 +2,7 @@ import { expect, test, type APIRequestContext, type BrowserContext } from "@play
 import { startQaLessonForTeacher } from "./qa-start";
 
 /**
- * Plan item 1.8 (decisions of 19.10): early sector close, one bonus a week,
+ * Plan item 1.8 (decisions of 19.10): one bonus a week,
  * topic percents for parents, no repeated lesson context on the attendance step.
  */
 
@@ -21,20 +21,8 @@ async function signIn(request: APIRequestContext, context: BrowserContext, login
   return payload.data.token as string;
 }
 
-test("the sector editor offers an early close with the Points the teacher writes", async ({ page, request, context }) => {
-  await signIn(request, context, "qa_teacher_1", "staff");
-  await page.goto("/admin/my-students/student/QA-STUDENT-1/plan");
-  const panel = page.getByTestId("sector-early-close");
-  await expect(panel).toBeVisible();
-  await panel.getByRole("button", { name: "Закрыть досрочно" }).click();
-  const points = panel.getByLabel("Баллы за досрочное закрытие");
-  await expect(points).toBeVisible();
-  await points.fill("300");
-  await expect(panel.getByText("Целое число от 0 до 250.")).toBeVisible();
-  await expect(panel.getByRole("button", { name: /Закрыть сектор \d+ за/ })).toBeDisabled();
-  await points.fill("120");
-  await expect(panel.getByRole("button", { name: /Закрыть сектор \d+ за 120 баллов/ })).toBeEnabled();
-});
+// 07.11: the early-close panel left the sector editor in 841af3b (no Points from teachers since 05.11);
+// its test went with it. The backend route waits for Vladislav's decision (document 25, question 4).
 
 test("the next step does not repeat the previous lesson shown on step 1", async ({ page, request, context }) => {
   const token = await signIn(request, context, "qa_teacher_1", "staff");
