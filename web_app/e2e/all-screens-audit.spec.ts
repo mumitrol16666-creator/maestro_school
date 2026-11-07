@@ -68,7 +68,7 @@ const adminRoutes = [
   "/admin/settings",
 ];
 
-const publicRoutes = ["/login", "/register", "/trial-lesson"];
+const publicRoutes = ["/login", "/register"];
 
 async function loginSession(
   request: APIRequestContext,

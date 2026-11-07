@@ -15,6 +15,7 @@ import {
   type RequestDisplayStatus,
 } from "@/lib/course-access-format";
 import { formatSchoolDate, formatTenge } from "@/lib/course-payments-format";
+import { TRIAL_BOOKING_URL } from "@/lib/trial-booking";
 import type { ApiCourseSummary } from "@/types/api";
 
 const REQUEST_TONE: Record<RequestDisplayStatus, string> = {
@@ -35,8 +36,8 @@ export function isMyCourse(course: Pick<ApiCourseSummary, "enrollmentStatus" | "
  * Stage 4, the profile of a student outside the school: the courses they hold with the dates, the
  * requests «Я оплатил» with their state, and the way to a trial lesson.
  *
- * «Записаться на пробный урок» leads to the public trial form of the app (`/trial-lesson`), which
- * sends the booking to CRM through `POST /trial-bookings`; there is no personal trial route yet.
+ * «Записаться на пробный урок» leads to the form on the school site (decision 03.11: a trial is booked
+ * only there; `/trial-lesson` itself answers 307 to the same address).
  */
 export function ExternalCoursesSection() {
   const resource = useApiResource(async () => {
@@ -103,12 +104,12 @@ export function ExternalCoursesSection() {
         <p className="mt-2 text-sm leading-6 text-stone-500">
           Запишись на пробный урок в школе Maestro. Мы получим заявку, свяжемся с тобой и подберём время.
         </p>
-        <Link
-          href="/trial-lesson"
+        <a
+          href={TRIAL_BOOKING_URL}
           className="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-ink px-5 py-3 text-sm font-bold text-white transition hover:bg-stone-800 sm:w-auto"
         >
           Записаться на пробный урок <ArrowRight size={16} />
-        </Link>
+        </a>
       </section>
     </>
   );

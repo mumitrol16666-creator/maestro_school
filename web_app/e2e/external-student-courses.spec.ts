@@ -397,14 +397,13 @@ test("a course without a price is open as a whole", async ({ page, context, requ
   await expect(page.getByTestId("lesson-free-label")).toHaveCount(0);
 });
 
-test("the profile leads to a trial lesson", async ({ page, context }) => {
+test("the profile leads to a trial lesson on the school site", async ({ page, context }) => {
   await installSession(context, outsider);
   await page.goto("/settings");
   const trial = page.getByTestId("external-trial").getByRole("link", { name: /Записаться на пробный урок/ });
-  await expect(trial).toHaveAttribute("href", "/trial-lesson");
+  // 03.11: a trial is booked only on the site; the app links straight to its form.
+  await expect(trial).toHaveAttribute("href", /^https:\/\/maestro\.com\.kz\/.*#zapis$/);
   expect((await trial.boundingBox())!.height).toBeGreaterThanOrEqual(44);
-  await trial.click();
-  await expect(page).toHaveURL(/\/trial-lesson$/);
 });
 
 test("an outsider's account menu shows points but no Coins, and a course leads back to the course list", async ({ page, context }) => {

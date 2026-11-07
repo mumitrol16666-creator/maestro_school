@@ -11,9 +11,8 @@ import { useAuth } from "@/components/auth-provider";
 import { RegisterForm } from "@/components/register-form";
 import type { PersonFields } from "@/lib/registration-form";
 import { homePathForUser } from "@/lib/role-labels";
+import { TRIAL_BOOKING_URL } from "@/lib/trial-booking";
 
-const TRIAL_LANDING_URL =
-  process.env.NEXT_PUBLIC_TRIAL_LANDING_URL ?? "https://crm.maestro.com.kz/trial.html";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -58,7 +57,7 @@ export default function RegisterPage() {
             </Link>
             <p className="mt-3 text-sm leading-6 text-stone-500">
               Хотите заниматься в школе с преподавателем?{" "}
-              <a href={TRIAL_LANDING_URL} className="font-bold text-gold-ink underline">Запишитесь на пробный урок</a>.
+              <a href={TRIAL_BOOKING_URL} className="font-bold text-gold-ink underline">Запишитесь на пробный урок</a>.
             </p>
           </div>
         </div>
