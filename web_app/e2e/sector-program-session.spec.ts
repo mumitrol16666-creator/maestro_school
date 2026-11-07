@@ -74,7 +74,7 @@ test("the appointed teacher conducts all six pupils on their saved exam checklis
       if(match){const person=participants.find(p=>p.exam.id===match[1])!;const action=match[2];
         if(action==="start")person.exam.status="in_progress";
         if(action.startsWith("items/"))person.exam.items[0].done=route.request().postDataJSON().done;
-        if(action==="finish"){expect(route.request().postDataJSON().decision).toBe("pass");person.exam.status="completed";Object.assign(person.exam,{outcome:"passed",certificate:{number:`MS-2026-${person.exam.id}`}});data={exam:person.exam,awardedPoints:250};}
+        if(action==="finish"){expect(route.request().postDataJSON().decision).toBe("pass");person.exam.status="completed";Object.assign(person.exam,{outcome:"passed",decision:"pass",certificate:{number:`MS-2026-${person.exam.id}`}});data={exam:person.exam,awardedPoints:250};}
         else data=person.exam;
       }
     }
@@ -88,12 +88,14 @@ test("the appointed teacher conducts all six pupils on their saved exam checklis
     await card.getByRole("button",{name:"Сделано",exact:true}).click();
     await card.getByRole("button",{name:"Сдал экзамен",exact:true}).click();
     await expect(card.getByText(/Сертификат/).first()).toBeVisible();
+    await expect(card.getByText(/Экзамен: Сдан/).first()).toBeVisible();
   }
   expect(participants.every(p=>p.exam.status==="completed")).toBe(true);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(1);
   await page.emulateMedia({media:"print"});
   await expect(page.locator("[data-exam-protocol]")).toBeVisible();
   await expect(page.locator("[data-exam-protocol] section")).toHaveCount(6);
+  await expect(page.locator("[data-exam-protocol]")).toContainText("Сдан");
 });
 
 for(const role of ["admin","student","parent"]) test(`the ${role} can open the same issued certificate without a role redirect`,async({page,context})=>{

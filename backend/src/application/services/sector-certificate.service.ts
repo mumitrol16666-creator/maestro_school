@@ -32,7 +32,7 @@ export async function getSectorCertificate(actorUserId: string, examId: string) 
   } else if (!isOfflineCoordinatorRole(role)) {
     throw new ForbiddenError("Сертификат недоступен");
   }
-  if (!exam.certificateNumber || !exam.certificateIssuedAt || exam.status !== "completed" || exam.decision !== "pass") throw new NotFoundError("Сертификат ещё не выдан");
+  if (!exam.certificateNumber || !exam.certificateIssuedAt || exam.status !== "completed" || !["pass", "close_sector"].includes(exam.decision ?? "")) throw new NotFoundError("Сертификат ещё не выдан");
   const snapshot = snapshotSchema.safeParse(exam.certificateSnapshot);
   if (!snapshot.success) throw new ConflictError("У прежнего сертификата нет сохранённых данных для печати. Обратитесь к администратору.", "CERTIFICATE_SNAPSHOT_MISSING");
   return { id: exam.id, number: exam.certificateNumber, ...snapshot.data };

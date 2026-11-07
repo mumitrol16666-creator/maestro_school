@@ -74,7 +74,7 @@ export function InProgress({ exam, busy, run }: {
         ))}
       </div>
       {!allMarked ? <p className="text-[11px] text-stone-500">Завершить можно, когда каждый пункт отмечен.</p> : null}
-      {allMarked ? <p className="text-sm text-stone-600">Сделано {doneCount} из {exam.items.length}. Сдан экзамен или нет, решаете вы: «Сдал экзамен» закрывает сектор и выдаёт сертификат, «Пересдача» ничего не начисляет.</p> : null}
+      {allMarked ? <p className="text-sm text-stone-600">Сделано {doneCount} из {exam.items.length}. Сдан экзамен или нет, решаете вы. «Сдал экзамен» закроет сектор, выдаст сертификат и начислит 250 баллов. «Пересдача» ничего не выдаёт и не начисляет.</p> : null}
     </div>
   );
 }

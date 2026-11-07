@@ -241,6 +241,25 @@ integrationTest("the teacher's pass is allowed when no item is done, every item 
   assert.equal(finished.awardedPoints, 250);
 });
 
+integrationTest("a certificate of an old close_sector exam still opens; a retake or an undecided exam never does", async t => {
+  const f = await createFixture(t);
+  const { exams, exam } = await startMarkedExam(f, [true, true, true]);
+  const finished = await exams.finishSectorExam(f.teacher.id, exam.id, { decision: "pass" });
+  const { getSectorCertificate } = await import("./sector-certificate.service.js");
+  const notFound = (error: { statusCode?: number }) => error.statusCode === 404;
+
+  // 20.10-05.11 personal exams were closed with decision "close_sector" and kept their certificate and snapshot.
+  await f.prisma.sectorExam.update({ where: { id: exam.id }, data: { decision: "close_sector", outcome: "partial" } });
+  assert.equal((await getSectorCertificate(f.student.id, exam.id)).number, finished.exam.certificate?.number);
+
+  for (const decision of ["retake", null]) {
+    await f.prisma.sectorExam.update({ where: { id: exam.id }, data: { decision } });
+    await assert.rejects(getSectorCertificate(f.student.id, exam.id), notFound);
+  }
+  await f.prisma.sectorExam.update({ where: { id: exam.id }, data: { decision: "pass", status: "in_progress" } });
+  await assert.rejects(getSectorCertificate(f.student.id, exam.id), notFound);
+});
+
 integrationTest("a retake decision with every item done issues nothing and closes nothing", async t => {
   const f = await createFixture(t);
   const { exams, exam } = await startMarkedExam(f, [true, true, true]);

@@ -1,6 +1,7 @@
 import { Check } from "lucide-react";
 import { Brand } from "@/components/brand";
-import type { AuthProfile } from "@/components/auth-platform-preview";
+
+export type AuthProfile = "student" | "parent" | "staff";
 
 const content: Record<AuthProfile, {
   heading: string;
