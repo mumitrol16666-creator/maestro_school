@@ -29,7 +29,7 @@ const closeReasonLabel: Record<string, string> = {
   plan_replaced: "план завершён преподавателем",
 };
 
-/** Closed sectors of the owner in this direction, newest first. */
+/** Closed sectors of the owner in this direction, newest first. A sector waiting for its exam is not here: the editor shows it in its own tab. */
 export function SectorHistoryList({ history }: { history: SectorHistoryEntry[] }) {
   return (
     <ul className="mt-4 divide-y divide-amber-200/60 rounded-2xl border border-amber-200/60 bg-white">
@@ -39,7 +39,7 @@ export function SectorHistoryList({ history }: { history: SectorHistoryEntry[] }
           <div className="min-w-0 flex-1">
             <p className="truncate font-bold text-ink">{entry.goal || `Сектор ${entry.sequence}`}</p>
             <p className="text-xs text-stone-500">
-              {entry.topicsCompleted} из {entry.topicsTotal} тем · {entry.status === "awaiting_exam" ? "Обучение завершено · экзамен ещё не подтверждён" : closeReasonLabel[entry.closeReason ?? ""] ?? "завершён"} {shortDate(entry.studyFinishedAt ?? entry.closedAt)}
+              {entry.topicsCompleted} из {entry.topicsTotal} тем · {closeReasonLabel[entry.closeReason ?? ""] ?? "завершён"} {shortDate(entry.studyFinishedAt ?? entry.closedAt)}
             </p>
           </div>
           <CheckCircle2 size={16} className={entry.closeReason === "completed" || entry.closeReason === "exam" ? "text-emerald-600" : "text-stone-300"} />

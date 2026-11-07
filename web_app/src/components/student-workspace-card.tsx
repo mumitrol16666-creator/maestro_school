@@ -30,6 +30,9 @@ import { ShareCourseLesson } from "@/components/share-course-lesson";
 import { BonusXpForm } from "@/components/league-bonus-form";
 import type { MaterialLibraryItem } from "@/types/materials";
 import { useApiResource } from "@/hooks/use-api-resource";
+import { useSectorChoice } from "@/hooks/use-sector-choice";
+import { SectorSwitch } from "@/components/sector-switch";
+import { groupOpenSectorsByDirection } from "@/lib/sector-switch";
 import { ApiError } from "@/lib/api-client";
 import { learningHomeworkApi } from "@/lib/learning-homework-api";
 import { teacherStudentsApi } from "@/lib/teacher-students-api";
@@ -239,6 +242,9 @@ function NowTab({
   const limited = data.access.kind === "lesson";
   const waiting = data.homework.items.filter((item) => item.state === "waiting_review");
   const [proposalHint, setProposalHint] = useState<string | null>(null);
+  // 07.11: a direction may have two open sectors — the current one and the one waiting for its exam.
+  const choice = useSectorChoice();
+  const sectorBlocks = groupOpenSectorsByDirection(data.sectors).map((block) => ({ ...block, shown: choice.pick(block.key, block.personal) }));
 
   return (
     <div className="grid min-w-0 grid-cols-1 gap-4">
@@ -248,8 +254,17 @@ function NowTab({
           description="Откройте первый сектор в редакторе: темы и цель, которые ученик увидит у себя."
           action={!limited ? <Link href={`/admin/my-students/student/${encodeURIComponent(crmStudentId)}/plan`} className={`${control} bg-ink text-white`}>Открыть сектор</Link> : undefined}
         />
-      ) : data.sectors.map((sector) => (
-        <SectorBlock key={sector.id} sector={sector} onChanged={onChanged} />
+      ) : sectorBlocks.map((block) => (
+        <div key={block.key} className="grid min-w-0 gap-3">
+          <SectorSwitch
+            sectors={block.personal}
+            selectedId={block.shown?.id}
+            onSelect={(id) => choice.select(block.key, id)}
+            label={`Секторы направления ${block.title}`}
+          />
+          {block.shown ? <SectorBlock sector={block.shown} onChanged={onChanged} /> : null}
+          {block.group.map((sector) => <SectorBlock key={sector.id} sector={sector} onChanged={onChanged} />)}
+        </div>
       ))}
 
       {!limited ? (
@@ -295,6 +310,9 @@ function SectorBlock({ sector, onChanged }: { sector: StudentHomeMonthlyPlan; on
             {sector.scope === "group" ? "План группы" : "Сектор"} {sector.sequence ?? ""}{sector.direction?.title ? ` · ${sector.direction.title}` : ""}
           </p>
           <h3 className="font-display mt-1 break-words text-xl text-ink">{sector.goal || "Цель не задана"}</h3>
+          {sector.status === "awaiting_exam" ? (
+            <p className="mt-2 inline-flex min-h-8 items-center rounded-full bg-sky-100 px-3 text-xs font-black text-sky-900" data-testid="workspace-sector-awaiting-exam">Ждёт экзамена</p>
+          ) : null}
         </div>
         <div className="text-right">
           <strong className="text-2xl text-ink">{sector.progress.percent}%</strong>
@@ -400,7 +418,10 @@ function HomeworkAssignForm({
   available: boolean;
   onDone: () => void;
 }) {
-  const topics = sectors.flatMap((sector) => sector.items.filter((item) => (!item.state || item.state === "active") && item.progressPercent !== 100));
+  // 07.11: topics of both open sectors; with more than one sector the option names the sector.
+  const topics = sectors.flatMap((sector) => sector.items
+    .filter((item) => (!item.state || item.state === "active") && item.progressPercent !== 100)
+    .map((item) => ({ ...item, label: sectors.length > 1 ? `${sector.scope === "group" ? "План группы" : "Сектор"} ${sector.sequence ?? ""} · ${item.title}` : item.title })));
   const [open, setOpen] = useState(false);
   const [topicId, setTopicId] = useState(topics[0]?.id ?? "");
   const [instructions, setInstructions] = useState("");
@@ -456,7 +477,7 @@ function HomeworkAssignForm({
       {open ? (
         <div className="mt-3 grid gap-2">
           <select value={topicId || topics[0]?.id || ""} onChange={(event) => setTopicId(event.target.value)} className="h-10 rounded-lg border border-stone-200 bg-white px-2 text-sm">
-            {topics.map((topic) => <option key={topic.id} value={topic.id}>{topic.title}</option>)}
+            {topics.map((topic) => <option key={topic.id} value={topic.id}>{topic.label}</option>)}
           </select>
           <textarea
             value={instructions}
@@ -648,7 +669,7 @@ function DynamicsTab({ data }: { data: TeacherStudentWorkspace }) {
           <ul className="mt-2 divide-y divide-stone-100">
             {dynamics.sectors.map((sector) => (
               <li key={sector.id} className="flex items-center justify-between gap-3 py-2 text-sm">
-                <span className="font-semibold text-ink">{sector.scope === "group" ? "План группы" : "Сектор"} {sector.sequence} · {sector.direction}</span>
+                <span className="font-semibold text-ink">{sector.scope === "group" ? "План группы" : "Сектор"} {sector.sequence} · {sector.direction}{sector.status === "awaiting_exam" ? " · ждёт экзамена" : ""}</span>
                 <span className="text-xs text-stone-500">{sector.completed}/{sector.total} тем · {sector.percent}%{sector.exam?.status === "completed" ? " · экзамен проведён" : sector.exam?.scheduledAt ? " · экзамен назначен" : ""}</span>
               </li>
             ))}
@@ -770,8 +791,8 @@ function SectorsTab({ data }: { data: TeacherStudentWorkspace }) {
           <ul className="mt-2 divide-y divide-stone-100">
             {open.map((sector) => (
               <li key={sector.id} className="flex items-center justify-between gap-3 py-2 text-sm">
-                <span className="font-semibold text-ink">{sector.scope === "group" ? "План группы" : "Сектор"} {sector.sequence} · {sector.direction}</span>
-                <span className="text-xs text-stone-500">{sector.completed}/{sector.total} тем · {sector.percent}%</span>
+                <span className="font-semibold text-ink">{sector.scope === "group" ? "План группы" : "Сектор"} {sector.sequence} · {sector.direction}{sector.status === "awaiting_exam" ? " · ждёт экзамена" : ""}</span>
+                <span className="text-xs text-stone-500">{sector.completed}/{sector.total} тем · {sector.percent}%{sector.exam?.scheduledAt && sector.exam.status !== "completed" ? " · экзамен назначен" : ""}</span>
               </li>
             ))}
           </ul>
@@ -786,7 +807,7 @@ function SectorsTab({ data }: { data: TeacherStudentWorkspace }) {
                 <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
                   <span className="font-semibold text-ink">{sector.scope === "group" ? "План группы" : "Сектор"} {sector.sequence} · {sector.direction}</span>
                   <span className="text-xs text-stone-500">
-                    {sector.status === "awaiting_exam" ? "Обучение завершено · ожидает подтверждения экзаменом" : sector.closedAt ? `закрыт ${formatDate(sector.closedAt)}` : sector.status}
+                    {sector.closedAt ? `закрыт ${formatDate(sector.closedAt)}` : sector.status}
                     {sector.exam?.status === "completed" ? ` · экзамен${sectorExamResultLabel(sector.exam) ? `: ${sectorExamResultLabel(sector.exam)?.toLowerCase()}` : ""}` : ""}
                     {sector.memberPass ? ` · ${sector.memberPass.method === "exam" ? "сдал на экзамене" : "зачтено без экзамена"}, ${sector.memberPass.points} баллов` : ""}
                   </span>
